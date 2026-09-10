@@ -21,17 +21,30 @@ if _checkpoint.exists() and _tokenizer.exists():
     _runtime = LocalModelRuntime(_checkpoint, _tokenizer)
 
 
+def _build_context(message: str, history: list[tuple[str, str]]) -> str:
+    prompt_parts = ["<conversation>"]
+    for role, content in history:
+        prompt_parts.append(f"{role}: {content}")
+    prompt_parts.append(f"user: {message.strip()}")
+    prompt_parts.append("assistant:")
+    return "\n".join(prompt_parts)
+
+
 class LocalAIService:
     """Async service facade for the Indoone local AI runtime."""
 
-    async def generate(self, message: str) -> str:
+    async def generate(self, message: str, history: list[tuple[str, str]] | None = None) -> str:
         prompt = message.strip()
         if not prompt:
             raise ValueError("message cannot be empty")
+        context = _build_context(prompt, history or [])
         if _runtime is not None:
-            return _runtime.generate(prompt)
-        return await _fallback_engine.generate(prompt)
+            return _runtime.generate(context)
+        return await _fallback_engine.generate(context)
 
 
-async def generate_reply(message: str) -> str:
-    return await LocalAIService().generate(message)
+async def generate_reply(
+    message: str,
+    history: list[tuple[str, str]] | None = None,
+) -> str:
+    return await LocalAIService().generate(message, history=history)

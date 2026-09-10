@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import json
 import torch
 
 from app.ai.train import train
@@ -36,6 +37,12 @@ def test_train_writes_checkpoint_and_history(tmp_path: Path) -> None:
     assert (output_dir / "tokenizer.json").exists()
     assert (output_dir / "training_history.json").exists()
     assert (output_dir / "metadata.json").exists()
+
+    metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert len(metadata["source_fingerprint"]) == 64
+    assert len(metadata["validation_fingerprint"]) == 64
+    assert metadata["instruction_data_enabled"] is False
+    assert metadata["training_text_characters"] == len(corpus)
 
     checkpoint = torch.load(
         output_dir / "indoone-small.pt",

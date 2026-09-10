@@ -26,6 +26,8 @@ def train_and_evaluate(
         validation_ratio=0.1,
     )
 
+    model_dir.mkdir(parents=True, exist_ok=True)
+
     train_loss = train(
         corpus_path=processed_dir / "train.txt",
         output_dir=model_dir,

@@ -4,13 +4,19 @@ from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 
 
-def test_bpe_tokenizer_round_trip() -> None:
+def test_bpe_tokenizer_round_trip(tmp_path) -> None:
     text = "Hello Indoone! Hello Indoone!"
     tokenizer = BPETokenizer.train(text, vocab_size=64, min_frequency=2)
     ids = tokenizer.encode(text)
     assert tokenizer.decode(ids) == text
     assert tokenizer.vocab_size <= 64
     assert tokenizer.encode("?") == [tokenizer.stoi["<unk>"]]
+
+    path = tmp_path / "tokenizer.json"
+    tokenizer.save(path)
+    loaded = BPETokenizer.load(path)
+    assert loaded.encode(text) == ids
+    assert loaded.decode(ids) == text
 
 
 def test_bpe_special_tokens_round_trip() -> None:

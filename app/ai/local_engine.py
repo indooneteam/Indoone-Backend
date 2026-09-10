@@ -76,17 +76,24 @@ class LocalAIEngine:
         prompt = message.strip()
         if not prompt:
             raise ValueError("message cannot be empty")
+        if max_new_tokens < 0:
+            raise ValueError("max_new_tokens must not be negative")
+        if temperature <= 0:
+            raise ValueError("temperature must be greater than zero")
 
-        generated = self.tokenizer.encode(prompt, add_special_tokens=True)
+        prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=True)
+        generated_ids = list(prompt_ids)
         for _ in range(max_new_tokens):
             context = torch.tensor(
-                [generated[-self.model.block_size :]], dtype=torch.long
+                [generated_ids[-self.model.block_size :]], dtype=torch.long
             )
             logits, _ = self.model(context)
-            next_logits = logits[:, -1, :] / max(temperature, 1e-4)
+            next_logits = logits[:, -1, :] / temperature
             probabilities = torch.softmax(next_logits, dim=-1)
             next_id = torch.multinomial(probabilities, num_samples=1).item()
-            generated.append(next_id)
+            generated_ids.append(next_id)
             if next_id == self.tokenizer.stoi["<eos>"]:
                 break
-        return self.tokenizer.decode(generated)
+
+        completion_ids = generated_ids[len(prompt_ids) :]
+        return self.tokenizer.decode(completion_ids).strip()

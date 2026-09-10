@@ -46,3 +46,42 @@ def test_build_benchmark_report_rejects_invalid_limits() -> None:
         benchmark.build_benchmark_report(batch_size=0)
     with pytest.raises(ValueError, match="max_new_tokens"):
         benchmark.build_benchmark_report(max_new_tokens=0)
+
+
+def _report(loss: float, perplexity: float, overall_pass: bool) -> dict[str, object]:
+    return {
+        "benchmark_version": "v1",
+        "language_metrics": {"loss": loss, "perplexity": perplexity},
+        "behavioral_gate": {"overall_pass": overall_pass, "category_pass": {}},
+        "overall_pass": overall_pass,
+    }
+
+
+def test_compare_benchmark_reports_requires_behavioral_pass_and_lower_metrics() -> None:
+    comparison = benchmark.compare_benchmark_reports(
+        _report(2.0, 6.0, True),
+        _report(1.5, 4.0, True),
+    )
+
+    assert comparison["loss_delta"] == -0.5
+    assert comparison["perplexity_delta"] == -2.0
+    assert comparison["improved"] is True
+    assert comparison["overall_improved"] is True
+
+
+def test_compare_benchmark_reports_rejects_behavioral_regression() -> None:
+    comparison = benchmark.compare_benchmark_reports(
+        _report(2.0, 6.0, True),
+        _report(1.5, 4.0, False),
+    )
+
+    assert comparison["improved"] is True
+    assert comparison["overall_improved"] is False
+    assert comparison["behavioral_regression_free"] is False
+
+
+def test_compare_benchmark_reports_requires_valid_shape() -> None:
+    import pytest
+
+    with pytest.raises(ValueError, match="invalid benchmark report shape"):
+        benchmark.compare_benchmark_reports({}, _report(1.0, 2.0, True))

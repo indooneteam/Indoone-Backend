@@ -1,13 +1,24 @@
 import torch
 
 from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import CharacterTokenizer
+from app.ai.tokenizer import BPETokenizer
 
 
-def test_tokenizer_round_trip() -> None:
-    tokenizer = CharacterTokenizer.from_text("Hello Indoone!")
-    ids = tokenizer.encode("Hello Indoone!")
-    assert tokenizer.decode(ids) == "Hello Indoone!"
+def test_bpe_tokenizer_round_trip() -> None:
+    text = "Hello Indoone! Hello Indoone!"
+    tokenizer = BPETokenizer.train(text, vocab_size=64, min_frequency=2)
+    ids = tokenizer.encode(text)
+    assert tokenizer.decode(ids) == text
+    assert tokenizer.vocab_size <= 64
+    assert tokenizer.encode("?") == [tokenizer.stoi["<unk>"]]
+
+
+def test_bpe_special_tokens_round_trip() -> None:
+    tokenizer = BPETokenizer.train("Hello Indoone", vocab_size=64, min_frequency=1)
+    ids = tokenizer.encode("Hello", add_special_tokens=True)
+    assert ids[0] == tokenizer.stoi["<bos>"]
+    assert ids[-1] == tokenizer.stoi["<eos>"]
+    assert tokenizer.decode(ids) == "Hello"
 
 
 def test_transformer_forward_shapes() -> None:

@@ -8,8 +8,8 @@ from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import CharacterTokenizer
 
 
-DEFAULT_CHECKPOINT = Path("models/indoone-small.pt")
-DEFAULT_TOKENIZER = Path("models/indoone-tokenizer.json")
+DEFAULT_CHECKPOINT = Path("models/indoone-small/indoone-small.pt")
+DEFAULT_TOKENIZER = Path("models/indoone-small/tokenizer.json")
 
 
 class LocalAIEngine:
@@ -31,14 +31,21 @@ class LocalAIEngine:
         if not self.checkpoint.exists() or not self.tokenizer_path.exists():
             self._load_error = (
                 "Indoone local model is not trained yet. Run "
-                "python -m scripts.train_indoone_model first."
+                "python -m scripts.train_indoone_model or the documented app.ai.train pipeline first."
             )
             return
         try:
-            payload = torch.load(self.checkpoint, map_location="cpu", weights_only=False)
+            payload = torch.load(
+                self.checkpoint,
+                map_location="cpu",
+                weights_only=False,
+            )
             self.tokenizer = CharacterTokenizer.load(self.tokenizer_path)
             config = payload["config"]
-            self.model = IndooneTransformer(vocab_size=len(self.tokenizer.chars), **config)
+            self.model = IndooneTransformer(
+                vocab_size=len(self.tokenizer.chars),
+                **config,
+            )
             self.model.load_state_dict(payload["model_state"])
             self.model.eval()
         except Exception as exc:
@@ -46,7 +53,11 @@ class LocalAIEngine:
 
     @property
     def ready(self) -> bool:
-        return self.model is not None and self.tokenizer is not None and self._load_error is None
+        return (
+            self.model is not None
+            and self.tokenizer is not None
+            and self._load_error is None
+        )
 
     @torch.inference_mode()
     async def generate(

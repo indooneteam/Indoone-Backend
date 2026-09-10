@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
+from app.ai.conversation_store import ConversationStore
 from app.main import app
 
 
@@ -32,7 +35,7 @@ def test_chat_returns_ai_reply(monkeypatch) -> None:
     assert payload["conversation_id"]
 
 
-def test_chat_reuses_conversation_context(monkeypatch) -> None:
+def test_chat_reuses_conversation_context(monkeypatch, tmp_path: Path) -> None:
     observed: list[list[tuple[str, str]]] = []
 
     async def fake_reply(message: str, history=None) -> str:
@@ -40,7 +43,10 @@ def test_chat_reuses_conversation_context(monkeypatch) -> None:
         return f"reply: {message}"
 
     monkeypatch.setattr("app.api.chat.generate_reply", fake_reply)
-    monkeypatch.setattr("app.api.chat._store", __import__("app.ai.conversation_store", fromlist=["ConversationStore"]).ConversationStore(":memory:"))
+    monkeypatch.setattr(
+        "app.api.chat._store",
+        ConversationStore(tmp_path / "api-conversations.sqlite3"),
+    )
 
     first = client.post("/api/chat", json={"message": "Hello"})
     conversation_id = first.json()["conversation_id"]

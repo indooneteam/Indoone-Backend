@@ -5,7 +5,13 @@ import pytest
 from app.ai.model_registry import ModelRecord, active_record, load_records, promote_candidate, should_promote
 
 
-def record(version: str, loss: float, perplexity: float, status: str = "candidate") -> ModelRecord:
+def record(
+    version: str,
+    loss: float,
+    perplexity: float,
+    status: str = "candidate",
+    behavioral_gate_passed: bool = True,
+) -> ModelRecord:
     return ModelRecord(
         version=version,
         model_dir=f"models/{version}",
@@ -14,6 +20,7 @@ def record(version: str, loss: float, perplexity: float, status: str = "candidat
         loss=loss,
         perplexity=perplexity,
         status=status,
+        behavioral_gate_passed=behavioral_gate_passed,
     )
 
 
@@ -39,6 +46,15 @@ def test_candidate_must_improve_both_metrics(tmp_path: Path) -> None:
     assert should_promote(better, active_record(registry))
     assert not should_promote(worse_loss, active_record(registry))
     assert not should_promote(worse_perplexity, active_record(registry))
+
+
+def test_behavioral_gate_is_required_for_promotion(tmp_path: Path) -> None:
+    registry = tmp_path / "registry.json"
+    candidate = record("v1", 1.0, 2.0, behavioral_gate_passed=False)
+
+    assert should_promote(candidate, None) is False
+    with pytest.raises(ValueError, match="behavioral gate"):
+        promote_candidate(registry, candidate)
 
 
 def test_promotion_retires_previous_active_model(tmp_path: Path) -> None:

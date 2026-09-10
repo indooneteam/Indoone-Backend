@@ -69,11 +69,12 @@ def compare_benchmark_reports(
     candidate: dict[str, object],
 ) -> dict[str, object]:
     """Compare two benchmark reports for a safe model-improvement decision."""
+    if baseline.get("benchmark_version") != candidate.get("benchmark_version"):
+        raise ValueError("benchmark versions must match")
+    if baseline.get("benchmark_version") != "v1":
+        raise ValueError("unsupported benchmark version")
+
     try:
-        if baseline.get("benchmark_version") != candidate.get("benchmark_version"):
-            raise ValueError("benchmark versions must match")
-        if baseline.get("benchmark_version") != "v1":
-            raise ValueError("unsupported benchmark version")
         baseline_metrics = baseline["language_metrics"]
         candidate_metrics = candidate["language_metrics"]
         baseline_gate = baseline["behavioral_gate"]

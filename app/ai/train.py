@@ -12,7 +12,14 @@ from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import CharacterTokenizer
 
 
-def batchify(data: torch.Tensor, block_size: int, batch_size: int, device: str) -> tuple[torch.Tensor, torch.Tensor]:
+def batchify(
+    data: torch.Tensor,
+    block_size: int,
+    batch_size: int,
+    device: str,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if len(data) <= block_size + 1:
+        raise ValueError("training corpus is too small for the configured block size")
     starts = torch.randint(0, len(data) - block_size - 1, (batch_size,))
     x = torch.stack([data[i : i + block_size] for i in starts]).to(device)
     y = torch.stack([data[i + 1 : i + block_size + 1] for i in starts]).to(device)
@@ -20,6 +27,9 @@ def batchify(data: torch.Tensor, block_size: int, batch_size: int, device: str) 
 
 
 def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
+    if steps <= 0:
+        raise ValueError("steps must be greater than zero")
+
     random.seed(seed)
     torch.manual_seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -30,8 +40,12 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
 
     tokenizer = CharacterTokenizer.from_text(text)
     encoded = torch.tensor(tokenizer.encode(text), dtype=torch.long)
+    block_size = min(128, max(32, len(encoded) // 4))
+    if len(encoded) <= block_size + 1:
+        raise ValueError("training corpus is too small for the selected block size")
+
     config = {
-        "block_size": min(128, max(32, len(encoded) // 4)),
+        "block_size": block_size,
         "n_embd": 128,
         "n_head": 4,
         "n_layer": 4,
@@ -43,7 +57,7 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
     model.train()
     last_loss = float("inf")
     for _ in range(steps):
-        x, y = batchify(encoded, config["block_size"], 16, device)
+        x, y = batchify(encoded, block_size, 16, device)
         _, loss = model(x, y)
         assert loss is not None
         optimizer.zero_grad(set_to_none=True)
@@ -59,7 +73,10 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
         output_dir / "indoone-small.pt",
     )
     (output_dir / "metadata.json").write_text(
-        json.dumps({"model": "indoone-small", "steps": steps, "seed": seed, "device": device}, indent=2),
+        json.dumps(
+            {"model": "indoone-small", "steps": steps, "seed": seed, "device": device},
+            indent=2,
+        ),
         encoding="utf-8",
     )
     return last_loss
@@ -67,7 +84,7 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train the first Indoone local language model")
-    parser.add_argument("--corpus", type=Path, default=Path("data/indoone_corpus.txt"))
+    parser.add_argument("--corpus", type=Path, default=Path("data/processed/train.txt"))
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=42)

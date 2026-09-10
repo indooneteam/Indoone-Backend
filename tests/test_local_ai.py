@@ -3,6 +3,7 @@ import pytest
 
 from app.ai.model import MODEL_VERSION, IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
+from app.ai.train import train
 
 
 def test_bpe_tokenizer_round_trip(tmp_path) -> None:
@@ -57,3 +58,30 @@ def test_transformer_rejects_invalid_inputs() -> None:
         model(torch.randint(0, 32, (1, 9)))
     with pytest.raises(ValueError, match="targets must match input tensor shape"):
         model(torch.randint(0, 32, (1, 4)), torch.randint(0, 32, (1, 3)))
+
+
+def test_training_pipeline_writes_checkpoint_and_history(tmp_path) -> None:
+    corpus = ("Indoone builds its own AI training pipeline. " * 20).strip()
+    validation = ("Indoone evaluates its own model. " * 10).strip()
+    corpus_path = tmp_path / "train.txt"
+    validation_path = tmp_path / "validation.txt"
+    output_dir = tmp_path / "model"
+    corpus_path.write_text(corpus, encoding="utf-8")
+    validation_path.write_text(validation, encoding="utf-8")
+
+    final_loss = train(
+        corpus_path=corpus_path,
+        output_dir=output_dir,
+        steps=2,
+        seed=7,
+        validation_path=validation_path,
+        batch_size=2,
+        checkpoint_interval=1,
+    )
+
+    assert torch.isfinite(torch.tensor(final_loss))
+    assert (output_dir / "tokenizer.json").exists()
+    assert (output_dir / "checkpoint.pt").exists()
+    assert (output_dir / "indoone-small.pt").exists()
+    assert (output_dir / "training_history.json").exists()
+    assert (output_dir / "metadata.json").exists()

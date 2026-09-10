@@ -20,6 +20,15 @@ class LocalModelRuntime:
         self.model.load_state_dict(checkpoint["model_state"])
         self.model.eval()
 
+    @staticmethod
+    def _select_next_token(logits: torch.Tensor, temperature: float) -> int:
+        if temperature < 0:
+            raise ValueError("temperature must be non-negative")
+        if temperature == 0:
+            return int(torch.argmax(logits, dim=-1).item())
+        probabilities = torch.softmax(logits / temperature, dim=-1)
+        return int(torch.multinomial(probabilities, num_samples=1).item())
+
     @torch.inference_mode()
     def generate(
         self,
@@ -32,8 +41,8 @@ class LocalModelRuntime:
             raise ValueError("prompt cannot be empty")
         if max_new_tokens < 0:
             raise ValueError("max_new_tokens must not be negative")
-        if temperature <= 0:
-            raise ValueError("temperature must be greater than zero")
+        if temperature < 0:
+            raise ValueError("temperature must be non-negative")
 
         prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=True)
         generated_ids = list(prompt_ids)
@@ -41,12 +50,11 @@ class LocalModelRuntime:
         for _ in range(max_new_tokens):
             context = idx[:, -self.model.block_size :]
             logits, _ = self.model(context)
-            next_logits = logits[:, -1, :] / temperature
-            probs = torch.softmax(next_logits, dim=-1)
-            next_id = torch.multinomial(probs, num_samples=1)
-            idx = torch.cat((idx, next_id), dim=1)
-            generated_ids.append(next_id.item())
-            if next_id.item() == self.tokenizer.stoi["<eos>"]:
+            next_logits = logits[:, -1, :]
+            next_id = self._select_next_token(next_logits, temperature)
+            idx = torch.cat((idx, torch.tensor([[next_id]], dtype=torch.long)), dim=1)
+            generated_ids.append(next_id)
+            if next_id == self.tokenizer.stoi["<eos>"]:
                 break
 
         completion_ids = generated_ids[len(prompt_ids) :]

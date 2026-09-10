@@ -18,7 +18,7 @@ def test_format_results_preserves_provenance() -> None:
 
 
 def test_provider_validates_inputs() -> None:
-    with pytest.raises(ValueError, match="HTTP\(S\)"):
+    with pytest.raises(ValueError, match=r"HTTP\(S\)"):
         HttpResearchProvider("file:///tmp/search")
 
     provider = HttpResearchProvider("https://example.com/search")

@@ -9,10 +9,11 @@ from pathlib import Path
 
 import httpx
 
+from app.ai.grounding import GroundedEvidence, append_sources, build_grounded_prompt_instruction
 from app.ai.inference import LocalModelRuntime
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
 from app.ai.local_engine import LocalAIEngine
-from app.ai.research import ResearchProvider, build_research_provider, format_results
+from app.ai.research import ResearchProvider, ResearchResult, build_research_provider, format_results
 
 
 MODEL_DIR = Path("models/indoone-small")
@@ -58,7 +59,7 @@ def _build_context(
     knowledge: str = "",
     research: str = "",
 ) -> str:
-    prompt_parts = ["<conversation>"]
+    prompt_parts = ["<conversation>", build_grounded_prompt_instruction()]
     for role, content in history:
         prompt_parts.append(f"{role}: {content}")
     if knowledge:
@@ -68,6 +69,10 @@ def _build_context(
     prompt_parts.append(f"user: {message.strip()}")
     prompt_parts.append("assistant:")
     return "\n".join(prompt_parts)
+
+
+def _evidence_from_results(results: list[ResearchResult]) -> list[GroundedEvidence]:
+    return [GroundedEvidence(title=result.title, url=result.url, snippet=result.snippet) for result in results]
 
 
 class LocalAIService:
@@ -83,10 +88,13 @@ class LocalAIService:
             knowledge = format_hits(_knowledge_base.search(prompt, limit=3))
 
         research = ""
+        research_results: list[ResearchResult] = []
         if _research_provider is not None and should_research(prompt):
             try:
-                research = format_results(await _research_provider.search(prompt, limit=5))
+                research_results = await _research_provider.search(prompt, limit=5)
+                research = format_results(research_results)
             except (httpx.HTTPError, RuntimeError, ValueError):
+                research_results = []
                 research = ""
 
         context = _build_context(
@@ -96,8 +104,10 @@ class LocalAIService:
             research=research,
         )
         if _runtime is not None:
-            return _runtime.generate(context)
-        return await _fallback_engine.generate(context)
+            answer = _runtime.generate(context)
+        else:
+            answer = await _fallback_engine.generate(context)
+        return append_sources(answer, _evidence_from_results(research_results))
 
 
 async def generate_reply(

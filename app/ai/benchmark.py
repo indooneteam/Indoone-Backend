@@ -68,24 +68,24 @@ def load_benchmark_report(path: Path) -> dict[str, object]:
 def _validate_report(report: dict[str, object]) -> tuple[str, dict[str, object], dict[str, object], bool]:
     try:
         version = report["benchmark_version"]
-        baseline_metrics = report["language_metrics"]
-        baseline_gate = report["behavioral_gate"]
+        metrics = report["language_metrics"]
+        gate = report["behavioral_gate"]
         overall_pass = report["overall_pass"]
-        if not isinstance(version, str):
+        if not isinstance(version, str) or not version.strip():
             raise TypeError
-        if not isinstance(baseline_metrics, dict) or not isinstance(baseline_gate, dict):
+        if not isinstance(metrics, dict) or not isinstance(gate, dict):
             raise TypeError
         if not isinstance(overall_pass, bool):
             raise TypeError
-        float(baseline_metrics["loss"])
-        float(baseline_metrics["perplexity"])
-        if not math.isfinite(float(baseline_metrics["loss"])):
+        loss = float(metrics["loss"])
+        perplexity = float(metrics["perplexity"])
+        if not math.isfinite(loss) or not math.isfinite(perplexity):
             raise ValueError
-        if not math.isfinite(float(baseline_metrics["perplexity"])):
+        if loss < 0 or perplexity < 0:
             raise ValueError
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("invalid benchmark report shape") from exc
-    return version, baseline_metrics, baseline_gate, overall_pass
+    return version, metrics, gate, overall_pass
 
 
 def compare_benchmark_reports(

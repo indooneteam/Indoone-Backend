@@ -99,6 +99,27 @@ def test_compare_benchmark_reports_requires_valid_shape() -> None:
         benchmark.compare_benchmark_reports({}, _report(1.0, 2.0, True))
 
 
+def test_compare_benchmark_reports_rejects_non_finite_metrics() -> None:
+    import math
+    import pytest
+
+    candidate = _report(math.nan, 2.0, True)
+    with pytest.raises(ValueError, match="invalid benchmark report shape"):
+        benchmark.compare_benchmark_reports(_report(1.0, 2.0, True), candidate)
+
+
+def test_compare_benchmark_reports_rejects_unsupported_version() -> None:
+    import pytest
+
+    baseline = _report(2.0, 6.0, True)
+    candidate = _report(1.5, 4.0, True)
+    baseline["benchmark_version"] = "v2"
+    candidate["benchmark_version"] = "v2"
+
+    with pytest.raises(ValueError, match="unsupported benchmark version"):
+        benchmark.compare_benchmark_reports(baseline, candidate)
+
+
 def test_build_comparison_report_loads_saved_reports(tmp_path: Path) -> None:
     baseline_path = tmp_path / "baseline.json"
     candidate_path = tmp_path / "candidate.json"

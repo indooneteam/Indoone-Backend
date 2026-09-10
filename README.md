@@ -10,6 +10,24 @@ The current local stack is:
 
 `/api/chat` → AI service → local model runtime → Indoone Transformer checkpoint
 
+When configured, fresh-information requests can also use the optional research layer:
+
+`/api/chat` → AI service → research provider → source results → local AI model
+
+Research is separate from model inference. It returns source title, URL, and optional snippet so provenance is retained in the model context.
+
+## Optional live research
+
+Set these variables to connect a search endpoint that returns JSON in the form `{ "results": [{ "title": "...", "url": "...", "snippet": "..." }] }`:
+
+```text
+INDOONE_RESEARCH_URL=https://your-search-service.example/search
+INDOONE_RESEARCH_TOKEN=
+INDOONE_RESEARCH_TIMEOUT=10
+```
+
+The backend only invokes the provider for messages that explicitly indicate a freshness or research request, such as "latest", "current", "today", "news", or "research". If the provider is unavailable, chat falls back to local knowledge/model context instead of failing the request.
+
 ## Dataset pipeline
 
 Place source documents in `data/raw/`. The preparation script normalizes whitespace, splits documents, removes very short entries, removes exact duplicate content using a normalized SHA-256 fingerprint, and creates deterministic train/validation/test files under `data/processed/`.
@@ -23,12 +41,13 @@ The processed dataset is a generated training artifact and should not be committ
 ## Project structure
 
 - `app/api/` — HTTP API routes
-- `app/ai/` — tokenizer, Transformer model, training, and local inference
+- `app/ai/` — tokenizer, Transformer model, training, local inference, knowledge, and research
 - `data/raw/` — source training documents
+- `data/knowledge/` — approved local knowledge sources
 - `data/processed/` — generated train/validation/test splits
 - `models/` — generated local checkpoints (ignored by Git)
 - `scripts/` — dataset and training utilities
-- `tests/` — API, dataset, and model tests
+- `tests/` — API, dataset, AI, and integration tests
 
 ## Train the first model
 

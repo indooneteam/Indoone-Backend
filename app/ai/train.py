@@ -30,16 +30,36 @@ def _file_fingerprint(path: Path) -> str:
     return digest.hexdigest()
 
 
-def batchify(data: torch.Tensor, block_size: int, batch_size: int, device: str, generator: torch.Generator | None = None) -> tuple[torch.Tensor, torch.Tensor]:
+def batchify(
+    data: torch.Tensor,
+    block_size: int,
+    batch_size: int,
+    device: str,
+    generator: torch.Generator | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
     if len(data) <= block_size + 1:
         raise ValueError("dataset is too small for the configured block size")
-    starts = torch.randint(0, len(data) - block_size - 1, (batch_size,), generator=generator)
+    starts = torch.randint(
+        0,
+        len(data) - block_size - 1,
+        (batch_size,),
+        generator=generator,
+    )
     x = torch.stack([data[i : i + block_size] for i in starts]).to(device)
     y = torch.stack([data[i + 1 : i + block_size + 1] for i in starts]).to(device)
     return x, y
 
 
-def evaluate(model: IndooneTransformer, data: torch.Tensor, block_size: int, batch_size: int, batches: int, device: str) -> float | None:
+def evaluate(
+    model: IndooneTransformer,
+    data: torch.Tensor,
+    block_size: int,
+    batch_size: int,
+    batches: int,
+    device: str,
+) -> float | None:
+    if batches <= 0:
+        raise ValueError("batches must be greater than zero")
     if len(data) <= block_size + 1:
         return None
     model.eval()
@@ -56,7 +76,25 @@ def evaluate(model: IndooneTransformer, data: torch.Tensor, block_size: int, bat
     return sum(losses) / len(losses)
 
 
-def train(corpus_path: Path, output_dir: Path, steps: int, seed: int, validation_path: Path | None = None, batch_size: int = 16, checkpoint_interval: int = 500, learning_rate: float = 3e-4, instruction_path: Path | None = None) -> float:
+def _snapshot_state(model: IndooneTransformer) -> dict[str, torch.Tensor]:
+    """Clone model weights so a later optimizer step cannot mutate the snapshot."""
+    return {
+        name: tensor.detach().cpu().clone()
+        for name, tensor in model.state_dict().items()
+    }
+
+
+def train(
+    corpus_path: Path,
+    output_dir: Path,
+    steps: int,
+    seed: int,
+    validation_path: Path | None = None,
+    batch_size: int = 16,
+    checkpoint_interval: int = 500,
+    learning_rate: float = 3e-4,
+    instruction_path: Path | None = None,
+) -> float:
     if steps <= 0:
         raise ValueError("steps must be greater than zero")
     if batch_size <= 0:
@@ -86,7 +124,10 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int, validation
         raise ValueError("training corpus is too small; add more text")
 
     tokenizer = BPETokenizer.train(train_text, vocab_size=512, min_frequency=2)
-    train_encoded = torch.tensor(tokenizer.encode(train_text, add_special_tokens=True), dtype=torch.long)
+    train_encoded = torch.tensor(
+        tokenizer.encode(train_text, add_special_tokens=True),
+        dtype=torch.long,
+    )
     if len(train_encoded) < 4:
         raise ValueError("training corpus is too small after tokenization")
 
@@ -99,7 +140,10 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int, validation
     if validation_path is not None and validation_path.exists():
         validation_text = validation_path.read_text(encoding="utf-8")
         if validation_text.strip():
-            validation_encoded = torch.tensor(tokenizer.encode(validation_text, add_special_tokens=True), dtype=torch.long)
+            validation_encoded = torch.tensor(
+                tokenizer.encode(validation_text, add_special_tokens=True),
+                dtype=torch.long,
+            )
             validation_fingerprint = _file_fingerprint(validation_path)
 
     config = {**DEFAULT_MODEL_CONFIG, "block_size": block_size}
@@ -113,6 +157,9 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int, validation
     train_generator.manual_seed(seed)
     history: list[dict[str, float | int | None]] = []
     last_loss = float("inf")
+    best_validation_loss = float("inf")
+    best_validation_step: int | None = None
+    best_model_state: dict[str, torch.Tensor] | None = None
 
     model.train()
     for step in range(1, steps + 1):
@@ -126,31 +173,95 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int, validation
         last_loss = float(loss.detach().cpu())
 
         if step == 1 or step % checkpoint_interval == 0 or step == steps:
-            validation_loss = evaluate(model, validation_encoded, block_size, batch_size, 4, device) if validation_encoded is not None else None
-            history.append({"step": step, "train_loss": last_loss, "validation_loss": validation_loss})
-            torch.save({"step": step, "model_config": model.config(), "optimizer_state": optimizer.state_dict(), "model_state": model.state_dict(), "seed": seed}, output_dir / "checkpoint.pt")
+            validation_loss = (
+                evaluate(model, validation_encoded, block_size, batch_size, 4, device)
+                if validation_encoded is not None
+                else None
+            )
+            history.append(
+                {
+                    "step": step,
+                    "train_loss": last_loss,
+                    "validation_loss": validation_loss,
+                }
+            )
 
-    torch.save({"config": config, "model_state": model.cpu().state_dict()}, output_dir / "indoone-small.pt")
-    (output_dir / "training_history.json").write_text(json.dumps(history, indent=2), encoding="utf-8")
-    (output_dir / "metadata.json").write_text(json.dumps({
-        "model": "indoone-small",
-        "tokenizer": "bpe-v1",
-        "vocab_size": tokenizer.vocab_size,
-        "special_tokens": list(tokenizer.SPECIAL_TOKENS),
-        "steps": steps,
-        "seed": seed,
-        "device": device,
-        "batch_size": batch_size,
-        "learning_rate": learning_rate,
-        "checkpoint_interval": checkpoint_interval,
-        "validation_enabled": validation_encoded is not None,
-        "instruction_data_enabled": instruction_enabled,
-        "source_fingerprint": _file_fingerprint(corpus_path),
-        "validation_fingerprint": validation_fingerprint,
-        "instruction_fingerprint": instruction_fingerprint,
-        "instruction_example_count": instruction_example_count,
-        "training_text_characters": len(train_text),
-    }, indent=2), encoding="utf-8")
+            if validation_loss is not None and validation_loss < best_validation_loss:
+                best_validation_loss = validation_loss
+                best_validation_step = step
+                best_model_state = _snapshot_state(model)
+                torch.save(
+                    {
+                        "step": step,
+                        "model_config": model.config(),
+                        "optimizer_state": optimizer.state_dict(),
+                        "model_state": best_model_state,
+                        "seed": seed,
+                        "selection": "best_validation_loss",
+                        "validation_loss": validation_loss,
+                    },
+                    output_dir / "best_checkpoint.pt",
+                )
+
+            torch.save(
+                {
+                    "step": step,
+                    "model_config": model.config(),
+                    "optimizer_state": optimizer.state_dict(),
+                    "model_state": model.state_dict(),
+                    "seed": seed,
+                },
+                output_dir / "checkpoint.pt",
+            )
+
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+
+    torch.save(
+        {
+            "config": config,
+            "model_state": model.cpu().state_dict(),
+        },
+        output_dir / "indoone-small.pt",
+    )
+    (output_dir / "training_history.json").write_text(
+        json.dumps(history, indent=2),
+        encoding="utf-8",
+    )
+    (output_dir / "metadata.json").write_text(
+        json.dumps(
+            {
+                "model": "indoone-small",
+                "tokenizer": "bpe-v1",
+                "vocab_size": tokenizer.vocab_size,
+                "special_tokens": list(tokenizer.SPECIAL_TOKENS),
+                "steps": steps,
+                "seed": seed,
+                "device": device,
+                "batch_size": batch_size,
+                "learning_rate": learning_rate,
+                "checkpoint_interval": checkpoint_interval,
+                "validation_enabled": validation_encoded is not None,
+                "best_validation_loss": (
+                    best_validation_loss if best_model_state is not None else None
+                ),
+                "best_validation_step": best_validation_step,
+                "final_model_selection": (
+                    "best_validation_loss"
+                    if best_model_state is not None
+                    else "final_step"
+                ),
+                "instruction_data_enabled": instruction_enabled,
+                "source_fingerprint": _file_fingerprint(corpus_path),
+                "validation_fingerprint": validation_fingerprint,
+                "instruction_fingerprint": instruction_fingerprint,
+                "instruction_example_count": instruction_example_count,
+                "training_text_characters": len(train_text),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     return last_loss
 
 
@@ -166,7 +277,17 @@ def main() -> None:
     parser.add_argument("--checkpoint-interval", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     args = parser.parse_args()
-    loss = train(args.corpus, args.output, args.steps, args.seed, args.validation, args.batch_size, args.checkpoint_interval, args.learning_rate, args.instructions)
+    loss = train(
+        args.corpus,
+        args.output,
+        args.steps,
+        args.seed,
+        args.validation,
+        args.batch_size,
+        args.checkpoint_interval,
+        args.learning_rate,
+        args.instructions,
+    )
     print(f"training complete; final loss={loss:.4f}")
 
 

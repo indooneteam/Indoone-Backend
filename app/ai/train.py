@@ -39,7 +39,7 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
         raise ValueError("training corpus is too small; add more text")
 
     tokenizer = BPETokenizer.train(text, vocab_size=512, min_frequency=2)
-    encoded = torch.tensor(tokenizer.encode(text), dtype=torch.long)
+    encoded = torch.tensor(tokenizer.encode(text, add_special_tokens=True), dtype=torch.long)
     block_size = min(128, max(32, len(encoded) // 4))
     if len(encoded) <= block_size + 1:
         raise ValueError("training corpus is too small for the selected block size")
@@ -78,6 +78,7 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
                 "model": "indoone-small",
                 "tokenizer": "bpe-v1",
                 "vocab_size": tokenizer.vocab_size,
+                "special_tokens": list(tokenizer.SPECIAL_TOKENS),
                 "steps": steps,
                 "seed": seed,
                 "device": device,

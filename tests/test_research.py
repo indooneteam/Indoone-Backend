@@ -18,11 +18,52 @@ def test_format_results_preserves_provenance() -> None:
 
 
 def test_provider_validates_inputs() -> None:
+    with pytest.raises(ValueError, match="HTTP\(S\)"):
+        HttpResearchProvider("file:///tmp/search")
+
     provider = HttpResearchProvider("https://example.com/search")
     with pytest.raises(ValueError, match="query"):
         asyncio.run(provider.search("   "))
     with pytest.raises(ValueError, match="limit"):
         asyncio.run(provider.search("indoone", limit=21))
+
+
+def test_provider_sanitizes_result_urls(monkeypatch) -> None:
+    class FakeResponse:
+        content = json.dumps(
+            {
+                "results": [
+                    {"title": "Valid", "url": "https://example.com", "snippet": "ok"},
+                    {"title": "Bad scheme", "url": "javascript:alert(1)", "snippet": "skip"},
+                    {"title": "Missing URL", "snippet": "skip"},
+                ]
+            }
+        ).encode("utf-8")
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return json.loads(self.content)
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            assert kwargs["follow_redirects"] is False
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, headers):
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    results = asyncio.run(HttpResearchProvider("https://search.example/api").search("Indoone"))
+
+    assert results == [ResearchResult("Valid", "https://example.com", "ok")]
 
 
 def test_provider_parses_json_results(monkeypatch) -> None:

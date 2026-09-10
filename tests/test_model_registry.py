@@ -94,14 +94,12 @@ def test_invalid_benchmark_version_is_rejected() -> None:
         should_promote(record("v1", 1.0, 2.0, benchmark_version="v2"), None)
 
 
-def test_benchmark_version_must_match_active_model(tmp_path: Path) -> None:
-    registry = tmp_path / "registry.json"
-    current = record("v1", 1.5, 4.5)
-    promote_candidate(registry, current)
-    candidate = record("v2", 1.4, 4.4, benchmark_version="v2")
+def test_benchmark_version_must_match_active_model() -> None:
+    current = record("v1", 1.5, 4.5, status="active", benchmark_version="v2")
+    candidate = record("v2", 1.4, 4.4, benchmark_version="v1")
 
     with pytest.raises(ValueError, match="benchmark versions"):
-        should_promote(candidate, active_record(registry))
+        should_promote(candidate, current)
 
 
 def test_candidate_version_must_differ_from_active() -> None:

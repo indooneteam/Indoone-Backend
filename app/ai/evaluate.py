@@ -30,8 +30,9 @@ def evaluate_checkpoint(
         weights_only=False,
     )
     tokenizer = BPETokenizer.load(tokenizer_path)
-    config = checkpoint["config"]
-    model = IndooneTransformer(vocab_size=tokenizer.vocab_size, **config)
+    raw_config = dict(checkpoint["config"])
+    model_version = str(raw_config.pop("model_version", "indoone-gpt-v1"))
+    model = IndooneTransformer(vocab_size=tokenizer.vocab_size, **raw_config)
     model.load_state_dict(checkpoint["model_state"])
     model.eval()
 
@@ -47,15 +48,13 @@ def evaluate_checkpoint(
     if len(encoded) <= block_size + 1:
         raise ValueError("evaluation corpus is too small for the model block size")
 
-    starts = range(0, len(encoded) - block_size, block_size)
+    starts = list(range(0, len(encoded) - block_size, block_size))
     losses: list[float] = []
     examples = 0
 
     with torch.inference_mode():
-        for offset in range(0, len(list(starts)), batch_size):
-            chunk = list(starts)[offset : offset + batch_size]
-            if not chunk:
-                continue
+        for offset in range(0, len(starts), batch_size):
+            chunk = starts[offset : offset + batch_size]
             x = torch.stack([encoded[i : i + block_size] for i in chunk])
             y = torch.stack([encoded[i + 1 : i + block_size + 1] for i in chunk])
             _, loss = model(x, y)
@@ -65,7 +64,7 @@ def evaluate_checkpoint(
 
     loss = sum(losses) / len(losses)
     return {
-        "model_version": str(config["model_version"]),
+        "model_version": model_version,
         "corpus_tokens": int(len(encoded)),
         "evaluation_batches": examples,
         "loss": loss,

@@ -5,17 +5,17 @@ from pathlib import Path
 import torch
 
 from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import CharacterTokenizer
+from app.ai.tokenizer import BPETokenizer
 
 
 class LocalModelRuntime:
     """Loads an Indoone checkpoint and generates text locally."""
 
     def __init__(self, checkpoint_path: Path, tokenizer_path: Path) -> None:
-        checkpoint = torch.load(checkpoint_path, map_location="cpu")
-        self.tokenizer = CharacterTokenizer.load(tokenizer_path)
+        checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+        self.tokenizer = BPETokenizer.load(tokenizer_path)
         config = checkpoint["config"]
-        self.model = IndooneTransformer(vocab_size=len(self.tokenizer.chars), **config)
+        self.model = IndooneTransformer(vocab_size=self.tokenizer.vocab_size, **config)
         self.model.load_state_dict(checkpoint["model_state"])
         self.model.eval()
 

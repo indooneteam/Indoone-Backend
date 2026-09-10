@@ -31,7 +31,9 @@ def test_service_includes_research_results(monkeypatch) -> None:
 
     reply = asyncio.run(service.generate_reply("latest Indoone news"))
 
-    assert reply == "ok"
+    assert reply.startswith("ok")
+    assert "Sources:" in reply
+    assert "https://example.com/indoone" in reply
     assert "<research>" in captured[0]
     assert "Indoone result" in captured[0]
     assert "https://example.com/indoone" in captured[0]

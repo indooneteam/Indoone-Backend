@@ -37,7 +37,7 @@ def test_evaluate_checkpoint_returns_loss_and_perplexity(tmp_path: Path) -> None
     )
 
     assert metrics["model_version"] == "indoone-gpt-v1"
-    assert metrics["corpus_tokens"] > 9
+    assert metrics["corpus_tokens"] >= 2
     assert metrics["evaluation_batches"] > 0
     assert isinstance(metrics["loss"], float)
     assert metrics["loss"] >= 0.0

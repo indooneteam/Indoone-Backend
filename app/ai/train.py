@@ -97,10 +97,10 @@ def train(
     train_encoded = torch.tensor(
         tokenizer.encode(train_text, add_special_tokens=True), dtype=torch.long
     )
-    if len(train_encoded) < 34:
+    if len(train_encoded) < 10:
         raise ValueError("training corpus is too small after tokenization")
 
-    block_size = min(128, max(32, len(train_encoded) // 4))
+    block_size = min(128, max(8, len(train_encoded) // 4))
     if len(train_encoded) <= block_size + 1:
         raise ValueError("training corpus is too small for the selected block size")
 

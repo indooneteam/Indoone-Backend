@@ -20,8 +20,17 @@ class LocalModelRuntime:
         self.model.eval()
 
     @torch.inference_mode()
-    def generate(self, prompt: str, max_new_tokens: int = 80, temperature: float = 0.8) -> str:
-        ids = self.tokenizer.encode(prompt)
+    def generate(
+        self,
+        prompt: str,
+        max_new_tokens: int = 80,
+        temperature: float = 0.8,
+    ) -> str:
+        prompt = prompt.strip()
+        if not prompt:
+            raise ValueError("prompt cannot be empty")
+
+        ids = self.tokenizer.encode(prompt, add_special_tokens=True)
         idx = torch.tensor([ids], dtype=torch.long)
         for _ in range(max_new_tokens):
             context = idx[:, -self.model.block_size :]
@@ -30,4 +39,6 @@ class LocalModelRuntime:
             probs = torch.softmax(next_logits, dim=-1)
             next_id = torch.multinomial(probs, num_samples=1)
             idx = torch.cat((idx, next_id), dim=1)
+            if next_id.item() == self.tokenizer.stoi["<eos>"]:
+                break
         return self.tokenizer.decode(idx[0].tolist())

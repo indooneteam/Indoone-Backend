@@ -54,6 +54,41 @@ def build_benchmark_report(
     }
 
 
+def compare_benchmark_reports(
+    baseline: dict[str, object],
+    candidate: dict[str, object],
+) -> dict[str, object]:
+    """Compare two benchmark reports and require a behavioral pass plus lower loss/perplexity."""
+    try:
+        baseline_metrics = baseline["language_metrics"]
+        candidate_metrics = candidate["language_metrics"]
+        baseline_gate = baseline["behavioral_gate"]
+        candidate_gate = candidate["behavioral_gate"]
+        baseline_loss = float(baseline_metrics["loss"])
+        candidate_loss = float(candidate_metrics["loss"])
+        baseline_perplexity = float(baseline_metrics["perplexity"])
+        candidate_perplexity = float(candidate_metrics["perplexity"])
+        baseline_pass = bool(baseline["overall_pass"])
+        candidate_pass = bool(candidate["overall_pass"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("invalid benchmark report shape") from exc
+
+    loss_delta = candidate_loss - baseline_loss
+    perplexity_delta = candidate_perplexity - baseline_perplexity
+    improved = candidate_loss < baseline_loss and candidate_perplexity < baseline_perplexity
+    return {
+        "baseline_pass": baseline_pass,
+        "candidate_pass": candidate_pass,
+        "behavioral_regression_free": candidate_pass or not bool(candidate_gate),
+        "loss_delta": loss_delta,
+        "perplexity_delta": perplexity_delta,
+        "improved": improved,
+        "overall_improved": candidate_pass and improved,
+        "baseline_behavioral_gate": baseline_gate,
+        "candidate_behavioral_gate": candidate_gate,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the repeatable Indoone core AI benchmark")
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)

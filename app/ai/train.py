@@ -10,6 +10,7 @@ from torch import nn
 
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
+from app.ai.training_data import load_examples, write_corpus
 
 
 DEFAULT_MODEL_CONFIG = {
@@ -75,6 +76,7 @@ def train(
     batch_size: int = 16,
     checkpoint_interval: int = 500,
     learning_rate: float = 3e-4,
+    instruction_path: Path | None = None,
 ) -> float:
     if steps <= 0:
         raise ValueError("steps must be greater than zero")
@@ -90,6 +92,11 @@ def train(
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     train_text = corpus_path.read_text(encoding="utf-8")
+    if instruction_path is not None and instruction_path.exists():
+        examples = load_examples(instruction_path)
+        instruction_corpus = output_dir / "instruction_corpus.txt"
+        write_corpus(examples, instruction_corpus)
+        train_text = train_text.rstrip() + "\n\n" + instruction_corpus.read_text(encoding="utf-8")
     if len(train_text) < 32:
         raise ValueError("training corpus is too small; add more text")
 
@@ -185,6 +192,7 @@ def train(
                 "learning_rate": learning_rate,
                 "checkpoint_interval": checkpoint_interval,
                 "validation_enabled": validation_encoded is not None,
+                "instruction_data_enabled": instruction_path is not None,
             },
             indent=2,
         ),
@@ -200,6 +208,11 @@ def main() -> None:
         "--validation",
         type=Path,
         default=Path("data/processed/validation.txt"),
+    )
+    parser.add_argument(
+        "--instructions",
+        type=Path,
+        default=Path("data/raw/indoone_instructions.jsonl"),
     )
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
     parser.add_argument("--steps", type=int, default=2000)
@@ -217,6 +230,7 @@ def main() -> None:
         args.batch_size,
         args.checkpoint_interval,
         args.learning_rate,
+        args.instructions,
     )
     print(f"training complete; final loss={loss:.4f}")
 

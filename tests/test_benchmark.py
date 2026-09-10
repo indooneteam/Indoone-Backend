@@ -80,8 +80,41 @@ def test_compare_benchmark_reports_rejects_behavioral_regression() -> None:
     assert comparison["behavioral_regression_free"] is False
 
 
+def test_compare_benchmark_reports_rejects_mismatched_version() -> None:
+    baseline = _report(2.0, 6.0, True)
+    candidate = _report(1.5, 4.0, True)
+    candidate["benchmark_version"] = "v2"
+
+    import pytest
+
+    with pytest.raises(ValueError, match="benchmark versions"):
+        benchmark.compare_benchmark_reports(baseline, candidate)
+
+
 def test_compare_benchmark_reports_requires_valid_shape() -> None:
     import pytest
 
     with pytest.raises(ValueError, match="invalid benchmark report shape"):
         benchmark.compare_benchmark_reports({}, _report(1.0, 2.0, True))
+
+
+def test_build_comparison_report_loads_saved_reports(tmp_path: Path) -> None:
+    baseline_path = tmp_path / "baseline.json"
+    candidate_path = tmp_path / "candidate.json"
+    baseline_path.write_text(json.dumps(_report(2.0, 6.0, True)), encoding="utf-8")
+    candidate_path.write_text(json.dumps(_report(1.5, 4.0, True)), encoding="utf-8")
+
+    comparison = benchmark.build_comparison_report(baseline_path, candidate_path)
+
+    assert comparison["overall_improved"] is True
+    assert comparison["loss_delta"] == -0.5
+
+
+def test_load_benchmark_report_rejects_invalid_json(tmp_path: Path) -> None:
+    import pytest
+
+    path = tmp_path / "broken.json"
+    path.write_text("not json", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="unable to load benchmark report"):
+        benchmark.load_benchmark_report(path)

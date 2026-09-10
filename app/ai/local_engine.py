@@ -76,7 +76,7 @@ class LocalAIEngine:
         if not prompt:
             raise ValueError("message cannot be empty")
 
-        generated = self.tokenizer.encode(prompt)
+        generated = self.tokenizer.encode(prompt, add_special_tokens=True)
         for _ in range(max_new_tokens):
             context = torch.tensor(
                 [generated[-self.model.block_size :]], dtype=torch.long

@@ -58,12 +58,16 @@ def compare_benchmark_reports(
     baseline: dict[str, object],
     candidate: dict[str, object],
 ) -> dict[str, object]:
-    """Compare two benchmark reports and require a behavioral pass plus lower loss/perplexity."""
+    """Compare two benchmark reports for a safe model-improvement decision."""
     try:
         baseline_metrics = baseline["language_metrics"]
         candidate_metrics = candidate["language_metrics"]
         baseline_gate = baseline["behavioral_gate"]
         candidate_gate = candidate["behavioral_gate"]
+        if not isinstance(baseline_metrics, dict) or not isinstance(candidate_metrics, dict):
+            raise TypeError
+        if not isinstance(baseline_gate, dict) or not isinstance(candidate_gate, dict):
+            raise TypeError
         baseline_loss = float(baseline_metrics["loss"])
         candidate_loss = float(candidate_metrics["loss"])
         baseline_perplexity = float(baseline_metrics["perplexity"])
@@ -79,7 +83,7 @@ def compare_benchmark_reports(
     return {
         "baseline_pass": baseline_pass,
         "candidate_pass": candidate_pass,
-        "behavioral_regression_free": candidate_pass or not bool(candidate_gate),
+        "behavioral_regression_free": candidate_pass,
         "loss_delta": loss_delta,
         "perplexity_delta": perplexity_delta,
         "improved": improved,

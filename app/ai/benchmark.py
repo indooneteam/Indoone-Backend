@@ -54,12 +54,26 @@ def build_benchmark_report(
     }
 
 
+def load_benchmark_report(path: Path) -> dict[str, object]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"unable to load benchmark report: {path}") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("benchmark report must contain a JSON object")
+    return payload
+
+
 def compare_benchmark_reports(
     baseline: dict[str, object],
     candidate: dict[str, object],
 ) -> dict[str, object]:
     """Compare two benchmark reports for a safe model-improvement decision."""
     try:
+        if baseline.get("benchmark_version") != candidate.get("benchmark_version"):
+            raise ValueError("benchmark versions must match")
+        if baseline.get("benchmark_version") != "v1":
+            raise ValueError("unsupported benchmark version")
         baseline_metrics = baseline["language_metrics"]
         candidate_metrics = candidate["language_metrics"]
         baseline_gate = baseline["behavioral_gate"]
@@ -81,6 +95,7 @@ def compare_benchmark_reports(
     perplexity_delta = candidate_perplexity - baseline_perplexity
     improved = candidate_loss < baseline_loss and candidate_perplexity < baseline_perplexity
     return {
+        "benchmark_version": "v1",
         "baseline_pass": baseline_pass,
         "candidate_pass": candidate_pass,
         "behavioral_regression_free": candidate_pass,
@@ -93,6 +108,14 @@ def compare_benchmark_reports(
     }
 
 
+def build_comparison_report(baseline_path: Path, candidate_path: Path) -> dict[str, object]:
+    """Load two saved benchmark reports and produce the promotion decision."""
+    return compare_benchmark_reports(
+        load_benchmark_report(baseline_path),
+        load_benchmark_report(candidate_path),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the repeatable Indoone core AI benchmark")
     parser.add_argument("--checkpoint", type=Path, default=DEFAULT_CHECKPOINT)
@@ -102,16 +125,25 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--max-new-tokens", type=int, default=80)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--baseline-report", type=Path)
+    parser.add_argument("--candidate-report", type=Path)
     args = parser.parse_args()
 
-    report = build_benchmark_report(
-        checkpoint_path=args.checkpoint,
-        tokenizer_path=args.tokenizer,
-        corpus_path=args.corpus,
-        cases_path=args.cases,
-        batch_size=args.batch_size,
-        max_new_tokens=args.max_new_tokens,
-    )
+    if (args.baseline_report is None) != (args.candidate_report is None):
+        parser.error("--baseline-report and --candidate-report must be provided together")
+
+    if args.baseline_report is not None and args.candidate_report is not None:
+        report = build_comparison_report(args.baseline_report, args.candidate_report)
+    else:
+        report = build_benchmark_report(
+            checkpoint_path=args.checkpoint,
+            tokenizer_path=args.tokenizer,
+            corpus_path=args.corpus,
+            cases_path=args.cases,
+            batch_size=args.batch_size,
+            max_new_tokens=args.max_new_tokens,
+        )
+
     rendered = json.dumps(report, indent=2, ensure_ascii=False)
     print(rendered)
     if args.output is not None:

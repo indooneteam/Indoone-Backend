@@ -1,0 +1,33 @@
+from __future__ import annotations
+
+from pathlib import Path
+
+import torch
+
+from app.ai.model import IndooneTransformer
+from app.ai.tokenizer import CharacterTokenizer
+
+
+class LocalModelRuntime:
+    """Loads an Indoone checkpoint and generates text locally."""
+
+    def __init__(self, checkpoint_path: Path, tokenizer_path: Path) -> None:
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        self.tokenizer = CharacterTokenizer.load(tokenizer_path)
+        config = checkpoint["config"]
+        self.model = IndooneTransformer(vocab_size=len(self.tokenizer.chars), **config)
+        self.model.load_state_dict(checkpoint["model_state"])
+        self.model.eval()
+
+    @torch.inference_mode()
+    def generate(self, prompt: str, max_new_tokens: int = 80, temperature: float = 0.8) -> str:
+        ids = self.tokenizer.encode(prompt)
+        idx = torch.tensor([ids], dtype=torch.long)
+        for _ in range(max_new_tokens):
+            context = idx[:, -self.model.block_size :]
+            logits, _ = self.model(context)
+            next_logits = logits[:, -1, :] / max(temperature, 1e-3)
+            probs = torch.softmax(next_logits, dim=-1)
+            next_id = torch.multinomial(probs, num_samples=1)
+            idx = torch.cat((idx, next_id), dim=1)
+        return self.tokenizer.decode(idx[0].tolist())

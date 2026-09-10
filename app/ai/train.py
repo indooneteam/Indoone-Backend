@@ -9,7 +9,7 @@ import torch
 from torch import nn
 
 from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import CharacterTokenizer
+from app.ai.tokenizer import BPETokenizer
 
 
 def batchify(
@@ -38,7 +38,7 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
     if len(text) < 32:
         raise ValueError("training corpus is too small; add more text")
 
-    tokenizer = CharacterTokenizer.from_text(text)
+    tokenizer = BPETokenizer.train(text, vocab_size=512, min_frequency=2)
     encoded = torch.tensor(tokenizer.encode(text), dtype=torch.long)
     block_size = min(128, max(32, len(encoded) // 4))
     if len(encoded) <= block_size + 1:
@@ -51,7 +51,7 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
         "n_layer": 4,
         "dropout": 0.0,
     }
-    model = IndooneTransformer(vocab_size=len(tokenizer.chars), **config).to(device)
+    model = IndooneTransformer(vocab_size=tokenizer.vocab_size, **config).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4, weight_decay=0.01)
 
     model.train()
@@ -74,7 +74,14 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int) -> float:
     )
     (output_dir / "metadata.json").write_text(
         json.dumps(
-            {"model": "indoone-small", "steps": steps, "seed": seed, "device": device},
+            {
+                "model": "indoone-small",
+                "tokenizer": "bpe-v1",
+                "vocab_size": tokenizer.vocab_size,
+                "steps": steps,
+                "seed": seed,
+                "device": device,
+            },
             indent=2,
         ),
         encoding="utf-8",

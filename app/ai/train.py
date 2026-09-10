@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import random
 from pathlib import Path
@@ -19,6 +20,14 @@ DEFAULT_MODEL_CONFIG = {
     "n_layer": 4,
     "dropout": 0.0,
 }
+
+
+def _file_fingerprint(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def batchify(data: torch.Tensor, block_size: int, batch_size: int, device: str, generator: torch.Generator | None = None) -> tuple[torch.Tensor, torch.Tensor]:
@@ -63,12 +72,16 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int, validation
 
     train_text = corpus_path.read_text(encoding="utf-8")
     instruction_enabled = instruction_path is not None and instruction_path.exists()
+    instruction_fingerprint = None
+    instruction_example_count = 0
     if instruction_enabled:
         examples = load_examples(instruction_path)
         output_dir.mkdir(parents=True, exist_ok=True)
         instruction_corpus = output_dir / "instruction_corpus.txt"
         write_corpus(examples, instruction_corpus)
         train_text = train_text.rstrip() + "\n\n" + instruction_corpus.read_text(encoding="utf-8")
+        instruction_fingerprint = _file_fingerprint(instruction_path)
+        instruction_example_count = len(examples)
     if len(train_text) < 32:
         raise ValueError("training corpus is too small; add more text")
 
@@ -82,10 +95,12 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int, validation
         raise ValueError("training corpus is too small for the selected block size")
 
     validation_encoded: torch.Tensor | None = None
+    validation_fingerprint = None
     if validation_path is not None and validation_path.exists():
         validation_text = validation_path.read_text(encoding="utf-8")
         if validation_text.strip():
             validation_encoded = torch.tensor(tokenizer.encode(validation_text, add_special_tokens=True), dtype=torch.long)
+            validation_fingerprint = _file_fingerprint(validation_path)
 
     config = {**DEFAULT_MODEL_CONFIG, "block_size": block_size}
     model = IndooneTransformer(vocab_size=tokenizer.vocab_size, **config).to(device)
@@ -130,6 +145,11 @@ def train(corpus_path: Path, output_dir: Path, steps: int, seed: int, validation
         "checkpoint_interval": checkpoint_interval,
         "validation_enabled": validation_encoded is not None,
         "instruction_data_enabled": instruction_enabled,
+        "source_fingerprint": _file_fingerprint(corpus_path),
+        "validation_fingerprint": validation_fingerprint,
+        "instruction_fingerprint": instruction_fingerprint,
+        "instruction_example_count": instruction_example_count,
+        "training_text_characters": len(train_text),
     }, indent=2), encoding="utf-8")
     return last_loss
 

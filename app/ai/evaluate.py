@@ -44,11 +44,14 @@ def evaluate_checkpoint(
         tokenizer.encode(text, add_special_tokens=True),
         dtype=torch.long,
     )
-    block_size = model.block_size
-    if len(encoded) <= block_size + 1:
-        raise ValueError("evaluation corpus is too small for the model block size")
+    if len(encoded) < 2:
+        raise ValueError("evaluation corpus must contain at least two tokens")
 
+    block_size = min(model.block_size, len(encoded) - 1)
     starts = list(range(0, len(encoded) - block_size, block_size))
+    if not starts:
+        raise ValueError("evaluation corpus does not contain an evaluable token pair")
+
     losses: list[float] = []
     examples = 0
 

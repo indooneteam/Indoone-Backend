@@ -14,6 +14,7 @@ class ModelRecord:
     loss: float
     perplexity: float
     status: str
+    behavioral_gate_passed: bool = False
     parent_version: str | None = None
 
 
@@ -62,6 +63,8 @@ def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
         raise ValueError("only candidate models can be promoted")
     if candidate.loss < 0 or candidate.perplexity < 0:
         raise ValueError("evaluation metrics cannot be negative")
+    if not candidate.behavioral_gate_passed:
+        return False
     if current is None:
         return True
     return candidate.loss < current.loss and candidate.perplexity < current.perplexity
@@ -70,7 +73,7 @@ def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
 def promote_candidate(path: Path, candidate: ModelRecord) -> ModelRecord:
     current = active_record(path)
     if not should_promote(candidate, current):
-        raise ValueError("candidate does not improve both loss and perplexity")
+        raise ValueError("candidate must pass the behavioral gate and improve both loss and perplexity")
 
     payload = _load_registry(path)
     records = [record for record in load_records(path) if record.version != candidate.version]

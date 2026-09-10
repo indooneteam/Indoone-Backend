@@ -26,7 +26,10 @@ _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
 
 if _checkpoint.exists() and _tokenizer.exists():
-    _runtime = LocalModelRuntime(_checkpoint, _tokenizer)
+    try:
+        _runtime = LocalModelRuntime(_checkpoint, _tokenizer)
+    except Exception:
+        _runtime = None
 if KNOWLEDGE_DIR.exists() and list(KNOWLEDGE_DIR.glob("*.txt")):
     _knowledge_base = LocalKnowledgeBase.from_directory(KNOWLEDGE_DIR)
 

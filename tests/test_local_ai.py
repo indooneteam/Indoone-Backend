@@ -1,6 +1,7 @@
 import torch
 import pytest
 
+from app.ai.inference import LocalModelRuntime
 from app.ai.model import MODEL_VERSION, IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 from app.ai.train import train
@@ -85,3 +86,28 @@ def test_training_pipeline_writes_checkpoint_and_history(tmp_path) -> None:
     assert (output_dir / "indoone-small.pt").exists()
     assert (output_dir / "training_history.json").exists()
     assert (output_dir / "metadata.json").exists()
+
+
+def test_trained_checkpoint_generates_locally(tmp_path) -> None:
+    corpus = ("Indoone builds its own AI training pipeline. " * 30).strip()
+    corpus_path = tmp_path / "train.txt"
+    output_dir = tmp_path / "model"
+    corpus_path.write_text(corpus, encoding="utf-8")
+
+    train(
+        corpus_path=corpus_path,
+        output_dir=output_dir,
+        steps=2,
+        seed=11,
+        batch_size=2,
+        checkpoint_interval=2,
+    )
+
+    runtime = LocalModelRuntime(
+        output_dir / "indoone-small.pt",
+        output_dir / "tokenizer.json",
+    )
+    generated = runtime.generate("Indoone", max_new_tokens=8, temperature=0.8)
+
+    assert generated.startswith("Indoone")
+    assert isinstance(generated, str)

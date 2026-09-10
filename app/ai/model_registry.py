@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -16,6 +17,7 @@ class ModelRecord:
     status: str
     behavioral_gate_passed: bool = False
     parent_version: str | None = None
+    benchmark_version: str = "v1"
 
 
 def _load_registry(path: Path) -> dict[str, object]:
@@ -61,12 +63,22 @@ def active_record(path: Path) -> ModelRecord | None:
 def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
     if candidate.status != "candidate":
         raise ValueError("only candidate models can be promoted")
+    if not candidate.version.strip():
+        raise ValueError("candidate version cannot be empty")
+    if candidate.benchmark_version != "v1":
+        raise ValueError("unsupported benchmark version")
+    if not math.isfinite(candidate.loss) or not math.isfinite(candidate.perplexity):
+        raise ValueError("evaluation metrics must be finite")
     if candidate.loss < 0 or candidate.perplexity < 0:
         raise ValueError("evaluation metrics cannot be negative")
     if not candidate.behavioral_gate_passed:
         return False
     if current is None:
         return True
+    if candidate.version == current.version:
+        raise ValueError("candidate version must differ from the active version")
+    if candidate.benchmark_version != current.benchmark_version:
+        raise ValueError("benchmark versions must match")
     return candidate.loss < current.loss and candidate.perplexity < current.perplexity
 
 
@@ -84,8 +96,16 @@ def promote_candidate(path: Path, candidate: ModelRecord) -> ModelRecord:
             )
             for record in records
         ]
-    records.append(ModelRecord(**{**asdict(candidate), "status": "active"}))
-    payload["active_version"] = candidate.version
+
+    promoted = ModelRecord(
+        **{
+            **asdict(candidate),
+            "status": "active",
+            "parent_version": current.version if current is not None else candidate.parent_version,
+        }
+    )
+    records.append(promoted)
+    payload["active_version"] = promoted.version
     payload["models"] = [asdict(record) for record in records]
     _write_registry(path, payload)
-    return records[-1]
+    return promoted

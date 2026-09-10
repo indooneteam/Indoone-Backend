@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 from app.ai.behavior_eval import CATEGORIES, run_behavioral_eval
@@ -64,31 +65,50 @@ def load_benchmark_report(path: Path) -> dict[str, object]:
     return payload
 
 
+def _validate_report(report: dict[str, object]) -> tuple[str, dict[str, object], dict[str, object], bool]:
+    try:
+        version = report["benchmark_version"]
+        baseline_metrics = report["language_metrics"]
+        baseline_gate = report["behavioral_gate"]
+        overall_pass = report["overall_pass"]
+        if not isinstance(version, str):
+            raise TypeError
+        if not isinstance(baseline_metrics, dict) or not isinstance(baseline_gate, dict):
+            raise TypeError
+        if not isinstance(overall_pass, bool):
+            raise TypeError
+        float(baseline_metrics["loss"])
+        float(baseline_metrics["perplexity"])
+        if not math.isfinite(float(baseline_metrics["loss"])):
+            raise ValueError
+        if not math.isfinite(float(baseline_metrics["perplexity"])):
+            raise ValueError
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("invalid benchmark report shape") from exc
+    return version, baseline_metrics, baseline_gate, overall_pass
+
+
 def compare_benchmark_reports(
     baseline: dict[str, object],
     candidate: dict[str, object],
 ) -> dict[str, object]:
     """Compare two benchmark reports for a safe model-improvement decision."""
-    if baseline.get("benchmark_version") != candidate.get("benchmark_version"):
+    if not isinstance(baseline, dict) or not isinstance(candidate, dict):
+        raise ValueError("invalid benchmark report shape")
+
+    baseline_version, baseline_metrics, baseline_gate, baseline_pass = _validate_report(baseline)
+    candidate_version, candidate_metrics, candidate_gate, candidate_pass = _validate_report(candidate)
+
+    if baseline_version != candidate_version:
         raise ValueError("benchmark versions must match")
-    if baseline.get("benchmark_version") != "v1":
+    if baseline_version != "v1":
         raise ValueError("unsupported benchmark version")
 
     try:
-        baseline_metrics = baseline["language_metrics"]
-        candidate_metrics = candidate["language_metrics"]
-        baseline_gate = baseline["behavioral_gate"]
-        candidate_gate = candidate["behavioral_gate"]
-        if not isinstance(baseline_metrics, dict) or not isinstance(candidate_metrics, dict):
-            raise TypeError
-        if not isinstance(baseline_gate, dict) or not isinstance(candidate_gate, dict):
-            raise TypeError
         baseline_loss = float(baseline_metrics["loss"])
         candidate_loss = float(candidate_metrics["loss"])
         baseline_perplexity = float(baseline_metrics["perplexity"])
         candidate_perplexity = float(candidate_metrics["perplexity"])
-        baseline_pass = bool(baseline["overall_pass"])
-        candidate_pass = bool(candidate["overall_pass"])
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("invalid benchmark report shape") from exc
 

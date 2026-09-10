@@ -7,6 +7,8 @@ fallback engine keeps the API runnable.
 
 from pathlib import Path
 
+import httpx
+
 from app.ai.inference import LocalModelRuntime
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
 from app.ai.local_engine import LocalAIEngine

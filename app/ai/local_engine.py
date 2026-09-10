@@ -5,7 +5,7 @@ from pathlib import Path
 import torch
 
 from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import CharacterTokenizer
+from app.ai.tokenizer import BPETokenizer
 
 
 DEFAULT_CHECKPOINT = Path("models/indoone-small/indoone-small.pt")
@@ -23,7 +23,7 @@ class LocalAIEngine:
         self.checkpoint = checkpoint
         self.tokenizer_path = tokenizer_path
         self.model: IndooneTransformer | None = None
-        self.tokenizer: CharacterTokenizer | None = None
+        self.tokenizer: BPETokenizer | None = None
         self._load_error: str | None = None
         self._load()
 
@@ -31,7 +31,8 @@ class LocalAIEngine:
         if not self.checkpoint.exists() or not self.tokenizer_path.exists():
             self._load_error = (
                 "Indoone local model is not trained yet. Run "
-                "python -m scripts.train_indoone_model or the documented app.ai.train pipeline first."
+                "python -m app.ai.train --corpus data/processed/train.txt "
+                "--output models/indoone-small"
             )
             return
         try:
@@ -40,10 +41,10 @@ class LocalAIEngine:
                 map_location="cpu",
                 weights_only=False,
             )
-            self.tokenizer = CharacterTokenizer.load(self.tokenizer_path)
+            self.tokenizer = BPETokenizer.load(self.tokenizer_path)
             config = payload["config"]
             self.model = IndooneTransformer(
-                vocab_size=len(self.tokenizer.chars),
+                vocab_size=self.tokenizer.vocab_size,
                 **config,
             )
             self.model.load_state_dict(payload["model_state"])
@@ -74,9 +75,6 @@ class LocalAIEngine:
         prompt = message.strip()
         if not prompt:
             raise ValueError("message cannot be empty")
-        unknown = [ch for ch in prompt if ch not in self.tokenizer.stoi]
-        if unknown:
-            raise ValueError("message contains characters outside the trained vocabulary")
 
         generated = self.tokenizer.encode(prompt)
         for _ in range(max_new_tokens):
@@ -88,6 +86,6 @@ class LocalAIEngine:
             probabilities = torch.softmax(next_logits, dim=-1)
             next_id = torch.multinomial(probabilities, num_samples=1).item()
             generated.append(next_id)
-            if self.tokenizer.itos[next_id] == "\n":
+            if next_id == self.tokenizer.stoi["<eos>"]:
                 break
         return self.tokenizer.decode(generated)

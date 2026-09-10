@@ -40,6 +40,29 @@ def prepare_documents(documents: list[str], min_chars: int = 40) -> list[str]:
     return cleaned
 
 
+def validate_split_quality(train: list[str], validation: list[str], test: list[str]) -> dict[str, int]:
+    splits = {
+        "train": train,
+        "validation": validation,
+        "test": test,
+    }
+    seen: dict[str, str] = {}
+    for split_name, documents in splits.items():
+        for document in documents:
+            digest = fingerprint(document)
+            previous = seen.get(digest)
+            if previous is not None:
+                raise ValueError(f"duplicate document across dataset splits: {previous} and {split_name}")
+            seen[digest] = split_name
+
+    return {
+        "train_documents": len(train),
+        "validation_documents": len(validation),
+        "test_documents": len(test),
+        "total_characters": sum(len(document) for documents in splits.values() for document in documents),
+    }
+
+
 def write_split(documents: list[str], output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n\n".join(documents) + "\n", encoding="utf-8")
@@ -55,19 +78,25 @@ def prepare_dataset(source: Path, output_dir: Path, train_ratio: float, validati
     if validation_end >= len(documents):
         validation_end = len(documents) - 1
 
-    write_split(documents[:train_end], output_dir / "train.txt")
-    write_split(documents[train_end:validation_end], output_dir / "validation.txt")
-    write_split(documents[validation_end:], output_dir / "test.txt")
+    train = documents[:train_end]
+    validation = documents[train_end:validation_end]
+    test = documents[validation_end:]
+    quality = validate_split_quality(train, validation, test)
+
+    write_split(train, output_dir / "train.txt")
+    write_split(validation, output_dir / "validation.txt")
+    write_split(test, output_dir / "test.txt")
     return {
         "documents": len(documents),
-        "train": len(documents[:train_end]),
-        "validation": len(documents[train_end:validation_end]),
-        "test": len(documents[validation_end:]),
+        "train": len(train),
+        "validation": len(validation),
+        "test": len(test),
+        "total_characters": quality["total_characters"],
     }
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Clean, deduplicate, and split an Indoone text dataset")
+    parser = argparse.ArgumentParser(description="Clean, deduplicate, split, and validate an Indoone text dataset")
     parser.add_argument("--source", type=Path, default=Path("data/raw/indoone_corpus.txt"))
     parser.add_argument("--output-dir", type=Path, default=Path("data/processed"))
     parser.add_argument("--train-ratio", type=float, default=0.8)

@@ -1,11 +1,10 @@
-import pytest
+import asyncio
 
 import app.ai.service as service
 from app.ai.knowledge import KnowledgeDocument, LocalKnowledgeBase
 
 
-@pytest.mark.asyncio
-async def test_service_includes_retrieved_knowledge(monkeypatch) -> None:
+def test_service_includes_retrieved_knowledge(monkeypatch) -> None:
     captured: list[str] = []
 
     class FakeEngine:
@@ -23,7 +22,7 @@ async def test_service_includes_retrieved_knowledge(monkeypatch) -> None:
     )
     monkeypatch.setattr(service, "_fallback_engine", FakeEngine())
 
-    reply = await service.generate_reply("What model does Indoone use?")
+    reply = asyncio.run(service.generate_reply("What model does Indoone use?"))
 
     assert reply == "ok"
     assert "Indoone Architecture" in captured[0]

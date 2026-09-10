@@ -42,10 +42,11 @@ class LocalAIEngine:
                 weights_only=False,
             )
             self.tokenizer = BPETokenizer.load(self.tokenizer_path)
-            config = payload["config"]
+            raw_config = dict(payload["config"])
+            raw_config.pop("model_version", None)
             self.model = IndooneTransformer(
                 vocab_size=self.tokenizer.vocab_size,
-                **config,
+                **raw_config,
             )
             self.model.load_state_dict(payload["model_state"])
             self.model.eval()

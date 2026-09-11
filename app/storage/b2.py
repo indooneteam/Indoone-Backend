@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 import boto3
+from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 
 
@@ -51,6 +52,13 @@ class B2Storage:
             region_name=region,
             aws_access_key_id=self.key_id,
             aws_secret_access_key=self.application_key,
+            config=Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+                retries={"max_attempts": 4, "mode": "standard"},
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            ),
         )
 
     @classmethod
@@ -67,8 +75,17 @@ class B2Storage:
 
     def upload_file(self, local_path: Path, object_key: str) -> None:
         try:
-            self._client.upload_file(str(local_path), self.bucket_name, object_key)
-        except (BotoCoreError, ClientError) as exc:
+            # Use a fixed-length PutObject for normal model artifacts. This avoids
+            # transfer-encoding/checksum negotiation issues seen with some modern
+            # botocore upload paths while remaining fully S3-compatible with B2.
+            with local_path.open("rb") as handle:
+                self._client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                    Body=handle,
+                    ContentLength=local_path.stat().st_size,
+                )
+        except (BotoCoreError, ClientError, OSError) as exc:
             raise B2StorageError(f"B2 upload failed for {object_key}") from exc
 
     def download_file(self, object_key: str, local_path: Path) -> bool:

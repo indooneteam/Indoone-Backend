@@ -7,7 +7,7 @@ import json
 import os
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode
+from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 import boto3
@@ -22,7 +22,7 @@ class B2StorageError(RuntimeError):
 class B2Storage:
     """Small wrapper around Backblaze's native API and S3-compatible API."""
 
-    AUTH_URL = "https://api.backblazeb2.com/b2api/v2/b2_authorize_account"
+    AUTH_URL = "https://api.backblazeb2.com/b2api/v4/b2_authorize_account"
 
     def __init__(self) -> None:
         self.key_id = os.getenv("B2_APPLICATION_KEY_ID", "").strip()
@@ -62,8 +62,9 @@ class B2Storage:
 
     def _region_from_endpoint(self) -> str:
         marker = "https://s3."
-        if self.endpoint.startswith(marker) and self.endpoint.endswith(".backblazeb2.com"):
-            return self.endpoint[len(marker) : -len(".backblazeb2.com")]
+        suffix = ".backblazeb2.com"
+        if self.endpoint.startswith(marker) and self.endpoint.endswith(suffix):
+            return self.endpoint[len(marker) : -len(suffix)]
         return os.getenv("B2_REGION", "us-east-1")
 
     @classmethod
@@ -116,8 +117,11 @@ class B2Storage:
         assert self._download_url is not None
         assert self._auth_token is not None
 
-        query = urlencode({"bucketName": self.bucket_name, "fileName": object_key})
-        url = f"{self._download_url}/b2api/v2/b2_download_file_by_name?{query}"
+        url = (
+            f"{self._download_url}/file/"
+            f"{quote(self.bucket_name, safe='')}/"
+            f"{quote(object_key, safe='/')}"
+        )
         request = Request(url, headers={"Authorization": self._auth_token}, method="GET")
         local_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = local_path.with_suffix(local_path.suffix + ".download")

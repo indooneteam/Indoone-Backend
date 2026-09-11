@@ -37,7 +37,6 @@ def main() -> None:
 
     try:
         storage = B2Storage()
-        storage.check_access()
     except B2StorageError as exc:
         raise SystemExit(str(exc)) from exc
 
@@ -45,9 +44,7 @@ def main() -> None:
         name for name in DEFAULT_FILENAMES if not (args.model_dir / name).is_file()
     ]
     if missing:
-        raise SystemExit(
-            "Missing trained artifacts: " + ", ".join(missing)
-        )
+        raise SystemExit("Missing trained artifacts: " + ", ".join(missing))
 
     for filename in DEFAULT_FILENAMES:
         storage.upload_file(

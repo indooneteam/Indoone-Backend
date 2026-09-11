@@ -8,7 +8,7 @@ from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 
 
-DEFAULT_MAX_NEW_TOKENS = 160
+DEFAULT_MAX_NEW_TOKENS = 64
 DEFAULT_TEMPERATURE = 0.0
 
 

@@ -3,6 +3,9 @@
 The service has no hosted AI provider dependency. When a trained Indoone
 checkpoint is present it is loaded for local inference; otherwise a small
 local fallback keeps the chat API available until model training is complete.
+
+When Backblaze B2 is configured, missing model artifacts are downloaded from
+private object storage before local inference is initialized.
 """
 
 from pathlib import Path
@@ -14,6 +17,7 @@ from app.ai.inference import LocalModelRuntime
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
 from app.ai.local_engine import LocalAIEngine
 from app.ai.research import ResearchProvider, ResearchResult, build_research_provider, format_results
+from app.storage.b2 import B2StorageError, ensure_model_artifacts
 
 
 MODEL_DIR = Path("models/indoone-small")
@@ -24,6 +28,12 @@ _fallback_engine = LocalAIEngine()
 _runtime: LocalModelRuntime | None = None
 _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
+
+try:
+    ensure_model_artifacts(MODEL_DIR)
+except B2StorageError:
+    # B2 is an optional model-artifact source; local fallback remains available.
+    pass
 
 if _checkpoint.exists() and _tokenizer.exists():
     try:

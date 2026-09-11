@@ -5,3 +5,4 @@ __pycache__/
 models/*/*.pt
 models/*/tokenizer.json
 models/*/metadata.json
+data/processed/

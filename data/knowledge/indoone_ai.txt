@@ -1,0 +1,9 @@
+Indoone AI is the local AI core of the Indoone platform. It is designed to answer users through the Indoone backend without depending on a hosted AI provider.
+
+Indoone improves through a controlled cycle: approved data is cleaned and versioned, a candidate model is trained, evaluation measures its quality, and only a candidate that passes promotion rules becomes active.
+
+Conversation memory stores recent user and assistant messages for a conversation so the assistant can use previous turns as context. Memory storage is separate from model weights.
+
+Knowledge retrieval lets Indoone look up relevant approved local documents before generating an answer. Retrieved knowledge is context for the model; it is not automatically written into model weights.
+
+Sensitive user data and conversations should not be blindly added to training data. Any future training intake must use explicit approval, privacy controls, data-quality checks, evaluation, and rollback-safe model promotion.

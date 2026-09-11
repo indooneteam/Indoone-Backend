@@ -1,8 +1,8 @@
 """Indoone AI core entry point.
 
 The service has no hosted AI provider dependency. When a trained Indoone
-checkpoint is present it is loaded for local inference; otherwise the local
-fallback engine keeps the API runnable.
+checkpoint is present it is loaded for local inference; otherwise a small
+local fallback keeps the chat API available until model training is complete.
 """
 
 from pathlib import Path
@@ -78,6 +78,27 @@ def _evidence_from_results(results: list[ResearchResult]) -> list[GroundedEviden
     return [GroundedEvidence(title=result.title, url=result.url, snippet=result.snippet) for result in results]
 
 
+def _fallback_reply(message: str) -> str:
+    """Return a truthful local response while the trained checkpoint is absent."""
+
+    normalized = " ".join(message.casefold().split())
+    if normalized in {"hi", "hello", "hey", "namaskara", "namaste"}:
+        return (
+            "Namaskara 👋 I’m Indoone AI. The production backend is online. "
+            "My trained local model is not loaded yet, so I’m currently running in fallback mode."
+        )
+    if "what is indoone" in normalized or "indoone ai" in normalized:
+        return (
+            "Indoone AI is the AI service behind the Indoone app. The backend is online, "
+            "but the first trained Indoone local checkpoint still needs to be produced."
+        )
+    return (
+        "Indoone AI backend is reachable ✅, but the trained Indoone local model is not "
+        "available yet. I’m keeping the API online in fallback mode instead of returning "
+        "an error. Full AI generation will start after the local checkpoint is trained and deployed."
+    )
+
+
 class LocalAIService:
     """Async service facade for the Indoone local AI runtime."""
 
@@ -107,9 +128,17 @@ class LocalAIService:
             research=research,
         )
         if _runtime is not None:
-            answer = _runtime.generate(context)
+            try:
+                answer = _runtime.generate(context)
+            except RuntimeError:
+                answer = _fallback_reply(prompt)
+        elif _fallback_engine.ready:
+            try:
+                answer = await _fallback_engine.generate(context)
+            except RuntimeError:
+                answer = _fallback_reply(prompt)
         else:
-            answer = await _fallback_engine.generate(context)
+            answer = _fallback_reply(prompt)
         return append_sources(answer, _evidence_from_results(research_results))
 
 

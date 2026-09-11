@@ -1,11 +1,8 @@
 """Indoone AI core entry point.
 
-The service has no hosted AI provider dependency. When a trained Indoone
-checkpoint is present it is loaded for local inference; otherwise a small
-local fallback keeps the chat API available until model training is complete.
-
-When Backblaze B2 is configured, missing model artifacts are downloaded from
-private object storage before local inference is initialized.
+The service keeps inference local and provider-independent. A trained Indoone
+checkpoint is used when available; otherwise the small local fallback keeps
+the chat API available.
 """
 
 from pathlib import Path
@@ -14,11 +11,20 @@ import re
 
 import httpx
 
-from app.ai.grounding import GroundedEvidence, append_sources, build_grounded_prompt_instruction
+from app.ai.grounding import (
+    GroundedEvidence,
+    append_sources,
+    build_grounded_prompt_instruction,
+)
 from app.ai.inference import LocalModelRuntime
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
 from app.ai.local_engine import LocalAIEngine
-from app.ai.research import ResearchProvider, ResearchResult, build_research_provider, format_results
+from app.ai.research import (
+    ResearchProvider,
+    ResearchResult,
+    build_research_provider,
+    format_results,
+)
 from app.storage.b2 import B2StorageError, ensure_model_artifacts
 
 
@@ -33,11 +39,13 @@ _runtime: LocalModelRuntime | None = None
 _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
 
+
 try:
     ensure_model_artifacts(MODEL_DIR)
     logger.info("Indoone model artifact check completed")
 except B2StorageError as exc:
     logger.error("Indoone model artifact check failed: %s", exc)
+
 
 if _checkpoint.exists() and _tokenizer.exists():
     try:
@@ -52,6 +60,8 @@ else:
         _checkpoint.exists(),
         _tokenizer.exists(),
     )
+
+
 if KNOWLEDGE_DIR.exists() and list(KNOWLEDGE_DIR.glob("*.txt")):
     _knowledge_base = LocalKnowledgeBase.from_directory(KNOWLEDGE_DIR)
 
@@ -81,17 +91,19 @@ _SCRIPT_RANGES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("Gujarati", re.compile(r"[\u0A80-\u0AFF]")),
     ("Punjabi", re.compile(r"[\u0A00-\u0A7F]")),
     ("Odia", re.compile(r"[\u0B00-\u0B7F]")),
+    ("Urdu", re.compile(r"[\u0600-\u06FF]")),
+)
+
+
+_RESPONSE_TAG_RE = re.compile(
+    r"</?(?:instruction|response|conversation|grounding|response_language)>"
+    r"|<response_language>.*?</response_language>",
+    flags=re.IGNORECASE | re.DOTALL,
 )
 
 
 def _detect_response_language(message: str) -> str:
-    """Choose the response language from the user's message.
-
-    Script detection is deliberately conservative: when a native Indic script
-    is present, that language takes priority. Otherwise Latin-script input
-    defaults to English, which avoids returning Kannada for simple messages
-    such as 'Hi'.
-    """
+    """Choose the response language from the user's message script."""
 
     for language, pattern in _SCRIPT_RANGES:
         if pattern.search(message):
@@ -101,10 +113,9 @@ def _detect_response_language(message: str) -> str:
 
 def _language_instruction(language: str) -> str:
     return (
-        f"Respond in {language}. Preserve the user's language/script. "
-        "Do not switch to another language unless the user explicitly asks you to. "
-        "For mixed-language messages, keep the same natural language mix while "
-        "remaining clear and concise."
+        f"Respond only in {language}. Preserve the user's language and script. "
+        "Do not switch languages unless the user explicitly requests it. "
+        "Keep the answer natural, clear, and concise."
     )
 
 
@@ -121,26 +132,105 @@ def _build_context(
     knowledge: str = "",
     research: str = "",
 ) -> str:
+    """Build an inference prompt using the same instruction format as training."""
+
     response_language = _detect_response_language(message)
+    grounding_instruction = build_grounded_prompt_instruction()
+    grounding_instruction = grounding_instruction.replace("<grounding>", "")
+    grounding_instruction = grounding_instruction.replace("</grounding>", "")
+    grounding_instruction = grounding_instruction.strip()
+
     prompt_parts = [
-        "<conversation>",
-        build_grounded_prompt_instruction(),
-        f"<response_language>{response_language}</response_language>",
+        "<instruction>",
+        grounding_instruction,
         _language_instruction(response_language),
     ]
-    for role, content in history:
-        prompt_parts.append(f"{role}: {content}")
+
+    if history:
+        prompt_parts.append("Conversation context:")
+        for role, content in history:
+            prompt_parts.append(f"{role}: {content}")
+
     if knowledge:
+        prompt_parts.append("Relevant knowledge:")
         prompt_parts.append(knowledge)
+
     if research:
+        prompt_parts.append("Fresh research evidence:")
         prompt_parts.append(research)
+
     prompt_parts.append(f"user: {message.strip()}")
-    prompt_parts.append("assistant:")
+    prompt_parts.extend(("</instruction>", "<response>"))
     return "\n".join(prompt_parts)
 
 
 def _evidence_from_results(results: list[ResearchResult]) -> list[GroundedEvidence]:
-    return [GroundedEvidence(title=result.title, url=result.url, snippet=result.snippet) for result in results]
+    return [
+        GroundedEvidence(
+            title=result.title,
+            url=result.url,
+            snippet=result.snippet,
+        )
+        for result in results
+    ]
+
+
+def _clean_model_reply(answer: str) -> str:
+    """Remove training-format markers if the small model echoes them."""
+
+    text = answer.strip()
+    if not text:
+        return ""
+
+    response_start = re.search(r"<response>\s*", text, flags=re.IGNORECASE)
+    if response_start:
+        text = text[response_start.end() :]
+
+    instruction_end = re.search(r"</instruction>\s*", text, flags=re.IGNORECASE)
+    if instruction_end:
+        text = text[instruction_end.end() :]
+
+    response_end = re.search(r"</response>", text, flags=re.IGNORECASE)
+    if response_end:
+        text = text[: response_end.start()]
+
+    text = _RESPONSE_TAG_RE.sub("", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def _has_expected_script(text: str, language: str) -> bool:
+    """Reject an obviously wrong-language model response."""
+
+    if not text:
+        return False
+
+    if language == "English":
+        return bool(re.search(r"[A-Za-z]", text))
+
+    pattern = dict(_SCRIPT_RANGES).get(language)
+    return pattern is not None and bool(pattern.search(text))
+
+
+def _generation_error_reply(language: str) -> str:
+    """Return a clean response instead of exposing malformed model output."""
+
+    messages = {
+        "Kannada": "ಕ್ಷಮಿಸಿ, ಈ ಪ್ರಶ್ನೆಗೆ ಈಗ ಸರಿಯಾದ ಉತ್ತರವನ್ನು ರಚಿಸಲು ನನಗೆ ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಕೇಳಿ.",
+        "Telugu": "క్షమించండి, ఈ ప్రశ్నకు ఇప్పుడు సరైన సమాధానం ఇవ్వలేకపోయాను. దయచేసి మళ్లీ అడగండి.",
+        "Tamil": "மன்னிக்கவும், இந்தக் கேள்விக்கு இப்போது சரியான பதிலை உருவாக்க முடியவில்லை. தயவுசெய்து மீண்டும் கேளுங்கள்.",
+        "Malayalam": "ക്ഷമിക്കണം, ഈ ചോദ്യത്തിന് ഇപ്പോൾ ശരിയായ മറുപടി നൽകാൻ കഴിഞ്ഞില്ല. ദയവായി വീണ്ടും ചോദിക്കൂ.",
+        "Hindi": "माफ़ कीजिए, मैं अभी इस सवाल का सही जवाब तैयार नहीं कर पाया। कृपया फिर से पूछें।",
+        "Bengali": "দুঃখিত, এই প্রশ্নের সঠিক উত্তর এখন দিতে পারিনি। অনুগ্রহ করে আবার জিজ্ঞাসা করুন।",
+        "Gujarati": "માફ કરશો, હું હાલમાં આ પ્રશ્નનો યોગ્ય જવાબ આપી શક્યો નથી. કૃપા કરીને ફરી પૂછો.",
+        "Punjabi": "ਮਾਫ਼ ਕਰਨਾ, ਮੈਂ ਇਸ ਸਵਾਲ ਦਾ ਸਹੀ ਜਵਾਬ ਹੁਣ ਨਹੀਂ ਦੇ ਸਕਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਪੁੱਛੋ।",
+        "Odia": "ଦୁଃଖିତ, ମୁଁ ଏହି ପ୍ରଶ୍ନର ସଠିକ ଉତ୍ତର ଏବେ ଦେଇପାରିଲି ନାହିଁ। ଦୟାକରି ପୁଣି ପଚାରନ୍ତୁ।",
+        "Urdu": "معذرت، میں ابھی اس سوال کا درست جواب نہیں دے سکا۔ براہِ کرم دوبارہ پوچھیں۔",
+    }
+    return messages.get(
+        language,
+        "Sorry, I could not generate a reliable answer right now. Please try again.",
+    )
 
 
 def _fallback_reply(message: str) -> str:
@@ -183,24 +273,31 @@ def _fallback_reply(message: str) -> str:
     if language == "Odia":
         return "ନମସ୍କାର 👋 ମୁଁ Indoone AI। trained local model ଏଯାବତ୍ load ହୋଇନାହିଁ, ସେଥିପାଇଁ ମୁଁ fallback modeରେ କାମ କରୁଛି।"
 
+    if language == "Urdu":
+        return "السلام علیکم 👋 میں Indoone AI ہوں۔ ابھی trained local model load نہیں ہوا، اس لیے میں fallback mode میں کام کر رہا ہوں۔"
+
     if normalized in {"hi", "hello", "hey"}:
         return "Hi 👋 I’m Indoone AI."
     if "what is indoone" in normalized or "indoone ai" in normalized:
         return (
             "Indoone AI is the AI service behind the Indoone app. The backend is online, "
-            "but the first trained Indoone local checkpoint still needs to be produced."
+            "but the trained Indoone local checkpoint is not available yet."
         )
     return (
         "Indoone AI backend is reachable ✅, but the trained Indoone local model is not "
         "available yet. I’m keeping the API online in fallback mode instead of returning "
-        "an error. Full AI generation will start after the local checkpoint is trained and deployed."
+        "an error."
     )
 
 
 class LocalAIService:
     """Async service facade for the Indoone local AI runtime."""
 
-    async def generate(self, message: str, history: list[tuple[str, str]] | None = None) -> str:
+    async def generate(
+        self,
+        message: str,
+        history: list[tuple[str, str]] | None = None,
+    ) -> str:
         prompt = message.strip()
         if not prompt:
             raise ValueError("message cannot be empty")
@@ -225,18 +322,33 @@ class LocalAIService:
             knowledge=knowledge,
             research=research,
         )
+        language = _detect_response_language(prompt)
+
         if _runtime is not None:
             try:
                 answer = _runtime.generate(context)
+                answer = _clean_model_reply(answer)
+
+                if not _has_expected_script(answer, language):
+                    logger.warning(
+                        "Discarding malformed or wrong-language model output for %s",
+                        language,
+                    )
+                    answer = _generation_error_reply(language)
             except RuntimeError:
                 answer = _fallback_reply(prompt)
         elif getattr(_fallback_engine, "ready", True):
             try:
                 answer = await _fallback_engine.generate(context)
+                answer = _clean_model_reply(answer)
+
+                if not _has_expected_script(answer, language):
+                    answer = _generation_error_reply(language)
             except RuntimeError:
                 answer = _fallback_reply(prompt)
         else:
             answer = _fallback_reply(prompt)
+
         return append_sources(answer, _evidence_from_results(research_results))
 
 
@@ -244,4 +356,6 @@ async def generate_reply(
     message: str,
     history: list[tuple[str, str]] | None = None,
 ) -> str:
+    """Generate a clean response through the Indoone local AI service."""
+
     return await LocalAIService().generate(message, history=history)

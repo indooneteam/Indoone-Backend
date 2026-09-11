@@ -30,7 +30,7 @@ LANGUAGE_GREETINGS = {
 }
 
 
-def make_examples(seed: int, target: int) -> list[dict[str, str]]:
+def make_examples(seed: int, target: int, source: Path | None = None) -> list[dict[str, str]]:
     rng = random.Random(seed)
     examples: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
@@ -40,6 +40,13 @@ def make_examples(seed: int, target: int) -> list[dict[str, str]]:
         if key not in seen:
             seen.add(key)
             examples.append({"instruction": instruction, "response": response, "category": category})
+
+    if source is not None and source.exists():
+        for line in source.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            payload = json.loads(line)
+            add(payload["instruction"], payload["response"], payload.get("category", "general"))
 
     for instruction, response, category in BASE_EXAMPLES:
         add(instruction, response, category)
@@ -66,12 +73,16 @@ def make_examples(seed: int, target: int) -> list[dict[str, str]]:
         ("Thank you", "ధన్యవాదాలు.", "Telugu"),
         ("How are you?", "మీరు ఎలా ఉన్నారు?", "Telugu"),
     ]
-    for source, response, language in translations:
-        add(f"Translate '{source}' into {language}.", response, "translation")
+    for source_text, response, language in translations:
+        add(f"Translate '{source_text}' into {language}.", response, "translation")
 
     while len(examples) < target:
         instruction, response, category = rng.choice(BASE_EXAMPLES)
-        add(f"{instruction} Give one practical example.", f"{response} A practical example is to apply the same rule to one small, testable case before scaling up.", category)
+        add(
+            f"{instruction} Give one practical example.",
+            f"{response} A practical example is to apply the same rule to one small, testable case before scaling up.",
+            category,
+        )
 
     rng.shuffle(examples)
     return examples[:target]
@@ -79,13 +90,14 @@ def make_examples(seed: int, target: int) -> list[dict[str, str]]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build a deterministic Indoone instruction training pack")
+    parser.add_argument("--source", type=Path, default=Path("data/raw/indoone_instructions.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("data/raw/indoone_generated_instructions.jsonl"))
     parser.add_argument("--count", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
     if args.count <= 0:
         raise ValueError("count must be greater than zero")
-    examples = make_examples(args.seed, args.count)
+    examples = make_examples(args.seed, args.count, args.source)
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(
         "\n".join(json.dumps(example, ensure_ascii=False) for example in examples) + "\n",

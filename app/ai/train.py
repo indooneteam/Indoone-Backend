@@ -113,6 +113,7 @@ def train(
     learning_rate: float = 3e-4,
     instruction_path: Path | None = None,
     multilingual_instruction_path: Path | None = None,
+    generated_instruction_path: Path | None = None,
 ) -> float:
     if steps <= 0:
         raise ValueError("steps must be greater than zero")
@@ -130,7 +131,11 @@ def train(
     train_text = corpus_path.read_text(encoding="utf-8")
     instruction_paths = [
         path
-        for path in (instruction_path, multilingual_instruction_path)
+        for path in (
+            instruction_path,
+            multilingual_instruction_path,
+            generated_instruction_path,
+        )
         if path is not None
     ]
     instruction_enabled = any(path.exists() for path in instruction_paths)
@@ -294,6 +299,7 @@ def main() -> None:
     parser.add_argument("--validation", type=Path, default=Path("data/processed/validation.txt"))
     parser.add_argument("--instructions", type=Path, default=Path("data/raw/indoone_instructions.jsonl"))
     parser.add_argument("--multilingual-instructions", type=Path, default=Path("data/raw/indoone_multilingual_examples.jsonl"))
+    parser.add_argument("--generated-instructions", type=Path, default=Path("data/raw/indoone_generated_instructions.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=42)
@@ -312,6 +318,7 @@ def main() -> None:
         args.learning_rate,
         args.instructions,
         args.multilingual_instructions,
+        args.generated_instructions,
     )
     print(f"training complete; final loss={loss:.4f}")
 

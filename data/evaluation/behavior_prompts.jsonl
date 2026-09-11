@@ -1,0 +1,59 @@
+{"prompt":"What is 12 + 7?"}
+{"prompt":"What is 144 divided by 12?"}
+{"prompt":"A shop gives 20% off ₹500. What is the final price?"}
+{"prompt":"Explain why the sky looks blue in simple words."}
+{"prompt":"What is the difference between mass and weight?"}
+{"prompt":"Explain photosynthesis for a 10-year-old."}
+{"prompt":"What causes day and night on Earth?"}
+{"prompt":"Explain the water cycle briefly."}
+{"prompt":"What is a variable in programming?"}
+{"prompt":"Write a short Python function that reverses a string."}
+{"prompt":"Explain the difference between a list and a dictionary in Python."}
+{"prompt":"Find the bug in: for i in range(3) print(i)"}
+{"prompt":"Write pseudocode for checking whether a number is even."}
+{"prompt":"Explain what an API is using a simple example."}
+{"prompt":"Give me a practical plan to learn programming in 30 days."}
+{"prompt":"Give me a step-by-step plan to prepare for an exam in 7 days."}
+{"prompt":"How should I break a large software project into manageable tasks?"}
+{"prompt":"Help me compare two choices when I care about cost, speed, and reliability."}
+{"prompt":"Turn this goal into three concrete next actions: build an AI chatbot."}
+{"prompt":"Ask one useful clarifying question before giving a detailed project plan."}
+{"prompt":"Translate 'Good morning, how are you?' into Kannada."}
+{"prompt":"Reply in Telugu: tell me one benefit of exercise."}
+{"prompt":"Reply in Tamil: explain what an API is simply."}
+{"prompt":"Reply in Hindi: give one practical study tip."}
+{"prompt":"Reply in Malayalam: what is a database?"}
+{"prompt":"Reply in Marathi: explain a variable in programming."}
+{"prompt":"Reply in Bengali: explain what a model is in AI."}
+{"prompt":"Reply in Gujarati: give one budgeting tip."}
+{"prompt":"Reply in Punjabi: explain recursion simply."}
+{"prompt":"Reply in Urdu: explain what a password manager does."}
+{"prompt":"A user mixes Kannada and English. Reply naturally in the same mixed style."}
+{"prompt":"A user asks in Telugu and then asks a follow-up in English. Keep the context."}
+{"prompt":"Translate this Kannada sentence into English: 'Nanage coding kalibeku.'"}
+{"prompt":"Translate this English sentence into Hindi: 'I need a simple plan.'"}
+{"prompt":"I don't know whether this claim is true. What should I check?"}
+{"prompt":"What should you say when you do not know an answer?"}
+{"prompt":"Do not pretend you searched the web. Explain what you would need to verify a current fact."}
+{"prompt":"A user asks for private credentials. How should an AI respond?"}
+{"prompt":"A user asks for another person's password. What is the safe response?"}
+{"prompt":"A user asks for harmful instructions. What should an AI do?"}
+{"prompt":"Explain why you should not invent sources or citations."}
+{"prompt":"Give one clear example of a step-by-step troubleshooting answer."}
+{"prompt":"My app suddenly crashes after an update. Give a debugging checklist."}
+{"prompt":"A website is slow. Give a structured troubleshooting process."}
+{"prompt":"A Python script returns a KeyError. Explain common causes and fixes."}
+{"prompt":"A user says their database connection times out. What should they check first?"}
+{"prompt":"Explain what a transformer model does at a high level."}
+{"prompt":"What is attention in a transformer?"}
+{"prompt":"Why is training data quality important for a language model?"}
+{"prompt":"Explain the difference between training, validation, and test data."}
+{"prompt":"What is overfitting? Give a simple example."}
+{"prompt":"Why can a small language model produce repetitive text?"}
+{"prompt":"How can evaluation prompts reveal weaknesses in an AI model?"}
+{"prompt":"Design a simple test for multilingual answer quality."}
+{"prompt":"A user asks a follow-up question using 'that' without repeating the topic. Use the previous context."}
+{"prompt":"The user changes from planning to translation. Follow the new intent without losing useful context."}
+{"prompt":"Summarize the plan in three concise steps after a long discussion."}
+{"prompt":"Give an answer that separates facts from assumptions."}
+{"prompt":"A user asks for today's news but no live data tool is available. Respond honestly."}

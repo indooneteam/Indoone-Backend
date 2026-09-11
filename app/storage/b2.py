@@ -103,3 +103,20 @@ def get_b2_storage() -> B2Storage | None:
     if not B2Storage.configured():
         return None
     return B2Storage()
+
+
+def ensure_model_artifacts(model_dir: Path) -> None:
+    """Download missing model artifacts from B2 when storage is configured."""
+
+    storage = get_b2_storage()
+    if storage is None:
+        return
+
+    artifacts = {
+        "indoone-small.pt": model_dir / "indoone-small.pt",
+        "tokenizer.json": model_dir / "tokenizer.json",
+    }
+    for filename, local_path in artifacts.items():
+        if local_path.exists():
+            continue
+        storage.download_file(f"models/indoone-small/{filename}", local_path)

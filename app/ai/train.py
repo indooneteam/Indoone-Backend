@@ -11,7 +11,7 @@ from torch import nn
 
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
-from app.ai.training_data import load_examples, write_corpus
+from app.ai.training_data import TrainingExample, load_examples, write_corpus
 
 DEFAULT_MODEL_CONFIG = {
     "block_size": 128,
@@ -28,6 +28,24 @@ def _file_fingerprint(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _merge_instruction_sets(paths: list[Path]) -> tuple[list[TrainingExample], list[str]]:
+    """Load multiple instruction sets and remove exact instruction/response duplicates."""
+    merged: list[TrainingExample] = []
+    seen: set[tuple[str, str]] = set()
+    fingerprints: list[str] = []
+    for path in paths:
+        if not path.exists():
+            continue
+        fingerprints.append(_file_fingerprint(path))
+        for example in load_examples(path):
+            key = (example.instruction.casefold(), example.response.casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append(example)
+    return merged, fingerprints
 
 
 def batchify(
@@ -94,6 +112,7 @@ def train(
     checkpoint_interval: int = 500,
     learning_rate: float = 3e-4,
     instruction_path: Path | None = None,
+    multilingual_instruction_path: Path | None = None,
 ) -> float:
     if steps <= 0:
         raise ValueError("steps must be greater than zero")
@@ -109,16 +128,20 @@ def train(
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     train_text = corpus_path.read_text(encoding="utf-8")
-    instruction_enabled = instruction_path is not None and instruction_path.exists()
-    instruction_fingerprint = None
+    instruction_paths = [
+        path
+        for path in (instruction_path, multilingual_instruction_path)
+        if path is not None
+    ]
+    instruction_enabled = any(path.exists() for path in instruction_paths)
+    instruction_fingerprints: list[str] = []
     instruction_example_count = 0
     if instruction_enabled:
-        examples = load_examples(instruction_path)
+        examples, instruction_fingerprints = _merge_instruction_sets(instruction_paths)
         output_dir.mkdir(parents=True, exist_ok=True)
         instruction_corpus = output_dir / "instruction_corpus.txt"
         write_corpus(examples, instruction_corpus)
         train_text = train_text.rstrip() + "\n\n" + instruction_corpus.read_text(encoding="utf-8")
-        instruction_fingerprint = _file_fingerprint(instruction_path)
         instruction_example_count = len(examples)
     if len(train_text) < 32:
         raise ValueError("training corpus is too small; add more text")
@@ -252,10 +275,10 @@ def train(
                     else "final_step"
                 ),
                 "instruction_data_enabled": instruction_enabled,
+                "instruction_example_count": instruction_example_count,
+                "instruction_fingerprints": instruction_fingerprints,
                 "source_fingerprint": _file_fingerprint(corpus_path),
                 "validation_fingerprint": validation_fingerprint,
-                "instruction_fingerprint": instruction_fingerprint,
-                "instruction_example_count": instruction_example_count,
                 "training_text_characters": len(train_text),
             },
             indent=2,
@@ -270,6 +293,7 @@ def main() -> None:
     parser.add_argument("--corpus", type=Path, default=Path("data/processed/train.txt"))
     parser.add_argument("--validation", type=Path, default=Path("data/processed/validation.txt"))
     parser.add_argument("--instructions", type=Path, default=Path("data/raw/indoone_instructions.jsonl"))
+    parser.add_argument("--multilingual-instructions", type=Path, default=Path("data/raw/indoone_multilingual_examples.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--seed", type=int, default=42)
@@ -287,6 +311,7 @@ def main() -> None:
         args.checkpoint_interval,
         args.learning_rate,
         args.instructions,
+        args.multilingual_instructions,
     )
     print(f"training complete; final loss={loss:.4f}")
 

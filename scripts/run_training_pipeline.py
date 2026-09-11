@@ -35,6 +35,8 @@ def main() -> None:
         )
 
     python = sys.executable
+    eval_prompts = Path("data/evaluation/behavior_prompts.jsonl")
+
     run(
         [
             python,
@@ -78,16 +80,17 @@ def main() -> None:
         run([python, "scripts/upload_model_to_b2.py"])
 
     if not args.skip_eval:
-        run(
-            [
-                python,
-                "scripts/evaluate_model.py",
-                "--model",
-                "models/indoone-small/indoone-small.pt",
-                "--tokenizer",
-                "models/indoone-small/tokenizer.json",
-            ]
-        )
+        command = [
+            python,
+            "scripts/evaluate_model.py",
+            "--model",
+            "models/indoone-small/indoone-small.pt",
+            "--tokenizer",
+            "models/indoone-small/tokenizer.json",
+        ]
+        if eval_prompts.is_file():
+            command.extend(["--prompts", str(eval_prompts)])
+        run(command)
 
 
 if __name__ == "__main__":

@@ -91,10 +91,20 @@ class B2Storage:
         try:
             with urlopen(request, timeout=20) as response:
                 payload = json.load(response)
-        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
+        except HTTPError as exc:
+            try:
+                error_payload = json.load(exc)
+                code = error_payload.get("code", "authorization_error")
+                message = error_payload.get("message", "B2 authorization failed")
+            except (json.JSONDecodeError, ValueError, OSError):
+                code = "authorization_error"
+                message = "B2 authorization failed"
+            raise B2StorageError(f"B2 authorization failed: {code}: {message}") from exc
+        except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
             raise B2StorageError("B2 authorization failed") from exc
 
-        self._download_url = str(payload.get("downloadUrl", "")).rstrip("/")
+        storage_api = payload.get("apiInfo", {}).get("storageApi", {})
+        self._download_url = str(storage_api.get("downloadUrl", "")).rstrip("/")
         self._auth_token = str(payload.get("authorizationToken", ""))
         if not self._download_url or not self._auth_token:
             raise B2StorageError("B2 authorization response was incomplete")

@@ -9,6 +9,7 @@ private object storage before local inference is initialized.
 """
 
 from pathlib import Path
+import logging
 
 import httpx
 
@@ -19,6 +20,8 @@ from app.ai.local_engine import LocalAIEngine
 from app.ai.research import ResearchProvider, ResearchResult, build_research_provider, format_results
 from app.storage.b2 import B2StorageError, ensure_model_artifacts
 
+
+logger = logging.getLogger(__name__)
 
 MODEL_DIR = Path("models/indoone-small")
 KNOWLEDGE_DIR = Path("data/knowledge")
@@ -31,15 +34,23 @@ _research_provider: ResearchProvider | None = build_research_provider()
 
 try:
     ensure_model_artifacts(MODEL_DIR)
-except B2StorageError:
-    # B2 is an optional model-artifact source; local fallback remains available.
-    pass
+    logger.info("Indoone model artifact check completed")
+except B2StorageError as exc:
+    logger.error("Indoone model artifact check failed: %s", exc)
 
 if _checkpoint.exists() and _tokenizer.exists():
     try:
         _runtime = LocalModelRuntime(_checkpoint, _tokenizer)
-    except Exception:
+        logger.info("Indoone local model runtime loaded successfully")
+    except Exception as exc:
+        logger.error("Indoone local model runtime failed to load: %s", exc)
         _runtime = None
+else:
+    logger.error(
+        "Indoone local model artifacts are missing: checkpoint=%s tokenizer=%s",
+        _checkpoint.exists(),
+        _tokenizer.exists(),
+    )
 if KNOWLEDGE_DIR.exists() and list(KNOWLEDGE_DIR.glob("*.txt")):
     _knowledge_base = LocalKnowledgeBase.from_directory(KNOWLEDGE_DIR)
 

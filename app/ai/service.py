@@ -142,7 +142,7 @@ class LocalAIService:
                 answer = _runtime.generate(context)
             except RuntimeError:
                 answer = _fallback_reply(prompt)
-        elif _fallback_engine.ready:
+        elif getattr(_fallback_engine, "ready", True):
             try:
                 answer = await _fallback_engine.generate(context)
             except RuntimeError:

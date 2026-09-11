@@ -1,8 +1,4 @@
-"""Backblaze B2 object-storage helpers.
-
-The service uses Backblaze's native B2 API for model artifact downloads and
-keeps credentials entirely in environment variables.
-"""
+"""Backblaze B2 object-storage helpers."""
 
 from __future__ import annotations
 
@@ -11,8 +7,12 @@ import json
 import os
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlencode
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+
+import boto3
+from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 
 
 class B2StorageError(RuntimeError):
@@ -20,7 +20,7 @@ class B2StorageError(RuntimeError):
 
 
 class B2Storage:
-    """Small wrapper around Backblaze's native B2 API."""
+    """Small wrapper around Backblaze's native API and S3-compatible API."""
 
     AUTH_URL = "https://api.backblazeb2.com/b2api/v2/b2_authorize_account"
 
@@ -36,14 +36,35 @@ class B2Storage:
                 ("B2_APPLICATION_KEY_ID", self.key_id),
                 ("B2_APPLICATION_KEY", self.application_key),
                 ("B2_BUCKET_NAME", self.bucket_name),
+                ("B2_ENDPOINT", self.endpoint),
             )
             if not value
         ]
         if missing:
             raise B2StorageError(f"Missing B2 configuration: {', '.join(missing)}")
 
+        self._client = boto3.client(
+            "s3",
+            endpoint_url=self.endpoint,
+            region_name=self._region_from_endpoint(),
+            aws_access_key_id=self.key_id,
+            aws_secret_access_key=self.application_key,
+            config=Config(
+                signature_version="s3v4",
+                s3={"addressing_style": "path"},
+                retries={"max_attempts": 4, "mode": "standard"},
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            ),
+        )
         self._download_url: str | None = None
         self._auth_token: str | None = None
+
+    def _region_from_endpoint(self) -> str:
+        marker = "https://s3."
+        if self.endpoint.startswith(marker) and self.endpoint.endswith(".backblazeb2.com"):
+            return self.endpoint[len(marker) : -len(".backblazeb2.com")]
+        return os.getenv("B2_REGION", "us-east-1")
 
     @classmethod
     def configured(cls) -> bool:
@@ -53,10 +74,11 @@ class B2Storage:
                 "B2_APPLICATION_KEY_ID",
                 "B2_APPLICATION_KEY",
                 "B2_BUCKET_NAME",
+                "B2_ENDPOINT",
             )
         )
 
-    def _authorize(self) -> None:
+    def _authorize_native(self) -> None:
         credentials = base64.b64encode(
             f"{self.key_id}:{self.application_key}".encode("utf-8")
         ).decode("ascii")
@@ -76,25 +98,25 @@ class B2Storage:
         if not self._download_url or not self._auth_token:
             raise B2StorageError("B2 authorization response was incomplete")
 
-    def _ensure_authorized(self) -> None:
-        if not self._download_url or not self._auth_token:
-            self._authorize()
-
     def upload_file(self, local_path: Path, object_key: str) -> None:
-        # Uploads are handled by the established S3-compatible path elsewhere.
-        raise B2StorageError("Direct model uploads are handled outside the runtime")
+        try:
+            with local_path.open("rb") as handle:
+                self._client.put_object(
+                    Bucket=self.bucket_name,
+                    Key=object_key,
+                    Body=handle,
+                    ContentLength=local_path.stat().st_size,
+                )
+        except (BotoCoreError, ClientError, OSError) as exc:
+            raise B2StorageError(f"B2 upload failed for {object_key}") from exc
 
     def download_file(self, object_key: str, local_path: Path) -> bool:
-        self._ensure_authorized()
+        if not self._download_url or not self._auth_token:
+            self._authorize_native()
         assert self._download_url is not None
         assert self._auth_token is not None
 
-        query = urlencode(
-            {
-                "bucketName": self.bucket_name,
-                "fileName": object_key,
-            }
-        )
+        query = urlencode({"bucketName": self.bucket_name, "fileName": object_key})
         url = f"{self._download_url}/b2api/v2/b2_download_file_by_name?{query}"
         request = Request(url, headers={"Authorization": self._auth_token}, method="GET")
         local_path.parent.mkdir(parents=True, exist_ok=True)
@@ -118,21 +140,17 @@ class B2Storage:
             raise B2StorageError("B2 model download failed") from exc
 
     def check_access(self) -> bool:
-        self._ensure_authorized()
+        self._authorize_native()
         return True
 
 
 def get_b2_storage() -> B2Storage | None:
-    """Return a configured B2 client, or None when B2 is intentionally disabled."""
-
     if not B2Storage.configured():
         return None
     return B2Storage()
 
 
 def ensure_model_artifacts(model_dir: Path) -> None:
-    """Download missing model artifacts from B2 when storage is configured."""
-
     storage = get_b2_storage()
     if storage is None:
         return

@@ -8,6 +8,9 @@ from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 
 
+DEFAULT_MAX_NEW_TOKENS = 32
+
+
 class LocalModelRuntime:
     """Loads an Indoone checkpoint and generates text locally."""
 
@@ -33,7 +36,7 @@ class LocalModelRuntime:
     def generate(
         self,
         prompt: str,
-        max_new_tokens: int = 80,
+        max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
         temperature: float = 0.8,
     ) -> str:
         prompt = prompt.strip()

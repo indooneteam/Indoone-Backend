@@ -10,10 +10,12 @@ from app.ai.tokenizer import BPETokenizer
 
 DEFAULT_CHECKPOINT = Path("models/indoone-small/indoone-small.pt")
 DEFAULT_TOKENIZER = Path("models/indoone-small/tokenizer.json")
+DEFAULT_MAX_NEW_TOKENS = 160
+DEFAULT_TEMPERATURE = 0.0
 
 
 class LocalAIEngine:
-    """Loads and runs an Indoone-owned local language model."""
+    """Load and run an Indoone-owned local language model."""
 
     def __init__(
         self,
@@ -35,6 +37,7 @@ class LocalAIEngine:
                 "--output models/indoone-small"
             )
             return
+
         try:
             payload = torch.load(
                 self.checkpoint,
@@ -42,8 +45,10 @@ class LocalAIEngine:
                 weights_only=False,
             )
             self.tokenizer = BPETokenizer.load(self.tokenizer_path)
+
             raw_config = dict(payload["config"])
             raw_config.pop("model_version", None)
+
             self.model = IndooneTransformer(
                 vocab_size=self.tokenizer.vocab_size,
                 **raw_config,
@@ -55,6 +60,8 @@ class LocalAIEngine:
 
     @property
     def ready(self) -> bool:
+        """Return whether the local checkpoint loaded successfully."""
+
         return (
             self.model is not None
             and self.tokenizer is not None
@@ -63,22 +70,37 @@ class LocalAIEngine:
 
     @staticmethod
     def _select_next_token(logits: torch.Tensor, temperature: float) -> int:
+        """Select the next token, using greedy decoding at temperature 0."""
+
         if temperature < 0:
             raise ValueError("temperature must be non-negative")
+
         if temperature == 0:
             return int(torch.argmax(logits, dim=-1).item())
+
         probabilities = torch.softmax(logits / temperature, dim=-1)
         return int(torch.multinomial(probabilities, num_samples=1).item())
+
+    def _prompt_ids(self, prompt: str) -> list[int]:
+        """Encode a prompt with BOS and leave EOS for generated output."""
+
+        token_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
+        return [self.tokenizer.stoi["<bos>"]] + token_ids
 
     @torch.inference_mode()
     async def generate(
         self,
         message: str,
-        max_new_tokens: int = 160,
-        temperature: float = 0.8,
+        max_new_tokens: int = DEFAULT_MAX_NEW_TOKENS,
+        temperature: float = DEFAULT_TEMPERATURE,
     ) -> str:
+        """Generate only the assistant completion for a prepared prompt."""
+
         if not self.ready:
-            raise RuntimeError(self._load_error or "Indoone local model is unavailable")
+            raise RuntimeError(
+                self._load_error or "Indoone local model is unavailable"
+            )
+
         assert self.model is not None
         assert self.tokenizer is not None
 
@@ -90,17 +112,19 @@ class LocalAIEngine:
         if temperature < 0:
             raise ValueError("temperature must be non-negative")
 
-        prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=True)
+        prompt_ids = self._prompt_ids(prompt)
         generated_ids = list(prompt_ids)
+        eos_id = self.tokenizer.stoi["<eos>"]
+
         for _ in range(max_new_tokens):
-            context = torch.tensor(
-                [generated_ids[-self.model.block_size :]], dtype=torch.long
-            )
+            context_ids = generated_ids[-self.model.block_size :]
+            context = torch.tensor([context_ids], dtype=torch.long)
             logits, _ = self.model(context)
             next_logits = logits[:, -1, :]
             next_id = self._select_next_token(next_logits, temperature)
+
             generated_ids.append(next_id)
-            if next_id == self.tokenizer.stoi["<eos>"]:
+            if next_id == eos_id:
                 break
 
         completion_ids = generated_ids[len(prompt_ids) :]

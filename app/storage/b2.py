@@ -14,7 +14,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
 
-_ENDPOINT_PATTERN = re.compile(r"^https://s3\\.(?P<region>[a-z0-9-]+)\\.backblazeb2\\.com/?$")
+_ENDPOINT_PATTERN = re.compile(r"^https://s3\.(?P<region>[a-z0-9-]+)\.backblazeb2\.com/?$")
 
 
 class B2StorageError(RuntimeError):
@@ -43,7 +43,7 @@ class B2Storage:
         if missing:
             raise B2StorageError(f"Missing B2 configuration: {', '.join(missing)}")
 
-        match = _ENDPOINT_PATTERN.match(self.endpoint + "/")
+        match = _ENDPOINT_PATTERN.match(self.endpoint)
         region = match.group("region") if match else os.getenv("B2_REGION", "us-east-1")
         self._client = boto3.client(
             "s3",

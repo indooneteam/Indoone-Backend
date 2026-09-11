@@ -4,7 +4,6 @@ import argparse
 import json
 from pathlib import Path
 
-
 DEFAULT_PROMPTS = [
     "What is 12 + 7?",
     "Explain why the sky looks blue in simple words.",
@@ -56,14 +55,12 @@ def main() -> None:
         raise SystemExit(f"Tokenizer not found: {tokenizer_path}")
     if args.max_new_tokens <= 0:
         raise SystemExit("--max-new-tokens must be positive")
-    if args.temperature <= 0:
-        raise SystemExit("--temperature must be positive")
+    if args.temperature < 0:
+        raise SystemExit("--temperature must be non-negative")
 
-    # Import only after argument/file validation so the script fails clearly
-    # when the model artifact is not present in CI or a clean checkout.
-    from app.ai.inference import InferenceEngine
+    from app.ai.inference import LocalModelRuntime
 
-    engine = InferenceEngine(str(model_path), str(tokenizer_path))
+    engine = LocalModelRuntime(model_path, tokenizer_path)
     prompts = load_prompts(args.prompts)
     for index, prompt in enumerate(prompts, 1):
         answer = engine.generate(

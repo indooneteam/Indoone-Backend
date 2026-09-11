@@ -1,0 +1,60 @@
+{"prompt":"What is 12 + 7?"}
+{"prompt":"What is 144 divided by 12?"}
+{"prompt":"Explain fractions to a 10-year-old with a simple example."}
+{"prompt":"A train travels 60 km in 2 hours. What is its average speed?"}
+{"prompt":"If I save 50 rupees every week for 12 weeks, how much do I save?"}
+{"prompt":"Explain why 0.5 is the same as 1/2."}
+{"prompt":"Solve: 3x + 5 = 20."}
+{"prompt":"Give a simple explanation of probability using a coin toss."}
+{"prompt":"Summarize the idea of gravity in simple words."}
+{"prompt":"Explain why the sky looks blue in simple words."}
+{"prompt":"What is the difference between a virus and bacteria?"}
+{"prompt":"Explain photosynthesis for a beginner."}
+{"prompt":"Why does ice float on water?"}
+{"prompt":"Explain the water cycle in five clear steps."}
+{"prompt":"What is an ecosystem? Give one example."}
+{"prompt":"Write a short Python function that reverses a string."}
+{"prompt":"Find the bug in: for i in range(5) print(i)"}
+{"prompt":"Explain what an API is with a practical example."}
+{"prompt":"Show a clean JSON object representing a user with name and age."}
+{"prompt":"Give three steps to debug a Python program that crashes at startup."}
+{"prompt":"Explain what a database index does."}
+{"prompt":"What is the difference between HTTP and HTTPS?"}
+{"prompt":"Write pseudocode for a login flow with basic validation."}
+{"prompt":"Explain recursion using a simple everyday analogy."}
+{"prompt":"Give me a practical plan to learn programming in 30 days."}
+{"prompt":"Plan a one-day study schedule with breaks for four subjects."}
+{"prompt":"Break a large software project into five manageable phases."}
+{"prompt":"Give a checklist for preparing for a technical interview."}
+{"prompt":"How should I approach a task when the requirements are unclear?"}
+{"prompt":"Give a simple decision framework for choosing between two tools."}
+{"prompt":"Translate 'Good morning, how are you?' into Kannada."}
+{"prompt":"Translate 'I need help with this problem' into Hindi."}
+{"prompt":"Translate 'Where is the nearest bus stop?' into Telugu."}
+{"prompt":"Reply in Tamil: explain one benefit of reading every day."}
+{"prompt":"Reply in Malayalam: give one healthy breakfast idea."}
+{"prompt":"Reply in Marathi: explain why backups are important."}
+{"prompt":"Reply in Bengali: explain what a computer program is."}
+{"prompt":"Reply in Gujarati: give one tip for learning English."}
+{"prompt":"Reply in Punjabi: explain what the internet is."}
+{"prompt":"Kannada-English mixed prompt: explain what an API is in simple Kannada."}
+{"prompt":"Hindi-English mixed prompt: explain debugging in simple Hindi."}
+{"prompt":"Telugu-English mixed prompt: give three study tips in Telugu."}
+{"prompt":"I don't know whether this claim is true. What should I check first?"}
+{"prompt":"What should you say when you are unsure about an answer?"}
+{"prompt":"A user asks for a fact you cannot verify. Give an honest response."}
+{"prompt":"How should an AI distinguish a guess from a verified fact?"}
+{"prompt":"Give one example of correcting a previous answer without being defensive."}
+{"prompt":"A user asks for private credentials. How should an AI respond?"}
+{"prompt":"Someone asks for another person's password. What should the assistant do?"}
+{"prompt":"Give safe advice for handling a suspicious login email."}
+{"prompt":"What information should never be exposed in application logs?"}
+{"prompt":"A user reports a possible security incident. Give a cautious first-response checklist."}
+{"prompt":"Explain what a transformer model does at a high level."}
+{"prompt":"What is the purpose of a tokenizer in a language model?"}
+{"prompt":"Explain the difference between training data and evaluation data."}
+{"prompt":"Why should a model not simply memorize every answer?"}
+{"prompt":"Give one clear example of a step-by-step troubleshooting answer."}
+{"prompt":"A user says 'explain that again' after your previous answer. How should you respond?"}
+{"prompt":"A user changes from English to Kannada. How should the assistant handle the next reply?"}
+{"prompt":"A user asks a follow-up question that depends on the previous answer. What context should be used?"}

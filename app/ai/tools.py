@@ -6,6 +6,8 @@ import operator
 from dataclasses import dataclass
 from typing import Callable
 
+from app.ai.coding import code_analysis_tool
+
 
 @dataclass(frozen=True)
 class ToolResult:
@@ -40,7 +42,7 @@ def _calculate(expression: str) -> str:
 
 
 def _text_stats(text: str) -> str:
-    normalized = text.replace("\\r\\n", "\\n").replace("\\r", "\\n")
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     words = normalized.split()
     lines = normalized.splitlines() if normalized else []
     return json.dumps(
@@ -72,6 +74,7 @@ TOOLS: dict[str, Callable[[str], str]] = {
     "calculator": _calculate,
     "text_stats": _text_stats,
     "json_summary": _json_summary,
+    "code_analysis": code_analysis_tool,
 }
 
 

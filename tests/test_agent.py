@@ -30,6 +30,7 @@ def test_agent_is_bounded_and_returns_tool_results() -> None:
     assert len(execution.steps) == MAX_AGENT_STEPS
     assert [result.output for result in execution.results] == ["56", "15", "25.0", "1"]
     assert all(result.safe for result in execution.results)
+    assert execution.retry_counts == (0, 0, 0, 0)
 
 
 def test_agent_loads_memory_context() -> None:
@@ -53,6 +54,13 @@ def test_agent_chains_previous_result_into_calculator() -> None:
     assert [result.output for result in execution.results] == ["5", "20"]
 
 
+def test_agent_exposes_bounded_retry_state_for_failures() -> None:
+    execution = execute_agent("calculate 10 / 0")
+    assert len(execution.results) == 1
+    assert execution.results[0].safe is False
+    assert execution.retry_counts == (1,)
+
+
 def test_agent_endpoint_exposes_steps() -> None:
     with TestClient(app) as client:
         response = client.post("/api/agent", json={"message": "what is 9 + 4"})
@@ -62,6 +70,7 @@ def test_agent_endpoint_exposes_steps() -> None:
     assert body["steps"][0]["tool"] == "calculator"
     assert body["results"][0]["output"] == "13"
     assert body["blocked_steps"] == []
+    assert body["retry_counts"] == [0]
 
 
 def test_agent_endpoint_exposes_multiple_results() -> None:
@@ -71,6 +80,7 @@ def test_agent_endpoint_exposes_multiple_results() -> None:
     body = response.json()
     assert [step["payload"] for step in body["steps"]] == ["9+4", "3*6"]
     assert [result["output"] for result in body["results"]] == ["13", "18"]
+    assert body["retry_counts"] == [0, 0]
 
 
 def test_agent_endpoint_returns_empty_plan_for_general_message() -> None:
@@ -81,3 +91,4 @@ def test_agent_endpoint_returns_empty_plan_for_general_message() -> None:
     assert body["steps"] == []
     assert body["results"] == []
     assert body["blocked_steps"] == []
+    assert body["retry_counts"] == []

@@ -122,6 +122,7 @@ async def synthesize_speech(
     language: str = "",
     voice: str = "",
     format: str = "wav",
+    audio_format: str | None = None,
 ) -> SynthesisResult:
     text = text.strip()
     if not text:
@@ -129,11 +130,12 @@ async def synthesize_speech(
     if len(text) > MAX_TEXT_LENGTH:
         raise ValueError("text is too long")
     url = _require_url("INDOONE_TTS_URL")
+    selected_format = (audio_format if audio_format is not None else format).strip()[:16] or "wav"
     payload = {
         "text": text,
         "language": language.strip()[:MAX_LANGUAGE_LENGTH],
         "voice": voice.strip()[:128],
-        "format": format.strip()[:16] or "wav",
+        "format": selected_format,
     }
     try:
         async with httpx.AsyncClient(timeout=_timeout()) as client:
@@ -145,9 +147,9 @@ async def synthesize_speech(
 
     encoded = data.get("audio_base64")
     if not isinstance(encoded, str) or not encoded:
-        images = data.get("audio")
-        if isinstance(images, list) and images and isinstance(images[0], str):
-            encoded = images[0]
+        audio = data.get("audio")
+        if isinstance(audio, list) and audio and isinstance(audio[0], str):
+            encoded = audio[0]
     if not isinstance(encoded, str) or not encoded:
         raise RuntimeError("text-to-speech provider returned no audio")
     try:

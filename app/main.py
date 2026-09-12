@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.ai import service as ai_service
 from app.ai.language_detection import detect_response_language
 from app.api.capabilities import router as capabilities_router
+from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 from app.api.facebook import router as facebook_router
@@ -41,6 +42,7 @@ app.include_router(youtube_router, prefix="/api")
 app.include_router(instagram_router, prefix="/api")
 app.include_router(facebook_router, prefix="/api")
 app.include_router(google_photos_router, prefix="/api")
+app.include_router(canva_router, prefix="/api")
 
 
 @app.get("/health")

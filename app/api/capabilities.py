@@ -19,7 +19,9 @@ from app.capabilities.store import (
     create_task,
     delete_memory,
     delete_project,
+    get_agent_run,
     get_project,
+    list_agent_runs,
     list_memories,
     list_projects,
     list_tasks,
@@ -221,6 +223,19 @@ async def get_tasks(user_id: str = Query(..., min_length=1, max_length=256)) -> 
     return {"tasks": list_tasks(user_id)}
 
 
+@router.get("/agent/runs")
+async def agent_runs(user_id: str = Query(..., min_length=1, max_length=256), limit: int = Query(default=50, ge=1, le=100)) -> dict[str, object]:
+    return {"runs": list_agent_runs(user_id, limit)}
+
+
+@router.get("/agent/runs/{run_id}")
+async def agent_run(run_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    run = get_agent_run(user_id, run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="agent run not found")
+    return {"run": run}
+
+
 @router.post("/analysis")
 async def analyze(request: AnalysisRequest) -> dict[str, object]:
     try:
@@ -302,24 +317,9 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
 
 @router.post("/agent")
 async def agent(request: AgentRequest) -> dict[str, object]:
-    execution = execute_agent(
-        request.message,
-        user_id=request.user_id,
-        approved_tools=frozenset(request.approved_tools),
-    )
+    execution = execute_agent(request.message, user_id=request.user_id, approved_tools=frozenset(request.approved_tools))
     if not execution.steps and not execution.blocked_steps:
-        return {
-            "intent": "general",
-            "tool": None,
-            "tool_payload": None,
-            "result": None,
-            "steps": [],
-            "results": [],
-            "memories": list(execution.memories),
-            "blocked_steps": [],
-            "retry_counts": list(execution.retry_counts),
-            "max_steps": MAX_AGENT_STEPS,
-        }
+        return {"intent": "general", "tool": None, "tool_payload": None, "result": None, "steps": [], "results": [], "memories": list(execution.memories), "blocked_steps": [], "retry_counts": list(execution.retry_counts), "run_id": execution.run_id, "max_steps": MAX_AGENT_STEPS}
     first = execution.steps[0] if execution.steps else execution.blocked_steps[0]
     first_result = execution.results[0] if execution.results else None
     return {
@@ -327,27 +327,12 @@ async def agent(request: AgentRequest) -> dict[str, object]:
         "tool": first.tool,
         "tool_payload": first.payload,
         "result": None if first_result is None else {"name": first_result.name, "output": first_result.output, "safe": first_result.safe},
-        "steps": [
-            {
-                "index": step.index,
-                "tool": step.tool,
-                "payload": step.payload,
-                "requires_approval": step.requires_approval,
-            }
-            for step in execution.steps
-        ],
+        "steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.steps],
         "results": [{"name": result.name, "output": result.output, "safe": result.safe} for result in execution.results],
         "memories": list(execution.memories),
-        "blocked_steps": [
-            {
-                "index": step.index,
-                "tool": step.tool,
-                "payload": step.payload,
-                "requires_approval": step.requires_approval,
-            }
-            for step in execution.blocked_steps
-        ],
+        "blocked_steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.blocked_steps],
         "retry_counts": list(execution.retry_counts),
+        "run_id": execution.run_id,
         "max_steps": MAX_AGENT_STEPS,
     }
 
@@ -410,14 +395,7 @@ async def voice_session(websocket: WebSocket) -> None:
                     await websocket.send_json({"type": "error", "code": "invalid_audio", "detail": "audio_base64 is required", "request_id": request_id, "sequence": state.next_sequence()})
                     continue
                 try:
-                    event = await handle_audio_message(
-                        state,
-                        audio_base64,
-                        mime_type=str(message.get("mime_type") or "audio/wav"),
-                        language=str(message.get("language") or ""),
-                        final=bool(message.get("final", True)),
-                        request_id=request_id,
-                    )
+                    event = await handle_audio_message(state, audio_base64, mime_type=str(message.get("mime_type") or "audio/wav"), language=str(message.get("language") or ""), final=bool(message.get("final", True)), request_id=request_id)
                 except (ValueError, RuntimeError) as exc:
                     await websocket.send_json({"type": "error", "code": "transcription_failed", "detail": str(exc), "request_id": request_id, "sequence": state.next_sequence()})
                     continue
@@ -429,14 +407,7 @@ async def voice_session(websocket: WebSocket) -> None:
                     await websocket.send_json({"type": "error", "code": "invalid_text", "detail": "text is required", "request_id": request_id, "sequence": state.next_sequence()})
                     continue
                 try:
-                    event = await handle_speak_message(
-                        state,
-                        text,
-                        language=str(message.get("language") or ""),
-                        voice=str(message.get("voice") or ""),
-                        format=str(message.get("format") or "wav"),
-                        request_id=request_id,
-                    )
+                    event = await handle_speak_message(state, text, language=str(message.get("language") or ""), voice=str(message.get("voice") or ""), format=str(message.get("format") or "wav"), request_id=request_id)
                 except (ValueError, RuntimeError) as exc:
                     await websocket.send_json({"type": "error", "code": "synthesis_failed", "detail": str(exc), "request_id": request_id, "sequence": state.next_sequence()})
                     continue

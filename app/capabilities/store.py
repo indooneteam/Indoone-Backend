@@ -169,6 +169,16 @@ def upsert_integration_token(
         db.commit()
 
 
+def get_integration_token(user_id: str, integration_id: str) -> dict[str, Any] | None:
+    initialize()
+    with closing(_connect()) as db:
+        row = db.execute(
+            "SELECT user_id, integration_id, access_token, token_type, scope, expires_at, updated_at FROM integration_tokens WHERE user_id = ? AND integration_id = ?",
+            (user_id, integration_id),
+        ).fetchone()
+    return _row_dict(row)
+
+
 def get_integration_token_metadata(user_id: str, integration_id: str) -> dict[str, Any] | None:
     initialize()
     with closing(_connect()) as db:
@@ -271,7 +281,10 @@ def create_project(user_id: str, name: str, instructions: str, context: dict[str
 def get_project(user_id: str, project_id: str) -> dict[str, Any] | None:
     initialize()
     with closing(_connect()) as db:
-        row = db.execute("SELECT * FROM projects WHERE user_id = ? AND id = ?", (user_id, project_id)).fetchone()
+        row = db.execute(
+            "SELECT * FROM projects WHERE user_id = ? AND id = ?",
+            (user_id, project_id),
+        ).fetchone()
     if row is None:
         return None
     data = dict(row)

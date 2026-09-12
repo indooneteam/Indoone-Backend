@@ -127,7 +127,7 @@ def test_provider_probe_endpoint_rejects_unconnected_user(tmp_path, monkeypatch)
     with TestClient(app) as client:
         response = client.post("/api/integrations/github/probe", json={"user_id": "user-two"})
     assert response.status_code == 400
-    assert "not connected" in response.json()["detail"]
+    assert "not connected" in response.json()["message"]
 
 
 def test_github_pull_request_endpoint_rejects_bad_repository(tmp_path, monkeypatch) -> None:
@@ -135,4 +135,4 @@ def test_github_pull_request_endpoint_rejects_bad_repository(tmp_path, monkeypat
     with TestClient(app) as client:
         response = client.post("/api/integrations/github/pull-requests", json={"user_id": "user-one", "repository": "bad"})
     assert response.status_code == 400
-    assert "owner/name" in response.json()["detail"]
+    assert "owner/name" in response.json()["message"]

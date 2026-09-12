@@ -12,7 +12,7 @@ from app.ai.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
 from app.capabilities.document_extract import extract_document
 from app.capabilities.image_generation import generate_image
-from app.capabilities.integrations import get_integration, list_integrations
+from app.capabilities.integrations import build_oauth_authorization, get_integration, list_integrations
 from app.capabilities.media import save_media
 from app.capabilities.registry import list_capabilities
 from app.capabilities.store import create_project, create_task, delete_memory, delete_project, get_agent_run, get_project, list_agent_runs, list_memories, list_projects, list_tasks, search_memories, search_projects, update_project, upsert_memory
@@ -75,12 +75,16 @@ class MediaRequest(BaseModel):
     content_base64: str = Field(min_length=1, max_length=12_000_000)
 
 
-class DocumentRequest(MediaRequest):
-    pass
+class DocumentRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    mime_type: str = Field(min_length=1, max_length=120)
+    content_base64: str = Field(min_length=1, max_length=12_000_000)
 
 
-class VisionRequest(MediaRequest):
-    pass
+class VisionRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    mime_type: str = Field(min_length=1, max_length=120)
+    content_base64: str = Field(min_length=1, max_length=12_000_000)
 
 
 class ResearchRequest(BaseModel):
@@ -119,6 +123,11 @@ class VoiceSynthesisRequest(BaseModel):
     format: str = Field(default="wav", min_length=1, max_length=16)
 
 
+class IntegrationConnectRequest(BaseModel):
+    state: str = Field(min_length=16, max_length=512)
+    redirect_uri: str = Field(min_length=1, max_length=2_000)
+
+
 @router.get("/capabilities")
 async def capabilities() -> dict[str, object]:
     return {"capabilities": list_capabilities()}
@@ -137,8 +146,24 @@ async def integration(integration_id: str) -> dict[str, object]:
     return {"integration": item}
 
 
+@router.post("/integrations/{integration_id}/connect")
+async def connect_integration(integration_id: str, request: IntegrationConnectRequest) -> dict[str, object]:
+    try:
+        return build_oauth_authorization(integration_id, request.state, request.redirect_uri)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @router.get("/memory")
-async def get_memories(user_id: str = Query(..., min_length=1, max_length=256), key_prefix: str = Query(default="", max_length=128), source: str = Query(default="", max_length=128), limit: int = Query(default=100, ge=1, le=500), q: str = Query(default="", max_length=500)) -> dict[str, object]:
+async def get_memories(
+    user_id: str = Query(..., min_length=1, max_length=256),
+    key_prefix: str = Query(default="", max_length=128),
+    source: str = Query(default="", max_length=128),
+    limit: int = Query(default=100, ge=1, le=500),
+    q: str = Query(default="", max_length=500),
+) -> dict[str, object]:
     memories = search_memories(user_id, q, limit) if q.strip() else list_memories(user_id, key_prefix, source, limit)
     return {"memories": memories}
 
@@ -150,7 +175,8 @@ async def write_memory(request: MemoryRequest) -> dict[str, object]:
 
 @router.delete("/memory")
 async def remove_memory(request: MemoryDeleteRequest) -> dict[str, bool]:
-    if not delete_memory(request.user_id, request.memory_id):
+    deleted = delete_memory(request.user_id, request.memory_id)
+    if not deleted:
         raise HTTPException(status_code=404, detail="memory not found")
     return {"deleted": True}
 
@@ -184,7 +210,8 @@ async def update_project_endpoint(project_id: str, request: ProjectUpdateRequest
 
 @router.delete("/projects/{project_id}")
 async def delete_project_endpoint(project_id: str, request: ProjectDeleteRequest) -> dict[str, bool]:
-    if not delete_project(request.user_id, project_id):
+    deleted = delete_project(request.user_id, project_id)
+    if not deleted:
         raise HTTPException(status_code=404, detail="project not found")
     return {"deleted": True}
 
@@ -206,10 +233,10 @@ async def agent_runs(user_id: str = Query(..., min_length=1, max_length=256), li
 
 @router.get("/agent/runs/{run_id}")
 async def agent_run(run_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
-    result = get_agent_run(user_id, run_id)
-    if result is None:
+    run = get_agent_run(user_id, run_id)
+    if run is None:
         raise HTTPException(status_code=404, detail="agent run not found")
-    return {"run": result}
+    return {"run": run}
 
 
 @router.post("/analysis")
@@ -219,157 +246,3 @@ async def analyze(request: AnalysisRequest) -> dict[str, object]:
         return {"analysis": analyze_payload(request.filename, content)}
     except (ValueError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/documents/extract")
-async def extract_document_endpoint(request: DocumentRequest) -> dict[str, object]:
-    try:
-        content = base64.b64decode(request.content_base64, validate=True)
-        result = extract_document(request.filename, request.mime_type, content)
-        return {"document": {"filename": result.filename, "mime_type": result.mime_type, "page_count": result.page_count, "paragraphs": result.paragraphs, "characters": result.characters, "text": result.text, "truncated": result.truncated, "ocr_required": not bool(result.text)}}
-    except (ValueError, UnicodeDecodeError) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/vision")
-async def vision(request: VisionRequest) -> dict[str, object]:
-    try:
-        return {"vision": analyze_image(request.filename, request.mime_type, request.content_base64)}
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/media")
-async def upload_media(request: MediaRequest) -> dict[str, object]:
-    try:
-        return save_media(request.filename, request.mime_type, request.content_base64)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-
-
-@router.post("/research")
-async def research(request: ResearchRequest) -> dict[str, object]:
-    provider = build_research_provider()
-    if provider is None:
-        raise HTTPException(status_code=503, detail="live research provider is not configured")
-    try:
-        results = await provider.search(request.query, request.limit)
-    except (RuntimeError, ValueError, httpx.HTTPError) as exc:
-        raise HTTPException(status_code=502, detail=f"research provider failed: {exc}") from exc
-    return {"query": request.query, "results": [{"title": item.title, "url": item.url, "snippet": item.snippet} for item in results]}
-
-
-@router.post("/deep-research")
-async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
-    provider = build_research_provider()
-    if provider is None:
-        raise HTTPException(status_code=503, detail="live research provider is not configured")
-    queries = [request.query, f"{request.query} official sources", f"{request.query} recent developments"][: request.queries]
-    results: list[dict[str, str]] = []
-    seen: set[str] = set()
-    for query in queries:
-        try:
-            batch = await provider.search(query, request.per_query_limit)
-        except (RuntimeError, ValueError, httpx.HTTPError) as exc:
-            raise HTTPException(status_code=502, detail=f"research provider failed: {exc}") from exc
-        for item in batch:
-            if item.url in seen:
-                continue
-            seen.add(item.url)
-            results.append({"query": query, "title": item.title, "url": item.url, "snippet": item.snippet})
-    return {"query": request.query, "queries": queries, "sources": results}
-
-
-@router.post("/agent")
-async def agent(request: AgentRequest) -> dict[str, object]:
-    execution = execute_agent(request.message, user_id=request.user_id, approved_tools=frozenset(request.approved_tools))
-    if not execution.steps and not execution.blocked_steps:
-        return {"intent": "general", "tool": None, "tool_payload": None, "result": None, "steps": [], "results": [], "memories": list(execution.memories), "blocked_steps": [], "retry_counts": list(execution.retry_counts), "run_id": execution.run_id, "max_steps": MAX_AGENT_STEPS}
-    first = execution.steps[0] if execution.steps else execution.blocked_steps[0]
-    first_result = execution.results[0] if execution.results else None
-    return {"intent": "tool", "tool": first.tool, "tool_payload": first.payload, "result": None if first_result is None else {"name": first_result.name, "output": first_result.output, "safe": first_result.safe}, "steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.steps], "results": [{"name": result.name, "output": result.output, "safe": result.safe} for result in execution.results], "memories": list(execution.memories), "blocked_steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.blocked_steps], "retry_counts": list(execution.retry_counts), "run_id": execution.run_id, "max_steps": MAX_AGENT_STEPS}
-
-
-@router.post("/image-generation")
-async def image_generation(request: ImageGenerationRequest) -> dict[str, object]:
-    try:
-        result = await generate_image(request.prompt, request.width, request.height)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"result": {"provider": result.provider, "model": result.model, "mime_type": result.mime_type, "image_base64": result.image_base64, "metadata": result.metadata}}
-
-
-@router.post("/voice/transcribe")
-async def voice_transcribe(request: VoiceTranscriptionRequest) -> dict[str, object]:
-    try:
-        result = await transcribe_audio(request.audio_base64, mime_type=request.mime_type, language=request.language)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"result": {"text": result.text, "language": result.language, "provider": result.provider, "model": result.model, "confidence": result.confidence, "metadata": result.metadata}}
-
-
-@router.post("/voice/synthesize")
-async def voice_synthesize(request: VoiceSynthesisRequest) -> dict[str, object]:
-    try:
-        result = await synthesize_speech(request.text, language=request.language, voice=request.voice, format=request.format)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"result": {"audio_base64": result.audio_base64, "mime_type": result.mime_type, "provider": result.provider, "model": result.model, "sample_rate_hz": result.sample_rate_hz, "metadata": result.metadata}}
-
-
-@router.websocket("/voice/session")
-async def voice_session(websocket: WebSocket) -> None:
-    state = VoiceSessionState()
-    await websocket.accept()
-    await websocket.send_json(ready_event(state))
-    try:
-        while True:
-            message = await websocket.receive_json()
-            try:
-                state.accept_message()
-            except ValueError as exc:
-                await websocket.send_json({"type": "error", "code": "session_limit", "detail": str(exc), "sequence": state.next_sequence()})
-                await websocket.close(code=1008)
-                return
-            event_type = str(message.get("type", ""))
-            request_id = normalize_request_id(message.get("request_id"))
-            if event_type == "ping":
-                await websocket.send_json({"type": "pong", "request_id": request_id, "sequence": state.next_sequence()})
-                continue
-            if event_type == "audio":
-                audio_base64 = message.get("audio_base64")
-                if not isinstance(audio_base64, str):
-                    await websocket.send_json({"type": "error", "code": "invalid_audio", "detail": "audio_base64 is required", "request_id": request_id, "sequence": state.next_sequence()})
-                    continue
-                try:
-                    event = await handle_audio_message(state, audio_base64, mime_type=str(message.get("mime_type") or "audio/wav"), language=str(message.get("language") or ""), final=bool(message.get("final", True)), request_id=request_id)
-                except (ValueError, RuntimeError) as exc:
-                    await websocket.send_json({"type": "error", "code": "transcription_failed", "detail": str(exc), "request_id": request_id, "sequence": state.next_sequence()})
-                    continue
-                await websocket.send_json(event)
-                continue
-            if event_type == "speak":
-                text = message.get("text")
-                if not isinstance(text, str):
-                    await websocket.send_json({"type": "error", "code": "invalid_text", "detail": "text is required", "request_id": request_id, "sequence": state.next_sequence()})
-                    continue
-                try:
-                    event = await handle_speak_message(state, text, language=str(message.get("language") or ""), voice=str(message.get("voice") or ""), format=str(message.get("format") or "wav"), request_id=request_id)
-                except (ValueError, RuntimeError) as exc:
-                    await websocket.send_json({"type": "error", "code": "synthesis_failed", "detail": str(exc), "request_id": request_id, "sequence": state.next_sequence()})
-                    continue
-                await websocket.send_json(event)
-                continue
-            if event_type == "stop":
-                state.closed = True
-                await websocket.send_json({"type": "stopped", "session_id": state.session_id, "request_id": request_id, "sequence": state.next_sequence()})
-                break
-            await websocket.send_json({"type": "error", "code": "unknown_event", "detail": "unsupported voice session event", "request_id": request_id, "sequence": state.next_sequence()})
-    except WebSocketDisconnect:
-        state.closed = True

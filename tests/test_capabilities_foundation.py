@@ -50,20 +50,58 @@ def test_memory_round_trip_search_and_isolation(tmp_path, monkeypatch) -> None:
         assert updated.json()["memory"]["created_at"] == created.json()["memory"]["created_at"]
 
 
-def test_project_and_task_storage(tmp_path, monkeypatch) -> None:
+def test_project_workspace_lifecycle_and_isolation(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     with TestClient(app) as client:
         project = client.post(
             "/api/projects",
-            json={"user_id": "u1", "name": "AI work", "instructions": "Be concise"},
+            json={
+                "user_id": "u1",
+                "name": "AI work",
+                "instructions": "Be concise",
+                "context": {"topic": "research"},
+            },
         )
         assert project.status_code == 200
+        project_id = project.json()["project"]["id"]
+        assert project.json()["project"]["archived"] is False
+
+        fetched = client.get(f"/api/projects/{project_id}", params={"user_id": "u1"})
+        assert fetched.status_code == 200
+        assert fetched.json()["project"]["context"]["topic"] == "research"
+
+        updated = client.patch(
+            f"/api/projects/{project_id}",
+            json={"user_id": "u1", "name": "AI research", "archived": True},
+        )
+        assert updated.status_code == 200
+        assert updated.json()["project"]["name"] == "AI research"
+        assert updated.json()["project"]["archived"] is True
+
+        assert client.get("/api/projects", params={"user_id": "u1"}).json()["projects"] == []
+        assert len(client.get("/api/projects", params={"user_id": "u1", "include_archived": True}).json()["projects"]) == 1
+
+        restored = client.patch(
+            f"/api/projects/{project_id}",
+            json={"user_id": "u1", "archived": False},
+        )
+        assert restored.status_code == 200
+        searched = client.get("/api/projects", params={"user_id": "u1", "q": "research"})
+        assert [item["id"] for item in searched.json()["projects"]] == [project_id]
+
+        assert client.get(f"/api/projects/{project_id}", params={"user_id": "u2"}).status_code == 404
+        assert client.delete(f"/api/projects/{project_id}", json={"user_id": "u1", "project_id": project_id}).json() == {"deleted": True}
+        assert client.get(f"/api/projects/{project_id}", params={"user_id": "u1"}).status_code == 404
+
+
+def test_task_storage(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    with TestClient(app) as client:
         task = client.post(
             "/api/tasks",
             json={"user_id": "u1", "title": "Daily brief", "prompt": "Summarize", "schedule": "RRULE:FREQ=DAILY"},
         )
         assert task.status_code == 200
-        assert client.get("/api/projects", params={"user_id": "u1"}).json()["projects"]
         assert client.get("/api/tasks", params={"user_id": "u1"}).json()["tasks"]
 
 

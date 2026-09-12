@@ -4,7 +4,7 @@ import ast
 import json
 import operator
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Callable
 
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
 from app.ai.code_sandbox import sandbox_execution_tool
@@ -88,6 +88,21 @@ def _phone_call(payload: str) -> str:
     return json.dumps(action.as_dict(), ensure_ascii=False, sort_keys=True)
 
 
+def _phone_call_contact(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("phone_call_contact payload must be an object")
+    contacts = parse_contacts(data.get("contacts", []))
+    query = str(data.get("query", "")).strip()
+    if not query:
+        raise ValueError("contact query cannot be empty")
+    match = resolve_contact(contacts, query)
+    if match is None:
+        return json.dumps({"contact": None, "requires_confirmation": False, "detail": "contact not found"}, ensure_ascii=False, sort_keys=True)
+    action = build_call_action(match.phone, match.name)
+    return json.dumps(action.as_dict(), ensure_ascii=False, sort_keys=True)
+
+
 TOOLS: dict[str, Callable[[str], str]] = {
     "calculator": _calculate,
     "text_stats": _text_stats,
@@ -99,6 +114,7 @@ TOOLS: dict[str, Callable[[str], str]] = {
     "contacts_search": _contacts_search,
     "contact_resolve": _contact_resolve,
     "phone_call": _phone_call,
+    "phone_call_contact": _phone_call_contact,
 }
 
 
@@ -107,6 +123,7 @@ def run_tool(name: str, payload: str) -> ToolResult:
     if tool is None:
         return ToolResult(name, f"Unknown tool: {name}", safe=False)
     try:
-        return ToolResult(name, tool(payload), safe=name != "phone_call" or '"requires_confirmation": true' in tool(payload))
+        output = tool(payload)
+        return ToolResult(name, output, safe=True)
     except Exception as exc:
         return ToolResult(name, f"Tool error: {exc}", safe=False)

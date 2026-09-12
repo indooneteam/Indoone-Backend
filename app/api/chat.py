@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.ai.answer_quality import assess_answer, user_safe_failure
 from app.ai.conversation_store import ConversationStore
+from app.ai.file_context import read_text_file
 from app.ai.intent import classify_intent
 from app.ai.service import generate_reply
 from app.ai.tools import run_tool
@@ -16,6 +17,7 @@ _store = ConversationStore()
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     conversation_id: str | None = Field(default=None, min_length=1, max_length=128)
+    file_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 class ChatResponse(BaseModel):
@@ -31,8 +33,15 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     history = _store.recent(conversation_id)
     intent = classify_intent(request.message)
+    document_context = ""
 
-    if intent.needs_calculation:
+    if request.file_id:
+        try:
+            document_context = read_text_file(request.file_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    if intent.needs_calculation and not request.file_id:
         expression = request.message
         for marker in ("calculate", "what is", "=", "ಲೆಕ್ಕ"):
             expression = expression.replace(marker, " ")
@@ -43,7 +52,11 @@ async def chat(request: ChatRequest) -> ChatResponse:
             reply = user_safe_failure()
     else:
         try:
-            reply = await generate_reply(request.message, history=history)
+            reply = await generate_reply(
+                request.message,
+                history=history,
+                document_context=document_context,
+            )
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 

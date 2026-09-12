@@ -10,6 +10,7 @@ from app.capabilities.store import search_memories
 
 MAX_AGENT_STEPS = 4
 MAX_AGENT_MEMORIES = 5
+MAX_AGENT_RETRIES = 1
 ALLOWED_AGENT_TOOLS = frozenset({"calculator"})
 AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator"})
 
@@ -29,6 +30,7 @@ class AgentExecution:
     results: tuple[ToolResult, ...]
     memories: tuple[dict[str, Any], ...] = ()
     blocked_steps: tuple[AgentStep, ...] = ()
+    retry_counts: tuple[int, ...] = ()
 
 
 def _extract_calculations(message: str) -> tuple[str, ...]:
@@ -83,18 +85,28 @@ def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
     return chained
 
 
+def _run_with_retry(tool: str, payload: str) -> tuple[ToolResult, int]:
+    """Retry a failed tool once with the exact same bounded payload."""
+    result = run_tool(tool, payload)
+    if result.safe or MAX_AGENT_RETRIES == 0:
+        return result, 0
+    retry_result = run_tool(tool, payload)
+    return retry_result, 1
+
+
 def execute_agent(
     message: str,
     user_id: str = "",
     approved_tools: set[str] | frozenset[str] | None = None,
 ) -> AgentExecution:
-    """Execute only allowed/approved tools and expose bounded memory context."""
+    """Execute only allowed/approved tools with bounded retries and result chaining."""
     approved = frozenset(approved_tools or ())
     memory_context = _load_memory_context(user_id, message)
     planned_steps = build_agent_steps(message)[:MAX_AGENT_STEPS]
     executable: list[AgentStep] = []
     blocked: list[AgentStep] = []
     results: list[ToolResult] = []
+    retry_counts: list[int] = []
 
     for step in planned_steps:
         if step.tool not in ALLOWED_AGENT_TOOLS:
@@ -105,7 +117,9 @@ def execute_agent(
             continue
         executable.append(step)
         chained_payload = _chain_payload(step.payload, tuple(results))
-        results.append(run_tool(step.tool, chained_payload))
+        result, retry_count = _run_with_retry(step.tool, chained_payload)
+        results.append(result)
+        retry_counts.append(retry_count)
 
     return AgentExecution(
         message=message,
@@ -113,4 +127,5 @@ def execute_agent(
         results=tuple(results),
         memories=memory_context,
         blocked_steps=tuple(blocked),
+        retry_counts=tuple(retry_counts),
     )

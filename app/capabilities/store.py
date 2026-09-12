@@ -50,7 +50,8 @@ def initialize() -> None:
                 instructions TEXT NOT NULL,
                 context TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                archived INTEGER NOT NULL DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
@@ -63,9 +64,13 @@ def initialize() -> None:
                 updated_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
+            CREATE INDEX IF NOT EXISTS idx_projects_user_updated ON projects(user_id, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
             """
         )
+        columns = {row[1] for row in db.execute("PRAGMA table_info(projects)").fetchall()}
+        if "archived" not in columns:
+            db.execute("ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
         db.commit()
 
 
@@ -96,10 +101,7 @@ def upsert_memory(user_id: str, key: str, value: str, confidence: float, source:
             (memory_id, user_id, key, value, confidence, source, created_at, timestamp),
         )
         db.commit()
-        row = db.execute(
-            "SELECT * FROM memories WHERE user_id = ? AND key = ?",
-            (user_id, key),
-        ).fetchone()
+        row = db.execute("SELECT * FROM memories WHERE user_id = ? AND key = ?", (user_id, key)).fetchone()
     return _row_dict(row) or {}
 
 
@@ -146,10 +148,7 @@ def search_memories(user_id: str, query: str, limit: int = 20) -> list[dict[str,
 def delete_memory(user_id: str, memory_id: str) -> bool:
     initialize()
     with closing(_connect()) as db:
-        cursor = db.execute(
-            "DELETE FROM memories WHERE user_id = ? AND id = ?",
-            (user_id, memory_id),
-        )
+        cursor = db.execute("DELETE FROM memories WHERE user_id = ? AND id = ?", (user_id, memory_id))
         db.commit()
     return cursor.rowcount > 0
 
@@ -161,32 +160,106 @@ def create_project(user_id: str, name: str, instructions: str, context: dict[str
     payload = json.dumps(context, ensure_ascii=False, sort_keys=True)
     with closing(_connect()) as db:
         db.execute(
-            "INSERT INTO projects(id, user_id, name, instructions, context, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO projects(id, user_id, name, instructions, context, created_at, updated_at, archived) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
             (project_id, user_id, name, instructions, payload, timestamp, timestamp),
         )
         db.commit()
-    return {
-        "id": project_id,
-        "user_id": user_id,
-        "name": name,
-        "instructions": instructions,
-        "context": context,
-        "created_at": timestamp,
-        "updated_at": timestamp,
-    }
+    return get_project(user_id, project_id) or {}
 
 
-def list_projects(user_id: str) -> list[dict[str, Any]]:
+def get_project(user_id: str, project_id: str) -> dict[str, Any] | None:
     initialize()
     with closing(_connect()) as db:
+        row = db.execute(
+            "SELECT * FROM projects WHERE user_id = ? AND id = ?",
+            (user_id, project_id),
+        ).fetchone()
+    if row is None:
+        return None
+    data = dict(row)
+    data["context"] = json.loads(data["context"])
+    data["archived"] = bool(data["archived"])
+    return data
+
+
+def update_project(
+    user_id: str,
+    project_id: str,
+    name: str | None = None,
+    instructions: str | None = None,
+    context: dict[str, Any] | None = None,
+    archived: bool | None = None,
+) -> dict[str, Any] | None:
+    initialize()
+    current = get_project(user_id, project_id)
+    if current is None:
+        return None
+    timestamp = _now()
+    next_name = current["name"] if name is None else name
+    next_instructions = current["instructions"] if instructions is None else instructions
+    next_context = current["context"] if context is None else context
+    next_archived = current["archived"] if archived is None else archived
+    with closing(_connect()) as db:
+        db.execute(
+            "UPDATE projects SET name = ?, instructions = ?, context = ?, archived = ?, updated_at = ? WHERE user_id = ? AND id = ?",
+            (
+                next_name,
+                next_instructions,
+                json.dumps(next_context, ensure_ascii=False, sort_keys=True),
+                1 if next_archived else 0,
+                timestamp,
+                user_id,
+                project_id,
+            ),
+        )
+        db.commit()
+    return get_project(user_id, project_id)
+
+
+def delete_project(user_id: str, project_id: str) -> bool:
+    initialize()
+    with closing(_connect()) as db:
+        cursor = db.execute("DELETE FROM projects WHERE user_id = ? AND id = ?", (user_id, project_id))
+        db.commit()
+    return cursor.rowcount > 0
+
+
+def list_projects(user_id: str, include_archived: bool = False, limit: int = 100) -> list[dict[str, Any]]:
+    initialize()
+    limit = max(1, min(limit, 500))
+    clause = "user_id = ?" if include_archived else "user_id = ? AND archived = 0"
+    with closing(_connect()) as db:
         rows = db.execute(
-            "SELECT * FROM projects WHERE user_id = ? ORDER BY updated_at DESC",
-            (user_id,),
+            f"SELECT * FROM projects WHERE {clause} ORDER BY updated_at DESC LIMIT ?",
+            (user_id, limit),
         ).fetchall()
     return [
         {
             **{key: row[key] for key in row.keys() if key != "context"},
             "context": json.loads(row["context"]),
+            "archived": bool(row["archived"]),
+        }
+        for row in rows
+    ]
+
+
+def search_projects(user_id: str, query: str, limit: int = 20) -> list[dict[str, Any]]:
+    initialize()
+    normalized = " ".join(query.split())
+    if not normalized:
+        return []
+    limit = max(1, min(limit, 100))
+    pattern = f"%{normalized}%"
+    with closing(_connect()) as db:
+        rows = db.execute(
+            "SELECT * FROM projects WHERE user_id = ? AND archived = 0 AND (name LIKE ? OR instructions LIKE ? OR context LIKE ?) ORDER BY updated_at DESC LIMIT ?",
+            (user_id, pattern, pattern, pattern, limit),
+        ).fetchall()
+    return [
+        {
+            **{key: row[key] for key in row.keys() if key != "context"},
+            "context": json.loads(row["context"]),
+            "archived": bool(row["archived"]),
         }
         for row in rows
     ]
@@ -217,8 +290,5 @@ def create_task(user_id: str, title: str, prompt: str, schedule: str, enabled: b
 def list_tasks(user_id: str) -> list[dict[str, Any]]:
     initialize()
     with closing(_connect()) as db:
-        rows = db.execute(
-            "SELECT * FROM tasks WHERE user_id = ? ORDER BY updated_at DESC",
-            (user_id,),
-        ).fetchall()
+        rows = db.execute("SELECT * FROM tasks WHERE user_id = ? ORDER BY updated_at DESC", (user_id,)).fetchall()
     return [{**dict(row), "enabled": bool(row["enabled"])} for row in rows]

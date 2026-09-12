@@ -33,6 +33,8 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability("coding", "Coding AI", "partial", True, "planned-ui", "Safe static code analysis, repair guidance, transformations, and guarded execution contract."),
     Capability("canvas", "Canvas/work documents", "partial", True, "planned-ui", "Project document contract; rich editor remains app-side."),
     Capability("connectors", "External app connectors", "active", True, "planned-ui", "Provider-agnostic connector metadata and permission registry; live OAuth credentials/actions are not configured."),
+    Capability("contacts", "Phone contacts", "partial", True, "planned-ui", "Client-supplied contact sync/search/resolve contract; contacts remain device-owned."),
+    Capability("phone", "Phone calling", "partial", True, "planned-ui", "Validated call-action contract with explicit confirmation; actual device dialing is performed by the client."),
     Capability("evaluation", "AI quality/evaluation", "active", True, "internal", "Behavioral and answer-quality checks are already part of the pipeline."),
     Capability("training", "Custom model training", "active", True, "internal", "Validated training pipeline with dataset/readiness gates."),
 )

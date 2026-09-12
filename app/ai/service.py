@@ -95,6 +95,222 @@ _SCRIPT_RANGES: tuple[tuple[str, re.Pattern[str]], ...] = (
 )
 
 
+_LANGUAGE_NAMES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Kannada", ("kannada", "ಕನ್ನಡ", "ಕನ್ನಡದ")),
+    ("Hindi", ("hindi", "हिंदी", "हिन्दी")),
+    ("Telugu", ("telugu", "తెలుగు")),
+    ("Tamil", ("tamil", "தமிழ்", "தமிழ")),
+    ("Malayalam", ("malayalam", "മലയാളം")),
+    ("Marathi", ("marathi", "मराठी")),
+    ("Bengali", ("bengali", "bangla", "বাংলা", "বাঙালি")),
+    ("Assamese", ("assamese", "অসমীয়া", "অসমিয়া")),
+    ("Gujarati", ("gujarati", "ગુજરાતી")),
+    ("Punjabi", ("punjabi", "ਪੰਜਾਬੀ")),
+    ("Odia", ("odia", "oriya", "ଓଡ଼ିଆ", "ଓଡିଆ")),
+    ("Urdu", ("urdu", "اردو")),
+)
+
+
+_ROMANIZED_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    (
+        "Kannada",
+        (
+            "bagge",
+            "helu",
+            "heLi",
+            "maadu",
+            "maadi",
+            "madbeku",
+            "madbekagutte",
+            "enidu",
+            "enu",
+            "yenu",
+            "yenide",
+            "ivaga",
+            "matte",
+            "nanage",
+            "nimage",
+            "nanna",
+            "namma",
+            "ide",
+            "illa",
+            "agide",
+            "beku",
+        ),
+    ),
+    (
+        "Hindi",
+        (
+            "kya",
+            "hai",
+            "hain",
+            "mujhe",
+            "aap",
+            "aapko",
+            "batao",
+            "bataiye",
+            "kaise",
+            "kaisa",
+            "kahan",
+            "kyun",
+            "nahi",
+            "abhi",
+            "mera",
+            "meri",
+        ),
+    ),
+    (
+        "Telugu",
+        (
+            "enti",
+            "ela",
+            "cheppu",
+            "cheppandi",
+            "undi",
+            "ledu",
+            "nenu",
+            "meeru",
+            "naaku",
+            "emiti",
+            "enduku",
+            "ippudu",
+            "malli",
+        ),
+    ),
+    (
+        "Tamil",
+        (
+            "enna",
+            "epdi",
+            "eppadi",
+            "sollu",
+            "sollunga",
+            "irukku",
+            "illa",
+            "naan",
+            "neenga",
+            "enakku",
+            "ippo",
+            "yen",
+        ),
+    ),
+    (
+        "Malayalam",
+        (
+            "entha",
+            "engane",
+            "parayu",
+            "parayoo",
+            "undu",
+            "illa",
+            "njan",
+            "ningal",
+            "enikku",
+            "ippo",
+        ),
+    ),
+    (
+        "Marathi",
+        (
+            "kay",
+            "aahe",
+            "mala",
+            "tumhi",
+            "sanga",
+            "kasa",
+            "kashi",
+            "kuthe",
+            "ka",
+            "nahi",
+            "aata",
+        ),
+    ),
+    (
+        "Bengali",
+        (
+            "ki",
+            "ache",
+            "ami",
+            "apni",
+            "bolo",
+            "bolun",
+            "amar",
+            "keno",
+            "nei",
+        ),
+    ),
+    (
+        "Assamese",
+        (
+            "ki",
+            "ase",
+            "moi",
+            "tumi",
+            "kobo",
+            "kobo",
+            "mur",
+            "kio",
+            "nai",
+        ),
+    ),
+    (
+        "Gujarati",
+        (
+            "shu",
+            "che",
+            "chhe",
+            "mane",
+            "tame",
+            "kaho",
+            "kem",
+            "nathi",
+            "maru",
+        ),
+    ),
+    (
+        "Punjabi",
+        (
+            "menu",
+            "mainu",
+            "tusi",
+            "daso",
+            "kive",
+            "kiwe",
+            "nahi",
+            "mera",
+            "sanu",
+        ),
+    ),
+    (
+        "Odia",
+        (
+            "kana",
+            "achhi",
+            "mu",
+            "tame",
+            "kahantu",
+            "kemiti",
+            "nahi",
+            "ebe",
+        ),
+    ),
+    (
+        "Urdu",
+        (
+            "kya",
+            "hai",
+            "mujhe",
+            "aap",
+            "batao",
+            "bataiye",
+            "kaise",
+            "kyun",
+            "nahi",
+        ),
+    ),
+)
+
+
 _RESPONSE_TAG_RE = re.compile(
     r"</?(?:instruction|response|conversation|grounding|response_language)>"
     r"|<response_language>.*?</response_language>",
@@ -103,11 +319,41 @@ _RESPONSE_TAG_RE = re.compile(
 
 
 def _detect_response_language(message: str) -> str:
-    """Choose the response language from the user's message script."""
+    """Choose the user's response language from native or romanized text."""
 
+    normalized = " ".join(message.casefold().split())
+    padded = f" {normalized} "
+
+    # Explicit language names are the strongest signal, including native scripts.
+    for language, names in _LANGUAGE_NAMES:
+        for name in names:
+            candidate = name.casefold()
+            if re.search(rf"(?<!\w){re.escape(candidate)}(?!\w)", normalized):
+                return language
+
+    # Native-script detection remains the strongest fallback when no name is present.
     for language, pattern in _SCRIPT_RANGES:
         if pattern.search(message):
             return language
+
+    # Romanized Indian-language text needs lexical signals because its script is Latin.
+    # Score only whole words so a common English substring does not dominate detection.
+    scores: dict[str, int] = {}
+    for language, hints in _ROMANIZED_HINTS:
+        score = 0
+        for hint in hints:
+            if re.search(rf"(?<!\w){re.escape(hint.casefold())}(?!\w)", normalized):
+                score += 1
+        if score:
+            scores[language] = score
+
+    if scores:
+        best_language, best_score = max(scores.items(), key=lambda item: item[1])
+        tied = [language for language, score in scores.items() if score == best_score]
+        if best_score >= 2 or len(tied) == 1:
+            return best_language
+
+    # Keep ordinary English or ambiguous Latin text as English.
     return "English"
 
 
@@ -229,7 +475,7 @@ def _generation_error_reply(language: str) -> str:
     }
     return messages.get(
         language,
-        "Sorry, I could not generate a reliable answer right now. Please try again.",
+        "Sorry, I could not generate a reliable answer right now.",
     )
 
 

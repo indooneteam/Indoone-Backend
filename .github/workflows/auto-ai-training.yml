@@ -38,8 +38,11 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
-      - name: Audit dataset
+      - name: Audit dataset size and diversity
         run: python scripts/audit_dataset.py --json
+
+      - name: Validate curated dataset quality
+        run: python scripts/validate_dataset_quality.py
 
       - name: Validate training manifest
         run: python scripts/validate_training_manifest.py
@@ -123,7 +126,7 @@ jobs:
     if: failure()
     runs-on: ubuntu-latest
     steps:
-      - name: Report blocked training
+      - name: Report blocked automatic training
         run: |
-          echo "Automatic model training was blocked by the dataset or training-contract readiness gate."
-          echo "Expand/repair the training data and rerun the workflow."
+          echo "Automatic model training was blocked by a dataset readiness or quality gate."
+          echo "Expand or repair the curated training data, then rerun the workflow."

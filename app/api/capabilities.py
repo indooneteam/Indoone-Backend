@@ -30,6 +30,13 @@ from app.capabilities.store import (
 )
 from app.capabilities.vision import analyze_image
 from app.capabilities.voice import synthesize_speech, transcribe_audio
+from app.capabilities.voice_session import (
+    VoiceSessionState,
+    handle_audio_message,
+    handle_speak_message,
+    normalize_request_id,
+    ready_event,
+)
 
 router = APIRouter(tags=["capabilities"])
 
@@ -188,14 +195,7 @@ async def get_project_endpoint(project_id: str, user_id: str = Query(..., min_le
 
 @router.patch("/projects/{project_id}")
 async def update_project_endpoint(project_id: str, request: ProjectUpdateRequest) -> dict[str, object]:
-    project = update_project(
-        request.user_id,
-        project_id,
-        request.name,
-        request.instructions,
-        request.context,
-        request.archived,
-    )
+    project = update_project(request.user_id, project_id, request.name, request.instructions, request.context, request.archived)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
     return {"project": project}
@@ -274,10 +274,7 @@ async def research(request: ResearchRequest) -> dict[str, object]:
         results = await provider.search(request.query, request.limit)
     except (RuntimeError, ValueError, httpx.HTTPError) as exc:
         raise HTTPException(status_code=502, detail=f"research provider failed: {exc}") from exc
-    return {
-        "query": request.query,
-        "results": [{"title": item.title, "url": item.url, "snippet": item.snippet} for item in results],
-    }
+    return {"query": request.query, "results": [{"title": item.title, "url": item.url, "snippet": item.snippet} for item in results]}
 
 
 @router.post("/deep-research")
@@ -285,11 +282,7 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
     provider = build_research_provider()
     if provider is None:
         raise HTTPException(status_code=503, detail="live research provider is not configured")
-    queries = [
-        request.query,
-        f"{request.query} official sources",
-        f"{request.query} recent developments",
-    ][: request.queries]
+    queries = [request.query, f"{request.query} official sources", f"{request.query} recent developments"][: request.queries]
     results: list[dict[str, str]] = []
     seen: set[str] = set()
     for query in queries:
@@ -313,11 +306,7 @@ async def agent(request: AgentRequest) -> dict[str, object]:
         "intent": plan.intent.name,
         "tool": plan.tool,
         "tool_payload": plan.tool_payload,
-        "result": None if tool_result is None else {
-            "name": tool_result.name,
-            "output": tool_result.output,
-            "safe": tool_result.safe,
-        },
+        "result": None if tool_result is None else {"name": tool_result.name, "output": tool_result.output, "safe": tool_result.safe},
     }
 
 
@@ -329,15 +318,7 @@ async def image_generation(request: ImageGenerationRequest) -> dict[str, object]
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {
-        "result": {
-            "provider": result.provider,
-            "model": result.model,
-            "mime_type": result.mime_type,
-            "image_base64": result.image_base64,
-            "metadata": result.metadata,
-        }
-    }
+    return {"result": {"provider": result.provider, "model": result.model, "mime_type": result.mime_type, "image_base64": result.image_base64, "metadata": result.metadata}}
 
 
 @router.post("/voice/transcribe")
@@ -364,30 +345,66 @@ async def voice_synthesize(request: VoiceSynthesisRequest) -> dict[str, object]:
 
 @router.websocket("/voice/session")
 async def voice_session(websocket: WebSocket) -> None:
+    state = VoiceSessionState()
     await websocket.accept()
-    await websocket.send_json({"type": "ready", "protocol": "indoone.voice.v1"})
+    await websocket.send_json(ready_event(state))
     try:
         while True:
             message = await websocket.receive_json()
+            try:
+                state.accept_message()
+            except ValueError as exc:
+                await websocket.send_json({"type": "error", "code": "session_limit", "detail": str(exc), "sequence": state.next_sequence()})
+                await websocket.close(code=1008)
+                return
             event_type = str(message.get("type", ""))
+            request_id = normalize_request_id(message.get("request_id"))
             if event_type == "ping":
-                await websocket.send_json({"type": "pong"})
+                await websocket.send_json({"type": "pong", "request_id": request_id, "sequence": state.next_sequence()})
                 continue
             if event_type == "audio":
                 audio_base64 = message.get("audio_base64")
                 if not isinstance(audio_base64, str):
-                    await websocket.send_json({"type": "error", "code": "invalid_audio", "detail": "audio_base64 is required"})
+                    await websocket.send_json({"type": "error", "code": "invalid_audio", "detail": "audio_base64 is required", "request_id": request_id, "sequence": state.next_sequence()})
                     continue
                 try:
-                    result = await transcribe_audio(audio_base64, mime_type=str(message.get("mime_type") or "audio/wav"), language=str(message.get("language") or ""))
+                    event = await handle_audio_message(
+                        state,
+                        audio_base64,
+                        mime_type=str(message.get("mime_type") or "audio/wav"),
+                        language=str(message.get("language") or ""),
+                        final=bool(message.get("final", True)),
+                        request_id=request_id,
+                    )
                 except (ValueError, RuntimeError) as exc:
-                    await websocket.send_json({"type": "error", "code": "transcription_failed", "detail": str(exc)})
+                    await websocket.send_json({"type": "error", "code": "transcription_failed", "detail": str(exc), "request_id": request_id, "sequence": state.next_sequence()})
                     continue
-                await websocket.send_json({"type": "transcript", "final": bool(message.get("final", True)), "text": result.text, "language": result.language, "provider": result.provider, "model": result.model, "confidence": result.confidence})
+                await websocket.send_json(event)
+                continue
+            if event_type == "speak":
+                text = message.get("text")
+                if not isinstance(text, str):
+                    await websocket.send_json({"type": "error", "code": "invalid_text", "detail": "text is required", "request_id": request_id, "sequence": state.next_sequence()})
+                    continue
+                try:
+                    event = await handle_speak_message(
+                        state,
+                        text,
+                        language=str(message.get("language") or ""),
+                        voice=str(message.get("voice") or ""),
+                        format=str(message.get("format") or "wav"),
+                        request_id=request_id,
+                    )
+                except (ValueError, RuntimeError) as exc:
+                    await websocket.send_json({"type": "error", "code": "synthesis_failed", "detail": str(exc), "request_id": request_id, "sequence": state.next_sequence()})
+                    continue
+                await websocket.send_json(event)
                 continue
             if event_type == "stop":
-                await websocket.send_json({"type": "stopped"})
+                state.closed = True
+                await websocket.send_json({"type": "stopped", "session_id": state.session_id, "request_id": request_id, "sequence": state.next_sequence()})
                 break
-            await websocket.send_json({"type": "error", "code": "unknown_event", "detail": "unsupported voice session event"})
+            await websocket.send_json({"type": "error", "code": "unknown_event", "detail": "unsupported voice session event", "request_id": request_id, "sequence": state.next_sequence()})
     except WebSocketDisconnect:
+        state.closed = True
         return

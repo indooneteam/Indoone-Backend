@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 import os
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.ai import service as ai_service
@@ -12,6 +13,7 @@ from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
 from app.api.contacts import router as contacts_router
 from app.api.documents import router as documents_router
+from app.api.errors import error_response
 from app.api.facebook import router as facebook_router
 from app.api.google_photos import router as google_photos_router
 from app.api.integrations import router as integrations_router
@@ -48,15 +50,26 @@ async def request_context_middleware(request: Request, call_next):
             principal = extract_principal(authorization)
             set_principal_id(principal)
         except (RuntimeError, ValueError) as exc:
-            return JSONResponse(status_code=401, content={"code": "AUTH_INVALID", "message": str(exc), "request_id": request_id})
+            return JSONResponse(status_code=401, content=error_response("AUTH_INVALID", str(exc)))
     elif os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
-        return JSONResponse(status_code=401, content={"code": "AUTH_REQUIRED", "message": "bearer authentication required", "request_id": request_id})
+        return JSONResponse(status_code=401, content=error_response("AUTH_REQUIRED", "bearer authentication required"))
 
     if principal:
         request.state.principal_id = principal
     response = await call_next(request)
     response.headers["X-Request-ID"] = get_request_id() or request_id
     return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
+    message = exc.detail if isinstance(exc.detail, str) else "request failed"
+    return JSONResponse(status_code=exc.status_code, content=error_response(f"HTTP_{exc.status_code}", message))
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(status_code=422, content=error_response("VALIDATION_ERROR", "request validation failed", {"errors": exc.errors()}))
 
 
 app.include_router(chat_router, prefix="/api")

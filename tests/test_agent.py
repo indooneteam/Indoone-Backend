@@ -17,6 +17,12 @@ from app.main import app
 from app.capabilities.store import get_agent_run, upsert_memory
 
 
+CONTACTS = [
+    {"contact_id": "c1", "name": "Rahul Kumar", "phone": "+919876543210"},
+    {"contact_id": "c2", "name": "Ravi Kumar", "phone": "+919876543211"},
+]
+
+
 def test_agent_builds_calculator_step() -> None:
     steps = build_agent_steps("what is 12 + 30")
     assert len(steps) == 1
@@ -36,6 +42,86 @@ def test_agent_routes_explicit_tools_in_message_order() -> None:
     steps = build_agent_steps("text stats: hello world; summarize json: {\"a\":1}")
     assert [step.tool for step in steps] == ["text_stats", "json_summary"]
     assert [step.index for step in steps] == [1, 2]
+
+
+def test_agent_resolves_contact_from_authorized_snapshot() -> None:
+    execution = execute_agent("find contact Rahul", contacts=CONTACTS)
+    assert execution.steps[0].tool == "contact_resolve"
+    assert execution.steps[0].requires_approval is False
+    assert execution.results[0].safe is True
+    assert "Rahul Kumar" in execution.results[0].output
+    assert "+919876543210" in execution.results[0].output
+
+
+def test_agent_call_requires_approval() -> None:
+    execution = execute_agent("call Rahul", contacts=CONTACTS)
+    assert execution.steps == ()
+    assert execution.results == ()
+    assert len(execution.blocked_steps) == 1
+    assert execution.blocked_steps[0].tool == "phone_call_contact"
+    assert execution.blocked_steps[0].requires_approval is True
+
+
+def test_agent_call_runs_after_explicit_approval() -> None:
+    execution = execute_agent("call Rahul", contacts=CONTACTS, approved_tools={"phone_call_contact"})
+    assert len(execution.steps) == 1
+    assert execution.steps[0].tool == "phone_call_contact"
+    assert execution.steps[0].requires_approval is True
+    assert execution.results[0].safe is True
+    assert '"requires_confirmation": true' in execution.results[0].output
+    assert "+919876543210" in execution.results[0].output
+
+
+def test_agent_call_does_not_expose_unmatched_number() -> None:
+    execution = execute_agent("call Unknown", contacts=CONTACTS, approved_tools={"phone_call_contact"})
+    assert len(execution.results) == 1
+    assert execution.results[0].safe is True
+    assert '"contact": null' in execution.results[0].output
+
+
+def test_agent_contact_endpoint_accepts_authorized_snapshot() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/agent",
+            json={"message": "find contact Rahul", "contacts": CONTACTS},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["tool"] == "contact_resolve"
+    assert body["results"][0]["safe"] is True
+    assert "+919876543210" in body["results"][0]["output"]
+
+
+def test_agent_phone_endpoint_keeps_call_blocked_without_approval() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/agent",
+            json={"message": "call Rahul", "contacts": CONTACTS},
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["steps"] == []
+    assert body["results"] == []
+    assert body["blocked_steps"][0]["tool"] == "phone_call_contact"
+    assert body["blocked_steps"][0]["requires_approval"] is True
+
+
+def test_agent_endpoint_exposes_approved_phone_action() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/agent",
+            json={
+                "message": "call Rahul",
+                "contacts": CONTACTS,
+                "approved_tools": ["phone_call_contact"],
+            },
+        )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["steps"][0]["tool"] == "phone_call_contact"
+    assert body["steps"][0]["requires_approval"] is True
+    assert body["results"][0]["safe"] is True
+    assert '"requires_confirmation": true' in body["results"][0]["output"]
 
 
 def test_agent_is_bounded_and_returns_tool_results() -> None:

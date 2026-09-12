@@ -7,6 +7,7 @@ from app.ai.language_detection import detect_response_language
 from app.api.capabilities import router as capabilities_router
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
+from app.api.facebook import router as facebook_router
 from app.api.integrations import router as integrations_router
 from app.api.instagram import router as instagram_router
 from app.api.platform import router as platform_router
@@ -37,6 +38,7 @@ app.include_router(telegram_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
 app.include_router(youtube_router, prefix="/api")
 app.include_router(instagram_router, prefix="/api")
+app.include_router(facebook_router, prefix="/api")
 
 
 @app.get("/health")

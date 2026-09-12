@@ -46,24 +46,45 @@ def test_oauth_contract_builds_user_scoped_authorization(monkeypatch) -> None:
     assert result["secrets_exposed"] is False
 
 
-def test_integration_connect_endpoint(monkeypatch) -> None:
+def test_integration_connect_endpoint_creates_user_bound_state(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     monkeypatch.setenv("INDOONE_GITHUB_CLIENT_ID", "client-123")
     with TestClient(app) as client:
         response = client.post(
             "/api/integrations/github/connect",
-            json={"state": "state-token-1234567890", "redirect_uri": "https://app.example/callback"},
+            json={"user_id": "user-123", "redirect_uri": "https://app.example/callback"},
         )
     assert response.status_code == 200
     payload = response.json()
     assert payload["integration"] == "github"
     assert payload["state_required"] is True
     assert payload["secrets_exposed"] is False
+    assert len(payload["state"]) >= 32
 
 
-def test_integration_connect_endpoint_rejects_unknown_provider() -> None:
+def test_integration_connect_endpoint_rejects_unknown_provider(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     with TestClient(app) as client:
         response = client.post(
             "/api/integrations/unknown/connect",
-            json={"state": "state-token-1234567890", "redirect_uri": "https://app.example/callback"},
+            json={"user_id": "user-123", "redirect_uri": "https://app.example/callback"},
         )
     assert response.status_code == 400
+
+
+def test_integration_callback_requires_code_and_state() -> None:
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/integrations/github/callback",
+            json={"state": "short"},
+        )
+    assert response.status_code == 422
+
+
+def test_integration_status_is_user_scoped(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    with TestClient(app) as client:
+        response = client.get("/api/integrations/github/status", params={"user_id": "user-123"})
+    assert response.status_code == 200
+    assert response.json()["connected"] is False
+    assert response.json()["metadata"] is None

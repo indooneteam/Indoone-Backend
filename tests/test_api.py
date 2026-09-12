@@ -21,8 +21,9 @@ def test_chat_rejects_empty_message() -> None:
 
 
 def test_chat_returns_ai_reply(monkeypatch) -> None:
-    async def fake_reply(message: str, history=None) -> str:
+    async def fake_reply(message: str, history=None, document_context="") -> str:
         assert history == []
+        assert document_context == ""
         return f"test reply: {message}"
 
     monkeypatch.setattr("app.api.chat.generate_reply", fake_reply)
@@ -38,7 +39,8 @@ def test_chat_returns_ai_reply(monkeypatch) -> None:
 def test_chat_reuses_conversation_context(monkeypatch, tmp_path: Path) -> None:
     observed: list[list[tuple[str, str]]] = []
 
-    async def fake_reply(message: str, history=None) -> str:
+    async def fake_reply(message: str, history=None, document_context="") -> str:
+        assert document_context == ""
         observed.append(history or [])
         return f"reply: {message}"
 

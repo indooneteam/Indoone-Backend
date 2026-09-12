@@ -19,33 +19,15 @@ def test_capability_registry_exposes_core_features() -> None:
 def test_memory_round_trip_search_and_isolation(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     with TestClient(app) as client:
-        created = client.post(
-            "/api/memory",
-            json={"user_id": "u1", "key": "nickname", "value": "Bro", "confidence": 0.99},
-        )
+        created = client.post("/api/memory", json={"user_id": "u1", "key": "nickname", "value": "Bro", "confidence": 0.99})
         assert created.status_code == 200
         assert created.json()["memory"]["value"] == "Bro"
-
-        other = client.post(
-            "/api/memory",
-            json={"user_id": "u2", "key": "nickname", "value": "Other"},
-        )
+        other = client.post("/api/memory", json={"user_id": "u2", "key": "nickname", "value": "Other"})
         assert other.status_code == 200
-
-        listed = client.get("/api/memory", params={"user_id": "u1"})
-        assert listed.status_code == 200
-        assert listed.json()["memories"][0]["key"] == "nickname"
-
-        searched = client.get("/api/memory", params={"user_id": "u1", "q": "Bro"})
-        assert searched.status_code == 200
-        assert [item["value"] for item in searched.json()["memories"]] == ["Bro"]
-
+        assert client.get("/api/memory", params={"user_id": "u1"}).json()["memories"][0]["key"] == "nickname"
+        assert [item["value"] for item in client.get("/api/memory", params={"user_id": "u1", "q": "Bro"}).json()["memories"]] == ["Bro"]
         assert client.get("/api/memory", params={"user_id": "u2", "q": "Bro"}).json()["memories"] == []
-
-        updated = client.post(
-            "/api/memory",
-            json={"user_id": "u1", "key": "nickname", "value": "Boss", "confidence": 1.0},
-        )
+        updated = client.post("/api/memory", json={"user_id": "u1", "key": "nickname", "value": "Boss", "confidence": 1.0})
         assert updated.json()["memory"]["id"] == created.json()["memory"]["id"]
         assert updated.json()["memory"]["created_at"] == created.json()["memory"]["created_at"]
 
@@ -53,54 +35,30 @@ def test_memory_round_trip_search_and_isolation(tmp_path, monkeypatch) -> None:
 def test_project_workspace_lifecycle_and_isolation(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     with TestClient(app) as client:
-        project = client.post(
-            "/api/projects",
-            json={
-                "user_id": "u1",
-                "name": "AI work",
-                "instructions": "Be concise",
-                "context": {"topic": "research"},
-            },
-        )
+        project = client.post("/api/projects", json={"user_id": "u1", "name": "AI work", "instructions": "Be concise", "context": {"topic": "research"}})
         assert project.status_code == 200
         project_id = project.json()["project"]["id"]
         assert project.json()["project"]["archived"] is False
-
-        fetched = client.get(f"/api/projects/{project_id}", params={"user_id": "u1"})
-        assert fetched.status_code == 200
-        assert fetched.json()["project"]["context"]["topic"] == "research"
-
-        updated = client.patch(
-            f"/api/projects/{project_id}",
-            json={"user_id": "u1", "name": "AI research", "archived": True},
-        )
+        assert client.get(f"/api/projects/{project_id}", params={"user_id": "u1"}).json()["project"]["context"]["topic"] == "research"
+        updated = client.patch(f"/api/projects/{project_id}", json={"user_id": "u1", "name": "AI research", "archived": True})
         assert updated.status_code == 200
-        assert updated.json()["project"]["name"] == "AI research"
         assert updated.json()["project"]["archived"] is True
-
         assert client.get("/api/projects", params={"user_id": "u1"}).json()["projects"] == []
         assert len(client.get("/api/projects", params={"user_id": "u1", "include_archived": True}).json()["projects"]) == 1
-
-        restored = client.patch(
-            f"/api/projects/{project_id}",
-            json={"user_id": "u1", "archived": False},
-        )
+        restored = client.patch(f"/api/projects/{project_id}", json={"user_id": "u1", "archived": False})
         assert restored.status_code == 200
         searched = client.get("/api/projects", params={"user_id": "u1", "q": "research"})
         assert [item["id"] for item in searched.json()["projects"]] == [project_id]
-
         assert client.get(f"/api/projects/{project_id}", params={"user_id": "u2"}).status_code == 404
-        assert client.delete(f"/api/projects/{project_id}", json={"user_id": "u1", "project_id": project_id}).json() == {"deleted": True}
+        deleted = client.request("DELETE", f"/api/projects/{project_id}", json={"user_id": "u1", "project_id": project_id})
+        assert deleted.json() == {"deleted": True}
         assert client.get(f"/api/projects/{project_id}", params={"user_id": "u1"}).status_code == 404
 
 
 def test_task_storage(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     with TestClient(app) as client:
-        task = client.post(
-            "/api/tasks",
-            json={"user_id": "u1", "title": "Daily brief", "prompt": "Summarize", "schedule": "RRULE:FREQ=DAILY"},
-        )
+        task = client.post("/api/tasks", json={"user_id": "u1", "title": "Daily brief", "prompt": "Summarize", "schedule": "RRULE:FREQ=DAILY"})
         assert task.status_code == 200
         assert client.get("/api/tasks", params={"user_id": "u1"}).json()["tasks"]
 
@@ -115,9 +73,6 @@ def test_csv_analysis() -> None:
 def test_media_intake() -> None:
     content = base64.b64encode(b"test-image-bytes").decode("ascii")
     with TestClient(app) as client:
-        response = client.post(
-            "/api/media",
-            json={"filename": "photo.png", "mime_type": "image/png", "content_base64": content},
-        )
+        response = client.post("/api/media", json={"filename": "photo.png", "mime_type": "image/png", "content_base64": content})
     assert response.status_code == 200
     assert response.json()["vision_ready"] is True

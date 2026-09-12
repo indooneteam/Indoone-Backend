@@ -6,19 +6,15 @@ from typing import Any
 
 from app.ai.orchestrator import Plan, plan_request
 from app.ai.tools import ToolResult, run_tool
-from app.capabilities.store import (
-    create_agent_run,
-    search_memories,
-    update_agent_run,
-)
+from app.capabilities.store import create_agent_run, search_memories, update_agent_run
 
 MAX_AGENT_STEPS = 4
 MAX_AGENT_MEMORIES = 5
 MAX_AGENT_RETRIES = 1
 MAX_AGENT_MESSAGE_LENGTH = 20_000
 MAX_AGENT_PAYLOAD_LENGTH = 8_000
-ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions"})
-AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions"})
+ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform"})
+AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform"})
 
 
 @dataclass(frozen=True)
@@ -48,8 +44,9 @@ def _step(tool: str, payload: str, index: int) -> AgentStep:
 
 def _extract_explicit_requests(message: str) -> list[tuple[int, str, str]]:
     patterns = (
-        ("code_analysis", r"(?:code analysis|analyze code)\s*:\s*(.+)$"),
+        ("code_transform", r"(?:transform|normalize|format)\s+code\s*:\s*(.+)$"),
         ("code_fix_suggestions", r"(?:fix suggestions|suggest fixes|debug code)\s*:\s*(.+)$"),
+        ("code_analysis", r"(?:code analysis|analyze code)\s*:\s*(.+)$"),
         ("json_summary", r"(?:summarize|summary of)\s+json\s*:\s*(\{.*?\}|\[.*?\])"),
         ("text_stats", r"(?:text stats|analyze text|count words)\s*:\s*(.+?)(?=\s*(?:;|$))"),
     )
@@ -69,19 +66,15 @@ def _extract_calculations(message: str) -> tuple[str, ...]:
 
 
 def build_agent_steps(message: str) -> tuple[AgentStep, ...]:
-    """Build a bounded deterministic plan with stable tool precedence and ordering."""
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
         return ()
-
     explicit = _extract_explicit_requests(normalized)
     if explicit:
         return tuple(_step(tool, payload, index) for index, (_, tool, payload) in enumerate(explicit, start=1))
-
     expressions = _extract_calculations(normalized)
     if expressions:
         return tuple(_step("calculator", expression, index) for index, expression in enumerate(expressions, start=1))
-
     plan: Plan = plan_request(normalized)
     if not plan.tool or plan.tool_payload is None or plan.tool not in ALLOWED_AGENT_TOOLS:
         return ()
@@ -122,13 +115,11 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
         return AgentExecution(message=message, steps=(), results=())
-
     approved = frozenset(approved_tools or ())
     memory_context = _load_memory_context(user_id, normalized)
     run_id: str | None = None
     if user_id.strip():
         run_id = str(create_agent_run(user_id, normalized)["id"])
-
     planned_steps = build_agent_steps(normalized)[:MAX_AGENT_STEPS]
     executable: list[AgentStep] = []
     blocked: list[AgentStep] = []
@@ -142,24 +133,9 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
         result, retry_count = _run_with_retry(step.tool, _chain_payload(step.payload, tuple(results)))
         results.append(result)
         retry_counts.append(retry_count)
-
     unsafe_result = any(not result.safe for result in results)
-    if unsafe_result:
-        status = "failed"
-    elif blocked and not results:
-        status = "blocked"
-    else:
-        status = "completed"
-
+    status = "failed" if unsafe_result else ("blocked" if blocked and not results else "completed")
     execution = AgentExecution(message=normalized, steps=tuple(executable), results=tuple(results), memories=memory_context, blocked_steps=tuple(blocked), retry_counts=tuple(retry_counts), run_id=run_id)
     if user_id.strip() and run_id is not None:
-        update_agent_run(
-            user_id=user_id,
-            run_id=run_id,
-            status=status,
-            steps=[_serialize_step(step) for step in execution.steps],
-            results=[_serialize_result(result) for result in execution.results],
-            blocked_steps=[_serialize_step(step) for step in execution.blocked_steps],
-            retry_counts=list(execution.retry_counts),
-        )
+        update_agent_run(user_id=user_id, run_id=run_id, status=status, steps=[_serialize_step(step) for step in execution.steps], results=[_serialize_result(result) for result in execution.results], blocked_steps=[_serialize_step(step) for step in execution.blocked_steps], retry_counts=list(execution.retry_counts))
     return execution

@@ -30,9 +30,9 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability("deep_research", "Multi-step research", "partial", True, "planned-ui", "Multi-query source collection built on the research provider."),
     Capability("tools", "Safe tools", "active", True, "existing", "Calculator/orchestrator tool layer."),
     Capability("agent", "Agent planning/execution", "active", True, "planned-ui", "Bounded deterministic multi-step execution with explicit step/results contract; broader autonomous tool selection remains gated."),
-    Capability("coding", "Coding AI", "partial", True, "planned-ui", "Safe static code analysis foundation with Python syntax diagnostics and generic delimiter checks; execution, repair, and broader language intelligence remain gated."),
+    Capability("coding", "Coding AI", "partial", True, "planned-ui", "Safe static code analysis, repair guidance, transformations, and guarded execution contract."),
     Capability("canvas", "Canvas/work documents", "partial", True, "planned-ui", "Project document contract; rich editor remains app-side."),
-    Capability("connectors", "External app connectors", "planned", True, "planned-ui", "Connector registry contract without live third-party credentials."),
+    Capability("connectors", "External app connectors", "active", True, "planned-ui", "Provider-agnostic connector metadata and permission registry; live OAuth credentials/actions are not configured."),
     Capability("evaluation", "AI quality/evaluation", "active", True, "internal", "Behavioral and answer-quality checks are already part of the pipeline."),
     Capability("training", "Custom model training", "active", True, "internal", "Validated training pipeline with dataset/readiness gates."),
 )

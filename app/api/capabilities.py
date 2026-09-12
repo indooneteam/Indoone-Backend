@@ -4,7 +4,7 @@ import base64
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
 from app.ai.orchestrator import execute_plan, plan_request
@@ -29,6 +29,7 @@ from app.capabilities.store import (
     upsert_memory,
 )
 from app.capabilities.vision import analyze_image
+from app.capabilities.voice import synthesize_speech, transcribe_audio
 
 router = APIRouter(tags=["capabilities"])
 
@@ -116,6 +117,19 @@ class ImageGenerationRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=4_000)
     width: int = Field(default=1024, ge=256, le=2048)
     height: int = Field(default=1024, ge=256, le=2048)
+
+
+class VoiceTranscriptionRequest(BaseModel):
+    audio_base64: str = Field(min_length=1, max_length=16_000_000)
+    mime_type: str = Field(default="audio/wav", min_length=1, max_length=120)
+    language: str = Field(default="", max_length=32)
+
+
+class VoiceSynthesisRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=8_000)
+    language: str = Field(default="", max_length=32)
+    voice: str = Field(default="", max_length=128)
+    format: str = Field(default="wav", min_length=1, max_length=16)
 
 
 @router.get("/capabilities")
@@ -324,3 +338,56 @@ async def image_generation(request: ImageGenerationRequest) -> dict[str, object]
             "metadata": result.metadata,
         }
     }
+
+
+@router.post("/voice/transcribe")
+async def voice_transcribe(request: VoiceTranscriptionRequest) -> dict[str, object]:
+    try:
+        result = await transcribe_audio(request.audio_base64, mime_type=request.mime_type, language=request.language)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"result": {"text": result.text, "language": result.language, "provider": result.provider, "model": result.model, "confidence": result.confidence, "metadata": result.metadata}}
+
+
+@router.post("/voice/synthesize")
+async def voice_synthesize(request: VoiceSynthesisRequest) -> dict[str, object]:
+    try:
+        result = await synthesize_speech(request.text, language=request.language, voice=request.voice, format=request.format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"result": {"audio_base64": result.audio_base64, "mime_type": result.mime_type, "provider": result.provider, "model": result.model, "sample_rate_hz": result.sample_rate_hz, "metadata": result.metadata}}
+
+
+@router.websocket("/voice/session")
+async def voice_session(websocket: WebSocket) -> None:
+    await websocket.accept()
+    await websocket.send_json({"type": "ready", "protocol": "indoone.voice.v1"})
+    try:
+        while True:
+            message = await websocket.receive_json()
+            event_type = str(message.get("type", ""))
+            if event_type == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+            if event_type == "audio":
+                audio_base64 = message.get("audio_base64")
+                if not isinstance(audio_base64, str):
+                    await websocket.send_json({"type": "error", "code": "invalid_audio", "detail": "audio_base64 is required"})
+                    continue
+                try:
+                    result = await transcribe_audio(audio_base64, mime_type=str(message.get("mime_type") or "audio/wav"), language=str(message.get("language") or ""))
+                except (ValueError, RuntimeError) as exc:
+                    await websocket.send_json({"type": "error", "code": "transcription_failed", "detail": str(exc)})
+                    continue
+                await websocket.send_json({"type": "transcript", "final": bool(message.get("final", True)), "text": result.text, "language": result.language, "provider": result.provider, "model": result.model, "confidence": result.confidence})
+                continue
+            if event_type == "stop":
+                await websocket.send_json({"type": "stopped"})
+                break
+            await websocket.send_json({"type": "error", "code": "unknown_event", "detail": "unsupported voice session event"})
+    except WebSocketDisconnect:
+        return

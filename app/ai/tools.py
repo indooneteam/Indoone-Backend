@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
+from app.ai.code_sandbox import sandbox_execution_tool
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,7 @@ TOOLS: dict[str, Callable[[str], str]] = {
     "code_analysis": code_analysis_tool,
     "code_fix_suggestions": code_fix_suggestions_tool,
     "code_transform": code_transform_tool,
+    "sandbox_execution": sandbox_execution_tool,
 }
 
 

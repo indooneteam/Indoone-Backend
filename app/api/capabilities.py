@@ -8,7 +8,6 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from pydantic import BaseModel, Field
 
 from app.ai.agent import execute_agent
-from app.ai.orchestrator import execute_plan, plan_request
 from app.ai.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
 from app.capabilities.document_extract import extract_document
@@ -302,13 +301,15 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
 @router.post("/agent")
 async def agent(request: AgentRequest) -> dict[str, object]:
     execution = execute_agent(request.message)
-    first_plan = plan_request(request.message)
-    first_result = execute_plan(first_plan)
+    if not execution.steps:
+        return {"intent": "general", "tool": None, "tool_payload": None, "result": None, "steps": [], "results": [], "max_steps": 4}
+    first = execution.steps[0]
+    first_result = execution.results[0]
     return {
-        "intent": first_plan.intent.name,
-        "tool": first_plan.tool,
-        "tool_payload": first_plan.tool_payload,
-        "result": None if first_result is None else {"name": first_result.name, "output": first_result.output, "safe": first_result.safe},
+        "intent": "tool",
+        "tool": first.tool,
+        "tool_payload": first.payload,
+        "result": {"name": first_result.name, "output": first_result.output, "safe": first_result.safe},
         "steps": [{"index": step.index, "tool": step.tool, "payload": step.payload} for step in execution.steps],
         "results": [{"name": result.name, "output": result.output, "safe": result.safe} for result in execution.results],
         "max_steps": 4,

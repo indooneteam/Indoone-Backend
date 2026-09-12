@@ -14,7 +14,7 @@ def run(command: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Prepare, train, publish, and evaluate an Indoone model in one command."
+        description="Prepare, assemble, train, publish, and evaluate an Indoone model in one command."
     )
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--batch-size", type=int, default=16)
@@ -36,6 +36,7 @@ def main() -> None:
 
     python = sys.executable
     eval_prompts = Path("data/evaluation/behavior_prompts.jsonl")
+    assembled_instructions = Path("data/processed/instructions_train.jsonl")
 
     run(
         [
@@ -52,13 +53,26 @@ def main() -> None:
         [
             python,
             "-m",
+            "scripts.assemble_training_dataset",
+            "--output",
+            str(assembled_instructions),
+            "--validation-output",
+            "data/processed/instructions_validation.jsonl",
+            "--seed",
+            str(args.seed),
+        ]
+    )
+    run(
+        [
+            python,
+            "-m",
             "app.ai.train",
             "--corpus",
             "data/processed/train.txt",
             "--validation",
             "data/processed/validation.txt",
             "--instructions",
-            "data/raw/indoone_generated_instructions.jsonl",
+            str(assembled_instructions),
             "--multilingual-instructions",
             "data/raw/indoone_multilingual_examples.jsonl",
             "--output",

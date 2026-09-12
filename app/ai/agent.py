@@ -67,6 +67,16 @@ def _extract_calculations(message: str) -> tuple[str, ...]:
     return tuple(match.replace(" ", "") for match in matches[:MAX_AGENT_STEPS])
 
 
+def _gmail_request_matches(message: str) -> bool:
+    text = message.strip()
+    patterns = (
+        r"(?:search|find|list)\s+(?:in\s+)?gmail(?:\s+for)?\s+.+$",
+        r"gmail\s+(?:search|find|list)\s+.+$",
+        r"(?:read|open|show)\s+(?:gmail\s+)?(?:email|message)\s+[A-Za-z0-9_-]+$",
+    )
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
 def _extract_gmail_request(message: str, user_id: str) -> tuple[str, dict[str, Any]] | None:
     if not user_id.strip():
         return None
@@ -113,6 +123,8 @@ def build_agent_steps(message: str, user_id: str = "", contacts: list[dict[str, 
     if gmail_request is not None:
         tool, payload = gmail_request
         return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
+    if _gmail_request_matches(normalized):
+        return ()
     contact_request = _extract_contact_request(normalized, contacts or [])
     if contact_request is not None:
         tool, payload = contact_request

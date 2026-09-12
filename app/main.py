@@ -8,6 +8,7 @@ from app.api.capabilities import router as capabilities_router
 from app.api.chat import router as chat_router
 from app.api.documents import router as documents_router
 from app.api.facebook import router as facebook_router
+from app.api.google_photos import router as google_photos_router
 from app.api.integrations import router as integrations_router
 from app.api.instagram import router as instagram_router
 from app.api.platform import router as platform_router
@@ -39,6 +40,7 @@ app.include_router(whatsapp_router, prefix="/api")
 app.include_router(youtube_router, prefix="/api")
 app.include_router(instagram_router, prefix="/api")
 app.include_router(facebook_router, prefix="/api")
+app.include_router(google_photos_router, prefix="/api")
 
 
 @app.get("/health")

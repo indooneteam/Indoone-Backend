@@ -1,9 +1,12 @@
 from contextlib import asynccontextmanager
+import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 
 from app.ai import service as ai_service
 from app.ai.language_detection import detect_response_language
+from app.api.auth import extract_principal
 from app.api.capabilities import router as capabilities_router
 from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
@@ -15,6 +18,7 @@ from app.api.integrations import router as integrations_router
 from app.api.instagram import router as instagram_router
 from app.api.phone import router as phone_router
 from app.api.platform import router as platform_router
+from app.api.request_context import get_request_id, new_request_id, set_principal_id
 from app.api.telegram import router as telegram_router
 from app.api.whatsapp import router as whatsapp_router
 from app.api.youtube import router as youtube_router
@@ -32,6 +36,29 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Indoone Backend", version="0.3.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def request_context_middleware(request: Request, call_next):
+    request_id = new_request_id()
+    authorization = request.headers.get("authorization", "")
+    principal = ""
+    if authorization:
+        try:
+            principal = extract_principal(authorization)
+            set_principal_id(principal)
+        except (RuntimeError, ValueError) as exc:
+            return JSONResponse(status_code=401, content={"code": "AUTH_INVALID", "message": str(exc), "request_id": request_id})
+    elif os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
+        return JSONResponse(status_code=401, content={"code": "AUTH_REQUIRED", "message": "bearer authentication required", "request_id": request_id})
+
+    if principal:
+        request.state.principal_id = principal
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = get_request_id() or request_id
+    return response
+
+
 app.include_router(chat_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")

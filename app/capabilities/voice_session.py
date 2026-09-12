@@ -15,6 +15,7 @@ class VoiceSessionState:
     sequence: int = 0
     messages: int = 0
     closed: bool = False
+    cancelled_requests: set[str] = field(default_factory=set)
 
     def next_sequence(self) -> int:
         self.sequence += 1
@@ -24,6 +25,15 @@ class VoiceSessionState:
         self.messages += 1
         if self.messages > MAX_SESSION_MESSAGES:
             raise ValueError("voice session message limit reached")
+
+    def cancel_request(self, request_id: str | None) -> bool:
+        if not request_id:
+            return False
+        self.cancelled_requests.add(request_id)
+        return True
+
+    def is_cancelled(self, request_id: str | None) -> bool:
+        return bool(request_id) and request_id in self.cancelled_requests
 
 
 def normalize_request_id(value: object) -> str | None:
@@ -38,7 +48,7 @@ def ready_event(state: VoiceSessionState) -> dict[str, object]:
         "type": "ready",
         "protocol": "indoone.voice.v1",
         "session_id": state.session_id,
-        "capabilities": ["stt", "tts", "partial_transcripts", "request_ids"],
+        "capabilities": ["stt", "tts", "partial_transcripts", "request_ids", "cancellation"],
         "sequence": state.next_sequence(),
     }
 
@@ -81,6 +91,14 @@ def audio_event(
     }
 
 
+def cancelled_event(state: VoiceSessionState, *, request_id: str | None = None) -> dict[str, object]:
+    return {
+        "type": "cancelled",
+        "request_id": request_id,
+        "sequence": state.next_sequence(),
+    }
+
+
 async def handle_audio_message(
     state: VoiceSessionState,
     audio_base64: str,
@@ -91,6 +109,8 @@ async def handle_audio_message(
     request_id: str | None = None,
 ) -> dict[str, object]:
     result = await transcribe_audio(audio_base64, mime_type=mime_type, language=language)
+    if state.is_cancelled(request_id):
+        return cancelled_event(state, request_id=request_id)
     return transcript_event(state, result, final=final, request_id=request_id)
 
 
@@ -104,4 +124,6 @@ async def handle_speak_message(
     request_id: str | None = None,
 ) -> dict[str, object]:
     result = await synthesize_speech(text, language=language, voice=voice, format=format)
+    if state.is_cancelled(request_id):
+        return cancelled_event(state, request_id=request_id)
     return audio_event(state, result, request_id=request_id)

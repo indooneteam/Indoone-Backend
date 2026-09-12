@@ -16,7 +16,7 @@ def test_capability_registry_exposes_core_features() -> None:
     assert {"chat", "memory", "projects", "tasks", "data_analysis", "research", "vision", "image_generation"} <= ids
 
 
-def test_memory_round_trip(tmp_path, monkeypatch) -> None:
+def test_memory_round_trip_search_and_isolation(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     with TestClient(app) as client:
         created = client.post(
@@ -26,9 +26,28 @@ def test_memory_round_trip(tmp_path, monkeypatch) -> None:
         assert created.status_code == 200
         assert created.json()["memory"]["value"] == "Bro"
 
+        other = client.post(
+            "/api/memory",
+            json={"user_id": "u2", "key": "nickname", "value": "Other"},
+        )
+        assert other.status_code == 200
+
         listed = client.get("/api/memory", params={"user_id": "u1"})
         assert listed.status_code == 200
         assert listed.json()["memories"][0]["key"] == "nickname"
+
+        searched = client.get("/api/memory", params={"user_id": "u1", "q": "Bro"})
+        assert searched.status_code == 200
+        assert [item["value"] for item in searched.json()["memories"]] == ["Bro"]
+
+        assert client.get("/api/memory", params={"user_id": "u2", "q": "Bro"}).json()["memories"] == []
+
+        updated = client.post(
+            "/api/memory",
+            json={"user_id": "u1", "key": "nickname", "value": "Boss", "confidence": 1.0},
+        )
+        assert updated.json()["memory"]["id"] == created.json()["memory"]["id"]
+        assert updated.json()["memory"]["created_at"] == created.json()["memory"]["created_at"]
 
 
 def test_project_and_task_storage(tmp_path, monkeypatch) -> None:

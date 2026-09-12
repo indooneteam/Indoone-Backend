@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 MAX_CODE_LENGTH = 12_000
 SUPPORTED_LANGUAGES = frozenset({"python", "javascript", "typescript", "java", "kotlin", "c", "cpp", "go", "rust", "bash", "sql"})
+SUPPORTED_TRANSFORMS = frozenset({"normalize", "strip_trailing_whitespace", "ensure_final_newline"})
 
 
 @dataclass(frozen=True)
@@ -127,11 +128,30 @@ def suggest_fixes(language: str, code: str) -> dict[str, object]:
         suggestions.append({"line": issue["line"], "column": issue["column"], "severity": issue["severity"], "issue": message, "suggestion": advice})
     if not suggestions:
         suggestions.append({"line": 0, "column": 0, "severity": "info", "issue": "none", "suggestion": "No static syntax or delimiter issue was detected."})
+    return {"language": analysis["language"], "valid": analysis["valid"], "issue_count": len(analysis["issues"]), "suggestions": suggestions, "safe": True, "execution": "not_performed"}
+
+
+def transform_code(language: str, code: str, operation: str = "normalize") -> dict[str, object]:
+    """Apply deterministic text-only code transformations; never executes user code."""
+    language = language.strip().lower()
+    operation = operation.strip().lower()
+    if language not in SUPPORTED_LANGUAGES:
+        raise ValueError(f"unsupported language: {language}")
+    if operation not in SUPPORTED_TRANSFORMS:
+        raise ValueError(f"unsupported transform: {operation}")
+    if len(code) > MAX_CODE_LENGTH:
+        raise ValueError(f"code exceeds {MAX_CODE_LENGTH} characters")
+
+    transformed = code.replace("\r\n", "\n").replace("\r", "\n")
+    if operation in {"normalize", "strip_trailing_whitespace"}:
+        transformed = "\n".join(line.rstrip() for line in transformed.split("\n"))
+    if operation in {"normalize", "ensure_final_newline"} and transformed and not transformed.endswith("\n"):
+        transformed += "\n"
     return {
-        "language": analysis["language"],
-        "valid": analysis["valid"],
-        "issue_count": len(analysis["issues"]),
-        "suggestions": suggestions,
+        "language": language,
+        "operation": operation,
+        "changed": transformed != code,
+        "code": transformed,
         "safe": True,
         "execution": "not_performed",
     }
@@ -153,3 +173,13 @@ def code_fix_suggestions_tool(payload: str) -> str:
     if not isinstance(code, str):
         raise ValueError("code must be a string")
     return json.dumps(suggest_fixes(language, code), ensure_ascii=False, sort_keys=True)
+
+
+def code_transform_tool(payload: str) -> str:
+    data = json.loads(payload)
+    language = str(data.get("language", ""))
+    code = data.get("code", "")
+    operation = str(data.get("operation", "normalize"))
+    if not isinstance(code, str):
+        raise ValueError("code must be a string")
+    return json.dumps(transform_code(language, code, operation), ensure_ascii=False, sort_keys=True)

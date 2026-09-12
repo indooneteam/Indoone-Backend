@@ -21,6 +21,7 @@ from app.capabilities.store import (
     list_memories,
     list_projects,
     list_tasks,
+    search_memories,
     upsert_memory,
 )
 from app.capabilities.vision import analyze_image
@@ -106,8 +107,15 @@ async def capabilities() -> dict[str, object]:
 
 
 @router.get("/memory")
-async def get_memories(user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
-    return {"memories": list_memories(user_id)}
+async def get_memories(
+    user_id: str = Query(..., min_length=1, max_length=256),
+    key_prefix: str = Query(default="", max_length=128),
+    source: str = Query(default="", max_length=128),
+    limit: int = Query(default=100, ge=1, le=500),
+    q: str = Query(default="", max_length=500),
+) -> dict[str, object]:
+    memories = search_memories(user_id, q, limit) if q.strip() else list_memories(user_id, key_prefix, source, limit)
+    return {"memories": memories}
 
 
 @router.post("/memory")

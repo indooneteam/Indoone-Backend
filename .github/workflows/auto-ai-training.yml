@@ -1,0 +1,101 @@
+name: Indoone Auto AI Training
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/ai/**"
+      - "app/api/**"
+      - "data/raw/**"
+      - "data/evaluation/**"
+      - "scripts/**"
+      - "models/registry.json"
+      - "training_manifest.json"
+      - ".github/workflows/auto-ai-training.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: indoone-ai-training
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Audit training readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Audit dataset
+        run: python scripts/audit_dataset.py --json
+
+      - name: Validate training manifest
+        run: python scripts/validate_training_manifest.py
+
+  train:
+    name: Train, evaluate, and publish candidate
+    needs: prepare
+    runs-on: [self-hosted, linux, x64, gpu, indoone-training]
+    timeout-minutes: 720
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Verify CUDA runner
+        run: nvidia-smi
+
+      - name: Run full AI training pipeline
+        env:
+          INDOONE_TRAINING_TRIGGER: "automatic"
+          INDOONE_GIT_SHA: ${{ github.sha }}
+        run: |
+          python scripts/run_training_pipeline.py \
+            --steps 2000 \
+            --batch-size 16 \
+            --checkpoint-interval 500 \
+            --learning-rate 3e-4 \
+            --seed 42
+
+      - name: Evaluate candidate behaviour
+        run: |
+          python -m app.ai.behavior_eval \
+            --cases data/evaluation/behavior_prompts.jsonl \
+            --checkpoint models/indoone-small/indoone-small.pt \
+            --tokenizer models/indoone-small/tokenizer.json
+
+      - name: Upload training artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: indoone-training-${{ github.sha }}
+          path: |
+            models/indoone-small/
+            data/processed/
+          if-no-files-found: error
+
+  note:
+    name: Explain blocked automatic training
+    needs: prepare
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report blocked training
+        run: |
+          echo "Automatic model training was blocked because the training readiness gate failed."
+          echo "Add/expand the required dataset and training examples, then rerun the workflow."

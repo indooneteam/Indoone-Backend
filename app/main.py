@@ -10,6 +10,7 @@ from app.api.documents import router as documents_router
 from app.api.integrations import router as integrations_router
 from app.api.platform import router as platform_router
 from app.api.telegram import router as telegram_router
+from app.api.whatsapp import router as whatsapp_router
 from app.api.voice_session import router as voice_session_router
 from app.capabilities.store import initialize as initialize_capability_store
 
@@ -31,6 +32,7 @@ app.include_router(documents_router, prefix="/api")
 app.include_router(voice_session_router, prefix="/api")
 app.include_router(integrations_router, prefix="/api")
 app.include_router(telegram_router, prefix="/api")
+app.include_router(whatsapp_router, prefix="/api")
 
 
 @app.get("/health")

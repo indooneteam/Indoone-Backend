@@ -42,7 +42,7 @@ def test_oauth_contract_builds_user_scoped_authorization(monkeypatch) -> None:
     result = build_oauth_authorization("github", "state-token-1234567890", "https://app.example/callback")
     assert "client_id=client-123" in result["authorization_url"]
     assert "state=state-token-1234567890" in result["authorization_url"]
-    assert result["token_storage"] == "user-scoped-server-side"
+    assert result["token_storage"] == "user-scoped-encrypted-server-side"
     assert result["secrets_exposed"] is False
 
 

@@ -5,7 +5,9 @@ from pydantic import BaseModel, Field
 
 from app.ai.answer_quality import assess_answer, user_safe_failure
 from app.ai.conversation_store import ConversationStore
+from app.ai.intent import classify_intent
 from app.ai.service import generate_reply
+from app.ai.tools import run_tool
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
@@ -25,10 +27,22 @@ class ChatResponse(BaseModel):
 async def chat(request: ChatRequest) -> ChatResponse:
     conversation_id = request.conversation_id or str(uuid4())
     history = _store.recent(conversation_id)
-    try:
-        reply = await generate_reply(request.message, history=history)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    intent = classify_intent(request.message)
+
+    if intent.needs_calculation:
+        expression = request.message
+        for marker in ("calculate", "what is", "=", "ಲೆಕ್ಕ"):
+            expression = expression.replace(marker, " ")
+        tool_result = run_tool("calculator", expression.strip())
+        if tool_result.safe:
+            reply = tool_result.output
+        else:
+            reply = user_safe_failure()
+    else:
+        try:
+            reply = await generate_reply(request.message, history=history)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     quality = assess_answer(request.message, reply)
     if not quality.passed:

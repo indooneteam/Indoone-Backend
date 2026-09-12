@@ -13,7 +13,7 @@ MAX_AGENT_MEMORIES = 5
 MAX_AGENT_RETRIES = 1
 MAX_AGENT_MESSAGE_LENGTH = 20_000
 MAX_AGENT_PAYLOAD_LENGTH = 8_000
-ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform"})
+ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "sandbox_execution"})
 AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform"})
 
 
@@ -44,6 +44,7 @@ def _step(tool: str, payload: str, index: int) -> AgentStep:
 
 def _extract_explicit_requests(message: str) -> list[tuple[int, str, str]]:
     patterns = (
+        ("sandbox_execution", r"(?:run|execute|sandbox)\s+code\s*:\s*(.+)$"),
         ("code_transform", r"(?:transform|normalize|format)\s+code\s*:\s*(.+)$"),
         ("code_fix_suggestions", r"(?:fix suggestions|suggest fixes|debug code)\s*:\s*(.+)$"),
         ("code_analysis", r"(?:code analysis|analyze code)\s*:\s*(.+)$"),

@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 import httpx
 from cryptography.fernet import Fernet
 
-from app.capabilities.store import consume_oauth_state, upsert_integration_token
+from app.capabilities.store import consume_oauth_state, get_integration_token, upsert_integration_token
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,7 @@ INTEGRATIONS: tuple[Integration, ...] = (
 _CLIENT_ID_ENV = {"github": "INDOONE_GITHUB_CLIENT_ID", "google_calendar": "INDOONE_GOOGLE_CLIENT_ID", "slack": "INDOONE_SLACK_CLIENT_ID"}
 _CLIENT_SECRET_ENV = {"github": "INDOONE_GITHUB_CLIENT_SECRET", "google_calendar": "INDOONE_GOOGLE_CLIENT_SECRET", "slack": "INDOONE_SLACK_CLIENT_SECRET"}
 _TOKEN_URLS = {"github": "https://github.com/login/oauth/access_token", "google_calendar": "https://oauth2.googleapis.com/token", "slack": "https://slack.com/api/oauth.v2.access"}
+_PROBE_URLS = {"github": "https://api.github.com/user", "google_calendar": "https://www.googleapis.com/calendar/v3/users/me/calendarList", "slack": "https://slack.com/api/auth.test"}
 
 
 def list_integrations() -> list[dict[str, object]]:
@@ -134,3 +135,40 @@ async def exchange_oauth_code(integration_id: str, state: str, code: str) -> dic
         token_type, scope, expires_at,
     )
     return {"integration": normalized, "user_id": state_data["user_id"], "connected": True, "scope": scope, "expires_at": expires_at, "secrets_exposed": False}
+
+
+def _provider_probe_summary(integration_id: str, payload: dict[str, object]) -> dict[str, object]:
+    if integration_id == "github":
+        return {"login": payload.get("login"), "name": payload.get("name"), "id": payload.get("id")}
+    if integration_id == "google_calendar":
+        items = payload.get("items")
+        return {"calendar_count": len(items) if isinstance(items, list) else 0}
+    if integration_id == "slack":
+        return {"team": payload.get("team"), "user": payload.get("user"), "team_id": payload.get("team_id"), "user_id": payload.get("user_id")}
+    return {}
+
+
+async def probe_integration(user_id: str, integration_id: str) -> dict[str, object]:
+    normalized = integration_id.strip().lower()
+    if not user_id.strip():
+        raise ValueError("user_id is required")
+    if normalized not in _PROBE_URLS:
+        raise ValueError("integration not found")
+    token_row = get_integration_token(user_id.strip(), normalized)
+    if token_row is None:
+        raise ValueError("integration is not connected for user")
+    cipher = _fernet()
+    try:
+        access_token = cipher.decrypt(bytes(token_row["access_token"])).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("stored oauth token cannot be decrypted") from exc
+    headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/json"}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(_PROBE_URLS[normalized], headers=headers)
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict):
+        raise RuntimeError("integration provider returned invalid response")
+    if normalized == "slack" and body.get("ok") is False:
+        raise RuntimeError(str(body.get("error") or "slack integration probe failed"))
+    return {"integration": normalized, "user_id": user_id.strip(), "connected": True, "provider_ok": True, "summary": _provider_probe_summary(normalized, body), "secrets_exposed": False}

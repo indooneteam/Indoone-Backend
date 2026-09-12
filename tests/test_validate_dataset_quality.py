@@ -18,7 +18,7 @@ def test_quality_gate_rejects_duplicates_and_placeholders() -> None:
 def test_quality_gate_accepts_clean_rows() -> None:
     rows = [
         {"instruction": "Explain gravity simply", "response": "Gravity attracts masses toward one another.", "category": "education"},
-        {"instruction": "Translate good morning", "response": "ಶುಭೋದಯ.", "category": "translation"},
+        {"instruction": "Translate good morning", "response": "ಶುಭೋದಯ, ನಿಮಗೆ ಶುಭೋದಯವಾಗಲಿ.", "category": "translation"},
         {"instruction": "Write a Python loop", "response": "Use a for loop to iterate over the items.", "category": "coding"},
     ]
 

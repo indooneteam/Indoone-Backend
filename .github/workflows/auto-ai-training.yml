@@ -38,6 +38,9 @@ jobs:
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
+      - name: Build balanced Indian-language training pack
+        run: python scripts/build_multilingual_training_pack.py
+
       - name: Audit dataset size and diversity
         run: python scripts/audit_dataset.py --json
 
@@ -63,6 +66,9 @@ jobs:
 
       - name: Install dependencies
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Build balanced Indian-language training pack
+        run: python scripts/build_multilingual_training_pack.py
 
       - name: Verify CUDA runner
         run: nvidia-smi

@@ -32,6 +32,7 @@ def main() -> None:
     eval_prompts = Path("data/evaluation/behavior_prompts.jsonl")
     assembled_instructions = Path("data/processed/instructions_train.jsonl")
 
+    run([python, "scripts/build_multilingual_training_pack.py"])
     run([python, "scripts/validate_dataset_quality.py"])
 
     if shutil.which("nvidia-smi") is None:

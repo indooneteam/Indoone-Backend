@@ -12,7 +12,7 @@ def test_integrations_list_is_safe_metadata(monkeypatch) -> None:
         response = client.get("/api/integrations")
     assert response.status_code == 200
     items = response.json()["integrations"]
-    assert {item["id"] for item in items} >= {"github", "google_calendar", "slack"}
+    assert {item["id"] for item in items} >= {"github", "google_calendar", "gmail", "slack"}
     assert all(item["configured"] is False for item in items)
     assert all("token" not in item and "secret" not in item for item in items)
 
@@ -25,6 +25,15 @@ def test_integration_lookup_and_missing_provider() -> None:
     assert response.json()["integration"]["auth_type"] == "oauth2"
     assert "repo:read" in response.json()["integration"]["permissions"]
     assert missing.status_code == 404
+
+
+def test_gmail_oauth_contract_uses_google_credentials_and_scope(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_GOOGLE_CLIENT_ID", "google-client-123")
+    result = build_oauth_authorization("gmail", "gmail-state-1234567890", "https://app.example/callback")
+    assert "client_id=google-client-123" in result["authorization_url"]
+    assert "gmail.modify" in result["authorization_url"]
+    assert result["token_storage"] == "user-scoped-encrypted-server-side"
+    assert result["secrets_exposed"] is False
 
 
 def test_oauth_contract_requires_client_id(monkeypatch) -> None:

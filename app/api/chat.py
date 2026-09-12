@@ -26,6 +26,9 @@ class ChatResponse(BaseModel):
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     conversation_id = request.conversation_id or str(uuid4())
+    if _store.is_closed(conversation_id):
+        conversation_id = str(uuid4())
+
     history = _store.recent(conversation_id)
     intent = classify_intent(request.message)
 
@@ -48,8 +51,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
     if not quality.passed:
         reply = user_safe_failure()
 
-    _store.append(
-        conversation_id,
-        [("user", request.message), ("assistant", reply)],
-    )
+    try:
+        _store.append(
+            conversation_id,
+            [("user", request.message), ("assistant", reply)],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
     return ChatResponse(conversation_id=conversation_id, reply=reply)

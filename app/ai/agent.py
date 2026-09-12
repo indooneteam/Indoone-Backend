@@ -5,7 +5,9 @@ import json
 import re
 from typing import Any
 
+from app.ai.approval import decide_tool
 from app.ai.orchestrator import Plan, plan_request
+from app.ai.tool_registry import get_tool_spec, tool_names
 from app.ai.tools import ToolResult, run_tool
 from app.capabilities.store import create_agent_run, search_memories, update_agent_run
 
@@ -14,8 +16,7 @@ MAX_AGENT_MEMORIES = 5
 MAX_AGENT_RETRIES = 1
 MAX_AGENT_MESSAGE_LENGTH = 20_000
 MAX_AGENT_PAYLOAD_LENGTH = 8_000
-ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "sandbox_execution", "contacts_search", "contact_resolve", "phone_call", "phone_call_contact", "gmail_search", "gmail_read"})
-AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "contacts_search", "contact_resolve", "gmail_search", "gmail_read"})
+ALLOWED_AGENT_TOOLS = tool_names()
 
 
 @dataclass(frozen=True)
@@ -40,7 +41,13 @@ class AgentExecution:
 def _step(tool: str, payload: str, index: int) -> AgentStep:
     if len(payload) > MAX_AGENT_PAYLOAD_LENGTH:
         payload = payload[:MAX_AGENT_PAYLOAD_LENGTH]
-    return AgentStep(index=index, tool=tool, payload=payload, requires_approval=tool not in AUTO_APPROVED_AGENT_TOOLS)
+    spec = get_tool_spec(tool)
+    return AgentStep(
+        index=index,
+        tool=tool,
+        payload=payload,
+        requires_approval=True if spec is None else spec.requires_approval,
+    )
 
 
 def _extract_explicit_requests(message: str) -> list[tuple[int, str, str]]:
@@ -188,11 +195,15 @@ def execute_agent(
     results: list[ToolResult] = []
     retry_counts: list[int] = []
     for step in planned_steps:
-        if step.tool not in ALLOWED_AGENT_TOOLS or (step.requires_approval and step.tool not in approved):
+        decision = decide_tool(step.tool, approved)
+        if not decision.allowed:
             blocked.append(step)
             continue
         executable.append(step)
         result, retry_count = _run_with_retry(step.tool, _chain_payload(step.payload, tuple(results)))
+        spec = get_tool_spec(step.tool)
+        if spec is not None and len(result.output) > spec.max_output_chars:
+            result = ToolResult(step.tool, result.output[:spec.max_output_chars], safe=False)
         results.append(result)
         retry_counts.append(retry_count)
     unsafe_result = any(not result.safe for result in results)

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.capabilities.github_writes import github_comment_issue_or_pr, github_create_issue
 from app.capabilities.gmail import get_gmail_message, list_gmail_messages, send_gmail_message
+from app.capabilities.google_calendar import create_event as create_calendar_event, delete_event as delete_calendar_event, get_event as get_calendar_event, list_calendars, list_events, update_event as update_calendar_event
 from app.capabilities.google_drive import (
     build_google_drive_authorization,
     exchange_google_drive_code,
@@ -81,6 +82,43 @@ class GmailSendRequest(BaseModel):
     approved: bool = False
 
 
+class GoogleCalendarListRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    page_token: str = Field(default="", max_length=2048)
+    max_results: int = Field(default=100, ge=1, le=250)
+
+
+class GoogleCalendarEventsRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    calendar_id: str = Field(default="primary", min_length=1, max_length=512)
+    time_min: str = Field(default="", max_length=100)
+    time_max: str = Field(default="", max_length=100)
+    query: str = Field(default="", max_length=500)
+    page_token: str = Field(default="", max_length=2048)
+    max_results: int = Field(default=100, ge=1, le=2500)
+
+
+class GoogleCalendarEventRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    calendar_id: str = Field(default="primary", min_length=1, max_length=512)
+    event_id: str = Field(default="", max_length=1024)
+
+
+class GoogleCalendarWriteRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    calendar_id: str = Field(default="primary", min_length=1, max_length=512)
+    event_id: str = Field(default="", max_length=1024)
+    event: dict[str, object]
+    approved: bool = False
+
+
+class GoogleCalendarDeleteRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    calendar_id: str = Field(default="primary", min_length=1, max_length=512)
+    event_id: str = Field(min_length=1, max_length=1024)
+    approved: bool = False
+
+
 class GoogleDriveConnectRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=256)
     redirect_uri: str = Field(min_length=1, max_length=2000)
@@ -124,6 +162,84 @@ async def integration_probe(integration_id: str, request: IntegrationProbeReques
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"integration provider failed: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-calendar/calendars")
+async def google_calendar_calendars(request: GoogleCalendarListRequest) -> dict[str, object]:
+    try:
+        return await list_calendars(request.user_id, request.page_token, request.max_results)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-calendar/events")
+async def google_calendar_events(request: GoogleCalendarEventsRequest) -> dict[str, object]:
+    try:
+        return await list_events(request.user_id, request.calendar_id, request.time_min, request.time_max, request.query, request.page_token, request.max_results)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-calendar/event")
+async def google_calendar_event(request: GoogleCalendarEventRequest) -> dict[str, object]:
+    try:
+        return await get_calendar_event(request.user_id, request.calendar_id, request.event_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-calendar/create-event")
+async def google_calendar_create_event(request: GoogleCalendarWriteRequest) -> dict[str, object]:
+    try:
+        return await create_calendar_event(request.user_id, request.calendar_id, request.event, request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-calendar/update-event")
+async def google_calendar_update_event(request: GoogleCalendarWriteRequest) -> dict[str, object]:
+    try:
+        return await update_calendar_event(request.user_id, request.calendar_id, request.event_id, request.event, request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-calendar/delete-event")
+async def google_calendar_delete_event(request: GoogleCalendarDeleteRequest) -> dict[str, object]:
+    try:
+        return await delete_calendar_event(request.user_id, request.calendar_id, request.event_id, request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

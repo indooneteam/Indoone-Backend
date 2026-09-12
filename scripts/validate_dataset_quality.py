@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 from collections import Counter
 from pathlib import Path
 
@@ -10,6 +9,7 @@ DEFAULT_SOURCES = (
     Path("data/raw/indoone_instructions.jsonl"),
     Path("data/raw/core_instruction_seed.jsonl"),
     Path("data/raw/indoone_multilingual_examples.jsonl"),
+    Path("data/raw/indoone_phone_contacts_examples.jsonl"),
 )
 
 REQUIRED_FIELDS = ("instruction", "response", "category")

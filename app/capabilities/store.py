@@ -63,9 +63,22 @@ def initialize() -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS agent_runs (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                message TEXT NOT NULL,
+                status TEXT NOT NULL,
+                steps TEXT NOT NULL,
+                results TEXT NOT NULL,
+                blocked_steps TEXT NOT NULL,
+                retry_counts TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
             CREATE INDEX IF NOT EXISTS idx_projects_user_updated ON projects(user_id, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
+            CREATE INDEX IF NOT EXISTS idx_agent_runs_user_updated ON agent_runs(user_id, updated_at DESC);
             """
         )
         columns = {row[1] for row in db.execute("PRAGMA table_info(projects)").fetchall()}
@@ -292,3 +305,74 @@ def list_tasks(user_id: str) -> list[dict[str, Any]]:
     with closing(_connect()) as db:
         rows = db.execute("SELECT * FROM tasks WHERE user_id = ? ORDER BY updated_at DESC", (user_id,)).fetchall()
     return [{**dict(row), "enabled": bool(row["enabled"])} for row in rows]
+
+
+def create_agent_run(user_id: str, message: str) -> dict[str, Any]:
+    initialize()
+    run_id = str(uuid4())
+    timestamp = _now()
+    with closing(_connect()) as db:
+        db.execute(
+            "INSERT INTO agent_runs(id, user_id, message, status, steps, results, blocked_steps, retry_counts, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (run_id, user_id, message, "running", "[]", "[]", "[]", "[]", timestamp, timestamp),
+        )
+        db.commit()
+    return get_agent_run(user_id, run_id) or {}
+
+
+def update_agent_run(
+    user_id: str,
+    run_id: str,
+    status: str,
+    steps: list[dict[str, Any]],
+    results: list[dict[str, Any]],
+    blocked_steps: list[dict[str, Any]],
+    retry_counts: list[int],
+) -> dict[str, Any] | None:
+    initialize()
+    timestamp = _now()
+    with closing(_connect()) as db:
+        db.execute(
+            "UPDATE agent_runs SET status = ?, steps = ?, results = ?, blocked_steps = ?, retry_counts = ?, updated_at = ? WHERE user_id = ? AND id = ?",
+            (
+                status,
+                json.dumps(steps, ensure_ascii=False, sort_keys=True),
+                json.dumps(results, ensure_ascii=False, sort_keys=True),
+                json.dumps(blocked_steps, ensure_ascii=False, sort_keys=True),
+                json.dumps(retry_counts),
+                timestamp,
+                user_id,
+                run_id,
+            ),
+        )
+        db.commit()
+    return get_agent_run(user_id, run_id)
+
+
+def get_agent_run(user_id: str, run_id: str) -> dict[str, Any] | None:
+    initialize()
+    with closing(_connect()) as db:
+        row = db.execute("SELECT * FROM agent_runs WHERE user_id = ? AND id = ?", (user_id, run_id)).fetchone()
+    if row is None:
+        return None
+    data = dict(row)
+    for key in ("steps", "results", "blocked_steps", "retry_counts"):
+        data[key] = json.loads(data[key])
+    return data
+
+
+def list_agent_runs(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
+    initialize()
+    limit = max(1, min(limit, 100))
+    with closing(_connect()) as db:
+        rows = db.execute("SELECT * FROM agent_runs WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?", (user_id, limit)).fetchall()
+    return [
+        {
+            **{key: row[key] for key in row.keys() if key not in {"steps", "results", "blocked_steps", "retry_counts"}},
+            "steps": json.loads(row["steps"]),
+            "results": json.loads(row["results"]),
+            "blocked_steps": json.loads(row["blocked_steps"]),
+            "retry_counts": json.loads(row["retry_counts"]),
+        }
+        for row in rows
+    ]

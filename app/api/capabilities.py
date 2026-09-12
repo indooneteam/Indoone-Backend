@@ -7,6 +7,7 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from app.ai.agent import execute_agent
 from app.ai.orchestrator import execute_plan, plan_request
 from app.ai.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
@@ -300,13 +301,17 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
 
 @router.post("/agent")
 async def agent(request: AgentRequest) -> dict[str, object]:
-    plan = plan_request(request.message)
-    tool_result = execute_plan(plan)
+    execution = execute_agent(request.message)
+    first_plan = plan_request(request.message)
+    first_result = execute_plan(first_plan)
     return {
-        "intent": plan.intent.name,
-        "tool": plan.tool,
-        "tool_payload": plan.tool_payload,
-        "result": None if tool_result is None else {"name": tool_result.name, "output": tool_result.output, "safe": tool_result.safe},
+        "intent": first_plan.intent.name,
+        "tool": first_plan.tool,
+        "tool_payload": first_plan.tool_payload,
+        "result": None if first_result is None else {"name": first_result.name, "output": first_result.output, "safe": first_result.safe},
+        "steps": [{"index": step.index, "tool": step.tool, "payload": step.payload} for step in execution.steps],
+        "results": [{"name": result.name, "output": result.output, "safe": result.safe} for result in execution.results],
+        "max_steps": 4,
     }
 
 

@@ -6,7 +6,11 @@ from typing import Any
 
 from app.ai.orchestrator import Plan, plan_request
 from app.ai.tools import ToolResult, run_tool
-from app.capabilities.store import search_memories
+from app.capabilities.store import (
+    create_agent_run,
+    search_memories,
+    update_agent_run,
+)
 
 MAX_AGENT_STEPS = 4
 MAX_AGENT_MEMORIES = 5
@@ -31,6 +35,7 @@ class AgentExecution:
     memories: tuple[dict[str, Any], ...] = ()
     blocked_steps: tuple[AgentStep, ...] = ()
     retry_counts: tuple[int, ...] = ()
+    run_id: str | None = None
 
 
 def _extract_calculations(message: str) -> tuple[str, ...]:
@@ -94,14 +99,32 @@ def _run_with_retry(tool: str, payload: str) -> tuple[ToolResult, int]:
     return retry_result, 1
 
 
+def _serialize_step(step: AgentStep) -> dict[str, Any]:
+    return {
+        "index": step.index,
+        "tool": step.tool,
+        "payload": step.payload,
+        "requires_approval": step.requires_approval,
+    }
+
+
+def _serialize_result(result: ToolResult) -> dict[str, Any]:
+    return {"name": result.name, "output": result.output, "safe": result.safe}
+
+
 def execute_agent(
     message: str,
     user_id: str = "",
     approved_tools: set[str] | frozenset[str] | None = None,
 ) -> AgentExecution:
-    """Execute only allowed/approved tools with bounded retries and result chaining."""
+    """Execute only allowed/approved tools with bounded retries and persisted state."""
     approved = frozenset(approved_tools or ())
     memory_context = _load_memory_context(user_id, message)
+    run_id: str | None = None
+    if user_id.strip():
+        run = create_agent_run(user_id, message)
+        run_id = str(run["id"])
+
     planned_steps = build_agent_steps(message)[:MAX_AGENT_STEPS]
     executable: list[AgentStep] = []
     blocked: list[AgentStep] = []
@@ -121,11 +144,25 @@ def execute_agent(
         results.append(result)
         retry_counts.append(retry_count)
 
-    return AgentExecution(
+    status = "blocked" if blocked and not results else "completed"
+    execution = AgentExecution(
         message=message,
         steps=tuple(executable),
         results=tuple(results),
         memories=memory_context,
         blocked_steps=tuple(blocked),
         retry_counts=tuple(retry_counts),
+        run_id=run_id,
     )
+
+    if user_id.strip() and run_id is not None:
+        update_agent_run(
+            user_id=user_id,
+            run_id=run_id,
+            status=status,
+            steps=[_serialize_step(step) for step in execution.steps],
+            results=[_serialize_result(result) for result in execution.results],
+            blocked_steps=[_serialize_step(step) for step in execution.blocked_steps],
+            retry_counts=list(execution.retry_counts),
+        )
+    return execution

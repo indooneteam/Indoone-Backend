@@ -112,355 +112,107 @@ _LANGUAGE_NAMES: tuple[tuple[str, tuple[str, ...]], ...] = (
 
 
 _ROMANIZED_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    (
-        "Kannada",
-        (
-            "bagge",
-            "helu",
-            "heLi",
-            "maadu",
-            "maadi",
-            "madbeku",
-            "madbekagutte",
-            "enidu",
-            "enu",
-            "yenu",
-            "yenide",
-            "ivaga",
-            "matte",
-            "nanage",
-            "nimage",
-            "nanna",
-            "namma",
-            "ide",
-            "illa",
-            "agide",
-            "beku",
-        ),
-    ),
-    (
-        "Hindi",
-        (
-            "kya",
-            "hai",
-            "hain",
-            "mujhe",
-            "aap",
-            "aapko",
-            "batao",
-            "bataiye",
-            "kaise",
-            "kaisa",
-            "kahan",
-            "kyun",
-            "nahi",
-            "abhi",
-            "mera",
-            "meri",
-        ),
-    ),
-    (
-        "Telugu",
-        (
-            "enti",
-            "ela",
-            "cheppu",
-            "cheppandi",
-            "undi",
-            "ledu",
-            "nenu",
-            "meeru",
-            "naaku",
-            "emiti",
-            "enduku",
-            "ippudu",
-            "malli",
-        ),
-    ),
-    (
-        "Tamil",
-        (
-            "enna",
-            "epdi",
-            "eppadi",
-            "sollu",
-            "sollunga",
-            "irukku",
-            "illa",
-            "naan",
-            "neenga",
-            "enakku",
-            "ippo",
-            "yen",
-        ),
-    ),
-    (
-        "Malayalam",
-        (
-            "entha",
-            "engane",
-            "parayu",
-            "parayoo",
-            "undu",
-            "illa",
-            "njan",
-            "ningal",
-            "enikku",
-            "ippo",
-        ),
-    ),
-    (
-        "Marathi",
-        (
-            "kay",
-            "aahe",
-            "mala",
-            "tumhi",
-            "sanga",
-            "kasa",
-            "kashi",
-            "kuthe",
-            "ka",
-            "nahi",
-            "aata",
-        ),
-    ),
-    (
-        "Bengali",
-        (
-            "ki",
-            "ache",
-            "ami",
-            "apni",
-            "bolo",
-            "bolun",
-            "amar",
-            "keno",
-            "nei",
-        ),
-    ),
-    (
-        "Assamese",
-        (
-            "ki",
-            "ase",
-            "moi",
-            "tumi",
-            "kobo",
-            "kobo",
-            "mur",
-            "kio",
-            "nai",
-        ),
-    ),
-    (
-        "Gujarati",
-        (
-            "shu",
-            "che",
-            "chhe",
-            "mane",
-            "tame",
-            "kaho",
-            "kem",
-            "nathi",
-            "maru",
-        ),
-    ),
-    (
-        "Punjabi",
-        (
-            "menu",
-            "mainu",
-            "tusi",
-            "daso",
-            "kive",
-            "kiwe",
-            "nahi",
-            "mera",
-            "sanu",
-        ),
-    ),
-    (
-        "Odia",
-        (
-            "kana",
-            "achhi",
-            "mu",
-            "tame",
-            "kahantu",
-            "kemiti",
-            "nahi",
-            "ebe",
-        ),
-    ),
-    (
-        "Urdu",
-        (
-            "kya",
-            "hai",
-            "mujhe",
-            "aap",
-            "batao",
-            "bataiye",
-            "kaise",
-            "kyun",
-            "nahi",
-        ),
-    ),
+    ("Kannada", ("bagge", "helu", "heLi", "maadu", "maadi", "madbeku", "madbekagutte", "enidu", "enu", "yenu", "yenide", "ivaga", "matte", "nanage", "nimage", "nanna", "namma", "ide", "illa", "agide", "beku")),
+    ("Hindi", ("kya", "hai", "hain", "mujhe", "aap", "aapko", "batao", "bataiye", "kaise", "kaisa", "kahan", "kyun", "nahi", "abhi", "mera", "meri")),
+    ("Telugu", ("enti", "ela", "cheppu", "cheppandi", "undi", "ledu", "nenu", "meeru", "naaku", "emiti", "enduku", "ippudu", "malli")),
+    ("Tamil", ("enna", "epdi", "eppadi", "sollu", "sollunga", "irukku", "illa", "naan", "neenga", "enakku", "ippo", "yen")),
+    ("Malayalam", ("entha", "engane", "parayu", "parayoo", "undu", "illa", "njan", "ningal", "enikku", "ippo")),
+    ("Marathi", ("kay", "aahe", "mala", "tumhi", "sanga", "kasa", "kashi", "kuthe", "ka", "nahi", "aata")),
+    ("Bengali", ("ki", "ache", "ami", "apni", "bolo", "bolun", "amar", "keno", "nei")),
+    ("Assamese", ("ki", "ase", "moi", "tumi", "kobo", "mur", "kio", "nai")),
+    ("Gujarati", ("shu", "che", "chhe", "mane", "tame", "kaho", "kem", "nathi", "maru")),
+    ("Punjabi", ("menu", "mainu", "tusi", "daso", "kive", "kiwe", "nahi", "mera", "sanu")),
+    ("Odia", ("kana", "achhi", "mu", "tame", "kahantu", "kemiti", "nahi", "ebe")),
+    ("Urdu", ("kya", "hai", "mujhe", "aap", "batao", "bataiye", "kaise", "kyun", "nahi")),
 )
 
 
-_RESPONSE_TAG_RE = re.compile(
-    r"</?(?:instruction|response|conversation|grounding|response_language)>"
-    r"|<response_language>.*?</response_language>",
-    flags=re.IGNORECASE | re.DOTALL,
-)
+_RESPONSE_TAG_RE = re.compile(r"</?(?:instruction|response|conversation|grounding|response_language)>|<response_language>.*?</response_language>", flags=re.IGNORECASE | re.DOTALL)
 
 
 def _detect_response_language(message: str) -> str:
-    """Choose the user's response language from native or romanized text."""
-
     normalized = " ".join(message.casefold().split())
-    padded = f" {normalized} "
-
-    # Explicit language names are the strongest signal, including native scripts.
     for language, names in _LANGUAGE_NAMES:
         for name in names:
             candidate = name.casefold()
             if re.search(rf"(?<!\w){re.escape(candidate)}(?!\w)", normalized):
                 return language
-
-    # Native-script detection remains the strongest fallback when no name is present.
     for language, pattern in _SCRIPT_RANGES:
         if pattern.search(message):
             return language
-
-    # Romanized Indian-language text needs lexical signals because its script is Latin.
-    # Score only whole words so a common English substring does not dominate detection.
     scores: dict[str, int] = {}
     for language, hints in _ROMANIZED_HINTS:
-        score = 0
-        for hint in hints:
-            if re.search(rf"(?<!\w){re.escape(hint.casefold())}(?!\w)", normalized):
-                score += 1
+        score = sum(1 for hint in hints if re.search(rf"(?<!\w){re.escape(hint.casefold())}(?!\w)", normalized))
         if score:
             scores[language] = score
-
     if scores:
         best_language, best_score = max(scores.items(), key=lambda item: item[1])
         tied = [language for language, score in scores.items() if score == best_score]
         if best_score >= 2 or len(tied) == 1:
             return best_language
-
-    # Keep ordinary English or ambiguous Latin text as English.
     return "English"
 
 
 def _language_instruction(language: str) -> str:
-    return (
-        f"Respond only in {language}. Preserve the user's language and script. "
-        "Do not switch languages unless the user explicitly requests it. "
-        "Keep the answer natural, clear, and concise."
-    )
+    return f"Respond only in {language}. Preserve the user's language and script. Do not switch languages unless the user explicitly requests it. Keep the answer natural, clear, and concise."
 
 
 def should_research(message: str) -> bool:
-    """Return whether a message explicitly asks for fresh information."""
-
     normalized = " ".join(message.casefold().split())
     return any(trigger in normalized for trigger in _RESEARCH_TRIGGERS)
 
 
-def _build_context(
-    message: str,
-    history: list[tuple[str, str]],
-    knowledge: str = "",
-    research: str = "",
-) -> str:
-    """Build an inference prompt using the same instruction format as training."""
-
+def _build_context(message: str, history: list[tuple[str, str]], knowledge: str = "", research: str = "") -> str:
     response_language = _detect_response_language(message)
-    grounding_instruction = build_grounded_prompt_instruction()
-    grounding_instruction = grounding_instruction.replace("<grounding>", "")
-    grounding_instruction = grounding_instruction.replace("</grounding>", "")
-    grounding_instruction = grounding_instruction.strip()
-
-    prompt_parts = [
-        "<instruction>",
-        grounding_instruction,
-        _language_instruction(response_language),
-    ]
-
+    grounding_instruction = build_grounded_prompt_instruction().replace("<grounding>", "").replace("</grounding>", "").strip()
+    prompt_parts = ["<instruction>", grounding_instruction, _language_instruction(response_language)]
     if history:
         prompt_parts.append("Conversation context:")
         for role, content in history:
             prompt_parts.append(f"{role}: {content}")
-
     if knowledge:
         prompt_parts.append("Relevant knowledge:")
         prompt_parts.append(knowledge)
-
     if research:
         prompt_parts.append("Fresh research evidence:")
         prompt_parts.append(research)
-
     prompt_parts.append(f"user: {message.strip()}")
     prompt_parts.extend(("</instruction>", "<response>"))
     return "\n".join(prompt_parts)
 
 
 def _evidence_from_results(results: list[ResearchResult]) -> list[GroundedEvidence]:
-    return [
-        GroundedEvidence(
-            title=result.title,
-            url=result.url,
-            snippet=result.snippet,
-        )
-        for result in results
-    ]
+    return [GroundedEvidence(title=result.title, url=result.url, snippet=result.snippet) for result in results]
 
 
 def _clean_model_reply(answer: str) -> str:
-    """Remove training-format markers if the small model echoes them."""
-
     text = answer.strip()
     if not text:
         return ""
-
     response_start = re.search(r"<response>\s*", text, flags=re.IGNORECASE)
     if response_start:
-        text = text[response_start.end() :]
-
+        text = text[response_start.end():]
     instruction_end = re.search(r"</instruction>\s*", text, flags=re.IGNORECASE)
     if instruction_end:
-        text = text[instruction_end.end() :]
-
+        text = text[instruction_end.end():]
     response_end = re.search(r"</response>", text, flags=re.IGNORECASE)
     if response_end:
         text = text[: response_end.start()]
-
     text = _RESPONSE_TAG_RE.sub("", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
 
 def _has_expected_script(text: str, language: str) -> bool:
-    """Reject an obviously wrong-language model response."""
-
     if not text:
         return False
-
     if language == "English":
         return bool(re.search(r"[A-Za-z]", text))
-
     pattern = dict(_SCRIPT_RANGES).get(language)
     return pattern is not None and bool(pattern.search(text))
 
 
 def _generation_error_reply(language: str) -> str:
-    """Return a clean response instead of exposing malformed model output."""
-
     messages = {
         "Kannada": "ಕ್ಷಮಿಸಿ, ಈ ಪ್ರಶ್ನೆಗೆ ಈಗ ಸರಿಯಾದ ಉತ್ತರವನ್ನು ರಚಿಸಲು ನನಗೆ ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಕೇಳಿ.",
         "Telugu": "క్షమించండి, ఈ ప్రశ్నకు ఇప్పుడు సరైన సమాధానం ఇవ్వలేకపోయాను. దయచేసి మళ్లీ అడగండి.",
@@ -473,76 +225,45 @@ def _generation_error_reply(language: str) -> str:
         "Odia": "ଦୁଃଖିତ, ମୁଁ ଏହି ପ୍ରଶ୍ନର ସଠିକ ଉତ୍ତର ଏବେ ଦେଇପାରିଲି ନାହିଁ। ଦୟାକରି ପୁଣି ପଚାରନ୍ତୁ।",
         "Urdu": "معذرت، میں ابھی اس سوال کا درست جواب نہیں دے سکا۔ براہِ کرم دوبارہ پوچھیں۔",
     }
-    return messages.get(
-        language,
-        "Sorry, I could not generate a reliable answer right now.",
-    )
+    return messages.get(language, "Sorry, I could not generate a reliable answer right now.")
 
 
 def _fallback_reply(message: str) -> str:
-    """Return a truthful local response while the trained checkpoint is absent."""
-
     normalized = " ".join(message.casefold().split())
     language = _detect_response_language(message)
-
     if language == "Kannada":
-        if normalized in {"hi", "hello", "hey"}:
+        if normalized in {"hi", "hello", "hey"} or "namaskara" in normalized or "namaste" in normalized:
             return "ನಮಸ್ಕಾರ 👋 ನಾನು Indoone AI."
-        if "namaskara" in normalized or "namaste" in normalized:
-            return "ನಮಸ್ಕಾರ 👋 ನಾನು Indoone AI."
-        return (
-            "Indoone AI backend ಸಿದ್ಧವಾಗಿದೆ ✅, ಆದರೆ ತರಬೇತಿ ಪಡೆದ local model ಇನ್ನೂ load ಆಗಿಲ್ಲ. "
-            "ಈಗ ನಾನು fallback modeನಲ್ಲಿ ಕಾರ್ಯನಿರ್ವಹಿಸುತ್ತಿದ್ದೇನೆ."
-        )
-
+        return "Indoone AI backend ಸಿದ್ಧವಾಗಿದೆ ✅, ಆದರೆ ತರಬೇತಿ ಪಡೆದ local model ಇನ್ನೂ load ಆಗಿಲ್ಲ."
     if language == "Telugu":
-        return "నమస్కారం 👋 నేను Indoone AI. ప్రస్తుతం local trained model load కాలేదు, కాబట్టి fallback modeలో పని చేస్తున్నాను."
-
+        return "నమస్కారం 👋 నేను Indoone AI. ప్రస్తుతం local trained model load కాలేదు."
     if language == "Tamil":
-        return "வணக்கம் 👋 நான் Indoone AI. தற்போது பயிற்சி பெற்ற local model load ஆகவில்லை; fallback mode-ல் இயங்குகிறேன்."
-
+        return "வணக்கம் 👋 நான் Indoone AI. தற்போது பயிற்சி பெற்ற local model load ஆகவில்லை."
     if language == "Malayalam":
-        return "നമസ്കാരം 👋 ഞാൻ Indoone AI. പരിശീലനം ലഭിച്ച local model ഇപ്പോൾ load ചെയ്തിട്ടില്ല; fallback mode-ൽ പ്രവർത്തിക്കുന്നു."
-
+        return "നമസ്കാരം 👋 ഞാൻ Indoone AI. പരിശീലനം ലഭിച്ച local model ഇപ്പോൾ load ചെയ്തിട്ടില്ല."
     if language == "Hindi":
-        return "नमस्कार 👋 मैं Indoone AI हूँ। अभी trained local model load नहीं हुआ है, इसलिए मैं fallback mode में काम कर रहा हूँ।"
-
+        return "नमस्कार 👋 मैं Indoone AI हूँ। अभी trained local model load नहीं हुआ है।"
     if language == "Bengali":
-        return "নমস্কার 👋 আমি Indoone AI। প্রশিক্ষিত local model এখনও load হয়নি, তাই আমি fallback mode-এ কাজ করছি।"
-
+        return "নমস্কার 👋 আমি Indoone AI। প্রশিক্ষিত local model এখনও load হয়নি।"
     if language == "Gujarati":
-        return "નમસ્કાર 👋 હું Indoone AI છું. હાલમાં trained local model load થયું નથી, તેથી હું fallback modeમાં કામ કરી રહ્યો છું."
-
+        return "નમસ્કાર 👋 હું Indoone AI છું. હાલમાં trained local model load થયું નથી."
     if language == "Punjabi":
-        return "ਸਤ ਸ੍ਰੀ ਅਕਾਲ 👋 ਮੈਂ Indoone AI ਹਾਂ। trained local model ਹਾਲੇ load ਨਹੀਂ ਹੋਇਆ, ਇਸ ਲਈ ਮੈਂ fallback mode ਵਿੱਚ ਕੰਮ ਕਰ ਰਿਹਾ ਹਾਂ।"
-
+        return "ਸਤ ਸ੍ਰੀ ਅਕਾਲ 👋 ਮੈਂ Indoone AI ਹਾਂ। trained local model ਹਾਲੇ load ਨਹੀਂ ਹੋਇਆ।"
     if language == "Odia":
-        return "ନମସ୍କାର 👋 ମୁଁ Indoone AI। trained local model ଏଯାବତ୍ load ହୋଇନାହିଁ, ସେଥିପାଇଁ ମୁଁ fallback modeରେ କାମ କରୁଛି।"
-
+        return "ନମସ୍କାର 👋 ମୁଁ Indoone AI। trained local model ଏଯାବତ୍ load ହୋଇନାହିଁ।"
     if language == "Urdu":
-        return "السلام علیکم 👋 میں Indoone AI ہوں۔ ابھی trained local model load نہیں ہوا، اس لیے میں fallback mode میں کام کر رہا ہوں۔"
-
+        return "السلام علیکم 👋 میں Indoone AI ہوں۔ ابھی trained local model load نہیں ہوا۔"
     if normalized in {"hi", "hello", "hey"}:
         return "Hi 👋 I’m Indoone AI."
-    if "what is indoone" in normalized or "indoone ai" in normalized:
-        return (
-            "Indoone AI is the AI service behind the Indoone app. The backend is online, "
-            "but the trained Indoone local checkpoint is not available yet."
-        )
-    return (
-        "Indoone AI backend is reachable ✅, but the trained Indoone local model is not "
-        "available yet. I’m keeping the API online in fallback mode instead of returning "
-        "an error."
-    )
+    return "Indoone AI backend is reachable ✅, but the trained Indoone local model is not available yet."
 
 
 class LocalAIService:
-    """Async service facade for the Indoone local AI runtime."""
-
     async def generate(
         self,
         message: str,
         history: list[tuple[str, str]] | None = None,
+        document_context: str = "",
     ) -> str:
         prompt = message.strip()
         if not prompt:
@@ -551,6 +272,8 @@ class LocalAIService:
         knowledge = ""
         if _knowledge_base is not None:
             knowledge = format_hits(_knowledge_base.search(prompt, limit=3))
+        if document_context.strip():
+            knowledge = (knowledge + "\n\n" if knowledge else "") + "User-provided document:\n" + document_context.strip()[:100_000]
 
         research = ""
         research_results: list[ResearchResult] = []
@@ -562,46 +285,32 @@ class LocalAIService:
                 research_results = []
                 research = ""
 
-        context = _build_context(
-            prompt,
-            history or [],
-            knowledge=knowledge,
-            research=research,
-        )
+        context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
 
         if _runtime is not None:
             try:
-                answer = _runtime.generate(context)
-                answer = _clean_model_reply(answer)
-
+                answer = _clean_model_reply(_runtime.generate(context))
                 if not _has_expected_script(answer, language):
-                    logger.warning(
-                        "Discarding malformed or wrong-language model output for %s",
-                        language,
-                    )
+                    logger.warning("Discarding malformed or wrong-language model output for %s", language)
                     answer = _generation_error_reply(language)
             except RuntimeError:
                 answer = _fallback_reply(prompt)
         elif getattr(_fallback_engine, "ready", True):
             try:
-                answer = await _fallback_engine.generate(context)
-                answer = _clean_model_reply(answer)
-
+                answer = _clean_model_reply(await _fallback_engine.generate(context))
                 if not _has_expected_script(answer, language):
                     answer = _generation_error_reply(language)
             except RuntimeError:
                 answer = _fallback_reply(prompt)
         else:
             answer = _fallback_reply(prompt)
-
         return append_sources(answer, _evidence_from_results(research_results))
 
 
 async def generate_reply(
     message: str,
     history: list[tuple[str, str]] | None = None,
+    document_context: str = "",
 ) -> str:
-    """Generate a clean response through the Indoone local AI service."""
-
-    return await LocalAIService().generate(message, history=history)
+    return await LocalAIService().generate(message, history=history, document_context=document_context)

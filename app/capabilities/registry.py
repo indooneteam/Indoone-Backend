@@ -17,7 +17,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability("chat", "AI chat", "active", True, "ready", "Central chat endpoint and context pipeline."),
     Capability("chat_streaming", "Streaming chat", "active", True, "ready", "Server-sent events endpoint."),
     Capability("multilingual", "Indian multilingual support", "active", True, "ready", "Language detection and multilingual model/data path."),
-    Capability("voice", "Voice input contract", "partial", True, "existing", "Backend accepts text produced by the Android voice layer."),
+    Capability("voice", "Real-time voice", "partial", True, "planned-ui", "Local/self-hosted STT and TTS adapters plus WebSocket voice session; model runtimes are configured separately."),
     Capability("memory", "Long-term memory", "partial", True, "planned-ui", "Durable user-scoped memory CRUD and candidate extraction."),
     Capability("projects", "Persistent projects/workspaces", "partial", True, "planned-ui", "Project metadata/context container backend."),
     Capability("tasks", "Scheduled tasks", "partial", True, "planned-ui", "Task definitions are persisted; an external worker is still required for time-based execution."),

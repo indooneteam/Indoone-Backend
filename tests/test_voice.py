@@ -72,7 +72,7 @@ def test_voice_websocket_protocol(monkeypatch) -> None:
             assert ready["type"] == "ready"
             assert ready["protocol"] == "indoone.voice.v1"
             assert ready["session_id"]
-            assert ready["capabilities"] == ["stt", "tts", "partial_transcripts", "request_ids"]
+            assert ready["capabilities"] == ["stt", "tts", "partial_transcripts", "request_ids", "cancellation"]
 
             websocket.send_json({"type": "ping", "request_id": "ping-1"})
             assert websocket.receive_json() == {"type": "pong", "request_id": "ping-1", "sequence": 2}

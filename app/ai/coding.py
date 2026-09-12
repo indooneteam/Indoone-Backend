@@ -20,14 +20,7 @@ def _python_issues(code: str) -> list[CodeIssue]:
     try:
         ast.parse(code)
     except SyntaxError as exc:
-        return [
-            CodeIssue(
-                severity="error",
-                message=exc.msg,
-                line=exc.lineno or 0,
-                column=exc.offset or 0,
-            )
-        ]
+        return [CodeIssue("error", exc.msg, exc.lineno or 0, exc.offset or 0)]
     return []
 
 
@@ -56,7 +49,6 @@ def analyze_code(language: str, code: str) -> dict[str, object]:
         raise ValueError(f"unsupported language: {language}")
     if len(code) > MAX_CODE_LENGTH:
         raise ValueError(f"code exceeds {MAX_CODE_LENGTH} characters")
-
     normalized = code.replace("\r\n", "\n").replace("\r", "\n")
     issues = _python_issues(normalized) if language == "python" else _delimiter_issues(normalized)
     return {
@@ -75,13 +67,10 @@ def explain_code(language: str, code: str) -> dict[str, object]:
         raise ValueError(f"unsupported language: {language}")
     if len(code) > MAX_CODE_LENGTH:
         raise ValueError(f"code exceeds {MAX_CODE_LENGTH} characters")
-
     normalized = code.replace("\r\n", "\n").replace("\r", "\n")
     analysis = analyze_code(language, normalized)
     lines = normalized.splitlines()
-    non_empty = [line.strip() for line in lines if line.strip()]
     concepts: list[str] = []
-
     if language == "python":
         try:
             tree = ast.parse(normalized)
@@ -107,14 +96,13 @@ def explain_code(language: str, code: str) -> dict[str, object]:
             concepts.append("conditionals")
         if " for " in f" {lowered} " or " while " in f" {lowered} ":
             concepts.append("loops")
-
     return {
         "language": language,
         "characters": analysis["characters"],
         "lines": analysis["lines"],
         "valid": analysis["valid"],
         "issues": analysis["issues"],
-        "non_empty_lines": len(non_empty),
+        "non_empty_lines": sum(bool(line.strip()) for line in lines),
         "concepts": concepts,
         "summary": f"{language} code with {len(lines)} lines and {len(concepts)} detected structural concepts.",
     }
@@ -137,7 +125,8 @@ def suggest_fixes(language: str, code: str) -> dict[str, object]:
         else:
             advice = "Review the reported issue at the indicated location before changing behavior."
         suggestions.append({"line": issue["line"], "column": issue["column"], "severity": issue["severity"], "issue": message, "suggestion": advice})
-
+    if not suggestions:
+        suggestions.append({"line": 0, "column": 0, "severity": "info", "issue": "none", "suggestion": "No static syntax or delimiter issue was detected."})
     return {
         "language": analysis["language"],
         "valid": analysis["valid"],

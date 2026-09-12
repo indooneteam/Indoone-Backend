@@ -145,53 +145,13 @@ async def list_pages(user_id: str) -> dict[str, object]:
     async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.get(
             f"{_GRAPH_URL}/me/accounts",
-            params={"fields": "id,name,access_token,category,tasks"},
+            params={"fields": "id,name,category,tasks"},
             headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
         )
         response.raise_for_status()
         body = response.json()
     if not isinstance(body, dict):
         raise RuntimeError("facebook pages response is invalid")
-    return {"integration": _INTEGRATION_ID, **body, "secrets_exposed": False}
-
-
-async def get_page(page_id: str) -> dict[str, object]:
-    if not page_id.strip():
-        raise ValueError("page_id is required")
-    token = await _access_token_for_page(page_id)
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(
-            f"{_GRAPH_URL}/{page_id.strip()}",
-            params={"fields": "id,name,category,about,link,picture,fan_count"},
-            headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
-        )
-        response.raise_for_status()
-        body = response.json()
-    if not isinstance(body, dict):
-        raise RuntimeError("facebook page response is invalid")
-    return {"integration": _INTEGRATION_ID, "page": body, "secrets_exposed": False}
-
-
-async def _access_token_for_page(page_id: str) -> str:
-    user_token = await _access_token(os.getenv("_FACEBOOK_REQUEST_USER_ID", "")) if False else None
-    raise RuntimeError("page access token lookup requires user context")
-
-
-async def list_page_posts(user_id: str, page_id: str, limit: int = 25, after: str = "") -> dict[str, object]:
-    if not page_id.strip():
-        raise ValueError("page_id is required")
-    if not 1 <= limit <= 100:
-        raise ValueError("limit must be between 1 and 100")
-    page_token = await page_access_token(user_id, page_id)
-    params: dict[str, object] = {"fields": "id,message,created_time,permalink_url,attachments", "limit": limit}
-    if after:
-        params["after"] = after
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(f"{_GRAPH_URL}/{page_id.strip()}/posts", params=params, headers={"Authorization": f"Bearer {page_token}", "Accept": "application/json"})
-        response.raise_for_status()
-        body = response.json()
-    if not isinstance(body, dict):
-        raise RuntimeError("facebook posts response is invalid")
     return {"integration": _INTEGRATION_ID, **body, "secrets_exposed": False}
 
 
@@ -213,6 +173,24 @@ async def page_access_token(user_id: str, page_id: str) -> str:
                 if isinstance(page_token, str) and page_token:
                     return page_token
     raise ValueError("facebook page is not available for this connected user")
+
+
+async def list_page_posts(user_id: str, page_id: str, limit: int = 25, after: str = "") -> dict[str, object]:
+    if not page_id.strip():
+        raise ValueError("page_id is required")
+    if not 1 <= limit <= 100:
+        raise ValueError("limit must be between 1 and 100")
+    page_token = await page_access_token(user_id, page_id)
+    params: dict[str, object] = {"fields": "id,message,created_time,permalink_url,attachments", "limit": limit}
+    if after:
+        params["after"] = after
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(f"{_GRAPH_URL}/{page_id.strip()}/posts", params=params, headers={"Authorization": f"Bearer {page_token}", "Accept": "application/json"})
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict):
+        raise RuntimeError("facebook posts response is invalid")
+    return {"integration": _INTEGRATION_ID, **body, "secrets_exposed": False}
 
 
 async def create_page_post(user_id: str, page_id: str, message: str, approved: bool = False) -> dict[str, object]:

@@ -8,7 +8,7 @@ from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 
 
-DEFAULT_MAX_NEW_TOKENS = 64
+DEFAULT_MAX_NEW_TOKENS = 192
 DEFAULT_TEMPERATURE = 0.0
 
 
@@ -47,11 +47,7 @@ class LocalModelRuntime:
         return int(torch.multinomial(probabilities, num_samples=1).item())
 
     def _prompt_ids(self, prompt: str) -> list[int]:
-        """Encode a prompt with BOS but without a trailing EOS token.
-
-        EOS belongs at the end of generated text. Putting EOS in the input
-        prompt makes the model believe the conversation has already ended.
-        """
+        """Encode a prompt with BOS but without a trailing EOS token."""
 
         token_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
         return [self.tokenizer.stoi["<bos>"]] + token_ids

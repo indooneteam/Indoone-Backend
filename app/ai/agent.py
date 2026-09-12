@@ -15,6 +15,8 @@ from app.capabilities.store import (
 MAX_AGENT_STEPS = 4
 MAX_AGENT_MEMORIES = 5
 MAX_AGENT_RETRIES = 1
+MAX_AGENT_MESSAGE_LENGTH = 20_000
+MAX_AGENT_PAYLOAD_LENGTH = 8_000
 ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary"})
 AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary"})
 
@@ -39,6 +41,8 @@ class AgentExecution:
 
 
 def _step(tool: str, payload: str, index: int) -> AgentStep:
+    if len(payload) > MAX_AGENT_PAYLOAD_LENGTH:
+        payload = payload[:MAX_AGENT_PAYLOAD_LENGTH]
     return AgentStep(index=index, tool=tool, payload=payload, requires_approval=tool not in AUTO_APPROVED_AGENT_TOOLS)
 
 
@@ -64,15 +68,19 @@ def _extract_calculations(message: str) -> tuple[str, ...]:
 
 def build_agent_steps(message: str) -> tuple[AgentStep, ...]:
     """Build a bounded deterministic plan with stable tool precedence and ordering."""
-    explicit = _extract_explicit_requests(message)
+    normalized = message.strip()
+    if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
+        return ()
+
+    explicit = _extract_explicit_requests(normalized)
     if explicit:
         return tuple(_step(tool, payload, index) for index, (_, tool, payload) in enumerate(explicit, start=1))
 
-    expressions = _extract_calculations(message)
+    expressions = _extract_calculations(normalized)
     if expressions:
         return tuple(_step("calculator", expression, index) for index, expression in enumerate(expressions, start=1))
 
-    plan: Plan = plan_request(message)
+    plan: Plan = plan_request(normalized)
     if not plan.tool or plan.tool_payload is None or plan.tool not in ALLOWED_AGENT_TOOLS:
         return ()
     return (_step(plan.tool, plan.tool_payload, 1),)
@@ -81,16 +89,16 @@ def build_agent_steps(message: str) -> tuple[AgentStep, ...]:
 def _load_memory_context(user_id: str, message: str) -> tuple[dict[str, Any], ...]:
     if not user_id.strip():
         return ()
-    return tuple(search_memories(user_id, message, limit=MAX_AGENT_MEMORIES))
+    return tuple(search_memories(user_id, message[:MAX_AGENT_PAYLOAD_LENGTH], limit=MAX_AGENT_MEMORIES))
 
 
 def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
     if not results:
-        return payload
+        return payload[:MAX_AGENT_PAYLOAD_LENGTH]
     chained = payload.replace("$last", results[-1].output)
     for index, result in enumerate(results, start=1):
         chained = chained.replace(f"$result{index}", result.output)
-    return chained
+    return chained[:MAX_AGENT_PAYLOAD_LENGTH]
 
 
 def _run_with_retry(tool: str, payload: str) -> tuple[ToolResult, int]:
@@ -109,13 +117,17 @@ def _serialize_result(result: ToolResult) -> dict[str, Any]:
 
 
 def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | frozenset[str] | None = None) -> AgentExecution:
+    normalized = message.strip()
+    if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
+        return AgentExecution(message=message, steps=(), results=())
+
     approved = frozenset(approved_tools or ())
-    memory_context = _load_memory_context(user_id, message)
+    memory_context = _load_memory_context(user_id, normalized)
     run_id: str | None = None
     if user_id.strip():
-        run_id = str(create_agent_run(user_id, message)["id"])
+        run_id = str(create_agent_run(user_id, normalized)["id"])
 
-    planned_steps = build_agent_steps(message)[:MAX_AGENT_STEPS]
+    planned_steps = build_agent_steps(normalized)[:MAX_AGENT_STEPS]
     executable: list[AgentStep] = []
     blocked: list[AgentStep] = []
     results: list[ToolResult] = []
@@ -130,7 +142,7 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
         retry_counts.append(retry_count)
 
     status = "blocked" if blocked and not results else "completed"
-    execution = AgentExecution(message=message, steps=tuple(executable), results=tuple(results), memories=memory_context, blocked_steps=tuple(blocked), retry_counts=tuple(retry_counts), run_id=run_id)
+    execution = AgentExecution(message=normalized, steps=tuple(executable), results=tuple(results), memories=memory_context, blocked_steps=tuple(blocked), retry_counts=tuple(retry_counts), run_id=run_id)
     if user_id.strip() and run_id is not None:
         update_agent_run(
             user_id=user_id,

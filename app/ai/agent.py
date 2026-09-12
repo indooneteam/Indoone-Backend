@@ -38,15 +38,21 @@ class AgentExecution:
     run_id: str | None = None
 
 
-def _extract_tool_requests(message: str) -> tuple[tuple[str, str], ...]:
-    requests: list[tuple[str, str]] = []
-    json_match = re.search(r"(?:summarize|summary of)\s+json\s*:\s*(\{.*\}|\[.*\])", message, re.IGNORECASE)
-    if json_match:
-        requests.append(("json_summary", json_match.group(1)))
-    text_match = re.search(r"(?:text stats|analyze text|count words)\s*:\s*(.+)", message, re.IGNORECASE | re.DOTALL)
-    if text_match:
-        requests.append(("text_stats", text_match.group(1).strip()))
-    return tuple(requests[:MAX_AGENT_STEPS])
+def _step(tool: str, payload: str, index: int) -> AgentStep:
+    return AgentStep(index=index, tool=tool, payload=payload, requires_approval=tool not in AUTO_APPROVED_AGENT_TOOLS)
+
+
+def _extract_explicit_requests(message: str) -> list[tuple[int, str, str]]:
+    patterns = (
+        ("json_summary", r"(?:summarize|summary of)\s+json\s*:\s*(\{.*?\}|\[.*?\])"),
+        ("text_stats", r"(?:text stats|analyze text|count words)\s*:\s*(.+?)(?=\s*(?:;|$))"),
+    )
+    matches: list[tuple[int, str, str]] = []
+    for tool, pattern in patterns:
+        for match in re.finditer(pattern, message, re.IGNORECASE | re.DOTALL):
+            matches.append((match.start(), tool, match.group(1).strip()))
+    matches.sort(key=lambda item: item[0])
+    return matches[:MAX_AGENT_STEPS]
 
 
 def _extract_calculations(message: str) -> tuple[str, ...]:
@@ -57,44 +63,19 @@ def _extract_calculations(message: str) -> tuple[str, ...]:
 
 
 def build_agent_steps(message: str) -> tuple[AgentStep, ...]:
-    """Build a bounded deterministic multi-step execution plan."""
-    tool_requests = _extract_tool_requests(message)
-    if tool_requests:
-        return tuple(
-            AgentStep(
-                index=index,
-                tool=tool,
-                payload=payload,
-                requires_approval=tool not in AUTO_APPROVED_AGENT_TOOLS,
-            )
-            for index, (tool, payload) in enumerate(tool_requests, start=1)
-        )
+    """Build a bounded deterministic plan with stable tool precedence and ordering."""
+    explicit = _extract_explicit_requests(message)
+    if explicit:
+        return tuple(_step(tool, payload, index) for index, (_, tool, payload) in enumerate(explicit, start=1))
 
     expressions = _extract_calculations(message)
     if expressions:
-        return tuple(
-            AgentStep(
-                index=index,
-                tool="calculator",
-                payload=expression,
-                requires_approval="calculator" not in AUTO_APPROVED_AGENT_TOOLS,
-            )
-            for index, expression in enumerate(expressions, start=1)
-        )
+        return tuple(_step("calculator", expression, index) for index, expression in enumerate(expressions, start=1))
 
     plan: Plan = plan_request(message)
-    if not plan.tool or plan.tool_payload is None:
+    if not plan.tool or plan.tool_payload is None or plan.tool not in ALLOWED_AGENT_TOOLS:
         return ()
-    if plan.tool not in ALLOWED_AGENT_TOOLS:
-        return ()
-    return (
-        AgentStep(
-            index=1,
-            tool=plan.tool,
-            payload=plan.tool_payload,
-            requires_approval=plan.tool not in AUTO_APPROVED_AGENT_TOOLS,
-        ),
-    )
+    return (_step(plan.tool, plan.tool_payload, 1),)
 
 
 def _load_memory_context(user_id: str, message: str) -> tuple[dict[str, Any], ...]:
@@ -104,7 +85,6 @@ def _load_memory_context(user_id: str, message: str) -> tuple[dict[str, Any], ..
 
 
 def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
-    """Resolve bounded result placeholders before a dependent tool call."""
     if not results:
         return payload
     chained = payload.replace("$last", results[-1].output)
@@ -114,12 +94,10 @@ def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
 
 
 def _run_with_retry(tool: str, payload: str) -> tuple[ToolResult, int]:
-    """Retry a failed tool once with the exact same bounded payload."""
     result = run_tool(tool, payload)
     if result.safe or MAX_AGENT_RETRIES == 0:
         return result, 0
-    retry_result = run_tool(tool, payload)
-    return retry_result, 1
+    return run_tool(tool, payload), 1
 
 
 def _serialize_step(step: AgentStep) -> dict[str, Any]:
@@ -130,49 +108,29 @@ def _serialize_result(result: ToolResult) -> dict[str, Any]:
     return {"name": result.name, "output": result.output, "safe": result.safe}
 
 
-def execute_agent(
-    message: str,
-    user_id: str = "",
-    approved_tools: set[str] | frozenset[str] | None = None,
-) -> AgentExecution:
-    """Execute only allowed/approved tools with bounded retries and persisted state."""
+def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | frozenset[str] | None = None) -> AgentExecution:
     approved = frozenset(approved_tools or ())
     memory_context = _load_memory_context(user_id, message)
     run_id: str | None = None
     if user_id.strip():
-        run = create_agent_run(user_id, message)
-        run_id = str(run["id"])
+        run_id = str(create_agent_run(user_id, message)["id"])
 
     planned_steps = build_agent_steps(message)[:MAX_AGENT_STEPS]
     executable: list[AgentStep] = []
     blocked: list[AgentStep] = []
     results: list[ToolResult] = []
     retry_counts: list[int] = []
-
     for step in planned_steps:
-        if step.tool not in ALLOWED_AGENT_TOOLS:
-            blocked.append(step)
-            continue
-        if step.requires_approval and step.tool not in approved:
+        if step.tool not in ALLOWED_AGENT_TOOLS or (step.requires_approval and step.tool not in approved):
             blocked.append(step)
             continue
         executable.append(step)
-        chained_payload = _chain_payload(step.payload, tuple(results))
-        result, retry_count = _run_with_retry(step.tool, chained_payload)
+        result, retry_count = _run_with_retry(step.tool, _chain_payload(step.payload, tuple(results)))
         results.append(result)
         retry_counts.append(retry_count)
 
     status = "blocked" if blocked and not results else "completed"
-    execution = AgentExecution(
-        message=message,
-        steps=tuple(executable),
-        results=tuple(results),
-        memories=memory_context,
-        blocked_steps=tuple(blocked),
-        retry_counts=tuple(retry_counts),
-        run_id=run_id,
-    )
-
+    execution = AgentExecution(message=message, steps=tuple(executable), results=tuple(results), memories=memory_context, blocked_steps=tuple(blocked), retry_counts=tuple(retry_counts), run_id=run_id)
     if user_id.strip() and run_id is not None:
         update_agent_run(
             user_id=user_id,

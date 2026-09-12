@@ -1,17 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 
 import httpx
-import pytest
 from fastapi.testclient import TestClient
 
 from app.capabilities.image_generation import generate_image
 from app.main import app
 
 
-@pytest.mark.anyio
-async def test_generate_image_normalizes_local_result(monkeypatch) -> None:
+def test_generate_image_normalizes_local_result(monkeypatch) -> None:
     encoded = base64.b64encode(b"fake-png").decode("ascii")
 
     class MockTransport(httpx.AsyncBaseTransport):
@@ -28,13 +27,13 @@ async def test_generate_image_normalizes_local_result(monkeypatch) -> None:
     monkeypatch.setattr("app.capabilities.image_generation.httpx.AsyncClient", client_factory)
     monkeypatch.setenv("INDOONE_IMAGE_GENERATOR_URL", "http://generator.local/generate")
 
-    result = await generate_image("a blue square", 512, 512)
+    result = asyncio.run(generate_image("a blue square", 512, 512))
     assert result.provider == "local"
     assert result.model == "test-model"
     assert result.image_base64 == encoded
 
 
-def test_image_generation_endpoint_returns_503_without_runtime() -> None:
+def test_image_generation_endpoint_returns_503_without_runtime(monkeypatch) -> None:
     with TestClient(app) as client:
         response = client.post("/api/image-generation", json={"prompt": "test", "width": 512, "height": 512})
     assert response.status_code == 503

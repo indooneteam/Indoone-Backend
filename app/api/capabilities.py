@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from app.ai.orchestrator import execute_plan, plan_request
 from app.ai.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
+from app.capabilities.document_extract import extract_document
 from app.capabilities.media import save_media
 from app.capabilities.registry import list_capabilities
 from app.capabilities.store import (
@@ -60,6 +61,12 @@ class AnalysisRequest(BaseModel):
 
 
 class MediaRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    mime_type: str = Field(min_length=1, max_length=120)
+    content_base64: str = Field(min_length=1, max_length=12_000_000)
+
+
+class DocumentRequest(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     mime_type: str = Field(min_length=1, max_length=120)
     content_base64: str = Field(min_length=1, max_length=12_000_000)
@@ -134,6 +141,27 @@ async def analyze(request: AnalysisRequest) -> dict[str, object]:
     try:
         content = base64.b64decode(request.content_base64, validate=True)
         return {"analysis": analyze_payload(request.filename, content)}
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/documents/extract")
+async def extract_document_endpoint(request: DocumentRequest) -> dict[str, object]:
+    try:
+        content = base64.b64decode(request.content_base64, validate=True)
+        result = extract_document(request.filename, request.mime_type, content)
+        return {
+            "document": {
+                "filename": result.filename,
+                "mime_type": result.mime_type,
+                "page_count": result.page_count,
+                "paragraphs": result.paragraphs,
+                "characters": result.characters,
+                "text": result.text,
+                "truncated": result.truncated,
+                "ocr_required": not bool(result.text),
+            }
+        }
     except (ValueError, UnicodeDecodeError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

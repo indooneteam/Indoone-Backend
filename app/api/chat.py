@@ -1,6 +1,6 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.ai.answer_quality import assess_answer, user_safe_failure
@@ -25,24 +25,32 @@ class ChatResponse(BaseModel):
     reply: str
 
 
-@router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest) -> ChatResponse:
-    conversation_id = request.conversation_id or str(uuid4())
-    if _store.is_closed(conversation_id):
-        conversation_id = str(uuid4())
+def _principal(request: Request) -> str:
+    return str(getattr(request.state, "principal_id", "")).strip()
 
-    history = _store.recent(conversation_id)
-    intent = classify_intent(request.message)
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(request: Request, body: ChatRequest) -> ChatResponse:
+    user_id = _principal(request)
+    conversation_id = body.conversation_id or str(uuid4())
+    try:
+        if _store.is_closed(conversation_id, user_id=user_id):
+            conversation_id = str(uuid4())
+        history = _store.recent(conversation_id, user_id=user_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+
+    intent = classify_intent(body.message)
     document_context = ""
 
-    if request.file_id:
+    if body.file_id:
         try:
-            document_context = read_text_file(request.file_id)
+            document_context = read_text_file(body.file_id)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    if intent.needs_calculation and not request.file_id:
-        expression = request.message
+    if intent.needs_calculation and not body.file_id:
+        expression = body.message
         for marker in ("calculate", "what is", "=", "ಲೆಕ್ಕ"):
             expression = expression.replace(marker, " ")
         tool_result = run_tool("calculator", expression.strip())
@@ -53,22 +61,25 @@ async def chat(request: ChatRequest) -> ChatResponse:
     else:
         try:
             reply = await generate_reply(
-                request.message,
+                body.message,
                 history=history,
                 document_context=document_context,
             )
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    quality = assess_answer(request.message, reply)
+    quality = assess_answer(body.message, reply)
     if not quality.passed:
         reply = user_safe_failure()
 
     try:
         _store.append(
             conversation_id,
-            [("user", request.message), ("assistant", reply)],
+            [("user", body.message), ("assistant", reply)],
+            user_id=user_id,
         )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

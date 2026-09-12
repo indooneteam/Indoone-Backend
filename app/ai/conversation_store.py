@@ -7,12 +7,13 @@ from typing import Iterable
 
 
 DEFAULT_DB_PATH = Path(os.getenv("INDOONE_CONVERSATION_DB", "data/indoone_conversations.sqlite3"))
+DEFAULT_MAX_MESSAGES = 50
 
 
 class ConversationStore:
-    """Small persistent SQLite-backed conversation history store."""
+    """Persistent SQLite conversation history with a bounded lifecycle."""
 
-    def __init__(self, db_path: Path = DEFAULT_DB_PATH, max_messages: int = 40) -> None:
+    def __init__(self, db_path: Path = DEFAULT_DB_PATH, max_messages: int = DEFAULT_MAX_MESSAGES) -> None:
         if max_messages <= 0:
             raise ValueError("max_messages must be greater than zero")
         self.db_path = db_path
@@ -39,8 +40,23 @@ class ConversationStore:
                 """
             )
             connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS conversations (
+                    conversation_id TEXT PRIMARY KEY,
+                    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed')),
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    closed_at TEXT
+                )
+                """
+            )
+            connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id "
                 "ON messages(conversation_id, id)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_conversations_status_updated "
+                "ON conversations(status, updated_at)"
             )
 
     def append(self, conversation_id: str, messages: Iterable[tuple[str, str]]) -> None:
@@ -56,10 +72,37 @@ class ConversationStore:
                 raise ValueError("message content cannot be empty")
 
         with self._connect() as connection:
+            connection.execute(
+                "INSERT OR IGNORE INTO conversations(conversation_id) VALUES (?)",
+                (conversation_id,),
+            )
+            current = connection.execute(
+                "SELECT status FROM conversations WHERE conversation_id = ?",
+                (conversation_id,),
+            ).fetchone()
+            if current is not None and current["status"] == "closed":
+                raise ValueError("conversation is closed")
+
             connection.executemany(
                 "INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)",
                 [(conversation_id, role, content.strip()) for role, content in rows],
             )
+            connection.execute(
+                "UPDATE conversations SET updated_at=CURRENT_TIMESTAMP WHERE conversation_id=?",
+                (conversation_id,),
+            )
+
+            count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM messages WHERE conversation_id = ?",
+                    (conversation_id,),
+                ).fetchone()[0]
+            )
+            if count >= self.max_messages:
+                connection.execute(
+                    "UPDATE conversations SET status='closed', closed_at=CURRENT_TIMESTAMP WHERE conversation_id=?",
+                    (conversation_id,),
+                )
 
     def recent(self, conversation_id: str) -> list[tuple[str, str]]:
         if not conversation_id:
@@ -77,8 +120,38 @@ class ConversationStore:
             ).fetchall()
         return [(str(row["role"]), str(row["content"])) for row in reversed(rows)]
 
+    def message_count(self, conversation_id: str) -> int:
+        if not conversation_id:
+            raise ValueError("conversation_id cannot be empty")
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?",
+                (conversation_id,),
+            ).fetchone()
+        return int(row["count"] if row is not None else 0)
+
+    def is_closed(self, conversation_id: str) -> bool:
+        if not conversation_id:
+            raise ValueError("conversation_id cannot be empty")
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT status FROM conversations WHERE conversation_id = ?",
+                (conversation_id,),
+            ).fetchone()
+        return row is not None and str(row["status"]) == "closed"
+
+    def close(self, conversation_id: str) -> None:
+        if not conversation_id:
+            raise ValueError("conversation_id cannot be empty")
+        with self._connect() as connection:
+            connection.execute(
+                "UPDATE conversations SET status='closed', closed_at=CURRENT_TIMESTAMP WHERE conversation_id=?",
+                (conversation_id,),
+            )
+
     def delete(self, conversation_id: str) -> None:
         if not conversation_id:
             raise ValueError("conversation_id cannot be empty")
         with self._connect() as connection:
             connection.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
+            connection.execute("DELETE FROM conversations WHERE conversation_id = ?", (conversation_id,))

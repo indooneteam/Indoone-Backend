@@ -20,9 +20,12 @@ class MockTransport(httpx.AsyncBaseTransport):
         return httpx.Response(404)
 
 
+_original_async_client = httpx.AsyncClient
+
+
 def client_factory(*args, **kwargs):
     kwargs["transport"] = MockTransport()
-    return httpx.AsyncClient(*args, **kwargs)
+    return _original_async_client(*args, **kwargs)
 
 
 def test_transcribe_audio_normalizes_local_result(monkeypatch) -> None:

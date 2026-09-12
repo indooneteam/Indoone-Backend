@@ -3,12 +3,15 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.ai.answer_quality import assess_answer, user_safe_failure
 from app.ai.file_context import save_text_file
+from app.ai.memory import extract_memory_candidates
+from app.ai.orchestrator import execute_plan, plan_request
 from app.ai.service import generate_reply
 
 router = APIRouter(tags=["platform"])
@@ -69,3 +72,44 @@ async def stream_chat(request: StreamChatRequest) -> StreamingResponse:
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+class PlanRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=20_000)
+
+
+@router.post("/ai/plan")
+async def ai_plan(request: PlanRequest) -> dict[str, object]:
+    plan = plan_request(request.message)
+    tool_result = execute_plan(plan)
+    return {
+        "intent": plan.intent.name,
+        "needs_research": plan.intent.needs_research,
+        "needs_file_context": plan.intent.needs_file_context,
+        "needs_calculation": plan.intent.needs_calculation,
+        "tool": plan.tool,
+        "tool_payload": plan.tool_payload,
+        "tool_result": None
+        if tool_result is None
+        else {
+            "name": tool_result.name,
+            "output": tool_result.output,
+            "safe": tool_result.safe,
+        },
+    }
+
+
+@router.post("/ai/memory/candidates")
+async def memory_candidates(request: PlanRequest) -> dict[str, object]:
+    candidates = extract_memory_candidates(request.message)
+    return {
+        "candidates": [
+            {
+                "key": item.key,
+                "value": item.value,
+                "confidence": item.confidence,
+                "reason": item.reason,
+            }
+            for item in candidates
+        ]
+    }

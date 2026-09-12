@@ -10,7 +10,8 @@ from typing import Any
 from uuid import uuid4
 
 
-DB_PATH = Path(os.getenv("INDOONE_CAPABILITY_DB", "data/indoone_capabilities.db"))
+def _db_path() -> Path:
+    return Path(os.getenv("INDOONE_CAPABILITY_DB", "data/indoone_capabilities.db"))
 
 
 def _now() -> str:
@@ -18,8 +19,9 @@ def _now() -> str:
 
 
 def _connect() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(DB_PATH)
+    db_path = _db_path()
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     return connection
 

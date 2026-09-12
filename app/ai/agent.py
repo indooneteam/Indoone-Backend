@@ -141,7 +141,14 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
         results.append(result)
         retry_counts.append(retry_count)
 
-    status = "blocked" if blocked and not results else "completed"
+    unsafe_result = any(not result.safe for result in results)
+    if unsafe_result:
+        status = "failed"
+    elif blocked and not results:
+        status = "blocked"
+    else:
+        status = "completed"
+
     execution = AgentExecution(message=normalized, steps=tuple(executable), results=tuple(results), memories=memory_context, blocked_steps=tuple(blocked), retry_counts=tuple(retry_counts), run_id=run_id)
     if user_id.strip() and run_id is not None:
         update_agent_run(

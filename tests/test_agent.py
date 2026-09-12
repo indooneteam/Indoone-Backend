@@ -82,10 +82,30 @@ def test_agent_rejects_oversized_messages() -> None:
 
 
 def test_agent_bounds_payloads() -> None:
-    payload = "text stats: " + ("word " * (MAX_AGENT_PAYLOAD_LENGTH + 100))
+    payload = "text stats: " + ("x" * (MAX_AGENT_PAYLOAD_LENGTH + 100))
     steps = build_agent_steps(payload)
     assert steps
-    assert len(steps[0].payload) <= MAX_AGENT_PAYLOAD_LENGTH
+    assert steps[0].tool == "text_stats"
+    assert len(steps[0].payload) == MAX_AGENT_PAYLOAD_LENGTH
+
+
+def test_agent_persists_failed_execution_state() -> None:
+    with TemporaryDirectory() as tempdir:
+        old_path = os.environ.get("INDOONE_CAPABILITY_DB")
+        os.environ["INDOONE_CAPABILITY_DB"] = os.path.join(tempdir, "agent.db")
+        try:
+            execution = execute_agent("calculate 10 / 0", user_id="user-1")
+            assert execution.run_id
+            saved = get_agent_run("user-1", execution.run_id)
+            assert saved is not None
+            assert saved["status"] == "failed"
+            assert saved["results"][0]["safe"] is False
+            assert saved["retry_counts"] == [1]
+        finally:
+            if old_path is None:
+                os.environ.pop("INDOONE_CAPABILITY_DB", None)
+            else:
+                os.environ["INDOONE_CAPABILITY_DB"] = old_path
 
 
 def test_agent_persists_execution_state() -> None:

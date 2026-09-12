@@ -12,12 +12,19 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol
 
 
 MAX_SUBJECT_LENGTH = 200
 MAX_TITLE_LENGTH = 500
 MAX_CONTENT_LENGTH = 200_000
 MAX_SOURCE_URL_LENGTH = 2_000
+
+
+class KnowledgeBackup(Protocol):
+    """Minimal interface required for durable object-storage backups."""
+
+    def upload_file(self, local_path: Path, object_key: str) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -82,8 +89,13 @@ def build_entry(
     )
 
 
-def save_entry(entry: KnowledgeEntry, directory: Path) -> Path:
-    """Persist one approved entry as a deterministic JSON document."""
+def save_entry(
+    entry: KnowledgeEntry,
+    directory: Path,
+    backup: KnowledgeBackup | None = None,
+    backup_prefix: str = "knowledge/",
+) -> Path:
+    """Persist one approved entry locally and optionally back it up to B2."""
 
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{entry.entry_id}.json"
@@ -91,6 +103,10 @@ def save_entry(entry: KnowledgeEntry, directory: Path) -> Path:
         json.dumps(asdict(entry), ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
+    if backup is not None:
+        prefix = backup_prefix.strip("/")
+        object_key = f"{prefix}/{path.name}" if prefix else path.name
+        backup.upload_file(path, object_key)
     return path
 
 

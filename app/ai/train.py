@@ -13,13 +13,17 @@ from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 from app.ai.training_data import TrainingExample, load_examples, write_corpus
 
+
+# V2 is intentionally larger while remaining practical for CPU inference.
 DEFAULT_MODEL_CONFIG = {
-    "block_size": 128,
-    "n_embd": 128,
-    "n_head": 4,
-    "n_layer": 4,
+    "block_size": 512,
+    "n_embd": 384,
+    "n_head": 8,
+    "n_layer": 10,
     "dropout": 0.0,
 }
+DEFAULT_VOCAB_SIZE = 8192
+DEFAULT_MIN_FREQUENCY = 2
 
 
 def _file_fingerprint(path: Path) -> str:
@@ -108,7 +112,7 @@ def train(
     steps: int,
     seed: int,
     validation_path: Path | None = None,
-    batch_size: int = 16,
+    batch_size: int = 8,
     checkpoint_interval: int = 500,
     learning_rate: float = 3e-4,
     instruction_path: Path | None = None,
@@ -146,7 +150,11 @@ def train(
     if len(train_text) < 32:
         raise ValueError("training corpus is too small; add more text")
 
-    tokenizer = BPETokenizer.train(train_text, vocab_size=512, min_frequency=2)
+    tokenizer = BPETokenizer.train(
+        train_text,
+        vocab_size=DEFAULT_VOCAB_SIZE,
+        min_frequency=DEFAULT_MIN_FREQUENCY,
+    )
     train_encoded = torch.tensor(
         tokenizer.encode(train_text, add_special_tokens=True),
         dtype=torch.long,
@@ -154,7 +162,7 @@ def train(
     if len(train_encoded) < 4:
         raise ValueError("training corpus is too small after tokenization")
 
-    block_size = min(128, max(2, len(train_encoded) // 2))
+    block_size = min(DEFAULT_MODEL_CONFIG["block_size"], max(2, len(train_encoded) // 2))
     if len(train_encoded) <= block_size + 1:
         raise ValueError("training corpus is too small for the selected block size")
 
@@ -171,7 +179,7 @@ def train(
 
     config = {**DEFAULT_MODEL_CONFIG, "block_size": block_size}
     model = IndooneTransformer(vocab_size=tokenizer.vocab_size, **config).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.1)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     tokenizer.save(output_dir / "tokenizer.json")
@@ -255,6 +263,7 @@ def train(
         json.dumps(
             {
                 "model": "indoone-small",
+                "model_version": "indoone-gpt-v2",
                 "tokenizer": "bpe-v1",
                 "vocab_size": tokenizer.vocab_size,
                 "special_tokens": list(tokenizer.SPECIAL_TOKENS),
@@ -280,6 +289,7 @@ def train(
                 "source_fingerprint": _file_fingerprint(corpus_path),
                 "validation_fingerprint": validation_fingerprint,
                 "training_text_characters": len(train_text),
+                "model_config": config,
             },
             indent=2,
         ),
@@ -289,15 +299,15 @@ def train(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train the first Indoone local language model")
+    parser = argparse.ArgumentParser(description="Train the Indoone local language model")
     parser.add_argument("--corpus", type=Path, default=Path("data/processed/train.txt"))
     parser.add_argument("--validation", type=Path, default=Path("data/processed/validation.txt"))
     parser.add_argument("--instructions", type=Path, default=Path("data/raw/indoone_instructions.jsonl"))
     parser.add_argument("--multilingual-instructions", type=Path, default=Path("data/raw/indoone_multilingual_examples.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
-    parser.add_argument("--steps", type=int, default=2000)
+    parser.add_argument("--steps", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--checkpoint-interval", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     args = parser.parse_args()

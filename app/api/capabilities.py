@@ -6,19 +6,38 @@ from typing import Any
 import httpx
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
+from secrets import token_urlsafe
 
 from app.ai.agent import MAX_AGENT_STEPS, execute_agent
 from app.ai.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
 from app.capabilities.document_extract import extract_document
 from app.capabilities.image_generation import generate_image
-from app.capabilities.integrations import build_oauth_authorization, get_integration, list_integrations
+from app.capabilities.integrations import (
+    build_oauth_authorization,
+    exchange_oauth_code,
+    get_integration,
+    list_integrations,
+)
 from app.capabilities.media import save_media
 from app.capabilities.registry import list_capabilities
 from app.capabilities.store import (
-    create_project, create_task, delete_memory, delete_project, get_agent_run,
-    get_project, list_agent_runs, list_memories, list_projects, list_tasks,
-    search_memories, search_projects, update_project, upsert_memory,
+    create_oauth_state,
+    create_project,
+    create_task,
+    delete_memory,
+    delete_project,
+    get_agent_run,
+    get_project,
+    get_integration_token_metadata,
+    list_agent_runs,
+    list_memories,
+    list_projects,
+    list_tasks,
+    search_memories,
+    search_projects,
+    update_project,
+    upsert_memory,
 )
 from app.capabilities.vision import analyze_image
 from app.capabilities.voice import synthesize_speech, transcribe_audio
@@ -111,8 +130,12 @@ class VoiceSynthesisRequest(BaseModel):
     format: str = Field(default="wav", min_length=1, max_length=16)
 
 class IntegrationConnectRequest(BaseModel):
-    state: str = Field(min_length=16, max_length=512)
+    user_id: str = Field(min_length=1, max_length=256)
     redirect_uri: str = Field(min_length=1, max_length=2_000)
+
+class IntegrationCallbackRequest(BaseModel):
+    state: str = Field(min_length=16, max_length=512)
+    code: str = Field(min_length=1, max_length=8_000)
 
 
 @router.get("/capabilities")
@@ -132,12 +155,31 @@ async def integration(integration_id: str) -> dict[str, object]:
 
 @router.post("/integrations/{integration_id}/connect")
 async def connect_integration(integration_id: str, request: IntegrationConnectRequest) -> dict[str, object]:
+    state = token_urlsafe(32)
     try:
-        return build_oauth_authorization(integration_id, request.state, request.redirect_uri)
+        create_oauth_state(state, request.user_id, integration_id.strip().lower(), request.redirect_uri.strip())
+        result = build_oauth_authorization(integration_id, state, request.redirect_uri)
+        return {**result, "state": state}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+@router.post("/integrations/{integration_id}/callback")
+async def integration_callback(integration_id: str, request: IntegrationCallbackRequest) -> dict[str, object]:
+    try:
+        return await exchange_oauth_code(integration_id, request.state, request.code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (RuntimeError, httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"oauth exchange failed: {exc}") from exc
+
+@router.get("/integrations/{integration_id}/status")
+async def integration_status(integration_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    if get_integration(integration_id) is None:
+        raise HTTPException(status_code=404, detail="integration not found")
+    metadata = get_integration_token_metadata(user_id, integration_id.strip().lower())
+    return {"integration": integration_id.strip().lower(), "connected": metadata is not None, "metadata": metadata}
 
 @router.get("/memory")
 async def get_memories(user_id: str = Query(..., min_length=1, max_length=256), key_prefix: str = Query(default="", max_length=128), source: str = Query(default="", max_length=128), limit: int = Query(default=100, ge=1, le=500), q: str = Query(default="", max_length=500)) -> dict[str, object]:
@@ -291,65 +333,36 @@ async def voice_transcribe(request: VoiceTranscriptionRequest) -> dict[str, obje
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"result": {"text": result.text, "language": result.language, "provider": result.provider, "model": result.model, "confidence": result.confidence, "metadata": result.metadata}}
+    return {"result": {"text": result.text, "language": result.language, "provider": result.provider}}
 
 @router.post("/voice/synthesize")
 async def voice_synthesize(request: VoiceSynthesisRequest) -> dict[str, object]:
     try:
-        result = await synthesize_speech(request.text, language=request.language, voice=request.voice, format=request.format)
+        result = await synthesize_speech(request.text, language=request.language, voice=request.voice, audio_format=request.format)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"result": {"audio_base64": result.audio_base64, "mime_type": result.mime_type, "provider": result.provider, "model": result.model, "sample_rate_hz": result.sample_rate_hz, "metadata": result.metadata}}
+    return {"result": {"audio_base64": result.audio_base64, "mime_type": result.mime_type, "language": result.language, "voice": result.voice, "provider": result.provider}}
 
-@router.websocket("/voice/session")
-async def voice_session(websocket: WebSocket) -> None:
-    state = VoiceSessionState()
+@router.websocket("/voice/stream")
+async def voice_stream(websocket: WebSocket) -> None:
     await websocket.accept()
-    await websocket.send_json(ready_event(state))
+    session = VoiceSessionState()
     try:
+        await websocket.send_json(ready_event(session))
         while True:
             message = await websocket.receive_json()
-            try:
-                state.accept_message()
-            except ValueError as exc:
-                await websocket.send_json({"type": "error", "code": "session_limit", "detail": str(exc), "sequence": state.next_sequence()})
-                await websocket.close(code=1008)
-                return
-            event_type = str(message.get("type", ""))
+            if not isinstance(message, dict):
+                await websocket.send_json({"type": "error", "detail": "message must be an object"})
+                continue
+            message_type = str(message.get("type", ""))
             request_id = normalize_request_id(message.get("request_id"))
-            if event_type == "ping":
-                await websocket.send_json({"type": "pong", "request_id": request_id, "sequence": state.next_sequence()})
-                continue
-            if event_type == "audio":
-                audio_base64 = message.get("audio_base64")
-                if not isinstance(audio_base64, str):
-                    await websocket.send_json({"type": "error", "code": "invalid_audio", "detail": "audio_base64 is required", "request_id": request_id, "sequence": state.next_sequence()})
-                    continue
-                try:
-                    event = await handle_audio_message(state, audio_base64, mime_type=str(message.get("mime_type") or "audio/wav"), language=str(message.get("language") or ""), final=bool(message.get("final", True)), request_id=request_id)
-                except (ValueError, RuntimeError) as exc:
-                    await websocket.send_json({"type": "error", "code": "transcription_failed", "detail": str(exc), "request_id": request_id, "sequence": state.next_sequence()})
-                    continue
-                await websocket.send_json(event)
-                continue
-            if event_type == "speak":
-                text = message.get("text")
-                if not isinstance(text, str):
-                    await websocket.send_json({"type": "error", "code": "invalid_text", "detail": "text is required", "request_id": request_id, "sequence": state.next_sequence()})
-                    continue
-                try:
-                    event = await handle_speak_message(state, text, language=str(message.get("language") or ""), voice=str(message.get("voice") or ""), format=str(message.get("format") or "wav"), request_id=request_id)
-                except (ValueError, RuntimeError) as exc:
-                    await websocket.send_json({"type": "error", "code": "synthesis_failed", "detail": str(exc), "request_id": request_id, "sequence": state.next_sequence()})
-                    continue
-                await websocket.send_json(event)
-                continue
-            if event_type == "stop":
-                state.closed = True
-                await websocket.send_json({"type": "stopped", "session_id": state.session_id, "request_id": request_id, "sequence": state.next_sequence()})
-                break
-            await websocket.send_json({"type": "error", "code": "unknown_event", "detail": "unsupported voice session event", "request_id": request_id, "sequence": state.next_sequence()})
+            if message_type == "audio":
+                await handle_audio_message(websocket, session, message, request_id)
+            elif message_type == "speak":
+                await handle_speak_message(websocket, session, message, request_id)
+            else:
+                await websocket.send_json({"type": "error", "request_id": request_id, "detail": "unsupported message type"})
     except WebSocketDisconnect:
-        state.closed = True
+        return

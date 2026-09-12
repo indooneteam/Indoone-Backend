@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 import json
 import operator
+import threading
 from dataclasses import dataclass
 from typing import Callable
 
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
 from app.ai.code_sandbox import sandbox_execution_tool
 from app.capabilities.contacts import parse_contacts, resolve_contact, search_contacts
+from app.capabilities.gmail import get_gmail_message, list_gmail_messages
 from app.capabilities.phone import build_call_action
 
 
@@ -103,6 +106,61 @@ def _phone_call_contact(payload: str) -> str:
     return json.dumps(action.as_dict(), ensure_ascii=False, sort_keys=True)
 
 
+def _run_async(coro):
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    result: list[object] = []
+    errors: list[BaseException] = []
+
+    def runner() -> None:
+        try:
+            result.append(asyncio.run(coro))
+        except BaseException as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    thread.join()
+    if errors:
+        raise errors[0]
+    return result[0]
+
+
+def _gmail_search(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("gmail_search payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    result = _run_async(
+        list_gmail_messages(
+            user_id=user_id,
+            query=str(data.get("query", "")),
+            page_token=str(data.get("page_token", "")),
+            max_results=int(data.get("max_results", 20)),
+        )
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+def _gmail_read(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("gmail_read payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    message_id = str(data.get("message_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not message_id:
+        raise ValueError("message_id is required")
+    result = _run_async(get_gmail_message(user_id=user_id, message_id=message_id))
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
 TOOLS: dict[str, Callable[[str], str]] = {
     "calculator": _calculate,
     "text_stats": _text_stats,
@@ -115,6 +173,8 @@ TOOLS: dict[str, Callable[[str], str]] = {
     "contact_resolve": _contact_resolve,
     "phone_call": _phone_call,
     "phone_call_contact": _phone_call_contact,
+    "gmail_search": _gmail_search,
+    "gmail_read": _gmail_read,
 }
 
 

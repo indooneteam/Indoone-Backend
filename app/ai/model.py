@@ -4,18 +4,13 @@ import torch
 from torch import nn
 
 
-MODEL_VERSION = "indoone-gpt-v1"
+MODEL_VERSION = "indoone-gpt-v2"
 
 
 class DecoderBlock(nn.Module):
-    """Causal self-attention + feed-forward block for Indoone."""
+    """Pre-norm causal Transformer block used by the local Indoone model."""
 
-    def __init__(
-        self,
-        n_embd: int,
-        n_head: int,
-        dropout: float,
-    ) -> None:
+    def __init__(self, n_embd: int, n_head: int, dropout: float) -> None:
         super().__init__()
         self.ln_1 = nn.LayerNorm(n_embd)
         self.attn = nn.MultiheadAttention(
@@ -27,7 +22,7 @@ class DecoderBlock(nn.Module):
         self.ln_2 = nn.LayerNorm(n_embd)
         self.mlp = nn.Sequential(
             nn.Linear(n_embd, 4 * n_embd),
-            nn.GELU(),
+            nn.GELU(approximate="tanh"),
             nn.Linear(4 * n_embd, n_embd),
             nn.Dropout(dropout),
         )
@@ -47,15 +42,15 @@ class DecoderBlock(nn.Module):
 
 
 class IndooneTransformer(nn.Module):
-    """Decoder-only Transformer language model for local Indoone inference."""
+    """Configurable decoder-only Transformer for Indoone local inference."""
 
     def __init__(
         self,
         vocab_size: int,
-        block_size: int = 128,
-        n_embd: int = 128,
-        n_head: int = 4,
-        n_layer: int = 4,
+        block_size: int = 512,
+        n_embd: int = 384,
+        n_head: int = 8,
+        n_layer: int = 10,
         dropout: float = 0.0,
     ) -> None:
         super().__init__()
@@ -113,8 +108,7 @@ class IndooneTransformer(nn.Module):
     def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None):
         if idx.ndim != 2:
             raise ValueError("input tensor must have shape (batch, sequence)")
-        batch_size, length = idx.shape
-        del batch_size
+        _, length = idx.shape
         if length <= 0:
             raise ValueError("input sequence must not be empty")
         if length > self.block_size:
@@ -136,6 +130,7 @@ class IndooneTransformer(nn.Module):
             if targets.shape != idx.shape:
                 raise ValueError("targets must match input tensor shape")
             loss = nn.functional.cross_entropy(
-                logits.reshape(-1, logits.size(-1)), targets.reshape(-1)
+                logits.reshape(-1, logits.size(-1)),
+                targets.reshape(-1),
             )
         return logits, loss

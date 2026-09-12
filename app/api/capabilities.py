@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import base64
 import os
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.ai.orchestrator import execute_plan, plan_request
@@ -91,7 +92,7 @@ async def capabilities() -> dict[str, object]:
 
 
 @router.get("/memory")
-async def get_memories(user_id: str = Field(min_length=1, max_length=256)) -> dict[str, object]:
+async def get_memories(user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
     return {"memories": list_memories(user_id)}
 
 
@@ -114,7 +115,7 @@ async def create_project_endpoint(request: ProjectRequest) -> dict[str, object]:
 
 
 @router.get("/projects")
-async def get_projects(user_id: str = Field(min_length=1, max_length=256)) -> dict[str, object]:
+async def get_projects(user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
     return {"projects": list_projects(user_id)}
 
 
@@ -124,14 +125,12 @@ async def create_task_endpoint(request: TaskRequest) -> dict[str, object]:
 
 
 @router.get("/tasks")
-async def get_tasks(user_id: str = Field(min_length=1, max_length=256)) -> dict[str, object]:
+async def get_tasks(user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
     return {"tasks": list_tasks(user_id)}
 
 
 @router.post("/analysis")
 async def analyze(request: AnalysisRequest) -> dict[str, object]:
-    import base64
-
     try:
         content = base64.b64decode(request.content_base64, validate=True)
         return {"analysis": analyze_payload(request.filename, content)}
@@ -208,11 +207,7 @@ async def image_generation(request: ImageGenerationRequest) -> dict[str, object]
     endpoint = os.getenv("INDOONE_IMAGE_GENERATOR_URL", "").strip()
     if not endpoint:
         raise HTTPException(status_code=503, detail="image generation model endpoint is not configured")
-    payload = {
-        "prompt": request.prompt,
-        "width": request.width,
-        "height": request.height,
-    }
+    payload = {"prompt": request.prompt, "width": request.width, "height": request.height}
     try:
         async with httpx.AsyncClient(timeout=120.0, follow_redirects=False) as client:
             response = await client.post(endpoint, json=payload)

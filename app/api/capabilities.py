@@ -23,6 +23,7 @@ from app.capabilities.store import (
     list_tasks,
     upsert_memory,
 )
+from app.capabilities.vision import analyze_image
 
 router = APIRouter(tags=["capabilities"])
 
@@ -67,6 +68,12 @@ class MediaRequest(BaseModel):
 
 
 class DocumentRequest(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    mime_type: str = Field(min_length=1, max_length=120)
+    content_base64: str = Field(min_length=1, max_length=12_000_000)
+
+
+class VisionRequest(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     mime_type: str = Field(min_length=1, max_length=120)
     content_base64: str = Field(min_length=1, max_length=12_000_000)
@@ -163,6 +170,14 @@ async def extract_document_endpoint(request: DocumentRequest) -> dict[str, objec
             }
         }
     except (ValueError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/vision")
+async def vision(request: VisionRequest) -> dict[str, object]:
+    try:
+        return {"vision": analyze_image(request.filename, request.mime_type, request.content_base64)}
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 

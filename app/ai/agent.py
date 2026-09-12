@@ -15,8 +15,8 @@ from app.capabilities.store import (
 MAX_AGENT_STEPS = 4
 MAX_AGENT_MEMORIES = 5
 MAX_AGENT_RETRIES = 1
-ALLOWED_AGENT_TOOLS = frozenset({"calculator"})
-AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator"})
+ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary"})
+AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary"})
 
 
 @dataclass(frozen=True)
@@ -38,6 +38,17 @@ class AgentExecution:
     run_id: str | None = None
 
 
+def _extract_tool_requests(message: str) -> tuple[tuple[str, str], ...]:
+    requests: list[tuple[str, str]] = []
+    json_match = re.search(r"(?:summarize|summary of)\s+json\s*:\s*(\{.*\}|\[.*\])", message, re.IGNORECASE)
+    if json_match:
+        requests.append(("json_summary", json_match.group(1)))
+    text_match = re.search(r"(?:text stats|analyze text|count words)\s*:\s*(.+)", message, re.IGNORECASE | re.DOTALL)
+    if text_match:
+        requests.append(("text_stats", text_match.group(1).strip()))
+    return tuple(requests[:MAX_AGENT_STEPS])
+
+
 def _extract_calculations(message: str) -> tuple[str, ...]:
     operand = r"(?:\$last|\$result\d+|\d+(?:\.\d+)?)"
     expression = rf"(?<!\w){operand}(?:\s*[+\-*/%]\s*{operand})+(?!\w)"
@@ -47,6 +58,18 @@ def _extract_calculations(message: str) -> tuple[str, ...]:
 
 def build_agent_steps(message: str) -> tuple[AgentStep, ...]:
     """Build a bounded deterministic multi-step execution plan."""
+    tool_requests = _extract_tool_requests(message)
+    if tool_requests:
+        return tuple(
+            AgentStep(
+                index=index,
+                tool=tool,
+                payload=payload,
+                requires_approval=tool not in AUTO_APPROVED_AGENT_TOOLS,
+            )
+            for index, (tool, payload) in enumerate(tool_requests, start=1)
+        )
+
     expressions = _extract_calculations(message)
     if expressions:
         return tuple(
@@ -100,12 +123,7 @@ def _run_with_retry(tool: str, payload: str) -> tuple[ToolResult, int]:
 
 
 def _serialize_step(step: AgentStep) -> dict[str, Any]:
-    return {
-        "index": step.index,
-        "tool": step.tool,
-        "payload": step.payload,
-        "requires_approval": step.requires_approval,
-    }
+    return {"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval}
 
 
 def _serialize_result(result: ToolResult) -> dict[str, Any]:

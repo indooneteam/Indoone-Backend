@@ -3,6 +3,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from app.ai.answer_quality import assess_answer, user_safe_failure
 from app.ai.conversation_store import ConversationStore
 from app.ai.service import generate_reply
 
@@ -28,6 +29,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
         reply = await generate_reply(request.message, history=history)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    quality = assess_answer(request.message, reply)
+    if not quality.passed:
+        reply = user_safe_failure()
 
     _store.append(
         conversation_id,

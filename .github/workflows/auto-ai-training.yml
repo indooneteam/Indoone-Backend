@@ -3,6 +3,7 @@ name: Indoone Auto AI Training
 on:
   push:
     branches:
+      - develop
       - main
     paths:
       - "app/ai/**"
@@ -44,8 +45,17 @@ jobs:
       - name: Audit dataset size and diversity
         run: python scripts/audit_dataset.py --json
 
+      - name: Assemble deduplicated training dataset
+        run: |
+          python scripts/assemble_training_dataset.py \
+            --output data/processed/instructions_train.jsonl \
+            --validation-output data/processed/instructions_validation.jsonl
+
       - name: Validate curated dataset quality
-        run: python scripts/validate_dataset_quality.py
+        run: |
+          python scripts/validate_dataset_quality.py \
+            --source data/processed/instructions_train.jsonl \
+            --source data/processed/instructions_validation.jsonl
 
       - name: Validate training manifest
         run: python scripts/validate_training_manifest.py
@@ -53,6 +63,7 @@ jobs:
   train_and_promote:
     name: Train, gate, and publish model
     needs: prepare
+    if: github.ref == 'refs/heads/main'
     runs-on: [self-hosted, linux, x64, gpu, indoone-training]
     timeout-minutes: 720
     steps:

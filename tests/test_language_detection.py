@@ -1,6 +1,6 @@
 import pytest
 
-from app.ai.service import _detect_response_language
+from app.ai.language_detection import detect_response_language
 
 
 @pytest.mark.parametrize(
@@ -34,4 +34,4 @@ from app.ai.service import _detect_response_language
     ],
 )
 def test_detect_response_language(message: str, language: str) -> None:
-    assert _detect_response_language(message) == language
+    assert detect_response_language(message) == language

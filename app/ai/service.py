@@ -8,6 +8,7 @@ the chat API available.
 from pathlib import Path
 import logging
 import re
+from urllib.parse import urlparse
 
 import httpx
 
@@ -17,6 +18,7 @@ from app.ai.grounding import (
     build_grounded_prompt_instruction,
 )
 from app.ai.inference import LocalModelRuntime
+from app.ai.intent import classify_intent
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
 from app.ai.local_engine import LocalAIEngine
 from app.ai.research import (
@@ -64,21 +66,6 @@ else:
 
 if KNOWLEDGE_DIR.exists() and list(KNOWLEDGE_DIR.glob("*.txt")):
     _knowledge_base = LocalKnowledgeBase.from_directory(KNOWLEDGE_DIR)
-
-
-_RESEARCH_TRIGGERS = (
-    "latest",
-    "today",
-    "current",
-    "currently",
-    "recent",
-    "news",
-    "right now",
-    "this week",
-    "research",
-    "look up",
-    "search for",
-)
 
 
 _SCRIPT_RANGES: tuple[tuple[str, re.Pattern[str]], ...] = (
@@ -157,11 +144,6 @@ def _language_instruction(language: str) -> str:
     return f"Respond only in {language}. Preserve the user's language and script. Do not switch languages unless the user explicitly requests it. Keep the answer natural, clear, and concise."
 
 
-def should_research(message: str) -> bool:
-    normalized = " ".join(message.casefold().split())
-    return any(trigger in normalized for trigger in _RESEARCH_TRIGGERS)
-
-
 def _build_context(message: str, history: list[tuple[str, str]], knowledge: str = "", research: str = "") -> str:
     response_language = _detect_response_language(message)
     grounding_instruction = build_grounded_prompt_instruction().replace("<grounding>", "").replace("</grounding>", "").strip()
@@ -183,6 +165,11 @@ def _build_context(message: str, history: list[tuple[str, str]], knowledge: str 
 
 def _evidence_from_results(results: list[ResearchResult]) -> list[GroundedEvidence]:
     return [GroundedEvidence(title=result.title, url=result.url, snippet=result.snippet) for result in results]
+
+
+def _research_has_enough_sources(results: list[ResearchResult], cross_check: bool) -> bool:
+    unique_domains = {urlparse(result.url).netloc.casefold() for result in results if urlparse(result.url).netloc}
+    return len(unique_domains) >= (2 if cross_check else 1)
 
 
 def _clean_model_reply(answer: str) -> str:
@@ -269,6 +256,7 @@ class LocalAIService:
         if not prompt:
             raise ValueError("message cannot be empty")
 
+        intent = classify_intent(prompt)
         knowledge = ""
         if _knowledge_base is not None:
             knowledge = format_hits(_knowledge_base.search(prompt, limit=3))
@@ -277,10 +265,15 @@ class LocalAIService:
 
         research = ""
         research_results: list[ResearchResult] = []
-        if _research_provider is not None and should_research(prompt):
+        if _research_provider is not None and intent.needs_research:
             try:
-                research_results = await _research_provider.search(prompt, limit=5)
-                research = format_results(research_results)
+                candidate_results = await _research_provider.search(prompt, limit=5)
+                if _research_has_enough_sources(candidate_results, intent.needs_cross_check):
+                    research_results = candidate_results
+                    research = format_results(candidate_results)
+                elif candidate_results:
+                    logger.warning("Insufficient independent research sources for query: %s", prompt)
+                    research = ""
             except (httpx.HTTPError, RuntimeError, ValueError):
                 research_results = []
                 research = ""

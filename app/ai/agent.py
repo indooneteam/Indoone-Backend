@@ -71,7 +71,7 @@ def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tu
     text = message.strip()
     patterns = (
         ("phone_call_contact", r"(?:call|phone|dial|ಕರೆ|ಫೋನ್|ಕರೆಮಾಡು)\s+(?:to\s+|ge\s+|ಗೆ\s+|maadu\s+|ಮಾಡು\s+)?(.+)$"),
-        ("contact_resolve", r"(?:find|search|lookup|resolve|contact|find\s+contact|ಹುಡುಕು|ಕಾಂಟ್ಯಾಕ್ಟ್)\s+(.+)$"),
+        ("contact_resolve", r"(?:find\s+contact|search\s+contact|lookup\s+contact|resolve\s+contact|contact|find|search|lookup|resolve|ಹುಡುಕು|ಕಾಂಟ್ಯಾಕ್ಟ್)\s+(.+)$"),
     )
     for tool, pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)

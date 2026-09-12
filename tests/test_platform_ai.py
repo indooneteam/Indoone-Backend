@@ -6,7 +6,7 @@ def test_memory_extraction_requires_explicit_user_statement() -> None:
     candidates = extract_memory_candidates("Call me Bro from now on.")
     assert len(candidates) == 1
     assert candidates[0].key == "nickname"
-    assert candidates[0].value == "bro from now on"
+    assert candidates[0].value == "Bro from now on"
     assert candidates[0].confidence >= 0.9
 
 

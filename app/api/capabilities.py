@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import os
 from typing import Any
 
 import httpx
@@ -12,6 +11,7 @@ from app.ai.orchestrator import execute_plan, plan_request
 from app.ai.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
 from app.capabilities.document_extract import extract_document
+from app.capabilities.image_generation import generate_image
 from app.capabilities.media import save_media
 from app.capabilities.registry import list_capabilities
 from app.capabilities.store import (
@@ -309,14 +309,18 @@ async def agent(request: AgentRequest) -> dict[str, object]:
 
 @router.post("/image-generation")
 async def image_generation(request: ImageGenerationRequest) -> dict[str, object]:
-    endpoint = os.getenv("INDOONE_IMAGE_GENERATOR_URL", "").strip()
-    if not endpoint:
-        raise HTTPException(status_code=503, detail="image generation model endpoint is not configured")
-    payload = {"prompt": request.prompt, "width": request.width, "height": request.height}
     try:
-        async with httpx.AsyncClient(timeout=120.0, follow_redirects=False) as client:
-            response = await client.post(endpoint, json=payload)
-            response.raise_for_status()
-            return {"result": response.json()}
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"image generator failed: {exc}") from exc
+        result = await generate_image(request.prompt, request.width, request.height)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {
+        "result": {
+            "provider": result.provider,
+            "model": result.model,
+            "mime_type": result.mime_type,
+            "image_base64": result.image_base64,
+            "metadata": result.metadata,
+        }
+    }

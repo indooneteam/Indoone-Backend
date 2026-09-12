@@ -1,17 +1,28 @@
 from __future__ import annotations
 
+import base64
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.capabilities.github_writes import github_comment_issue_or_pr, github_create_issue
 from app.capabilities.gmail import get_gmail_message, list_gmail_messages, send_gmail_message
+from app.capabilities.google_drive import (
+    build_google_drive_authorization,
+    exchange_google_drive_code,
+    get_drive_file,
+    list_drive_files,
+    probe_google_drive,
+    upload_drive_file,
+)
 from app.capabilities.integrations import (
     list_github_issues,
     list_github_pull_requests,
     list_github_repositories,
     probe_integration,
 )
+from app.capabilities.store import create_oauth_state
+from secrets import token_urlsafe
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 
@@ -70,14 +81,110 @@ class GmailSendRequest(BaseModel):
     approved: bool = False
 
 
+class GoogleDriveConnectRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    redirect_uri: str = Field(min_length=1, max_length=2000)
+
+
+class GoogleDriveCallbackRequest(BaseModel):
+    state: str = Field(min_length=16, max_length=512)
+    code: str = Field(min_length=1, max_length=8000)
+
+
+class GoogleDriveFilesRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    query: str = Field(default="", max_length=500)
+    page_token: str = Field(default="", max_length=2048)
+    page_size: int = Field(default=50, ge=1, le=1000)
+
+
+class GoogleDriveFileRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    file_id: str = Field(min_length=1, max_length=512)
+    download: bool = False
+    export_mime_type: str = Field(default="", max_length=256)
+
+
+class GoogleDriveUploadRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    filename: str = Field(min_length=1, max_length=512)
+    mime_type: str = Field(min_length=1, max_length=256)
+    content_base64: str = Field(min_length=1, max_length=20_000_000)
+    parent_id: str = Field(default="", max_length=512)
+    approved: bool = False
+
+
 @router.post("/{integration_id}/probe")
 async def integration_probe(integration_id: str, request: IntegrationProbeRequest) -> dict[str, object]:
     try:
+        if integration_id.strip().lower() == "google_drive":
+            return await probe_google_drive(request.user_id)
         return await probe_integration(request.user_id, integration_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"integration provider failed: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-drive/connect")
+async def google_drive_connect(request: GoogleDriveConnectRequest) -> dict[str, object]:
+    state = token_urlsafe(32)
+    try:
+        create_oauth_state(state, request.user_id, "google_drive", request.redirect_uri.strip())
+        return {**build_google_drive_authorization(state, request.redirect_uri), "state": state}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-drive/callback")
+async def google_drive_callback(request: GoogleDriveCallbackRequest) -> dict[str, object]:
+    try:
+        return await exchange_google_drive_code(request.state, request.code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"google drive oauth failed: {exc}") from exc
+
+
+@router.post("/google-drive/files")
+async def google_drive_files(request: GoogleDriveFilesRequest) -> dict[str, object]:
+    try:
+        return await list_drive_files(request.user_id, request.query, request.page_token, request.page_size)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"google drive provider failed: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-drive/file")
+async def google_drive_file(request: GoogleDriveFileRequest) -> dict[str, object]:
+    try:
+        return await get_drive_file(request.user_id, request.file_id, request.download, request.export_mime_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"google drive provider failed: {exc}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/google-drive/upload")
+async def google_drive_upload(request: GoogleDriveUploadRequest) -> dict[str, object]:
+    try:
+        content = base64.b64decode(request.content_base64, validate=True)
+        return await upload_drive_file(request.user_id, request.filename, request.mime_type, content, request.parent_id, request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"google drive provider failed: {exc}") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

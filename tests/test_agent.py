@@ -25,6 +25,12 @@ def test_agent_builds_multiple_bounded_steps() -> None:
     assert all(step.tool in ALLOWED_AGENT_TOOLS for step in steps)
 
 
+def test_agent_routes_explicit_tools_in_message_order() -> None:
+    steps = build_agent_steps("text stats: hello world; summarize json: {\"a\":1}")
+    assert [step.tool for step in steps] == ["text_stats", "json_summary"]
+    assert [step.index for step in steps] == [1, 2]
+
+
 def test_agent_is_bounded_and_returns_tool_results() -> None:
     execution = execute_agent("calculate 7 * 8, 10 + 5, 100 / 4, 9 % 2, 1 + 1")
     assert len(execution.steps) == MAX_AGENT_STEPS

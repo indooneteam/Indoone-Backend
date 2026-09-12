@@ -31,7 +31,7 @@ def test_generic_code_analysis_reports_unbalanced_delimiters() -> None:
 def test_python_code_explanation_detects_structure_without_execution() -> None:
     result = explain_code("python", "import math\n\nclass Calc:\n    def add(self, a, b):\n        if a > 0:\n            return a + b\n")
     assert result["valid"] is True
-    assert result["non_empty_lines"] == 6
+    assert result["non_empty_lines"] == 5
     assert set(result["concepts"]) == {"imports", "classes", "functions", "conditionals"}
 
 

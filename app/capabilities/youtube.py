@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -271,6 +272,7 @@ async def upload_video(
     description: str = "",
     privacy_status: str = "private",
     category_id: str = "22",
+    mime_type: str = "video/mp4",
     approved: bool = False,
 ) -> dict[str, object]:
     if not approved:
@@ -279,6 +281,8 @@ async def upload_video(
         raise ValueError("video content is required")
     if len(content) > _MAX_UPLOAD_BYTES:
         raise ValueError("video exceeds the supported API gateway size limit")
+    if not mime_type.strip().startswith("video/"):
+        raise ValueError("mime_type must be a video MIME type")
     title = title.strip()
     if not title:
         raise ValueError("title is required")
@@ -295,9 +299,9 @@ async def upload_video(
     body = (
         b"--" + boundary + separator
         + b'Content-Type: application/json; charset=UTF-8' + separator + separator
-        + __import__("json").dumps(metadata).encode("utf-8") + separator
+        + json.dumps(metadata).encode("utf-8") + separator
         + b"--" + boundary + separator
-        + b"Content-Type: video/mp4" + separator + separator
+        + f"Content-Type: {mime_type.strip()}".encode("ascii") + separator + separator
         + content + separator
         + b"--" + boundary + b"--" + separator
     )

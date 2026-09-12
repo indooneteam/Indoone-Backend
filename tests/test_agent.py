@@ -5,7 +5,14 @@ from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
 
-from app.ai.agent import ALLOWED_AGENT_TOOLS, MAX_AGENT_STEPS, build_agent_steps, execute_agent
+from app.ai.agent import (
+    ALLOWED_AGENT_TOOLS,
+    MAX_AGENT_MESSAGE_LENGTH,
+    MAX_AGENT_PAYLOAD_LENGTH,
+    MAX_AGENT_STEPS,
+    build_agent_steps,
+    execute_agent,
+)
 from app.main import app
 from app.capabilities.store import get_agent_run, upsert_memory
 
@@ -65,6 +72,20 @@ def test_agent_exposes_bounded_retry_state_for_failures() -> None:
     assert len(execution.results) == 1
     assert execution.results[0].safe is False
     assert execution.retry_counts == (1,)
+
+
+def test_agent_rejects_oversized_messages() -> None:
+    oversized = "x" * (MAX_AGENT_MESSAGE_LENGTH + 1)
+    execution = execute_agent(oversized)
+    assert execution.steps == ()
+    assert execution.results == ()
+
+
+def test_agent_bounds_payloads() -> None:
+    payload = "text stats: " + ("word " * (MAX_AGENT_PAYLOAD_LENGTH + 100))
+    steps = build_agent_steps(payload)
+    assert steps
+    assert len(steps[0].payload) <= MAX_AGENT_PAYLOAD_LENGTH
 
 
 def test_agent_persists_execution_state() -> None:

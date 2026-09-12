@@ -18,10 +18,14 @@ from app.capabilities.store import (
     create_project,
     create_task,
     delete_memory,
+    delete_project,
+    get_project,
     list_memories,
     list_projects,
     list_tasks,
     search_memories,
+    search_projects,
+    update_project,
     upsert_memory,
 )
 from app.capabilities.vision import analyze_image
@@ -47,6 +51,19 @@ class ProjectRequest(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     instructions: str = Field(default="", max_length=8_000)
     context: dict[str, Any] = Field(default_factory=dict)
+
+
+class ProjectUpdateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    instructions: str | None = Field(default=None, max_length=8_000)
+    context: dict[str, Any] | None = None
+    archived: bool | None = None
+
+
+class ProjectDeleteRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    project_id: str = Field(min_length=1, max_length=128)
 
 
 class TaskRequest(BaseModel):
@@ -137,8 +154,45 @@ async def create_project_endpoint(request: ProjectRequest) -> dict[str, object]:
 
 
 @router.get("/projects")
-async def get_projects(user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
-    return {"projects": list_projects(user_id)}
+async def get_projects(
+    user_id: str = Query(..., min_length=1, max_length=256),
+    include_archived: bool = False,
+    limit: int = Query(default=100, ge=1, le=500),
+    q: str = Query(default="", max_length=500),
+) -> dict[str, object]:
+    projects = search_projects(user_id, q, limit) if q.strip() else list_projects(user_id, include_archived, limit)
+    return {"projects": projects}
+
+
+@router.get("/projects/{project_id}")
+async def get_project_endpoint(project_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    project = get_project(user_id, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return {"project": project}
+
+
+@router.patch("/projects/{project_id}")
+async def update_project_endpoint(project_id: str, request: ProjectUpdateRequest) -> dict[str, object]:
+    project = update_project(
+        request.user_id,
+        project_id,
+        request.name,
+        request.instructions,
+        request.context,
+        request.archived,
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return {"project": project}
+
+
+@router.delete("/projects/{project_id}")
+async def delete_project_endpoint(project_id: str, request: ProjectDeleteRequest) -> dict[str, bool]:
+    deleted = delete_project(request.user_id, project_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="project not found")
+    return {"deleted": True}
 
 
 @router.post("/tasks")

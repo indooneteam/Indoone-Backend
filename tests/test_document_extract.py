@@ -22,6 +22,22 @@ def test_extract_docx_text() -> None:
     assert "Indoone document understanding" in result.text
     assert "ಕನ್ನಡ" in result.text
     assert result.truncated is False
+    assert result.tables == []
+
+
+def test_extract_docx_table() -> None:
+    buffer = io.BytesIO()
+    document = Document()
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "Language"
+    table.cell(0, 1).text = "Code"
+    table.cell(1, 0).text = "Kannada"
+    table.cell(1, 1).text = "kn"
+    document.save(buffer)
+
+    result = extract_document("table.docx", DOCX_MIME, buffer.getvalue())
+
+    assert result.tables == [[["Language", "Code"], ["Kannada", "kn"]]]
 
 
 def test_extract_pdf_text() -> None:
@@ -36,6 +52,7 @@ def test_extract_pdf_text() -> None:
     assert result.mime_type == PDF_MIME
     assert result.text == ""
     assert result.truncated is False
+    assert result.tables == []
 
 
 def test_reject_unsupported_document() -> None:

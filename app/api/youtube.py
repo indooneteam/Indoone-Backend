@@ -120,6 +120,7 @@ async def upload(request: UploadRequest) -> dict[str, object]:
             request.description,
             request.privacy_status,
             request.category_id,
+            request.mime_type,
             request.approved,
         )
     except PermissionError as exc:

@@ -1,0 +1,129 @@
+name: Indoone Auto AI Training
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "app/ai/**"
+      - "app/api/**"
+      - "data/raw/**"
+      - "data/eval/**"
+      - "data/evaluation/**"
+      - "scripts/**"
+      - "training_manifest.json"
+      - ".github/workflows/auto-ai-training.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: indoone-ai-training
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Audit training readiness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Audit dataset
+        run: python scripts/audit_dataset.py --json
+
+      - name: Validate training manifest
+        run: python scripts/validate_training_manifest.py
+
+  train_and_promote:
+    name: Train, gate, and publish model
+    needs: prepare
+    runs-on: [self-hosted, linux, x64, gpu, indoone-training]
+    timeout-minutes: 720
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install --upgrade pip && pip install -r requirements.txt
+
+      - name: Verify CUDA runner
+        run: nvidia-smi
+
+      - name: Train candidate and run base evaluation
+        env:
+          INDOONE_TRAINING_TRIGGER: "automatic"
+          INDOONE_GIT_SHA: ${{ github.sha }}
+        run: |
+          python scripts/run_training_pipeline.py \
+            --steps 2000 \
+            --batch-size 16 \
+            --checkpoint-interval 500 \
+            --learning-rate 3e-4 \
+            --seed 42 \
+            --skip-upload
+
+      - name: Run behavioral promotion gate
+        run: |
+          python -m app.ai.behavior_eval \
+            --cases data/eval/behavior.jsonl \
+            --checkpoint models/indoone-small/indoone-small.pt \
+            --tokenizer models/indoone-small/tokenizer.json \
+            --output models/indoone-small/behavior_eval.json
+
+      - name: Promote only when all gates pass
+        env:
+          MODEL_VERSION: "auto-${{ github.sha }}"
+        run: |
+          python scripts/promote_model.py \
+            --version "$MODEL_VERSION" \
+            --model-dir models/indoone-small \
+            --behavior-cases data/eval/behavior.jsonl \
+            --registry models/registry.json
+
+      - name: Publish promoted model to B2
+        run: python scripts/upload_model_to_b2.py --model-dir models/indoone-small --prefix models/indoone-small
+
+      - name: Persist active model registry
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/registry.json
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(ai): promote auto-trained model [skip ci]"
+          git push origin main
+
+      - name: Upload promoted training artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: indoone-training-${{ github.sha }}
+          path: |
+            models/indoone-small/
+            data/processed/
+            models/registry.json
+          if-no-files-found: error
+
+  note:
+    name: Explain blocked automatic training
+    needs: prepare
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report blocked training
+        run: |
+          echo "Automatic model training was blocked by the dataset or training-contract readiness gate."
+          echo "Expand/repair the training data and rerun the workflow."

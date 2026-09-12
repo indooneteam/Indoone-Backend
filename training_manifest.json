@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "training_policy": {
+    "trigger_on_backend_ai_change": true,
+    "trigger_on_api_change": true,
+    "trigger_on_dataset_change": true,
+    "require_dataset_audit": true,
+    "require_behavioral_gate": true,
+    "require_candidate_evaluation": true,
+    "auto_publish_candidate": true,
+    "auto_promote_only_on_gate": true
+  },
+  "feature_contract": {
+    "description": "Every user-facing AI capability should have a training/evaluation example before it can become a learned model behaviour.",
+    "required_fields": ["feature_id", "category", "training_examples", "evaluation_cases"],
+    "categories": [
+      "instruction_following",
+      "honesty",
+      "safety",
+      "grounding",
+      "conversation",
+      "reasoning",
+      "multilingual",
+      "tool_use",
+      "files",
+      "vision"
+    ]
+  },
+  "training_defaults": {
+    "steps": 2000,
+    "batch_size": 16,
+    "checkpoint_interval": 500,
+    "learning_rate": 0.0003,
+    "seed": 42
+  }
+}

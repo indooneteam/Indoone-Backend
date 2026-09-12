@@ -14,12 +14,21 @@ from app.capabilities.contacts import parse_contacts, resolve_contact, search_co
 from app.capabilities.gmail import get_gmail_message, list_gmail_messages
 from app.capabilities.phone import build_call_action
 
+MAX_CALCULATOR_ABS_VALUE = 10**100
+MAX_CALCULATOR_EXPONENT = 1000
+
 
 @dataclass(frozen=True)
 class ToolResult:
     name: str
     output: str
     safe: bool = True
+
+
+def _bounded_number(value: int | float) -> int | float:
+    if abs(value) > MAX_CALCULATOR_ABS_VALUE:
+        raise ValueError("calculator result is too large")
+    return value
 
 
 def _calculate(expression: str) -> str:
@@ -30,18 +39,24 @@ def _calculate(expression: str) -> str:
         ast.Mult: operator.mul,
         ast.Div: operator.truediv,
         ast.Mod: operator.mod,
-        ast.Pow: operator.pow,
         ast.USub: operator.neg,
         ast.UAdd: operator.pos,
     }
 
     def walk(node: ast.AST):
         if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
-            return node.value
+            return _bounded_number(node.value)
         if isinstance(node, ast.UnaryOp) and type(node.op) in allowed:
-            return allowed[type(node.op)](walk(node.operand))
-        if isinstance(node, ast.BinOp) and type(node.op) in allowed:
-            return allowed[type(node.op)](walk(node.left), walk(node.right))
+            return _bounded_number(allowed[type(node.op)](walk(node.operand)))
+        if isinstance(node, ast.BinOp):
+            if isinstance(node.op, ast.Pow):
+                left = walk(node.left)
+                exponent = walk(node.right)
+                if abs(exponent) > MAX_CALCULATOR_EXPONENT or int(exponent) != exponent:
+                    raise ValueError("calculator exponent is too large")
+                return _bounded_number(operator.pow(left, exponent))
+            if type(node.op) in allowed:
+                return _bounded_number(allowed[type(node.op)](walk(node.left), walk(node.right)))
         raise ValueError("Only numeric arithmetic is allowed")
 
     return str(walk(tree.body))

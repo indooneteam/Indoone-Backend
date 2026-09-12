@@ -14,7 +14,7 @@ def run(command: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Prepare, assemble, train, publish, and evaluate an Indoone model in one command."
+        description="Prepare, validate, assemble, train, publish, and evaluate an Indoone model in one command."
     )
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--batch-size", type=int, default=16)
@@ -28,15 +28,17 @@ def main() -> None:
     if args.steps <= 0:
         raise SystemExit("--steps must be positive")
 
+    python = sys.executable
+    eval_prompts = Path("data/evaluation/behavior_prompts.jsonl")
+    assembled_instructions = Path("data/processed/instructions_train.jsonl")
+
+    run([python, "scripts/validate_dataset_quality.py"])
+
     if shutil.which("nvidia-smi") is None:
         raise SystemExit(
             "NVIDIA GPU not detected. Run this pipeline on a CUDA-capable machine; "
             "the local CPU environment is intentionally not used for the full training run."
         )
-
-    python = sys.executable
-    eval_prompts = Path("data/evaluation/behavior_prompts.jsonl")
-    assembled_instructions = Path("data/processed/instructions_train.jsonl")
 
     run(
         [

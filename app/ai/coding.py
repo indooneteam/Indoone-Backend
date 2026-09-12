@@ -68,6 +68,58 @@ def analyze_code(language: str, code: str) -> dict[str, object]:
     }
 
 
+def explain_code(language: str, code: str) -> dict[str, object]:
+    """Return a deterministic structural explanation without executing user code."""
+    language = language.strip().lower()
+    if language not in SUPPORTED_LANGUAGES:
+        raise ValueError(f"unsupported language: {language}")
+    if len(code) > MAX_CODE_LENGTH:
+        raise ValueError(f"code exceeds {MAX_CODE_LENGTH} characters")
+
+    normalized = code.replace("\r\n", "\n").replace("\r", "\n")
+    analysis = analyze_code(language, normalized)
+    lines = normalized.splitlines()
+    non_empty = [line.strip() for line in lines if line.strip()]
+    concepts: list[str] = []
+
+    if language == "python":
+        try:
+            tree = ast.parse(normalized)
+            counts = {
+                "functions": sum(isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in ast.walk(tree)),
+                "classes": sum(isinstance(node, ast.ClassDef) for node in ast.walk(tree)),
+                "imports": sum(isinstance(node, (ast.Import, ast.ImportFrom)) for node in ast.walk(tree)),
+                "conditionals": sum(isinstance(node, ast.If) for node in ast.walk(tree)),
+                "loops": sum(isinstance(node, (ast.For, ast.AsyncFor, ast.While)) for node in ast.walk(tree)),
+            }
+            concepts.extend(name for name, count in counts.items() if count)
+        except SyntaxError:
+            concepts.append("syntax-error")
+    else:
+        lowered = normalized.lower()
+        if "import " in lowered or "#include" in lowered:
+            concepts.append("imports/includes")
+        if "function " in lowered or "func " in lowered or "def " in lowered:
+            concepts.append("functions")
+        if "class " in lowered:
+            concepts.append("classes")
+        if " if " in f" {lowered} ":
+            concepts.append("conditionals")
+        if " for " in f" {lowered} " or " while " in f" {lowered} ":
+            concepts.append("loops")
+
+    return {
+        "language": language,
+        "characters": analysis["characters"],
+        "lines": analysis["lines"],
+        "valid": analysis["valid"],
+        "issues": analysis["issues"],
+        "non_empty_lines": len(non_empty),
+        "concepts": concepts,
+        "summary": f"{language} code with {len(lines)} lines and {len(concepts)} detected structural concepts.",
+    }
+
+
 def code_analysis_tool(payload: str) -> str:
     data = json.loads(payload)
     language = str(data.get("language", ""))

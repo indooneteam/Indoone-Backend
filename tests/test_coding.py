@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from app.ai.coding import MAX_CODE_LENGTH, analyze_code, code_analysis_tool
+from app.ai.coding import MAX_CODE_LENGTH, analyze_code, code_analysis_tool, explain_code
 from app.ai.tools import run_tool
 
 
@@ -26,6 +26,20 @@ def test_generic_code_analysis_reports_unbalanced_delimiters() -> None:
     result = analyze_code("javascript", "function add(a, b) { return a + b;\n")
     assert result["valid"] is False
     assert "unclosed '{'" in result["issues"][0]["message"]
+
+
+def test_python_code_explanation_detects_structure_without_execution() -> None:
+    result = explain_code("python", "import math\n\nclass Calc:\n    def add(self, a, b):\n        if a > 0:\n            return a + b\n")
+    assert result["valid"] is True
+    assert result["non_empty_lines"] == 6
+    assert set(result["concepts"]) == {"imports", "classes", "functions", "conditionals"}
+
+
+def test_code_explanation_surfaces_syntax_error() -> None:
+    result = explain_code("python", "def broken(:\n    pass\n")
+    assert result["valid"] is False
+    assert "syntax-error" in result["concepts"]
+    assert result["issues"]
 
 
 def test_code_analysis_tool_is_json_and_safe() -> None:

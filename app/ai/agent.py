@@ -32,10 +32,9 @@ class AgentExecution:
 
 
 def _extract_calculations(message: str) -> tuple[str, ...]:
-    matches = re.findall(
-        r"(?<!\w)(?:\d+(?:\.\d+)?\s*[+\-*/%]\s*)+\d+(?:\.\d+)?(?!\w)",
-        message,
-    )
+    operand = r"(?:\$last|\$result\d+|\d+(?:\.\d+)?)"
+    expression = rf"(?<!\w){operand}(?:\s*[+\-*/%]\s*{operand})+(?!\w)"
+    matches = re.findall(expression, message)
     return tuple(match.replace(" ", "") for match in matches[:MAX_AGENT_STEPS])
 
 

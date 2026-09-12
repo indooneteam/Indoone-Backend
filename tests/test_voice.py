@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 
 import httpx
@@ -24,12 +25,12 @@ def client_factory(*args, **kwargs):
     return httpx.AsyncClient(*args, **kwargs)
 
 
-async def test_transcribe_audio_normalizes_local_result(monkeypatch) -> None:
+def test_transcribe_audio_normalizes_local_result(monkeypatch) -> None:
     monkeypatch.setattr("app.capabilities.voice.httpx.AsyncClient", client_factory)
     monkeypatch.setenv("INDOONE_STT_URL", "http://stt.local/transcribe")
 
     encoded = base64.b64encode(b"fake-audio").decode("ascii")
-    result = await transcribe_audio(encoded, mime_type="audio/wav", language="kn")
+    result = asyncio.run(transcribe_audio(encoded, mime_type="audio/wav", language="kn"))
 
     assert result.text == "namaskara"
     assert result.language == "kn"
@@ -37,11 +38,11 @@ async def test_transcribe_audio_normalizes_local_result(monkeypatch) -> None:
     assert result.confidence == 0.91
 
 
-async def test_synthesize_speech_normalizes_local_result(monkeypatch) -> None:
+def test_synthesize_speech_normalizes_local_result(monkeypatch) -> None:
     monkeypatch.setattr("app.capabilities.voice.httpx.AsyncClient", client_factory)
     monkeypatch.setenv("INDOONE_TTS_URL", "http://tts.local/synthesize")
 
-    result = await synthesize_speech("namaskara", language="kn")
+    result = asyncio.run(synthesize_speech("namaskara", language="kn"))
 
     assert result.audio_base64 == base64.b64encode(b"fake-wav").decode("ascii")
     assert result.mime_type == "audio/wav"

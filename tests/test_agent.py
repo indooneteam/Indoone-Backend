@@ -90,6 +90,51 @@ def test_agent_endpoint_exposes_steps() -> None:
     assert body["results"][0]["output"] == "13"
     assert body["blocked_steps"] == []
     assert body["retry_counts"] == [0]
+    assert body["run_id"] is None
+
+
+def test_agent_endpoint_exposes_persisted_run_history() -> None:
+    with TemporaryDirectory() as tempdir:
+        old_path = os.environ.get("INDOONE_CAPABILITY_DB")
+        os.environ["INDOONE_CAPABILITY_DB"] = os.path.join(tempdir, "agent.db")
+        try:
+            with TestClient(app) as client:
+                response = client.post("/api/agent", json={"message": "9 + 4", "user_id": "user-1"})
+                assert response.status_code == 200
+                run_id = response.json()["run_id"]
+                assert run_id
+
+                detail = client.get(f"/api/agent/runs/{run_id}", params={"user_id": "user-1"})
+                assert detail.status_code == 200
+                assert detail.json()["run"]["status"] == "completed"
+
+                history = client.get("/api/agent/runs", params={"user_id": "user-1"})
+                assert history.status_code == 200
+                runs = history.json()["runs"]
+                assert len(runs) == 1
+                assert runs[0]["id"] == run_id
+        finally:
+            if old_path is None:
+                os.environ.pop("INDOONE_CAPABILITY_DB", None)
+            else:
+                os.environ["INDOONE_CAPABILITY_DB"] = old_path
+
+
+def test_agent_run_is_user_scoped() -> None:
+    with TemporaryDirectory() as tempdir:
+        old_path = os.environ.get("INDOONE_CAPABILITY_DB")
+        os.environ["INDOONE_CAPABILITY_DB"] = os.path.join(tempdir, "agent.db")
+        try:
+            execution = execute_agent("1 + 1", user_id="user-1")
+            assert execution.run_id
+            with TestClient(app) as client:
+                response = client.get(f"/api/agent/runs/{execution.run_id}", params={"user_id": "user-2"})
+            assert response.status_code == 404
+        finally:
+            if old_path is None:
+                os.environ.pop("INDOONE_CAPABILITY_DB", None)
+            else:
+                os.environ["INDOONE_CAPABILITY_DB"] = old_path
 
 
 def test_agent_endpoint_exposes_multiple_results() -> None:

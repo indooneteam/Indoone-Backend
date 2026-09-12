@@ -90,7 +90,6 @@ async def handle_audio_message(
     final: bool = True,
     request_id: str | None = None,
 ) -> dict[str, object]:
-    state.accept_message()
     result = await transcribe_audio(audio_base64, mime_type=mime_type, language=language)
     return transcript_event(state, result, final=final, request_id=request_id)
 
@@ -104,6 +103,5 @@ async def handle_speak_message(
     format: str = "wav",
     request_id: str | None = None,
 ) -> dict[str, object]:
-    state.accept_message()
     result = await synthesize_speech(text, language=language, voice=voice, format=format)
     return audio_event(state, result, request_id=request_id)

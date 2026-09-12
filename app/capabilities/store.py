@@ -38,9 +38,11 @@ def initialize() -> None:
                 confidence REAL NOT NULL,
                 source TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                UNIQUE(user_id, key)
+                updated_at TEXT NOT NULL
             );
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_memories_user_key ON memories(user_id, key);
+            CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id);
+            CREATE INDEX IF NOT EXISTS idx_memories_user_updated ON memories(user_id, updated_at DESC);
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
@@ -60,7 +62,6 @@ def initialize() -> None:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id);
             CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
             CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
             """
@@ -75,8 +76,13 @@ def _row_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
 def upsert_memory(user_id: str, key: str, value: str, confidence: float, source: str) -> dict[str, Any]:
     initialize()
     timestamp = _now()
-    memory_id = str(uuid4())
     with closing(_connect()) as db:
+        existing = db.execute(
+            "SELECT id, created_at FROM memories WHERE user_id = ? AND key = ?",
+            (user_id, key),
+        ).fetchone()
+        memory_id = str(existing["id"]) if existing else str(uuid4())
+        created_at = str(existing["created_at"]) if existing else timestamp
         db.execute(
             """
             INSERT INTO memories(id, user_id, key, value, confidence, source, created_at, updated_at)
@@ -87,7 +93,7 @@ def upsert_memory(user_id: str, key: str, value: str, confidence: float, source:
                 source=excluded.source,
                 updated_at=excluded.updated_at
             """,
-            (memory_id, user_id, key, value, confidence, source, timestamp, timestamp),
+            (memory_id, user_id, key, value, confidence, source, created_at, timestamp),
         )
         db.commit()
         row = db.execute(
@@ -97,12 +103,42 @@ def upsert_memory(user_id: str, key: str, value: str, confidence: float, source:
     return _row_dict(row) or {}
 
 
-def list_memories(user_id: str) -> list[dict[str, Any]]:
+def list_memories(user_id: str, key_prefix: str = "", source: str = "", limit: int = 100) -> list[dict[str, Any]]:
     initialize()
+    limit = max(1, min(limit, 500))
+    clauses = ["user_id = ?"]
+    params: list[Any] = [user_id]
+    if key_prefix:
+        clauses.append("key LIKE ?")
+        params.append(f"{key_prefix}%")
+    if source:
+        clauses.append("source = ?")
+        params.append(source)
+    params.append(limit)
     with closing(_connect()) as db:
         rows = db.execute(
-            "SELECT * FROM memories WHERE user_id = ? ORDER BY updated_at DESC",
-            (user_id,),
+            f"SELECT * FROM memories WHERE {' AND '.join(clauses)} ORDER BY updated_at DESC LIMIT ?",
+            params,
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def search_memories(user_id: str, query: str, limit: int = 20) -> list[dict[str, Any]]:
+    initialize()
+    normalized = " ".join(query.split())
+    if not normalized:
+        return []
+    limit = max(1, min(limit, 100))
+    pattern = f"%{normalized}%"
+    with closing(_connect()) as db:
+        rows = db.execute(
+            """
+            SELECT * FROM memories
+            WHERE user_id = ? AND (key LIKE ? OR value LIKE ? OR source LIKE ?)
+            ORDER BY confidence DESC, updated_at DESC
+            LIMIT ?
+            """,
+            (user_id, pattern, pattern, pattern, limit),
         ).fetchall()
     return [dict(row) for row in rows]
 

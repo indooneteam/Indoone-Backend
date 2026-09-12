@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import re
 from typing import Any
 
@@ -13,8 +14,8 @@ MAX_AGENT_MEMORIES = 5
 MAX_AGENT_RETRIES = 1
 MAX_AGENT_MESSAGE_LENGTH = 20_000
 MAX_AGENT_PAYLOAD_LENGTH = 8_000
-ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "sandbox_execution"})
-AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform"})
+ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "sandbox_execution", "contacts_search", "contact_resolve", "phone_call", "phone_call_contact"})
+AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "contacts_search", "contact_resolve"})
 
 
 @dataclass(frozen=True)
@@ -66,13 +67,32 @@ def _extract_calculations(message: str) -> tuple[str, ...]:
     return tuple(match.replace(" ", "") for match in matches[:MAX_AGENT_STEPS])
 
 
-def build_agent_steps(message: str) -> tuple[AgentStep, ...]:
+def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tuple[str, dict[str, Any]] | None:
+    text = message.strip()
+    patterns = (
+        ("phone_call_contact", r"(?:call|phone|dial|ಕರೆ|ಫೋನ್|ಕರೆಮಾಡು)\s+(?:to\s+|ge\s+|ಗೆ\s+|maadu\s+|ಮಾಡು\s+)?(.+)$"),
+        ("contact_resolve", r"(?:find|search|lookup|resolve|contact|find\s+contact|ಹುಡುಕು|ಕಾಂಟ್ಯಾಕ್ಟ್)\s+(.+)$"),
+    )
+    for tool, pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            query = match.group(1).strip(" .?!")
+            if query:
+                return tool, {"contacts": contacts, "query": query}
+    return None
+
+
+def build_agent_steps(message: str, contacts: list[dict[str, Any]] | None = None) -> tuple[AgentStep, ...]:
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
         return ()
     explicit = _extract_explicit_requests(normalized)
     if explicit:
         return tuple(_step(tool, payload, index) for index, (_, tool, payload) in enumerate(explicit, start=1))
+    contact_request = _extract_contact_request(normalized, contacts or [])
+    if contact_request is not None:
+        tool, payload = contact_request
+        return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
     expressions = _extract_calculations(normalized)
     if expressions:
         return tuple(_step("calculator", expression, index) for index, expression in enumerate(expressions, start=1))
@@ -112,7 +132,12 @@ def _serialize_result(result: ToolResult) -> dict[str, Any]:
     return {"name": result.name, "output": result.output, "safe": result.safe}
 
 
-def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | frozenset[str] | None = None) -> AgentExecution:
+def execute_agent(
+    message: str,
+    user_id: str = "",
+    approved_tools: set[str] | frozenset[str] | None = None,
+    contacts: list[dict[str, Any]] | None = None,
+) -> AgentExecution:
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
         return AgentExecution(message=message, steps=(), results=())
@@ -121,7 +146,7 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
     run_id: str | None = None
     if user_id.strip():
         run_id = str(create_agent_run(user_id, normalized)["id"])
-    planned_steps = build_agent_steps(normalized)[:MAX_AGENT_STEPS]
+    planned_steps = build_agent_steps(normalized, contacts=contacts)[:MAX_AGENT_STEPS]
     executable: list[AgentStep] = []
     blocked: list[AgentStep] = []
     results: list[ToolResult] = []

@@ -29,7 +29,7 @@ CAPABILITIES: tuple[Capability, ...] = (
     Capability("research", "Live research", "partial", True, "planned-ui", "Controlled HTTP research provider; enabled only when configured."),
     Capability("deep_research", "Multi-step research", "partial", True, "planned-ui", "Multi-query source collection built on the research provider."),
     Capability("tools", "Safe tools", "active", True, "existing", "Calculator/orchestrator tool layer."),
-    Capability("agent", "Agent planning/execution", "partial", True, "planned-ui", "Existing orchestrator exposed through a stable backend contract."),
+    Capability("agent", "Agent planning/execution", "active", True, "planned-ui", "Bounded deterministic multi-step execution with explicit step/results contract; broader autonomous tool selection remains gated."),
     Capability("canvas", "Canvas/work documents", "partial", True, "planned-ui", "Project document contract; rich editor remains app-side."),
     Capability("connectors", "External app connectors", "planned", True, "planned-ui", "Connector registry contract without live third-party credentials."),
     Capability("evaluation", "AI quality/evaluation", "active", True, "internal", "Behavioral and answer-quality checks are already part of the pipeline."),

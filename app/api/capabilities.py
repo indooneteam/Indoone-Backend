@@ -111,6 +111,7 @@ class AgentRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     user_id: str = Field(default="", max_length=256)
     approved_tools: list[str] = Field(default_factory=list, max_length=8)
+    contacts: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
 
 class ImageGenerationRequest(BaseModel):
     prompt: str = Field(min_length=1, max_length=4_000)
@@ -306,7 +307,12 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
 
 @router.post("/agent")
 async def agent(request: AgentRequest) -> dict[str, object]:
-    execution = execute_agent(request.message, user_id=request.user_id, approved_tools=frozenset(request.approved_tools))
+    execution = execute_agent(
+        request.message,
+        user_id=request.user_id,
+        approved_tools=frozenset(request.approved_tools),
+        contacts=request.contacts,
+    )
     if not execution.steps and not execution.blocked_steps:
         return {"intent": "general", "tool": None, "tool_payload": None, "result": None, "steps": [], "results": [], "memories": list(execution.memories), "blocked_steps": [], "retry_counts": list(execution.retry_counts), "run_id": execution.run_id, "max_steps": MAX_AGENT_STEPS}
     first = execution.steps[0] if execution.steps else execution.blocked_steps[0]
@@ -319,48 +325,4 @@ async def image_generation(request: ImageGenerationRequest) -> dict[str, object]
         result = await generate_image(request.prompt, request.width, request.height)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"result": {"provider": result.provider, "model": result.model, "mime_type": result.mime_type, "image_base64": result.image_base64, "metadata": result.metadata}}
-
-@router.post("/voice/transcribe")
-async def voice_transcribe(request: VoiceTranscriptionRequest) -> dict[str, object]:
-    try:
-        result = await transcribe_audio(request.audio_base64, mime_type=request.mime_type, language=request.language)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"result": {"text": result.text, "language": result.language, "provider": result.provider}}
-
-@router.post("/voice/synthesize")
-async def voice_synthesize(request: VoiceSynthesisRequest) -> dict[str, object]:
-    try:
-        result = await synthesize_speech(request.text, language=request.language, voice=request.voice, audio_format=request.format)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"result": {"audio_base64": result.audio_base64, "mime_type": result.mime_type, "language": result.language, "voice": result.voice, "provider": result.provider}}
-
-@router.websocket("/voice/stream")
-async def voice_stream(websocket: WebSocket) -> None:
-    await websocket.accept()
-    session = VoiceSessionState()
-    try:
-        await websocket.send_json(ready_event(session))
-        while True:
-            message = await websocket.receive_json()
-            if not isinstance(message, dict):
-                await websocket.send_json({"type": "error", "detail": "message must be an object"})
-                continue
-            message_type = str(message.get("type", ""))
-            request_id = normalize_request_id(message.get("request_id"))
-            if message_type == "audio":
-                await handle_audio_message(websocket, session, message, request_id)
-            elif message_type == "speak":
-                await handle_speak_message(websocket, session, message, request_id)
-            else:
-                await websocket.send_json({"type": "error", "request_id": request_id, "detail": "unsupported message type"})
-    except WebSocketDisconnect:
-        return
+    return {"image": result}

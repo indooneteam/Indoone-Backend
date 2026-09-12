@@ -120,6 +120,34 @@ def explain_code(language: str, code: str) -> dict[str, object]:
     }
 
 
+def suggest_fixes(language: str, code: str) -> dict[str, object]:
+    """Return deterministic, non-executing repair guidance for detected issues."""
+    analysis = analyze_code(language, code)
+    suggestions: list[dict[str, object]] = []
+    for issue in analysis["issues"]:
+        message = str(issue["message"])
+        if "unclosed '" in message:
+            opening = message.split("'")[1]
+            closing = {"(": ")", "[": "]", "{": "}"}.get(opening, "")
+            advice = f"Add the matching closing delimiter '{closing}' near line {issue['line']}." if closing else "Add the matching closing delimiter."
+        elif "unexpected '" in message:
+            advice = "Check the nearby delimiters and remove or replace the unexpected closing character."
+        elif language == "python" and message:
+            advice = "Review the indicated Python syntax around the reported line and column; fix the construct described by the parser."
+        else:
+            advice = "Review the reported issue at the indicated location before changing behavior."
+        suggestions.append({"line": issue["line"], "column": issue["column"], "severity": issue["severity"], "issue": message, "suggestion": advice})
+
+    return {
+        "language": analysis["language"],
+        "valid": analysis["valid"],
+        "issue_count": len(analysis["issues"]),
+        "suggestions": suggestions,
+        "safe": True,
+        "execution": "not_performed",
+    }
+
+
 def code_analysis_tool(payload: str) -> str:
     data = json.loads(payload)
     language = str(data.get("language", ""))
@@ -127,3 +155,12 @@ def code_analysis_tool(payload: str) -> str:
     if not isinstance(code, str):
         raise ValueError("code must be a string")
     return json.dumps(analyze_code(language, code), ensure_ascii=False, sort_keys=True)
+
+
+def code_fix_suggestions_tool(payload: str) -> str:
+    data = json.loads(payload)
+    language = str(data.get("language", ""))
+    code = data.get("code", "")
+    if not isinstance(code, str):
+        raise ValueError("code must be a string")
+    return json.dumps(suggest_fixes(language, code), ensure_ascii=False, sort_keys=True)

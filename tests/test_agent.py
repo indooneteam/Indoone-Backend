@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.ai.agent import ALLOWED_AGENT_TOOLS, MAX_AGENT_STEPS, build_agent_steps, execute_agent
 from app.main import app
-from app.capabilities.store import upsert_memory
+from app.capabilities.store import get_agent_run, upsert_memory
 
 
 def test_agent_builds_calculator_step() -> None:
@@ -59,6 +59,25 @@ def test_agent_exposes_bounded_retry_state_for_failures() -> None:
     assert len(execution.results) == 1
     assert execution.results[0].safe is False
     assert execution.retry_counts == (1,)
+
+
+def test_agent_persists_execution_state() -> None:
+    with TemporaryDirectory() as tempdir:
+        old_path = os.environ.get("INDOONE_CAPABILITY_DB")
+        os.environ["INDOONE_CAPABILITY_DB"] = os.path.join(tempdir, "agent.db")
+        try:
+            execution = execute_agent("calculate 2 + 3, then $last * 4", user_id="user-1")
+            assert execution.run_id
+            saved = get_agent_run("user-1", execution.run_id)
+            assert saved is not None
+            assert saved["status"] == "completed"
+            assert [item["output"] for item in saved["results"]] == ["5", "20"]
+            assert saved["retry_counts"] == [0, 0]
+        finally:
+            if old_path is None:
+                os.environ.pop("INDOONE_CAPABILITY_DB", None)
+            else:
+                os.environ["INDOONE_CAPABILITY_DB"] = old_path
 
 
 def test_agent_endpoint_exposes_steps() -> None:

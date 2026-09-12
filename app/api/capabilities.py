@@ -317,6 +317,7 @@ async def agent(request: AgentRequest) -> dict[str, object]:
             "results": [],
             "memories": list(execution.memories),
             "blocked_steps": [],
+            "retry_counts": list(execution.retry_counts),
             "max_steps": MAX_AGENT_STEPS,
         }
     first = execution.steps[0] if execution.steps else execution.blocked_steps[0]
@@ -346,6 +347,7 @@ async def agent(request: AgentRequest) -> dict[str, object]:
             }
             for step in execution.blocked_steps
         ],
+        "retry_counts": list(execution.retry_counts),
         "max_steps": MAX_AGENT_STEPS,
     }
 

@@ -6,7 +6,7 @@ import operator
 from dataclasses import dataclass
 from typing import Callable
 
-from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool
+from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
 
 
 @dataclass(frozen=True)
@@ -45,24 +45,13 @@ def _text_stats(text: str) -> str:
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
     words = normalized.split()
     lines = normalized.splitlines() if normalized else []
-    return json.dumps(
-        {
-            "characters": len(text),
-            "words": len(words),
-            "lines": len(lines),
-        },
-        sort_keys=True,
-    )
+    return json.dumps({"characters": len(text), "words": len(words), "lines": len(lines)}, sort_keys=True)
 
 
 def _json_summary(payload: str) -> str:
     data = json.loads(payload)
     if isinstance(data, dict):
-        return json.dumps(
-            {"type": "object", "keys": len(data), "key_names": sorted(str(key) for key in data)[:50]},
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+        return json.dumps({"type": "object", "keys": len(data), "key_names": sorted(str(key) for key in data)[:50]}, ensure_ascii=False, sort_keys=True)
     if isinstance(data, list):
         return json.dumps({"type": "array", "items": len(data)}, sort_keys=True)
     if data is None:
@@ -76,6 +65,7 @@ TOOLS: dict[str, Callable[[str], str]] = {
     "json_summary": _json_summary,
     "code_analysis": code_analysis_tool,
     "code_fix_suggestions": code_fix_suggestions_tool,
+    "code_transform": code_transform_tool,
 }
 
 

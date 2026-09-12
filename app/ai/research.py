@@ -17,6 +17,7 @@ import httpx
 
 MAX_TITLE_LENGTH = 500
 MAX_SNIPPET_LENGTH = 2_000
+MAX_RESEARCH_QUERIES = 6
 
 
 @dataclass(frozen=True)
@@ -134,16 +135,68 @@ def build_research_provider() -> ResearchProvider | None:
     )
 
 
-def format_results(results: list[ResearchResult]) -> str:
+def build_deep_research_queries(query: str, count: int = 3) -> list[str]:
+    """Build deterministic complementary queries for evidence gathering."""
+
+    normalized = " ".join(query.split())
+    if not normalized:
+        raise ValueError("query cannot be empty")
+    if count < 1 or count > MAX_RESEARCH_QUERIES:
+        raise ValueError(f"count must be between 1 and {MAX_RESEARCH_QUERIES}")
+    candidates = [
+        normalized,
+        f"{normalized} official sources",
+        f"{normalized} recent developments",
+        f"{normalized} data statistics evidence",
+        f"{normalized} risks limitations criticism",
+        f"{normalized} alternatives comparison",
+    ]
+    return candidates[:count]
+
+
+def merge_research_results(results_by_query: dict[str, list[ResearchResult]], limit: int = 50) -> list[dict[str, Any]]:
+    """Deduplicate sources while retaining which queries found each source."""
+
+    if limit < 1 or limit > 200:
+        raise ValueError("limit must be between 1 and 200")
+    merged: dict[str, dict[str, Any]] = {}
+    for query, results in results_by_query.items():
+        for item in results:
+            existing = merged.get(item.url)
+            if existing is None:
+                merged[item.url] = {
+                    "title": item.title,
+                    "url": item.url,
+                    "snippet": item.snippet,
+                    "queries": [query],
+                }
+            elif query not in existing["queries"]:
+                existing["queries"].append(query)
+                if len(item.snippet) > len(existing["snippet"]):
+                    existing["snippet"] = item.snippet
+    ordered = sorted(merged.values(), key=lambda item: (-len(item["queries"]), item["url"]))
+    return ordered[:limit]
+
+
+def format_results(results: list[ResearchResult | dict[str, Any]]) -> str:
     """Format sources for model context without losing provenance."""
 
     if not results:
         return ""
     lines = ["<research>"]
     for result in results:
-        lines.append(f"title: {result.title}")
-        lines.append(f"url: {result.url}")
-        if result.snippet:
-            lines.append(f"snippet: {result.snippet}")
+        if isinstance(result, ResearchResult):
+            title, url, snippet = result.title, result.url, result.snippet
+        else:
+            title = str(result.get("title", "")).strip()
+            url = str(result.get("url", "")).strip()
+            snippet = str(result.get("snippet", "")).strip()
+            queries = result.get("queries")
+        lines.append(f"title: {title}")
+        lines.append(f"url: {url}")
+        if snippet:
+            lines.append(f"snippet: {snippet}")
+        if isinstance(queries, list) and queries:
+            lines.append("found_by: " + " | ".join(str(item) for item in queries))
     lines.append("</research>")
     return "\n".join(lines)

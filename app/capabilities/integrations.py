@@ -33,6 +33,7 @@ _CLIENT_ID_ENV = {"github": "INDOONE_GITHUB_CLIENT_ID", "google_calendar": "INDO
 _CLIENT_SECRET_ENV = {"github": "INDOONE_GITHUB_CLIENT_SECRET", "google_calendar": "INDOONE_GOOGLE_CLIENT_SECRET", "slack": "INDOONE_SLACK_CLIENT_SECRET"}
 _TOKEN_URLS = {"github": "https://github.com/login/oauth/access_token", "google_calendar": "https://oauth2.googleapis.com/token", "slack": "https://slack.com/api/oauth.v2.access"}
 _PROBE_URLS = {"github": "https://api.github.com/user", "google_calendar": "https://www.googleapis.com/calendar/v3/users/me/calendarList", "slack": "https://slack.com/api/auth.test"}
+_GITHUB_REPOSITORIES_URL = "https://api.github.com/user/repos"
 
 
 def list_integrations() -> list[dict[str, object]]:
@@ -172,3 +173,43 @@ async def probe_integration(user_id: str, integration_id: str) -> dict[str, obje
     if normalized == "slack" and body.get("ok") is False:
         raise RuntimeError(str(body.get("error") or "slack integration probe failed"))
     return {"integration": normalized, "user_id": user_id.strip(), "connected": True, "provider_ok": True, "summary": _provider_probe_summary(normalized, body), "secrets_exposed": False}
+
+
+async def list_github_repositories(user_id: str, page: int = 1, per_page: int = 30) -> dict[str, object]:
+    normalized_user = user_id.strip()
+    if not normalized_user:
+        raise ValueError("user_id is required")
+    if page < 1 or page > 1000:
+        raise ValueError("page must be between 1 and 1000")
+    if per_page < 1 or per_page > 100:
+        raise ValueError("per_page must be between 1 and 100")
+    token_row = get_integration_token(normalized_user, "github")
+    if token_row is None:
+        raise ValueError("integration is not connected for user")
+    cipher = _fernet()
+    try:
+        access_token = cipher.decrypt(bytes(token_row["access_token"])).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("stored oauth token cannot be decrypted") from exc
+    headers = {"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
+    params = {"page": page, "per_page": per_page, "sort": "updated", "direction": "desc"}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(_GITHUB_REPOSITORIES_URL, headers=headers, params=params)
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, list):
+        raise RuntimeError("github provider returned invalid repository response")
+    repositories: list[dict[str, object]] = []
+    for item in body:
+        if not isinstance(item, dict):
+            continue
+        repositories.append({
+            "id": item.get("id"),
+            "name": item.get("name"),
+            "full_name": item.get("full_name"),
+            "private": item.get("private"),
+            "html_url": item.get("html_url"),
+            "default_branch": item.get("default_branch"),
+            "description": item.get("description"),
+        })
+    return {"integration": "github", "user_id": normalized_user, "page": page, "per_page": per_page, "repositories": repositories, "secrets_exposed": False}

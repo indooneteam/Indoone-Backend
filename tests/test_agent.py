@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import os
+from tempfile import TemporaryDirectory
+
 from fastapi.testclient import TestClient
 
 from app.ai.agent import ALLOWED_AGENT_TOOLS, MAX_AGENT_STEPS, build_agent_steps, execute_agent
 from app.main import app
+from app.capabilities.store import upsert_memory
 
 
 def test_agent_builds_calculator_step() -> None:
@@ -11,6 +15,7 @@ def test_agent_builds_calculator_step() -> None:
     assert len(steps) == 1
     assert steps[0].tool == "calculator"
     assert steps[0].payload == "12+30"
+    assert steps[0].requires_approval is False
 
 
 def test_agent_builds_multiple_bounded_steps() -> None:
@@ -23,8 +28,29 @@ def test_agent_builds_multiple_bounded_steps() -> None:
 def test_agent_is_bounded_and_returns_tool_results() -> None:
     execution = execute_agent("calculate 7 * 8, 10 + 5, 100 / 4, 9 % 2, 1 + 1")
     assert len(execution.steps) == MAX_AGENT_STEPS
-    assert [result.output for result in execution.results] == ["56", "15", "25.0", "1",]
+    assert [result.output for result in execution.results] == ["56", "15", "25.0", "1"]
     assert all(result.safe for result in execution.results)
+
+
+def test_agent_loads_memory_context() -> None:
+    with TemporaryDirectory() as tempdir:
+        old_path = os.environ.get("INDOONE_CAPABILITY_DB")
+        os.environ["INDOONE_CAPABILITY_DB"] = os.path.join(tempdir, "agent.db")
+        try:
+            upsert_memory("user-1", "timezone", "Asia/Kolkata", 1.0, "user")
+            execution = execute_agent("timezone", user_id="user-1")
+            assert execution.memories
+            assert execution.memories[0]["key"] == "timezone"
+        finally:
+            if old_path is None:
+                os.environ.pop("INDOONE_CAPABILITY_DB", None)
+            else:
+                os.environ["INDOONE_CAPABILITY_DB"] = old_path
+
+
+def test_agent_chains_previous_result_into_calculator() -> None:
+    execution = execute_agent("calculate 2 + 3, then $last * 4")
+    assert [result.output for result in execution.results] == ["5", "20"]
 
 
 def test_agent_endpoint_exposes_steps() -> None:
@@ -35,6 +61,7 @@ def test_agent_endpoint_exposes_steps() -> None:
     assert body["max_steps"] == MAX_AGENT_STEPS
     assert body["steps"][0]["tool"] == "calculator"
     assert body["results"][0]["output"] == "13"
+    assert body["blocked_steps"] == []
 
 
 def test_agent_endpoint_exposes_multiple_results() -> None:
@@ -53,3 +80,4 @@ def test_agent_endpoint_returns_empty_plan_for_general_message() -> None:
     body = response.json()
     assert body["steps"] == []
     assert body["results"] == []
+    assert body["blocked_steps"] == []

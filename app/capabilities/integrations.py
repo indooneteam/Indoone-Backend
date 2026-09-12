@@ -27,13 +27,14 @@ class Integration:
 INTEGRATIONS: tuple[Integration, ...] = (
     Integration("github", "GitHub", "developer", "ready", "oauth2", ("repo:read", "issues:read", "pull_requests:read"), "https://github.com/login/oauth/authorize", bool(os.getenv("INDOONE_GITHUB_CLIENT_ID"))),
     Integration("google_calendar", "Google Calendar", "productivity", "ready", "oauth2", ("calendar:read", "calendar:write"), "https://accounts.google.com/o/oauth2/v2/auth", bool(os.getenv("INDOONE_GOOGLE_CLIENT_ID"))),
+    Integration("gmail", "Gmail", "communication", "ready", "oauth2", ("gmail:read", "gmail:send"), "https://accounts.google.com/o/oauth2/v2/auth", bool(os.getenv("INDOONE_GOOGLE_CLIENT_ID"))),
     Integration("slack", "Slack", "communication", "ready", "oauth2", ("channels:read", "messages:read", "messages:write"), "https://slack.com/oauth/v2/authorize", bool(os.getenv("INDOONE_SLACK_CLIENT_ID"))),
 )
 
-_CLIENT_ID_ENV = {"github": "INDOONE_GITHUB_CLIENT_ID", "google_calendar": "INDOONE_GOOGLE_CLIENT_ID", "slack": "INDOONE_SLACK_CLIENT_ID"}
-_CLIENT_SECRET_ENV = {"github": "INDOONE_GITHUB_CLIENT_SECRET", "google_calendar": "INDOONE_GOOGLE_CLIENT_SECRET", "slack": "INDOONE_SLACK_CLIENT_SECRET"}
-_TOKEN_URLS = {"github": "https://github.com/login/oauth/access_token", "google_calendar": "https://oauth2.googleapis.com/token", "slack": "https://slack.com/api/oauth.v2.access"}
-_PROBE_URLS = {"github": "https://api.github.com/user", "google_calendar": "https://www.googleapis.com/calendar/v3/users/me/calendarList", "slack": "https://slack.com/api/auth.test"}
+_CLIENT_ID_ENV = {"github": "INDOONE_GITHUB_CLIENT_ID", "google_calendar": "INDOONE_GOOGLE_CLIENT_ID", "gmail": "INDOONE_GOOGLE_CLIENT_ID", "slack": "INDOONE_SLACK_CLIENT_ID"}
+_CLIENT_SECRET_ENV = {"github": "INDOONE_GITHUB_CLIENT_SECRET", "google_calendar": "INDOONE_GOOGLE_CLIENT_SECRET", "gmail": "INDOONE_GOOGLE_CLIENT_SECRET", "slack": "INDOONE_SLACK_CLIENT_SECRET"}
+_TOKEN_URLS = {"github": "https://github.com/login/oauth/access_token", "google_calendar": "https://oauth2.googleapis.com/token", "gmail": "https://oauth2.googleapis.com/token", "slack": "https://slack.com/api/oauth.v2.access"}
+_PROBE_URLS = {"github": "https://api.github.com/user", "google_calendar": "https://www.googleapis.com/calendar/v3/users/me/calendarList", "gmail": "https://gmail.googleapis.com/gmail/v1/users/me/profile", "slack": "https://slack.com/api/auth.test"}
 _GITHUB_REPOSITORIES_URL = "https://api.github.com/user/repos"
 _GITHUB_ISSUES_URL = "https://api.github.com/issues"
 _GITHUB_PULLS_BASE_URL = "https://api.github.com/repos"
@@ -70,8 +71,10 @@ def build_oauth_authorization(integration_id: str, state: str, redirect_uri: str
     params = {"client_id": client_id, "redirect_uri": redirect_uri.strip(), "state": state.strip()}
     if normalized == "github":
         params["scope"] = " ".join(integration.permissions)
-    elif normalized == "google_calendar":
-        params.update({"response_type": "code", "access_type": "offline", "scope": "https://www.googleapis.com/auth/calendar"})
+    elif normalized in {"google_calendar", "gmail"}:
+        params.update({"response_type": "code", "access_type": "offline"})
+        params["prompt"] = "consent"
+        params["scope"] = "https://www.googleapis.com/auth/calendar" if normalized == "google_calendar" else "https://www.googleapis.com/auth/gmail.modify"
     elif normalized == "slack":
         params["scope"] = ",".join(integration.permissions)
     return {"integration": integration.id, "authorization_url": f"{integration.authorization_url}?{urlencode(params)}", "state_required": True, "token_storage": "user-scoped-encrypted-server-side", "secrets_exposed": False}
@@ -125,7 +128,7 @@ async def exchange_oauth_code(integration_id: str, state: str, code: str) -> dic
         raise ValueError("invalid or expired oauth state")
     client_id, client_secret = _secret(normalized)
     payload = {"client_id": client_id, "client_secret": client_secret, "code": code.strip(), "redirect_uri": state_data["redirect_uri"]}
-    if normalized == "google_calendar":
+    if normalized in {"google_calendar", "gmail"}:
         payload["grant_type"] = "authorization_code"
     headers = {"Accept": "application/json"}
     async with httpx.AsyncClient(timeout=20.0) as client:
@@ -148,6 +151,8 @@ def _provider_probe_summary(integration_id: str, payload: dict[str, object]) -> 
     if integration_id == "google_calendar":
         items = payload.get("items")
         return {"calendar_count": len(items) if isinstance(items, list) else 0}
+    if integration_id == "gmail":
+        return {"email_address": payload.get("emailAddress"), "messages_total": payload.get("messagesTotal"), "threads_total": payload.get("threadsTotal")}
     if integration_id == "slack":
         return {"team": payload.get("team"), "user": payload.get("user"), "team_id": payload.get("team_id"), "user_id": payload.get("user_id")}
     return {}

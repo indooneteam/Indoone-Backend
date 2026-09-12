@@ -14,8 +14,8 @@ MAX_AGENT_MEMORIES = 5
 MAX_AGENT_RETRIES = 1
 MAX_AGENT_MESSAGE_LENGTH = 20_000
 MAX_AGENT_PAYLOAD_LENGTH = 8_000
-ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "sandbox_execution", "contacts_search", "contact_resolve", "phone_call", "phone_call_contact"})
-AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "contacts_search", "contact_resolve"})
+ALLOWED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "sandbox_execution", "contacts_search", "contact_resolve", "phone_call", "phone_call_contact", "gmail_search", "gmail_read"})
+AUTO_APPROVED_AGENT_TOOLS = frozenset({"calculator", "text_stats", "json_summary", "code_analysis", "code_fix_suggestions", "code_transform", "contacts_search", "contact_resolve", "gmail_search", "gmail_read"})
 
 
 @dataclass(frozen=True)
@@ -67,6 +67,26 @@ def _extract_calculations(message: str) -> tuple[str, ...]:
     return tuple(match.replace(" ", "") for match in matches[:MAX_AGENT_STEPS])
 
 
+def _extract_gmail_request(message: str, user_id: str) -> tuple[str, dict[str, Any]] | None:
+    if not user_id.strip():
+        return None
+    text = message.strip()
+    patterns = (
+        ("gmail_search", r"(?:search|find|list)\s+(?:in\s+)?gmail(?:\s+for)?\s+(.+)$"),
+        ("gmail_search", r"gmail\s+(?:search|find|list)\s+(.+)$"),
+        ("gmail_read", r"(?:read|open|show)\s+(?:gmail\s+)?(?:email|message)\s+([A-Za-z0-9_-]+)$"),
+    )
+    for tool, pattern in patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            query = match.group(1).strip(" .?!")
+            if query:
+                if tool == "gmail_search":
+                    return tool, {"user_id": user_id, "query": query}
+                return tool, {"user_id": user_id, "message_id": query}
+    return None
+
+
 def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tuple[str, dict[str, Any]] | None:
     text = message.strip()
     patterns = (
@@ -82,13 +102,17 @@ def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tu
     return None
 
 
-def build_agent_steps(message: str, contacts: list[dict[str, Any]] | None = None) -> tuple[AgentStep, ...]:
+def build_agent_steps(message: str, user_id: str = "", contacts: list[dict[str, Any]] | None = None) -> tuple[AgentStep, ...]:
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
         return ()
     explicit = _extract_explicit_requests(normalized)
     if explicit:
         return tuple(_step(tool, payload, index) for index, (_, tool, payload) in enumerate(explicit, start=1))
+    gmail_request = _extract_gmail_request(normalized, user_id)
+    if gmail_request is not None:
+        tool, payload = gmail_request
+        return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
     contact_request = _extract_contact_request(normalized, contacts or [])
     if contact_request is not None:
         tool, payload = contact_request
@@ -146,7 +170,7 @@ def execute_agent(
     run_id: str | None = None
     if user_id.strip():
         run_id = str(create_agent_run(user_id, normalized)["id"])
-    planned_steps = build_agent_steps(normalized, contacts=contacts)[:MAX_AGENT_STEPS]
+    planned_steps = build_agent_steps(normalized, user_id=user_id, contacts=contacts)[:MAX_AGENT_STEPS]
     executable: list[AgentStep] = []
     blocked: list[AgentStep] = []
     results: list[ToolResult] = []

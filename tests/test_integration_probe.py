@@ -10,8 +10,9 @@ from app.main import app
 @pytest.mark.asyncio
 async def test_provider_probe_uses_user_scoped_encrypted_token(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
-    monkeypatch.setenv("INDOONE_OAUTH_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
-    cipher = Fernet()
+    key = Fernet.generate_key().decode("ascii")
+    monkeypatch.setenv("INDOONE_OAUTH_ENCRYPTION_KEY", key)
+    cipher = Fernet(key.encode("ascii"))
     access = "user-one-secret"
     upsert_integration_token("user-one", "github", cipher.encrypt(access.encode()), None, "Bearer", "repo:read", None)
 

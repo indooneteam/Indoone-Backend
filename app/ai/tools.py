@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ast
+import json
 import operator
 from dataclasses import dataclass
 from typing import Callable
@@ -38,8 +39,39 @@ def _calculate(expression: str) -> str:
     return str(walk(tree.body))
 
 
+def _text_stats(text: str) -> str:
+    normalized = text.replace("\\r\\n", "\\n").replace("\\r", "\\n")
+    words = normalized.split()
+    lines = normalized.splitlines() if normalized else []
+    return json.dumps(
+        {
+            "characters": len(text),
+            "words": len(words),
+            "lines": len(lines),
+        },
+        sort_keys=True,
+    )
+
+
+def _json_summary(payload: str) -> str:
+    data = json.loads(payload)
+    if isinstance(data, dict):
+        return json.dumps(
+            {"type": "object", "keys": len(data), "key_names": sorted(str(key) for key in data)[:50]},
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    if isinstance(data, list):
+        return json.dumps({"type": "array", "items": len(data)}, sort_keys=True)
+    if data is None:
+        return json.dumps({"type": "null"}, sort_keys=True)
+    return json.dumps({"type": type(data).__name__}, sort_keys=True)
+
+
 TOOLS: dict[str, Callable[[str], str]] = {
     "calculator": _calculate,
+    "text_stats": _text_stats,
+    "json_summary": _json_summary,
 }
 
 

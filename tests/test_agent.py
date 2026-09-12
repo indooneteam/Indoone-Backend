@@ -44,6 +44,29 @@ def test_agent_routes_explicit_tools_in_message_order() -> None:
     assert [step.index for step in steps] == [1, 2]
 
 
+def test_agent_routes_gmail_search_for_user() -> None:
+    steps = build_agent_steps("search gmail for invoices", user_id="user-1")
+    assert len(steps) == 1
+    assert steps[0].tool == "gmail_search"
+    assert '"user_id":"user-1"' in steps[0].payload
+    assert '"query":"invoices"' in steps[0].payload
+    assert steps[0].requires_approval is False
+
+
+def test_agent_routes_gmail_read_for_user() -> None:
+    steps = build_agent_steps("read email abc123", user_id="user-1")
+    assert len(steps) == 1
+    assert steps[0].tool == "gmail_read"
+    assert '"user_id":"user-1"' in steps[0].payload
+    assert '"message_id":"abc123"' in steps[0].payload
+    assert steps[0].requires_approval is False
+
+
+def test_agent_does_not_route_gmail_without_user() -> None:
+    steps = build_agent_steps("search gmail for invoices")
+    assert steps == ()
+
+
 def test_agent_resolves_contact_from_authorized_snapshot() -> None:
     execution = execute_agent("find contact Rahul", contacts=CONTACTS)
     assert execution.steps[0].tool == "contact_resolve"
@@ -68,7 +91,7 @@ def test_agent_call_runs_after_explicit_approval() -> None:
     assert execution.steps[0].tool == "phone_call_contact"
     assert execution.steps[0].requires_approval is True
     assert execution.results[0].safe is True
-    assert '"requires_confirmation": true' in execution.results[0].output
+    assert '\"requires_confirmation\": true' in execution.results[0].output
     assert "+919876543210" in execution.results[0].output
 
 
@@ -76,7 +99,7 @@ def test_agent_call_does_not_expose_unmatched_number() -> None:
     execution = execute_agent("call Unknown", contacts=CONTACTS, approved_tools={"phone_call_contact"})
     assert len(execution.results) == 1
     assert execution.results[0].safe is True
-    assert '"contact": null' in execution.results[0].output
+    assert '\"contact\": null' in execution.results[0].output
 
 
 def test_agent_contact_endpoint_accepts_authorized_snapshot() -> None:
@@ -121,7 +144,7 @@ def test_agent_endpoint_exposes_approved_phone_action() -> None:
     assert body["steps"][0]["tool"] == "phone_call_contact"
     assert body["steps"][0]["requires_approval"] is True
     assert body["results"][0]["safe"] is True
-    assert '"requires_confirmation": true' in body["results"][0]["output"]
+    assert '\"requires_confirmation\": true' in body["results"][0]["output"]
 
 
 def test_agent_is_bounded_and_returns_tool_results() -> None:

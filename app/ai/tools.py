@@ -6,7 +6,7 @@ import operator
 from dataclasses import dataclass
 from typing import Callable
 
-from app.ai.coding import code_analysis_tool
+from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool
 
 
 @dataclass(frozen=True)
@@ -75,6 +75,7 @@ TOOLS: dict[str, Callable[[str], str]] = {
     "text_stats": _text_stats,
     "json_summary": _json_summary,
     "code_analysis": code_analysis_tool,
+    "code_fix_suggestions": code_fix_suggestions_tool,
 }
 
 

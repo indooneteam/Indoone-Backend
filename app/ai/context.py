@@ -32,3 +32,16 @@ def trim_history(history: list[tuple[str, str]], budget: ContextBudget) -> list[
         result.append((role, clipped))
         used += len(clipped)
     return list(reversed(result))
+
+
+def trim_sections(sections: list[tuple[str, str]], budget: ContextBudget) -> list[tuple[str, str]]:
+    remaining = budget.max_chars
+    result: list[tuple[str, str]] = []
+    for label, content in sections:
+        if remaining <= 0:
+            break
+        clipped = trim_text(content, remaining)
+        if clipped:
+            result.append((label, clipped))
+            remaining -= len(clipped)
+    return result

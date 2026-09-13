@@ -9,6 +9,10 @@ class ModelRoute:
     model_role: str
     reason: str
 
+    @property
+    def specialized(self) -> bool:
+        return self.model_role != "general"
+
 
 def route_task(task: str) -> ModelRoute:
     normalized = task.strip().lower()

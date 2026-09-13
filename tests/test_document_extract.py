@@ -4,6 +4,7 @@ import io
 
 from docx import Document
 from pypdf import PdfWriter
+import pytest
 
 from app.capabilities.document_extract import DOCX_MIME, PDF_MIME, extract_document
 
@@ -56,9 +57,20 @@ def test_extract_pdf_text() -> None:
 
 
 def test_reject_unsupported_document() -> None:
-    try:
+    with pytest.raises(ValueError, match="unsupported document type"):
         extract_document("sample.txt", "text/plain", b"hello")
-    except ValueError as exc:
-        assert "unsupported document type" in str(exc)
-    else:
-        raise AssertionError("expected unsupported document type error")
+
+
+def test_reject_path_traversal_filename() -> None:
+    result = extract_document("../../sample.pdf", PDF_MIME, b"%PDF-1.4")
+    assert result.filename == "sample.pdf"
+
+
+def test_reject_malformed_pdf() -> None:
+    with pytest.raises(ValueError, match="invalid PDF document"):
+        extract_document("broken.pdf", PDF_MIME, b"not a real pdf")
+
+
+def test_reject_malformed_docx() -> None:
+    with pytest.raises(ValueError, match="invalid DOCX document"):
+        extract_document("broken.docx", DOCX_MIME, b"not a zip document")

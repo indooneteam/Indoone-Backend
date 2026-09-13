@@ -19,6 +19,7 @@ MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
 MAX_TOOL_PAYLOAD = 100_000
 MAX_TOOL_TIMEOUT_SECONDS = 60.0
+MAX_SYNC_TOOL_WORKERS = 8
 
 
 @dataclass(frozen=True)
@@ -126,32 +127,41 @@ def _phone_call_contact(payload: str) -> str:
 
 
 def _run_async(coro, timeout_seconds: float):
+    bounded_timeout = max(0.01, min(float(timeout_seconds), MAX_TOOL_TIMEOUT_SECONDS))
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(asyncio.wait_for(coro, timeout=timeout_seconds))
+        return asyncio.run(asyncio.wait_for(coro, timeout=bounded_timeout))
 
     result: list[object] = []
     errors: list[BaseException] = []
 
     def runner() -> None:
         try:
-            result.append(asyncio.run(asyncio.wait_for(coro, timeout=timeout_seconds)))
+            result.append(asyncio.run(asyncio.wait_for(coro, timeout=bounded_timeout)))
         except BaseException as exc:
             errors.append(exc)
 
-    thread = threading.Thread(target=runner, daemon=True)
+    thread = threading.Thread(target=runner, daemon=True, name="indoonе-async-tool")
     thread.start()
-    thread.join(timeout_seconds + 0.5)
+    thread.join(bounded_timeout + 0.5)
     if thread.is_alive():
         raise TimeoutError("asynchronous tool timed out")
     if errors:
         raise errors[0]
+    if not result:
+        raise RuntimeError("asynchronous tool returned no result")
     return result[0]
+
+
+_SYNC_TOOL_SEMAPHORE = threading.BoundedSemaphore(MAX_SYNC_TOOL_WORKERS)
 
 
 def _run_sync_with_timeout(tool: Callable[[str], str], payload: str, timeout_seconds: float) -> str:
     bounded_timeout = max(0.01, min(float(timeout_seconds), MAX_TOOL_TIMEOUT_SECONDS))
+    if not _SYNC_TOOL_SEMAPHORE.acquire(blocking=False):
+        raise RuntimeError("too many timed-out or running sync tools")
+
     result: list[object] = []
     errors: list[BaseException] = []
 
@@ -160,8 +170,10 @@ def _run_sync_with_timeout(tool: Callable[[str], str], payload: str, timeout_sec
             result.append(tool(payload))
         except BaseException as exc:
             errors.append(exc)
+        finally:
+            _SYNC_TOOL_SEMAPHORE.release()
 
-    thread = threading.Thread(target=runner, daemon=True)
+    thread = threading.Thread(target=runner, daemon=True, name="indoonе-sync-tool")
     thread.start()
     thread.join(bounded_timeout)
     if thread.is_alive():

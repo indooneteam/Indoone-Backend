@@ -35,7 +35,7 @@ def test_document_analysis_requires_authentication(monkeypatch) -> None:
     )
 
     assert response.status_code == 401
-    assert response.json()["code"] == "AUTH_REQUIRED"
+    assert response.json()["code"] == "HTTP_401"
 
 
 def test_document_batch_size_is_bounded(monkeypatch) -> None:

@@ -207,10 +207,16 @@ def execute_agent(
         if not decision.allowed:
             blocked.append(step)
             continue
+        if results and not results[-1].safe:
+            blocked.append(step)
+            continue
         executable.append(step)
         result, retry_count = _run_with_retry(step.tool, _chain_payload(step.payload, tuple(results)))
         results.append(result)
         retry_counts.append(retry_count)
+        if not result.safe:
+            blocked.extend(planned_steps[step.index:])
+            break
     unsafe_result = any(not result.safe for result in results)
     status = "failed" if unsafe_result else ("blocked" if blocked and not results else "completed")
     execution = AgentExecution(message=normalized, steps=tuple(executable), results=tuple(results), memories=memory_context, blocked_steps=tuple(blocked), retry_counts=tuple(retry_counts), run_id=run_id)

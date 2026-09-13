@@ -16,7 +16,7 @@ def test_approval_token_is_bound_to_user_and_tool(monkeypatch) -> None:
     token = issue_approval_token("user-1", "phone_call_contact", ttl_seconds=60, now=1_000)
     assert validate_approval_token(token, "user-1", "phone_call_contact", now=1_001)
     assert not validate_approval_token(token, "user-2", "phone_call_contact", now=1_001)
-    assert not validate_approval_token(token, "gmail_delete", now=1_001)
+    assert not validate_approval_token(token, "user-1", "gmail_delete", now=1_001)
 
 
 def test_approval_token_expires(monkeypatch) -> None:

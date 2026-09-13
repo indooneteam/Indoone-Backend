@@ -10,6 +10,27 @@ MAX_TEXT_BYTES = 2_000_000
 SUPPORTED_SUFFIXES = {".txt", ".md", ".json", ".csv", ".log"}
 
 
+def _safe_directory(file_id: str) -> Path:
+    try:
+        safe_id = str(UUID(file_id))
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise ValueError("Invalid file_id") from exc
+    return FILE_ROOT / safe_id
+
+
+def _load_metadata(directory: Path) -> dict[str, object]:
+    metadata_path = directory / ".metadata.json"
+    if not metadata_path.exists():
+        raise PermissionError("uploaded file owner metadata is missing")
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Uploaded file metadata is invalid") from exc
+    if not isinstance(metadata, dict):
+        raise ValueError("Uploaded file metadata is invalid")
+    return metadata
+
+
 def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str, str | int]:
     if len(content) > MAX_TEXT_BYTES:
         raise ValueError("File is too large")
@@ -30,26 +51,20 @@ def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str
     return {"file_id": file_id, "filename": target.name, "bytes": len(content), "text": text}
 
 
-def read_text_file(file_id: str, user_id: str = "") -> str:
-    try:
-        safe_id = str(UUID(file_id))
-    except (ValueError, AttributeError, TypeError) as exc:
-        raise ValueError("Invalid file_id") from exc
+def get_file_owner(file_id: str) -> str:
+    metadata = _load_metadata(_safe_directory(file_id))
+    owner = str(metadata.get("user_id", "")).strip()
+    if not owner:
+        raise PermissionError("uploaded file owner metadata is missing")
+    return owner
 
-    directory = FILE_ROOT / safe_id
-    metadata_path = directory / ".metadata.json"
+
+def read_text_file(file_id: str, user_id: str = "") -> str:
+    directory = _safe_directory(file_id)
     owner = user_id.strip()
     if not owner:
         raise PermissionError("authenticated user required")
-    if not metadata_path.exists():
-        raise PermissionError("uploaded file owner metadata is missing")
-    try:
-        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise ValueError("Uploaded file metadata is invalid") from exc
-    stored_owner = str(metadata.get("user_id", "")).strip()
-    if not stored_owner:
-        raise PermissionError("uploaded file owner metadata is missing")
+    stored_owner = get_file_owner(file_id)
     if stored_owner != owner:
         raise PermissionError("file belongs to another user")
 

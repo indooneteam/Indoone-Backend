@@ -18,6 +18,7 @@ from app.capabilities.phone import build_call_action
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
 MAX_TOOL_PAYLOAD = 100_000
+MAX_TOOL_TIMEOUT_SECONDS = 60.0
 
 
 @dataclass(frozen=True)
@@ -149,6 +150,32 @@ def _run_async(coro, timeout_seconds: float):
     return result[0]
 
 
+def _run_sync_with_timeout(tool: Callable[[str], str], payload: str, timeout_seconds: float) -> str:
+    bounded_timeout = max(0.01, min(float(timeout_seconds), MAX_TOOL_TIMEOUT_SECONDS))
+    result: list[object] = []
+    errors: list[BaseException] = []
+
+    def runner() -> None:
+        try:
+            result.append(tool(payload))
+        except BaseException as exc:
+            errors.append(exc)
+
+    thread = threading.Thread(target=runner, daemon=True)
+    thread.start()
+    thread.join(bounded_timeout)
+    if thread.is_alive():
+        raise TimeoutError("tool execution timed out")
+    if errors:
+        raise errors[0]
+    if not result:
+        raise RuntimeError("tool execution returned no result")
+    output = result[0]
+    if not isinstance(output, str):
+        raise TypeError("tool output must be text")
+    return output
+
+
 def _gmail_search(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
@@ -216,7 +243,7 @@ def run_tool(name: str, payload: str) -> ToolResult:
     if spec is None or tool is None:
         return ToolResult(normalized_name, "Unknown or unregistered tool", safe=False, retryable=False)
     try:
-        output = tool(payload)
+        output = _run_sync_with_timeout(tool, payload, spec.timeout_seconds)
         if len(output) > spec.max_output_chars:
             output = output[: spec.max_output_chars] + "\n[output truncated by policy]"
         return ToolResult(normalized_name, output, safe=True, retryable=False)

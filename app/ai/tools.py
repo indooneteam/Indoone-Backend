@@ -142,7 +142,7 @@ def _run_async(coro, timeout_seconds: float):
         except BaseException as exc:
             errors.append(exc)
 
-    thread = threading.Thread(target=runner, daemon=True, name="indoonе-async-tool")
+    thread = threading.Thread(target=runner, daemon=True, name="indoone-async-tool")
     thread.start()
     thread.join(bounded_timeout + 0.5)
     if thread.is_alive():
@@ -173,7 +173,7 @@ def _run_sync_with_timeout(tool: Callable[[str], str], payload: str, timeout_sec
         finally:
             _SYNC_TOOL_SEMAPHORE.release()
 
-    thread = threading.Thread(target=runner, daemon=True, name="indoonе-sync-tool")
+    thread = threading.Thread(target=runner, daemon=True, name="indoone-sync-tool")
     thread.start()
     thread.join(bounded_timeout)
     if thread.is_alive():

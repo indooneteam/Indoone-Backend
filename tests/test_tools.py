@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+import time
 
-from app.ai.tools import MAX_CALCULATOR_ABS_VALUE, MAX_CALCULATOR_EXPONENT, run_tool
+from app.ai.tools import MAX_CALCULATOR_ABS_VALUE, MAX_CALCULATOR_EXPONENT, TOOLS, run_tool
 
 
 def test_text_stats_tool_is_deterministic() -> None:
@@ -48,3 +49,32 @@ def test_non_string_payload_is_rejected() -> None:
     result = run_tool("text_stats", None)  # type: ignore[arg-type]
     assert result.safe is False
     assert "payload" in result.output.lower()
+
+
+def test_sync_tool_timeout_is_bounded(monkeypatch) -> None:
+    original = TOOLS["text_stats"]
+
+    def slow_tool(_: str) -> str:
+        time.sleep(0.2)
+        return "done"
+
+    monkeypatch.setitem(TOOLS, "text_stats", slow_tool)
+    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.05, "max_output_chars": 100})())
+    started = time.monotonic()
+    result = run_tool("text_stats", "hello")
+    elapsed = time.monotonic() - started
+    monkeypatch.setitem(TOOLS, "text_stats", original)
+    assert result.safe is False
+    assert result.retryable is True
+    assert "timed out" in result.output.lower()
+    assert elapsed < 0.15
+
+
+def test_non_text_tool_output_is_unsafe(monkeypatch) -> None:
+    original = TOOLS["text_stats"]
+    monkeypatch.setitem(TOOLS, "text_stats", lambda _: 123)  # type: ignore[assignment]
+    result = run_tool("text_stats", "hello")
+    monkeypatch.setitem(TOOLS, "text_stats", original)
+    assert result.safe is False
+    assert result.retryable is False
+    assert "output must be text" in result.output.lower()

@@ -36,3 +36,15 @@ def test_tool_payload_limit_is_enforced() -> None:
     result = run_tool("text_stats", "x" * 100_001)
     assert result.safe is False
     assert "payload" in result.output.lower()
+
+
+def test_tool_name_is_normalized() -> None:
+    result = run_tool(" TEXT_STATS ", "hello")
+    assert result.safe is True
+    assert result.name == "text_stats"
+
+
+def test_non_string_payload_is_rejected() -> None:
+    result = run_tool("text_stats", None)  # type: ignore[arg-type]
+    assert result.safe is False
+    assert "payload" in result.output.lower()

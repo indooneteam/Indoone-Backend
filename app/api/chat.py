@@ -45,7 +45,9 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
 
     if body.file_id:
         try:
-            document_context = read_text_file(body.file_id)
+            document_context = read_text_file(body.file_id, user_id=user_id)
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 

@@ -52,7 +52,10 @@ def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str
 
 
 def get_file_owner(file_id: str) -> str:
-    metadata = _load_metadata(_safe_directory(file_id))
+    directory = _safe_directory(file_id)
+    if not directory.exists():
+        raise ValueError("Uploaded file was not found")
+    metadata = _load_metadata(directory)
     owner = str(metadata.get("user_id", "")).strip()
     if not owner:
         raise PermissionError("uploaded file owner metadata is missing")

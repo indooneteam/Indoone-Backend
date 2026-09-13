@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -69,16 +70,20 @@ def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str
     file_id = str(uuid4())
     directory = FILE_ROOT / file_id
     target = directory / safe_filename
-    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-    target.write_bytes(content)
-    target.chmod(0o600)
-    metadata = {"user_id": owner, "filename": target.name}
-    metadata_path = directory / ".metadata.json"
-    temporary_metadata = directory / ".metadata.json.tmp"
-    temporary_metadata.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
-    temporary_metadata.chmod(0o600)
-    temporary_metadata.replace(metadata_path)
-    metadata_path.chmod(0o600)
+    try:
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        target.write_bytes(content)
+        target.chmod(0o600)
+        metadata = {"user_id": owner, "filename": target.name}
+        metadata_path = directory / ".metadata.json"
+        temporary_metadata = directory / ".metadata.json.tmp"
+        temporary_metadata.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+        temporary_metadata.chmod(0o600)
+        temporary_metadata.replace(metadata_path)
+        metadata_path.chmod(0o600)
+    except (OSError, ValueError, TypeError) as exc:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise ValueError("Uploaded file could not be stored") from exc
     text = content.decode("utf-8", errors="replace")
     return {"file_id": file_id, "filename": target.name, "bytes": len(content), "text": text}
 

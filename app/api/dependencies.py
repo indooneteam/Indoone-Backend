@@ -10,6 +10,11 @@ def current_user_id(request: Request) -> str:
     return principal
 
 
+def require_authenticated_request(request: Request) -> Request:
+    current_user_id(request)
+    return request
+
+
 def enforce_user_match(request: Request, requested_user_id: str) -> str:
     principal = current_user_id(request)
     requested = requested_user_id.strip()

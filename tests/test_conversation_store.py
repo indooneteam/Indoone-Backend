@@ -4,14 +4,17 @@ import pytest
 
 from app.ai.conversation_store import ConversationStore
 
+OWNER = "user-one"
+OTHER = "user-two"
+
 
 def test_conversation_history_is_persistent_and_ordered(tmp_path: Path) -> None:
     db = tmp_path / "conversations.sqlite3"
     first = ConversationStore(db)
-    first.append("c1", [("user", "Hello"), ("assistant", "Namaskara")])
+    first.append("c1", [("user", "Hello"), ("assistant", "Namaskara")], user_id=OWNER)
 
     second = ConversationStore(db)
-    assert second.recent("c1") == [("user", "Hello"), ("assistant", "Namaskara")]
+    assert second.recent("c1", user_id=OWNER) == [("user", "Hello"), ("assistant", "Namaskara")]
 
 
 def test_recent_history_is_bounded(tmp_path: Path) -> None:
@@ -19,29 +22,38 @@ def test_recent_history_is_bounded(tmp_path: Path) -> None:
     store.append(
         "c1",
         [("user", "one"), ("assistant", "two"), ("user", "three"), ("assistant", "four")],
+        user_id=OWNER,
     )
 
-    assert store.recent("c1") == [("user", "three"), ("assistant", "four")]
+    assert store.recent("c1", user_id=OWNER) == [("user", "three"), ("assistant", "four")]
 
 
 def test_conversation_closes_at_message_limit(tmp_path: Path) -> None:
     store = ConversationStore(tmp_path / "conversations.sqlite3", max_messages=4)
-    store.append("c1", [("user", "one"), ("assistant", "two"), ("user", "three")])
-    assert store.is_closed("c1") is False
+    store.append("c1", [("user", "one"), ("assistant", "two"), ("user", "three")], user_id=OWNER)
+    assert store.is_closed("c1", user_id=OWNER) is False
 
-    store.append("c1", [("assistant", "four")])
-    assert store.message_count("c1") == 4
-    assert store.is_closed("c1") is True
+    store.append("c1", [("assistant", "four")], user_id=OWNER)
+    assert store.message_count("c1", user_id=OWNER) == 4
+    assert store.is_closed("c1", user_id=OWNER) is True
 
     with pytest.raises(ValueError, match="closed"):
-        store.append("c1", [("user", "five")])
+        store.append("c1", [("user", "five")], user_id=OWNER)
 
 
 def test_invalid_messages_are_rejected(tmp_path: Path) -> None:
     store = ConversationStore(tmp_path / "conversations.sqlite3")
 
     with pytest.raises(ValueError, match="role"):
-        store.append("c1", [("system", "bad")])
+        store.append("c1", [("system", "bad")], user_id=OWNER)
 
     with pytest.raises(ValueError, match="content"):
-        store.append("c1", [("user", "   ")])
+        store.append("c1", [("user", "   ")], user_id=OWNER)
+
+
+def test_cross_user_access_is_rejected(tmp_path: Path) -> None:
+    store = ConversationStore(tmp_path / "conversations.sqlite3")
+    store.append("c1", [("user", "private")], user_id=OWNER)
+
+    with pytest.raises(PermissionError, match="another user"):
+        store.recent("c1", user_id=OTHER)

@@ -20,7 +20,7 @@ from app.api.integrations import router as integrations_router
 from app.api.instagram import router as instagram_router
 from app.api.phone import router as phone_router
 from app.api.platform import router as platform_router
-from app.api.request_context import get_request_id, new_request_id, set_principal_id
+from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
 from app.api.telegram import router as telegram_router
 from app.api.whatsapp import router as whatsapp_router
 from app.api.youtube import router as youtube_router
@@ -43,6 +43,8 @@ app = FastAPI(title="Indoone Backend", version="0.3.0", lifespan=lifespan)
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
     request_id = new_request_id()
+    clear_principal_id()
+    request.state.principal_id = ""
     authorization = request.headers.get("authorization", "")
     principal = ""
     if authorization:

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.ai import service as ai_service
 from app.ai.language_detection import detect_response_language
+from app.api.approvals import router as approvals_router
 from app.api.auth import extract_principal
 from app.api.capabilities import router as capabilities_router
 from app.api.canva import router as canva_router
@@ -82,6 +83,7 @@ app.include_router(documents_router, prefix="/api")
 app.include_router(voice_session_router, prefix="/api")
 app.include_router(contacts_router, prefix="/api")
 app.include_router(phone_router, prefix="/api")
+app.include_router(approvals_router, prefix="/api")
 app.include_router(integrations_router, prefix="/api")
 app.include_router(telegram_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")

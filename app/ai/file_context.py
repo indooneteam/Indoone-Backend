@@ -17,8 +17,8 @@ def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str
     if suffix not in SUPPORTED_SUFFIXES:
         raise ValueError("Text intake currently supports txt, md, json, csv, and log files")
     owner = user_id.strip()
-    if len(owner) > 256:
-        raise ValueError("Invalid user_id")
+    if not owner or len(owner) > 256:
+        raise ValueError("authenticated user is required")
     file_id = str(uuid4())
     directory = FILE_ROOT / file_id
     target = directory / Path(filename).name
@@ -31,7 +31,6 @@ def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str
 
 
 def read_text_file(file_id: str, user_id: str = "") -> str:
-    """Read an uploaded text file and enforce owner metadata when present."""
     try:
         safe_id = str(UUID(file_id))
     except (ValueError, AttributeError, TypeError) as exc:
@@ -40,16 +39,19 @@ def read_text_file(file_id: str, user_id: str = "") -> str:
     directory = FILE_ROOT / safe_id
     metadata_path = directory / ".metadata.json"
     owner = user_id.strip()
-    if metadata_path.exists():
-        try:
-            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise ValueError("Uploaded file metadata is invalid") from exc
-        stored_owner = str(metadata.get("user_id", "")).strip()
-        if stored_owner and owner and stored_owner != owner:
-            raise PermissionError("file belongs to another user")
-        if stored_owner and not owner:
-            raise PermissionError("authenticated user required")
+    if not owner:
+        raise PermissionError("authenticated user required")
+    if not metadata_path.exists():
+        raise PermissionError("uploaded file owner metadata is missing")
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Uploaded file metadata is invalid") from exc
+    stored_owner = str(metadata.get("user_id", "")).strip()
+    if not stored_owner:
+        raise PermissionError("uploaded file owner metadata is missing")
+    if stored_owner != owner:
+        raise PermissionError("file belongs to another user")
 
     matches = [path for path in directory.iterdir() if path.is_file() and path.name != ".metadata.json"] if directory.exists() else []
     if len(matches) != 1:

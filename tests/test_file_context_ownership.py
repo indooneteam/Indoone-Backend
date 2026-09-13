@@ -27,3 +27,12 @@ def test_upload_requires_authenticated_owner(tmp_path: Path, monkeypatch) -> Non
     monkeypatch.setattr(file_context, "FILE_ROOT", tmp_path)
     with pytest.raises(ValueError, match="authenticated user is required"):
         file_context.save_text_file("note.txt", b"hello")
+
+
+def test_missing_owner_metadata_is_not_usable(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(file_context, "FILE_ROOT", tmp_path)
+    saved = file_context.save_text_file("note.txt", b"hello", user_id="user-one")
+    (tmp_path / saved["file_id"] / ".metadata.json").write_text("{}", encoding="utf-8")
+
+    with pytest.raises(PermissionError, match="owner metadata is missing"):
+        file_context.get_file_owner(saved["file_id"])

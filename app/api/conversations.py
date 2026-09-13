@@ -1,5 +1,5 @@
-from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel
 
 from app.ai.conversation_store import ConversationStore
 from app.api.dependencies import current_user_id
@@ -26,9 +26,13 @@ class ConversationActionResponse(BaseModel):
 
 
 @router.get("/conversations", response_model=ConversationListResponse)
-async def list_conversations(request: Request, limit: int = Field(default=50, ge=1, le=100)) -> ConversationListResponse:
+async def list_conversations(
+    request: Request, limit: int = Query(default=50, ge=1, le=100)
+) -> ConversationListResponse:
     user_id = current_user_id(request)
-    return ConversationListResponse(conversations=[ConversationSummary(**item) for item in _store.list_for_user(user_id, limit)])
+    return ConversationListResponse(
+        conversations=[ConversationSummary(**item) for item in _store.list_for_user(user_id, limit)]
+    )
 
 
 @router.post("/conversations/{conversation_id}/close", response_model=ConversationActionResponse)

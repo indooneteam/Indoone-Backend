@@ -32,7 +32,8 @@ def test_health() -> None:
     assert response.json() == {"status": "ok"}
 
 
-def test_chat_rejects_empty_message() -> None:
+def test_chat_rejects_empty_message(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
     response = client.post("/api/chat", json={"message": ""}, headers=_auth_headers())
     assert response.status_code == 422
     assert response.json()["code"] == "VALIDATION_ERROR"

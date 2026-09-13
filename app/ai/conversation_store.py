@@ -11,7 +11,7 @@ DEFAULT_MAX_MESSAGES = 50
 
 
 class ConversationStore:
-    """Persistent SQLite conversation history with bounded lifecycle and optional user ownership."""
+    """Persistent SQLite conversation history with strict user ownership."""
 
     def __init__(self, db_path: Path = DEFAULT_DB_PATH, max_messages: int = DEFAULT_MAX_MESSAGES) -> None:
         if max_messages <= 0:
@@ -68,18 +68,30 @@ class ConversationStore:
     def _normalize_user_id(user_id: str | None) -> str:
         return (user_id or "").strip()
 
-    def _assert_owner(self, row: sqlite3.Row | None, user_id: str | None) -> None:
-        requested = self._normalize_user_id(user_id)
-        if row is None or not requested:
-            return
-        owner = str(row["user_id"] or "")
-        if owner and owner != requested:
+    @classmethod
+    def _require_user_id(cls, user_id: str | None) -> str:
+        normalized = cls._normalize_user_id(user_id)
+        if not normalized or len(normalized) > 256:
+            raise PermissionError("authenticated user required")
+        return normalized
+
+    @classmethod
+    def _assert_owner(cls, row: sqlite3.Row | None, user_id: str | None) -> str:
+        requested = cls._require_user_id(user_id)
+        if row is None:
+            raise ValueError("conversation not found")
+        owner = str(row["user_id"] or "").strip()
+        if not owner:
+            raise PermissionError("conversation owner metadata is missing")
+        if owner != requested:
             raise PermissionError("conversation belongs to another user")
+        return requested
 
     def append(self, conversation_id: str, messages: Iterable[tuple[str, str]], user_id: str | None = None) -> None:
         rows = list(messages)
         if not conversation_id:
             raise ValueError("conversation_id cannot be empty")
+        normalized_user_id = self._require_user_id(user_id)
         if not rows:
             return
         for role, content in rows:
@@ -88,21 +100,18 @@ class ConversationStore:
             if not content.strip():
                 raise ValueError("message content cannot be empty")
 
-        normalized_user_id = self._normalize_user_id(user_id)
         with self._connect() as connection:
             connection.execute(
                 "INSERT OR IGNORE INTO conversations(conversation_id, user_id) VALUES (?, ?)",
-                (conversation_id, normalized_user_id or None),
+                (conversation_id, normalized_user_id),
             )
             current = connection.execute(
                 "SELECT user_id, status FROM conversations WHERE conversation_id = ?",
                 (conversation_id,),
             ).fetchone()
             self._assert_owner(current, normalized_user_id)
-            if current is not None and current["status"] == "closed":
+            if current["status"] == "closed":
                 raise ValueError("conversation is closed")
-            if current is not None and not current["user_id"] and normalized_user_id:
-                connection.execute("UPDATE conversations SET user_id=? WHERE conversation_id=?", (normalized_user_id, conversation_id))
 
             connection.executemany(
                 "INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)",
@@ -113,7 +122,11 @@ class ConversationStore:
                 (conversation_id,),
             )
 
-            count = int(connection.execute("SELECT COUNT(*) FROM messages WHERE conversation_id = ?", (conversation_id,)).fetchone()[0])
+            count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM messages WHERE conversation_id = ?", (conversation_id,)
+                ).fetchone()[0]
+            )
             if count >= self.max_messages:
                 connection.execute(
                     "UPDATE conversations SET status='closed', closed_at=CURRENT_TIMESTAMP WHERE conversation_id=?",
@@ -124,7 +137,9 @@ class ConversationStore:
         if not conversation_id:
             raise ValueError("conversation_id cannot be empty")
         with self._connect() as connection:
-            owner = connection.execute("SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)).fetchone()
+            owner = connection.execute(
+                "SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)
+            ).fetchone()
             self._assert_owner(owner, user_id)
             rows = connection.execute(
                 "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?",
@@ -136,32 +151,45 @@ class ConversationStore:
         if not conversation_id:
             raise ValueError("conversation_id cannot be empty")
         with self._connect() as connection:
-            owner = connection.execute("SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)).fetchone()
+            owner = connection.execute(
+                "SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)
+            ).fetchone()
             self._assert_owner(owner, user_id)
-            row = connection.execute("SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?", (conversation_id,)).fetchone()
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?", (conversation_id,)
+            ).fetchone()
         return int(row["count"] if row is not None else 0)
 
     def is_closed(self, conversation_id: str, user_id: str | None = None) -> bool:
         if not conversation_id:
             raise ValueError("conversation_id cannot be empty")
         with self._connect() as connection:
-            row = connection.execute("SELECT user_id, status FROM conversations WHERE conversation_id = ?", (conversation_id,)).fetchone()
+            row = connection.execute(
+                "SELECT user_id, status FROM conversations WHERE conversation_id = ?", (conversation_id,)
+            ).fetchone()
             self._assert_owner(row, user_id)
-        return row is not None and str(row["status"]) == "closed"
+        return str(row["status"]) == "closed"
 
     def close(self, conversation_id: str, user_id: str | None = None) -> None:
         if not conversation_id:
             raise ValueError("conversation_id cannot be empty")
         with self._connect() as connection:
-            row = connection.execute("SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)).fetchone()
+            row = connection.execute(
+                "SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)
+            ).fetchone()
             self._assert_owner(row, user_id)
-            connection.execute("UPDATE conversations SET status='closed', closed_at=CURRENT_TIMESTAMP WHERE conversation_id=?", (conversation_id,))
+            connection.execute(
+                "UPDATE conversations SET status='closed', closed_at=CURRENT_TIMESTAMP WHERE conversation_id=?",
+                (conversation_id,),
+            )
 
     def delete(self, conversation_id: str, user_id: str | None = None) -> None:
         if not conversation_id:
             raise ValueError("conversation_id cannot be empty")
         with self._connect() as connection:
-            row = connection.execute("SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)).fetchone()
+            row = connection.execute(
+                "SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)
+            ).fetchone()
             self._assert_owner(row, user_id)
             connection.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
             connection.execute("DELETE FROM conversations WHERE conversation_id = ?", (conversation_id,))

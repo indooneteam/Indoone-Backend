@@ -39,6 +39,23 @@ def _safe_filename(filename: str) -> str:
     return candidate
 
 
+def _metadata_owner(metadata: dict[str, object]) -> str:
+    owner = metadata.get("user_id")
+    if not isinstance(owner, str):
+        raise PermissionError("uploaded file owner metadata is missing")
+    owner = owner.strip()
+    if not owner or len(owner) > 256:
+        raise PermissionError("uploaded file owner metadata is missing")
+    return owner
+
+
+def _metadata_filename(metadata: dict[str, object]) -> str:
+    filename = metadata.get("filename")
+    if not isinstance(filename, str):
+        raise ValueError("Uploaded file metadata is invalid")
+    return _safe_filename(filename)
+
+
 def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str, str | int]:
     if len(content) > MAX_TEXT_BYTES:
         raise ValueError("File is too large")
@@ -70,11 +87,7 @@ def get_file_owner(file_id: str) -> str:
     directory = _safe_directory(file_id)
     if not directory.exists():
         raise ValueError("Uploaded file was not found")
-    metadata = _load_metadata(directory)
-    owner = str(metadata.get("user_id", "")).strip()
-    if not owner:
-        raise PermissionError("uploaded file owner metadata is missing")
-    return owner
+    return _metadata_owner(_load_metadata(directory))
 
 
 def read_text_file(file_id: str, user_id: str = "") -> str:
@@ -82,12 +95,16 @@ def read_text_file(file_id: str, user_id: str = "") -> str:
     owner = user_id.strip()
     if not owner or len(owner) > 256:
         raise PermissionError("authenticated user required")
-    stored_owner = get_file_owner(file_id)
+    metadata = _load_metadata(directory) if directory.exists() else None
+    if metadata is None:
+        raise ValueError("Uploaded file was not found")
+    stored_owner = _metadata_owner(metadata)
     if stored_owner != owner:
         raise PermissionError("file belongs to another user")
+    expected_filename = _metadata_filename(metadata)
 
-    matches = [path for path in directory.iterdir() if path.is_file() and path.name != ".metadata.json"] if directory.exists() else []
-    if len(matches) != 1:
+    matches = [path for path in directory.iterdir() if path.is_file() and path.name != ".metadata.json"]
+    if len(matches) != 1 or matches[0].name != expected_filename:
         raise ValueError("Uploaded file was not found")
     target = matches[0]
     if target.suffix.lower() not in SUPPORTED_SUFFIXES:

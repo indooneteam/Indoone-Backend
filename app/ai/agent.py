@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import re
-from typing import Any
+from typing import Any, Iterable
 
 from app.ai.approval import decide_tool
 from app.ai.orchestrator import Plan, plan_request
@@ -180,11 +180,15 @@ def execute_agent(
     user_id: str = "",
     approved_tools: set[str] | frozenset[str] | None = None,
     contacts: list[dict[str, Any]] | None = None,
+    approval_tokens: Iterable[str] | None = None,
 ) -> AgentExecution:
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
         return AgentExecution(message=message, steps=(), results=())
+    # approved_tools is kept for compatibility only; authorization is cryptographically
+    # bound to the authenticated user through server-issued approval tokens.
     approved = frozenset(approved_tools or ())
+    approval_tokens_tuple = tuple(approval_tokens or ())
     memory_context = _load_memory_context(user_id, normalized)
     run_id: str | None = None
     if user_id.strip():
@@ -195,7 +199,7 @@ def execute_agent(
     results: list[ToolResult] = []
     retry_counts: list[int] = []
     for step in planned_steps:
-        decision = decide_tool(step.tool, approved)
+        decision = decide_tool(step.tool, approved, approval_tokens_tuple, user_id=user_id)
         if not decision.allowed:
             blocked.append(step)
             continue

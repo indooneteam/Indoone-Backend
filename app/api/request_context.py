@@ -21,6 +21,10 @@ def set_principal_id(principal_id: str) -> None:
     _PRINCIPAL_ID.set(principal_id.strip())
 
 
+def clear_principal_id() -> None:
+    _PRINCIPAL_ID.set("")
+
+
 def get_principal_id() -> str:
     return _PRINCIPAL_ID.get()
 

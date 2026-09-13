@@ -162,9 +162,15 @@ def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
 
 def _run_with_retry(tool: str, payload: str) -> tuple[ToolResult, int]:
     result = run_tool(tool, payload)
-    if result.safe or MAX_AGENT_RETRIES == 0:
+    if result.safe or not result.retryable or MAX_AGENT_RETRIES == 0:
         return result, 0
-    return run_tool(tool, payload), 1
+    retry_count = 0
+    while retry_count < MAX_AGENT_RETRIES:
+        retry_count += 1
+        result = run_tool(tool, payload)
+        if result.safe or not result.retryable:
+            break
+    return result, retry_count
 
 
 def _serialize_step(step: AgentStep) -> dict[str, Any]:
@@ -172,7 +178,7 @@ def _serialize_step(step: AgentStep) -> dict[str, Any]:
 
 
 def _serialize_result(result: ToolResult) -> dict[str, Any]:
-    return {"name": result.name, "output": result.output, "safe": result.safe}
+    return {"name": result.name, "output": result.output, "safe": result.safe, "retryable": result.retryable}
 
 
 def execute_agent(
@@ -185,8 +191,6 @@ def execute_agent(
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
         return AgentExecution(message=message, steps=(), results=())
-    # approved_tools is kept for compatibility only; authorization is cryptographically
-    # bound to the authenticated user through server-issued approval tokens.
     approved = frozenset(approved_tools or ())
     approval_tokens_tuple = tuple(approval_tokens or ())
     memory_context = _load_memory_context(user_id, normalized)
@@ -205,9 +209,6 @@ def execute_agent(
             continue
         executable.append(step)
         result, retry_count = _run_with_retry(step.tool, _chain_payload(step.payload, tuple(results)))
-        spec = get_tool_spec(step.tool)
-        if spec is not None and len(result.output) > spec.max_output_chars:
-            result = ToolResult(step.tool, result.output[:spec.max_output_chars], safe=False)
         results.append(result)
         retry_counts.append(retry_count)
     unsafe_result = any(not result.safe for result in results)

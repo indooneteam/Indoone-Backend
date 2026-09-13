@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
@@ -34,12 +34,15 @@ class AuditEvent:
         return cls(
             event_id=str(uuid4()),
             event_type=event_type,
-            user_id=user_id,
-            actor=actor,
-            resource=resource,
-            action=action,
-            outcome=outcome,
-            request_id=request_id,
+            user_id=user_id.strip(),
+            actor=actor.strip(),
+            resource=resource.strip(),
+            action=action.strip(),
+            outcome=outcome.strip(),
+            request_id=request_id.strip(),
             metadata=metadata or {},
             created_at=datetime.now(timezone.utc).isoformat(),
         )
+
+    def as_record(self) -> dict[str, Any]:
+        return asdict(self)

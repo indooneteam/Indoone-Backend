@@ -9,6 +9,7 @@ from app.ai.file_context import read_text_file
 from app.ai.intent import classify_intent
 from app.ai.service import generate_reply
 from app.ai.tools import run_tool
+from app.api.dependencies import current_user_id
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
@@ -26,7 +27,7 @@ class ChatResponse(BaseModel):
 
 
 def _principal(request: Request) -> str:
-    return str(getattr(request.state, "principal_id", "")).strip()
+    return current_user_id(request)
 
 
 @router.post("/chat", response_model=ChatResponse)

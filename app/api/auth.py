@@ -39,6 +39,15 @@ def _decode_part(value: str) -> bytes:
     return base64.urlsafe_b64decode((value + padding).encode("ascii"))
 
 
+def _validate_principal(user_id: str) -> str:
+    normalized = user_id.strip()
+    if not normalized or len(normalized) > 256:
+        raise ValueError("invalid principal")
+    if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in normalized):
+        raise ValueError("invalid principal")
+    return normalized
+
+
 def extract_principal(authorization: str) -> str:
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
@@ -54,8 +63,7 @@ def extract_principal(authorization: str) -> str:
         signature = _decode_part(encoded_signature)
     except (ValueError, UnicodeDecodeError, base64.binascii.Error) as exc:
         raise ValueError("invalid bearer token") from exc
-    if not user_id or len(user_id) > 256:
-        raise ValueError("invalid principal")
+    user_id = _validate_principal(user_id)
     age = int(time.time()) - issued_at
     if age < -_clock_skew_seconds() or age > _max_token_age_seconds():
         raise ValueError("expired bearer token")

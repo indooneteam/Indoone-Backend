@@ -12,6 +12,12 @@ class ConnectorSpec:
     read_capabilities: tuple[str, ...]
     write_capabilities: tuple[str, ...] = ()
 
+    def capabilities(self) -> tuple[str, ...]:
+        return self.read_capabilities + self.write_capabilities
+
+    def allows(self, capability: str) -> bool:
+        return capability.strip().lower() in {item.lower() for item in self.capabilities()}
+
 
 CONNECTORS: tuple[ConnectorSpec, ...] = (
     ConnectorSpec("gmail", "Gmail", "communication", "oauth2", ("messages.search", "messages.read"), ("messages.send",)),
@@ -35,3 +41,8 @@ def get_connector(connector_id: str) -> ConnectorSpec | None:
 
 def list_connectors() -> list[dict[str, object]]:
     return [asdict(item) for item in CONNECTORS]
+
+
+def allows_capability(connector_id: str, capability: str) -> bool:
+    connector = get_connector(connector_id)
+    return connector is not None and connector.allows(capability)

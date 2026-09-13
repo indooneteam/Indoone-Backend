@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
+from pathlib import Path
+from zipfile import BadZipFile
 
 from docx import Document
 from pypdf import PdfReader
+from pypdf.errors import PdfReadError
 
 
 MAX_DOCUMENT_BYTES = 8_000_000
@@ -12,6 +15,7 @@ MAX_TEXT_CHARS = 200_000
 MAX_TABLES = 100
 MAX_TABLE_ROWS = 500
 MAX_TABLE_COLS = 100
+MAX_FILENAME_LENGTH = 255
 PDF_MIME = "application/pdf"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
@@ -51,9 +55,19 @@ def _validate(content: bytes) -> None:
         raise ValueError("document exceeds 8 MB limit")
 
 
+def _safe_filename(filename: str) -> str:
+    candidate = Path(filename).name.strip()
+    if not candidate or candidate in {".", ".."} or len(candidate) > MAX_FILENAME_LENGTH:
+        raise ValueError("invalid document filename")
+    return candidate
+
+
 def _extract_pdf(filename: str, content: bytes) -> DocumentExtraction:
-    reader = PdfReader(io.BytesIO(content))
-    pages = [page.extract_text() or "" for page in reader.pages]
+    try:
+        reader = PdfReader(io.BytesIO(content))
+        pages = [page.extract_text() or "" for page in reader.pages]
+    except (PdfReadError, ValueError, OSError) as exc:
+        raise ValueError("invalid PDF document") from exc
     tables: list[list[list[str]]] = []
     for page_text in pages:
         candidate_rows: list[list[str]] = []
@@ -88,9 +102,7 @@ def extract_document(filename: str, mime_type: str, content: bytes) -> DocumentE
     """Extract text and structured tables from supported documents."""
 
     _validate(content)
-    filename = str(filename).strip()
-    if not filename:
-        raise ValueError("filename cannot be empty")
+    filename = _safe_filename(str(filename))
     mime_type = mime_type.strip().lower()
     if mime_type not in {PDF_MIME, DOCX_MIME}:
         raise ValueError("unsupported document type")
@@ -98,7 +110,10 @@ def extract_document(filename: str, mime_type: str, content: bytes) -> DocumentE
     if mime_type == PDF_MIME:
         return _extract_pdf(filename, content)
 
-    document = Document(io.BytesIO(content))
+    try:
+        document = Document(io.BytesIO(content))
+    except (BadZipFile, ValueError, OSError) as exc:
+        raise ValueError("invalid DOCX document") from exc
     paragraphs = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
     raw_text = "\n\n".join(paragraphs)
     text, truncated = _limit_text(raw_text)

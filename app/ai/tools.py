@@ -10,12 +10,14 @@ from typing import Callable
 
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
 from app.ai.code_sandbox import sandbox_execution_tool
+from app.ai.tool_registry import get_tool_spec
 from app.capabilities.contacts import parse_contacts, resolve_contact, search_contacts
 from app.capabilities.gmail import get_gmail_message, list_gmail_messages
 from app.capabilities.phone import build_call_action
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
+MAX_TOOL_PAYLOAD = 100_000
 
 
 @dataclass(frozen=True)
@@ -121,24 +123,26 @@ def _phone_call_contact(payload: str) -> str:
     return json.dumps(action.as_dict(), ensure_ascii=False, sort_keys=True)
 
 
-def _run_async(coro):
+def _run_async(coro, timeout_seconds: float):
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        return asyncio.run(coro)
+        return asyncio.run(asyncio.wait_for(coro, timeout=timeout_seconds))
 
     result: list[object] = []
     errors: list[BaseException] = []
 
     def runner() -> None:
         try:
-            result.append(asyncio.run(coro))
+            result.append(asyncio.run(asyncio.wait_for(coro, timeout=timeout_seconds)))
         except BaseException as exc:
             errors.append(exc)
 
     thread = threading.Thread(target=runner, daemon=True)
     thread.start()
-    thread.join()
+    thread.join(timeout_seconds + 0.5)
+    if thread.is_alive():
+        raise TimeoutError("asynchronous tool timed out")
     if errors:
         raise errors[0]
     return result[0]
@@ -151,13 +155,15 @@ def _gmail_search(payload: str) -> str:
     user_id = str(data.get("user_id", "")).strip()
     if not user_id:
         raise ValueError("user_id is required")
+    spec = get_tool_spec("gmail_search")
     result = _run_async(
         list_gmail_messages(
             user_id=user_id,
             query=str(data.get("query", "")),
             page_token=str(data.get("page_token", "")),
             max_results=int(data.get("max_results", 20)),
-        )
+        ),
+        spec.timeout_seconds if spec else 20.0,
     )
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
@@ -172,7 +178,8 @@ def _gmail_read(payload: str) -> str:
         raise ValueError("user_id is required")
     if not message_id:
         raise ValueError("message_id is required")
-    result = _run_async(get_gmail_message(user_id=user_id, message_id=message_id))
+    spec = get_tool_spec("gmail_read")
+    result = _run_async(get_gmail_message(user_id=user_id, message_id=message_id), spec.timeout_seconds if spec else 20.0)
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
@@ -194,11 +201,16 @@ TOOLS: dict[str, Callable[[str], str]] = {
 
 
 def run_tool(name: str, payload: str) -> ToolResult:
+    if len(payload) > MAX_TOOL_PAYLOAD:
+        return ToolResult(name, "Tool payload is too large", safe=False)
+    spec = get_tool_spec(name)
     tool = TOOLS.get(name)
-    if tool is None:
-        return ToolResult(name, f"Unknown tool: {name}", safe=False)
+    if spec is None or tool is None:
+        return ToolResult(name, "Unknown or unregistered tool", safe=False)
     try:
         output = tool(payload)
+        if len(output) > spec.max_output_chars:
+            output = output[: spec.max_output_chars] + "\n[output truncated by policy]"
         return ToolResult(name, output, safe=True)
     except Exception as exc:
         return ToolResult(name, f"Tool error: {exc}", safe=False)

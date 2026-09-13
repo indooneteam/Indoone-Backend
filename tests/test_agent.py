@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
@@ -29,7 +30,7 @@ APPROVAL_SECRET = "a" * 32
 
 def _approval_token(user_id: str, tool: str) -> str:
     os.environ["INDOONE_APPROVAL_SECRET"] = APPROVAL_SECRET
-    return issue_approval_token(user_id, tool, now=1_000)
+    return issue_approval_token(user_id, tool, now=int(time.time()))
 
 
 def test_agent_builds_calculator_step() -> None:

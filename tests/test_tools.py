@@ -30,3 +30,9 @@ def test_calculator_rejects_huge_exponent() -> None:
 def test_calculator_rejects_huge_literal() -> None:
     result = run_tool("calculator", str(MAX_CALCULATOR_ABS_VALUE + 1))
     assert result.safe is False
+
+
+def test_tool_payload_limit_is_enforced() -> None:
+    result = run_tool("text_stats", "x" * 100_001)
+    assert result.safe is False
+    assert "payload" in result.output.lower()

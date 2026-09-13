@@ -7,6 +7,7 @@ from uuid import UUID, uuid4
 
 FILE_ROOT = Path("data/uploads")
 MAX_TEXT_BYTES = 2_000_000
+MAX_FILENAME_LENGTH = 255
 SUPPORTED_SUFFIXES = {".txt", ".md", ".json", ".csv", ".log"}
 
 
@@ -31,10 +32,18 @@ def _load_metadata(directory: Path) -> dict[str, object]:
     return metadata
 
 
+def _safe_filename(filename: str) -> str:
+    candidate = Path(filename).name.strip()
+    if not candidate or candidate in {".", ".."} or len(candidate) > MAX_FILENAME_LENGTH:
+        raise ValueError("Invalid filename")
+    return candidate
+
+
 def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str, str | int]:
     if len(content) > MAX_TEXT_BYTES:
         raise ValueError("File is too large")
-    suffix = Path(filename).suffix.lower()
+    safe_filename = _safe_filename(filename)
+    suffix = Path(safe_filename).suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
         raise ValueError("Text intake currently supports txt, md, json, csv, and log files")
     owner = user_id.strip()
@@ -42,11 +51,17 @@ def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str
         raise ValueError("authenticated user is required")
     file_id = str(uuid4())
     directory = FILE_ROOT / file_id
-    target = directory / Path(filename).name
-    directory.mkdir(parents=True, exist_ok=True)
+    target = directory / safe_filename
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     target.write_bytes(content)
+    target.chmod(0o600)
     metadata = {"user_id": owner, "filename": target.name}
-    (directory / ".metadata.json").write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+    metadata_path = directory / ".metadata.json"
+    temporary_metadata = directory / ".metadata.json.tmp"
+    temporary_metadata.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+    temporary_metadata.chmod(0o600)
+    temporary_metadata.replace(metadata_path)
+    metadata_path.chmod(0o600)
     text = content.decode("utf-8", errors="replace")
     return {"file_id": file_id, "filename": target.name, "bytes": len(content), "text": text}
 
@@ -65,7 +80,7 @@ def get_file_owner(file_id: str) -> str:
 def read_text_file(file_id: str, user_id: str = "") -> str:
     directory = _safe_directory(file_id)
     owner = user_id.strip()
-    if not owner:
+    if not owner or len(owner) > 256:
         raise PermissionError("authenticated user required")
     stored_owner = get_file_owner(file_id)
     if stored_owner != owner:

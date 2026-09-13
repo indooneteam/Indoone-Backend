@@ -18,6 +18,8 @@ def test_health() -> None:
 def test_chat_rejects_empty_message() -> None:
     response = client.post("/api/chat", json={"message": ""})
     assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert response.headers["X-Request-ID"]
 
 
 def test_chat_returns_ai_reply(monkeypatch) -> None:
@@ -34,6 +36,7 @@ def test_chat_returns_ai_reply(monkeypatch) -> None:
     payload = response.json()
     assert payload["reply"] == "test reply: Hello Indoone"
     assert payload["conversation_id"]
+    assert response.headers["X-Request-ID"]
 
 
 def test_chat_reuses_conversation_context(monkeypatch, tmp_path: Path) -> None:

@@ -20,3 +20,9 @@ def test_owned_file_requires_authentication(tmp_path: Path, monkeypatch) -> None
 
     with pytest.raises(PermissionError, match="authenticated user required"):
         file_context.read_text_file(saved["file_id"])
+
+
+def test_upload_requires_authenticated_owner(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(file_context, "FILE_ROOT", tmp_path)
+    with pytest.raises(ValueError, match="authenticated user is required"):
+        file_context.save_text_file("note.txt", b"hello")

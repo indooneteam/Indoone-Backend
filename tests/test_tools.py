@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from app.ai.tools import run_tool
+from app.ai.tools import MAX_CALCULATOR_ABS_VALUE, MAX_CALCULATOR_EXPONENT, run_tool
 
 
 def test_text_stats_tool_is_deterministic() -> None:
@@ -19,4 +19,14 @@ def test_json_summary_tool_is_bounded() -> None:
 
 def test_unknown_tool_is_unsafe() -> None:
     result = run_tool("not_a_tool", "payload")
+    assert result.safe is False
+
+
+def test_calculator_rejects_huge_exponent() -> None:
+    result = run_tool("calculator", f"2**{MAX_CALCULATOR_EXPONENT + 1}")
+    assert result.safe is False
+
+
+def test_calculator_rejects_huge_literal() -> None:
+    result = run_tool("calculator", str(MAX_CALCULATOR_ABS_VALUE + 1))
     assert result.safe is False

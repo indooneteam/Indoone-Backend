@@ -40,16 +40,26 @@ def test_document_analysis_requires_authentication(monkeypatch) -> None:
 
 def test_document_batch_size_is_bounded(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
-    oversized = "A" * 30_000_001
+    oversized = "A" * 10_000_001
     response = client.post(
         "/api/documents/analyze-batch",
         json={
             "documents": [
                 {
-                    "filename": "large.pdf",
+                    "filename": "large-1.pdf",
                     "mime_type": "application/pdf",
                     "content_base64": oversized,
-                }
+                },
+                {
+                    "filename": "large-2.pdf",
+                    "mime_type": "application/pdf",
+                    "content_base64": oversized,
+                },
+                {
+                    "filename": "large-3.pdf",
+                    "mime_type": "application/pdf",
+                    "content_base64": oversized,
+                },
             ]
         },
         headers=_auth_headers(),

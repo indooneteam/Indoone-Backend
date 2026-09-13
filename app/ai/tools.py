@@ -18,7 +18,6 @@ from app.capabilities.phone import build_call_action
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
 MAX_TOOL_PAYLOAD = 100_000
-MAX_TOOL_NAME = 128
 
 
 @dataclass(frozen=True)
@@ -26,6 +25,7 @@ class ToolResult:
     name: str
     output: str
     safe: bool = True
+    retryable: bool = False
 
 
 def _bounded_number(value: int | float) -> int | float:
@@ -201,24 +201,24 @@ TOOLS: dict[str, Callable[[str], str]] = {
 }
 
 
+def _is_retryable_exception(exc: BaseException) -> bool:
+    return isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError))
+
+
 def run_tool(name: str, payload: str) -> ToolResult:
     normalized_name = str(name).strip().lower()
-    if not normalized_name or len(normalized_name) > MAX_TOOL_NAME:
-        return ToolResult(normalized_name, "Unknown or invalid tool", safe=False)
     if not isinstance(payload, str):
-        return ToolResult(normalized_name, "Tool payload must be text", safe=False)
+        return ToolResult(normalized_name, "Tool payload must be text", safe=False, retryable=False)
     if len(payload) > MAX_TOOL_PAYLOAD:
-        return ToolResult(normalized_name, "Tool payload is too large", safe=False)
+        return ToolResult(normalized_name, "Tool payload is too large", safe=False, retryable=False)
     spec = get_tool_spec(normalized_name)
     tool = TOOLS.get(normalized_name)
     if spec is None or tool is None:
-        return ToolResult(normalized_name, "Unknown or unregistered tool", safe=False)
+        return ToolResult(normalized_name, "Unknown or unregistered tool", safe=False, retryable=False)
     try:
         output = tool(payload)
-        if not isinstance(output, str):
-            output = str(output)
         if len(output) > spec.max_output_chars:
             output = output[: spec.max_output_chars] + "\n[output truncated by policy]"
-        return ToolResult(normalized_name, output, safe=True)
+        return ToolResult(normalized_name, output, safe=True, retryable=False)
     except Exception as exc:
-        return ToolResult(normalized_name, f"Tool error: {exc}", safe=False)
+        return ToolResult(normalized_name, f"Tool error: {exc}", safe=False, retryable=_is_retryable_exception(exc))

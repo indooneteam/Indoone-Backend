@@ -112,9 +112,12 @@ class ConversationStore:
     def is_closed(self, conversation_id: str, user_id: str | None = None) -> bool:
         if not conversation_id:
             raise ValueError("conversation_id cannot be empty")
+        owner_id = self._require_user_id(user_id)
         with self._connect() as connection:
             row = connection.execute("SELECT user_id, status FROM conversations WHERE conversation_id = ?", (conversation_id,)).fetchone()
-            self._assert_owner(row, user_id)
+            if row is None:
+                return False
+            self._assert_owner(row, owner_id)
         return str(row["status"]) == "closed"
 
     def close(self, conversation_id: str, user_id: str | None = None) -> None:

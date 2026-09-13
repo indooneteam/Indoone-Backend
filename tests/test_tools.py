@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import threading
 import time
 
 from app.ai.tools import MAX_CALCULATOR_ABS_VALUE, MAX_CALCULATOR_EXPONENT, TOOLS, run_tool
@@ -78,3 +79,32 @@ def test_non_text_tool_output_is_unsafe(monkeypatch) -> None:
     assert result.safe is False
     assert result.retryable is False
     assert "output must be text" in result.output.lower()
+
+
+def test_sync_tool_worker_slots_are_bounded(monkeypatch) -> None:
+    original_tool = TOOLS["text_stats"]
+
+    def blocked_tool(_: str) -> str:
+        time.sleep(0.2)
+        return "done"
+
+    monkeypatch.setitem(TOOLS, "text_stats", blocked_tool)
+    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.2, "max_output_chars": 100})())
+    results: list[object] = []
+    lock = threading.Lock()
+
+    def call() -> None:
+        outcome = run_tool("text_stats", "hello")
+        with lock:
+            results.append(outcome)
+
+    workers = [threading.Thread(target=call) for _ in range(9)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    monkeypatch.setitem(TOOLS, "text_stats", original_tool)
+
+    unsafe = [item for item in results if getattr(item, "safe", True) is False]
+    assert len(results) == 9
+    assert any("too many" in getattr(item, "output", "").lower() for item in unsafe)

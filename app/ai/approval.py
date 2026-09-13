@@ -11,6 +11,11 @@ from typing import Iterable
 
 from app.ai.tool_registry import get_tool_spec
 
+MAX_APPROVAL_USER_LENGTH = 256
+MAX_APPROVAL_TOOL_LENGTH = 128
+MAX_APPROVAL_TOKEN_LENGTH = 2048
+MAX_APPROVAL_TOKEN_COUNT = 32
+
 
 @dataclass(frozen=True)
 class ApprovalDecision:
@@ -26,35 +31,61 @@ def _approval_secret() -> bytes:
     return secret.encode("utf-8")
 
 
+def _normalize_identity(value: str, field: str, limit: int) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field} is required")
+    if len(normalized) > limit:
+        raise ValueError(f"{field} is too long")
+    return normalized
+
+
 def issue_approval_token(user_id: str, tool: str, ttl_seconds: int = 300, now: int | None = None) -> str:
-    normalized_user = user_id.strip()
-    normalized_tool = tool.strip()
-    if not normalized_user:
-        raise ValueError("user_id is required")
-    if not normalized_tool:
-        raise ValueError("tool is required")
+    normalized_user = _normalize_identity(user_id, "user_id", MAX_APPROVAL_USER_LENGTH)
+    normalized_tool = _normalize_identity(tool, "tool", MAX_APPROVAL_TOOL_LENGTH).lower()
+    spec = get_tool_spec(normalized_tool)
+    if spec is None:
+        raise ValueError("tool is not registered")
+    if not spec.requires_approval:
+        raise ValueError("tool does not require approval")
     if ttl_seconds < 1 or ttl_seconds > 3600:
         raise ValueError("approval token ttl must be between 1 and 3600 seconds")
-    if get_tool_spec(normalized_tool) is None:
-        raise ValueError("tool is not registered")
     timestamp = int(time.time()) if now is None else int(now)
     payload = {
         "v": 1,
         "sub": normalized_user,
-        "tool": normalized_tool,
+        "tool": spec.name,
         "exp": timestamp + ttl_seconds,
     }
-    encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")).decode("ascii").rstrip("=")
+    encoded = base64.urlsafe_b64encode(
+        json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    ).decode("ascii").rstrip("=")
     signature = hmac.new(_approval_secret(), encoded.encode("ascii"), hashlib.sha256).hexdigest()
     return f"v1.{encoded}.{signature}"
 
 
 def validate_approval_token(token: str, user_id: str, tool: str, now: int | None = None) -> bool:
-    parts = token.strip().split(".")
+    if len(token.strip()) > MAX_APPROVAL_TOKEN_LENGTH:
+        return False
+    try:
+        normalized_user = _normalize_identity(user_id, "user_id", MAX_APPROVAL_USER_LENGTH)
+        normalized_tool = _normalize_identity(tool, "tool", MAX_APPROVAL_TOOL_LENGTH).lower()
+    except ValueError:
+        return False
+    spec = get_tool_spec(normalized_tool)
+    if spec is None or not spec.requires_approval:
+        return False
+    token_value = token.strip()
+    parts = token_value.split(".")
     if len(parts) != 3 or parts[0] != "v1":
         return False
     encoded, signature = parts[1], parts[2]
-    expected = hmac.new(_approval_secret(), encoded.encode("ascii"), hashlib.sha256).hexdigest()
+    if not encoded or len(signature) != hashlib.sha256().digest_size * 2:
+        return False
+    try:
+        expected = hmac.new(_approval_secret(), encoded.encode("ascii"), hashlib.sha256).hexdigest()
+    except UnicodeEncodeError:
+        return False
     if not hmac.compare_digest(signature, expected):
         return False
     try:
@@ -62,11 +93,13 @@ def validate_approval_token(token: str, user_id: str, tool: str, now: int | None
         payload = json.loads(base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8"))
     except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
         return False
+    if not isinstance(payload, dict):
+        return False
     timestamp = int(time.time()) if now is None else int(now)
     return (
         payload.get("v") == 1
-        and payload.get("sub") == user_id.strip()
-        and payload.get("tool") == tool.strip()
+        and payload.get("sub") == normalized_user
+        and payload.get("tool") == spec.name
         and isinstance(payload.get("exp"), int)
         and timestamp < payload["exp"]
     )
@@ -88,7 +121,14 @@ def decide_tool(
         return ApprovalDecision(False, True, "authenticated user is required for approval")
     try:
         tokens = tuple(approval_tokens or ())
-        if any(validate_approval_token(token, user_id, name) for token in tokens):
+        if len(tokens) > MAX_APPROVAL_TOKEN_COUNT:
+            return ApprovalDecision(False, True, "too many approval tokens")
+        if any(
+            isinstance(token, str)
+            and len(token.strip()) <= MAX_APPROVAL_TOKEN_LENGTH
+            and validate_approval_token(token, user_id, spec.name)
+            for token in tokens
+        ):
             return ApprovalDecision(True, True, "server-issued approval token accepted")
     except RuntimeError:
         return ApprovalDecision(False, True, "approval service is not configured")

@@ -234,6 +234,25 @@ def test_agent_retries_are_bounded(monkeypatch) -> None:
     assert calls["count"] == 2
 
 
+def test_agent_aborts_remaining_steps_after_unsafe_result(monkeypatch) -> None:
+    calls: list[str] = []
+
+    def failing_tool(name: str, payload: str):
+        from app.ai.tools import ToolResult
+
+        calls.append(payload)
+        return ToolResult(name, "invalid result", safe=False, retryable=False)
+
+    monkeypatch.setattr("app.ai.agent.run_tool", failing_tool)
+    execution = execute_agent("calculate 10 / 0, 2 + 3")
+    assert len(execution.results) == 1
+    assert len(execution.steps) == 1
+    assert execution.results[0].safe is False
+    assert execution.blocked_steps
+    assert execution.blocked_steps[0].index == 2
+    assert calls == ["10/0"]
+
+
 def test_agent_rejects_oversized_messages() -> None:
     oversized = "x" * (MAX_AGENT_MESSAGE_LENGTH + 1)
     execution = execute_agent(oversized)

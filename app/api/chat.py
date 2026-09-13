@@ -33,13 +33,22 @@ def _principal(request: Request) -> str:
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     user_id = _principal(request)
+    is_new_conversation = body.conversation_id is None
     conversation_id = body.conversation_id or str(uuid4())
+
     try:
-        if _store.is_closed(conversation_id, user_id=user_id):
-            conversation_id = str(uuid4())
-        history = _store.recent(conversation_id, user_id=user_id)
+        if is_new_conversation:
+            history: list[tuple[str, str]] = []
+        else:
+            if _store.is_closed(conversation_id, user_id=user_id):
+                conversation_id = str(uuid4())
+                history = []
+            else:
+                history = _store.recent(conversation_id, user_id=user_id)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     intent = classify_intent(body.message)
     document_context = ""

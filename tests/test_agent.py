@@ -192,11 +192,46 @@ def test_agent_chains_previous_result_into_calculator() -> None:
     assert [result.output for result in execution.results] == ["5", "20"]
 
 
-def test_agent_exposes_bounded_retry_state_for_failures() -> None:
+def test_agent_does_not_retry_non_transient_failures() -> None:
     execution = execute_agent("calculate 10 / 0")
     assert len(execution.results) == 1
     assert execution.results[0].safe is False
+    assert execution.results[0].retryable is False
+    assert execution.retry_counts == (0,)
+
+
+def test_agent_retries_transient_failures(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    def flaky_tool(name: str, payload: str):
+        from app.ai.tools import ToolResult
+
+        calls["count"] += 1
+        if calls["count"] == 1:
+            return ToolResult(name, "temporary failure", safe=False, retryable=True)
+        return ToolResult(name, "recovered", safe=True, retryable=False)
+
+    monkeypatch.setattr("app.ai.agent.run_tool", flaky_tool)
+    execution = execute_agent("text stats: hello")
+    assert execution.results[0].output == "recovered"
     assert execution.retry_counts == (1,)
+    assert calls["count"] == 2
+
+
+def test_agent_retries_are_bounded(monkeypatch) -> None:
+    calls = {"count": 0}
+
+    def always_flaky(name: str, payload: str):
+        from app.ai.tools import ToolResult
+
+        calls["count"] += 1
+        return ToolResult(name, "temporary failure", safe=False, retryable=True)
+
+    monkeypatch.setattr("app.ai.agent.run_tool", always_flaky)
+    execution = execute_agent("text stats: hello")
+    assert execution.results[0].safe is False
+    assert execution.retry_counts == (1,)
+    assert calls["count"] == 2
 
 
 def test_agent_rejects_oversized_messages() -> None:
@@ -225,7 +260,7 @@ def test_agent_persists_failed_execution_state() -> None:
             assert saved is not None
             assert saved["status"] == "failed"
             assert saved["results"][0]["safe"] is False
-            assert saved["retry_counts"] == [1]
+            assert saved["retry_counts"] == [0]
         finally:
             if old_path is None:
                 os.environ.pop("INDOONE_CAPABILITY_DB", None)

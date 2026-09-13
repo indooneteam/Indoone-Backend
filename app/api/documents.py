@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import base64
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.api.dependencies import current_user_id
 from app.capabilities.document_extract import extract_document
 
 
 router = APIRouter(prefix="/documents", tags=["documents"])
+MAX_BATCH_ENCODED_BYTES = 30_000_000
 
 
 class DocumentItem(BaseModel):
@@ -43,13 +45,18 @@ def _decode_document(item: DocumentItem) -> dict[str, object]:
 
 
 @router.post("/analyze")
-async def analyze_document(request: DocumentItem) -> dict[str, object]:
-    return {"document": _decode_document(request)}
+async def analyze_document(request: Request, body: DocumentItem) -> dict[str, object]:
+    current_user_id(request)
+    return {"document": _decode_document(body)}
 
 
 @router.post("/analyze-batch")
-async def analyze_document_batch(request: BatchDocumentRequest) -> dict[str, object]:
-    documents = [_decode_document(item) for item in request.documents]
+async def analyze_document_batch(request: Request, body: BatchDocumentRequest) -> dict[str, object]:
+    current_user_id(request)
+    encoded_bytes = sum(len(item.content_base64) for item in body.documents)
+    if encoded_bytes > MAX_BATCH_ENCODED_BYTES:
+        raise HTTPException(status_code=413, detail="document batch is too large")
+    documents = [_decode_document(item) for item in body.documents]
     return {
         "documents": documents,
         "count": len(documents),

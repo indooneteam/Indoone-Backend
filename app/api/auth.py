@@ -40,9 +40,10 @@ def _decode_part(value: str) -> bytes:
 
 
 def extract_principal(authorization: str) -> str:
-    if not authorization.startswith("Bearer "):
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
         raise ValueError("bearer authentication required")
-    token = authorization[7:].strip()
+    token = token.strip()
     parts = token.split(".")
     if len(parts) != 3:
         raise ValueError("invalid bearer token")

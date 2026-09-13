@@ -6,7 +6,25 @@ import hmac
 import os
 import time
 
-_MAX_TOKEN_AGE_SECONDS = 3600
+_DEFAULT_TOKEN_AGE_SECONDS = 3600
+_DEFAULT_CLOCK_SKEW_SECONDS = 30
+
+
+def _bounded_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(minimum, min(maximum, value))
+
+
+def _max_token_age_seconds() -> int:
+    return _bounded_int("INDOONE_AUTH_TOKEN_MAX_AGE", _DEFAULT_TOKEN_AGE_SECONDS, minimum=60, maximum=86_400)
+
+
+def _clock_skew_seconds() -> int:
+    return _bounded_int("INDOONE_AUTH_CLOCK_SKEW", _DEFAULT_CLOCK_SKEW_SECONDS, minimum=0, maximum=300)
 
 
 def _secret() -> bytes:
@@ -38,7 +56,7 @@ def extract_principal(authorization: str) -> str:
     if not user_id or len(user_id) > 256:
         raise ValueError("invalid principal")
     age = int(time.time()) - issued_at
-    if age < -30 or age > _MAX_TOKEN_AGE_SECONDS:
+    if age < -_clock_skew_seconds() or age > _max_token_age_seconds():
         raise ValueError("expired bearer token")
     payload = f"{encoded_user}.{encoded_timestamp}".encode("ascii")
     expected = hmac.new(_secret(), payload, hashlib.sha256).digest()

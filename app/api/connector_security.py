@@ -14,6 +14,10 @@ logger = logging.getLogger("indoone.connector_security")
 _CONNECTOR_PATH_PREFIXES = ("/api/integrations", "/api/google-photos")
 
 
+def _is_connector_path(path: str) -> bool:
+    return any(path == prefix or path.startswith(f"{prefix}/") for prefix in _CONNECTOR_PATH_PREFIXES)
+
+
 def _extract_requested_user(request: Request, payload: Any) -> str:
     query_user = request.query_params.get("user_id", "").strip()
     if query_user:
@@ -26,7 +30,7 @@ def _extract_requested_user(request: Request, payload: Any) -> str:
 
 async def enforce_connector_user_scope(request: Request) -> None:
     """Keep connector API user scopes bound to the authenticated principal."""
-    if not request.url.path.startswith(_CONNECTOR_PATH_PREFIXES):
+    if not _is_connector_path(request.url.path):
         return
     payload: Any = None
     if request.method in {"POST", "PUT", "PATCH"}:

@@ -17,29 +17,25 @@ from app.ai.agent import (
     _unresolved_chain_references,
     build_agent_steps,
 )
+from app.ai.agent_policy import deadline_failure, remaining_budget, should_retry
 from app.ai.approval import decide_tool
 from app.ai.tools import ToolResult, run_tool_async
 from app.capabilities.store import create_agent_run, update_agent_run
 
 
 async def _run_with_retry_async(tool: str, payload: str, deadline: float) -> tuple[ToolResult, int]:
-    remaining = deadline - time.monotonic()
+    remaining = remaining_budget(deadline)
     if remaining <= 0:
-        return ToolResult(tool, "Tool execution deadline exceeded", safe=False, retryable=False), 0
+        return deadline_failure(tool), 0
 
     result = await run_tool_async(tool, payload, max_runtime_seconds=remaining)
-    if result.safe or not result.retryable or MAX_AGENT_RETRIES == 0:
-        return result, 0
-
     retry_count = 0
-    while retry_count < MAX_AGENT_RETRIES:
-        remaining = deadline - time.monotonic()
+    while should_retry(result, retry_count, MAX_AGENT_RETRIES):
+        remaining = remaining_budget(deadline)
         if remaining <= 0:
-            return ToolResult(tool, "Tool execution deadline exceeded", safe=False, retryable=False), retry_count
+            return deadline_failure(tool), retry_count
         retry_count += 1
         result = await run_tool_async(tool, payload, max_runtime_seconds=remaining)
-        if result.safe or not result.retryable:
-            break
     return result, retry_count
 
 
@@ -62,14 +58,14 @@ async def execute_agent_async(
         run_id = str(create_agent_run(user_id, normalized)["id"])
 
     planned_steps = build_agent_steps(normalized, user_id=user_id, contacts=contacts)[:MAX_AGENT_STEPS]
-    executable = []
-    blocked = []
+    executable: list[Any] = []
+    blocked: list[Any] = []
     results: list[ToolResult] = []
     retry_counts: list[int] = []
     deadline = time.monotonic() + MAX_AGENT_RUNTIME_SECONDS
 
     for position, step in enumerate(planned_steps):
-        if time.monotonic() >= deadline:
+        if remaining_budget(deadline) <= 0:
             blocked.extend(planned_steps[position:])
             break
 
@@ -106,7 +102,7 @@ async def execute_agent_async(
     timed_out = bool(
         blocked
         and len(executable) + len(blocked) >= len(planned_steps)
-        and time.monotonic() >= deadline
+        and remaining_budget(deadline) <= 0
     )
     status = "failed" if unsafe_result else ("blocked" if blocked and not results else ("timed_out" if timed_out else "completed"))
     execution = AgentExecution(

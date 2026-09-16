@@ -8,6 +8,7 @@ import time
 from typing import Any, Iterable
 
 from app.ai.agent_contracts import serialize_tool_result
+from app.ai.agent_policy import deadline_failure, remaining_budget, should_retry
 from app.ai.approval import decide_tool
 from app.ai.orchestrator import Plan, plan_request
 from app.ai.tool_registry import get_tool_spec, tool_names
@@ -143,17 +144,15 @@ def _run_with_retry(tool: str, payload: str, deadline: float) -> tuple[ToolResul
         parameters = inspect.signature(run_tool).parameters
         if "max_runtime_seconds" in parameters: return run_tool(tool, payload, max_runtime_seconds=remaining)
         return run_tool(tool, payload)
-    remaining = deadline - time.monotonic()
-    if remaining <= 0: return ToolResult(tool, "Tool execution deadline exceeded", safe=False, retryable=False), 0
+    remaining = remaining_budget(deadline)
+    if remaining <= 0: return deadline_failure(tool), 0
     result = invoke(remaining)
-    if result.safe or not result.retryable or MAX_AGENT_RETRIES == 0: return result, 0
     retry_count = 0
-    while retry_count < MAX_AGENT_RETRIES:
-        remaining = deadline - time.monotonic()
-        if remaining <= 0: return ToolResult(tool, "Tool execution deadline exceeded", safe=False, retryable=False), retry_count
+    while should_retry(result, retry_count, MAX_AGENT_RETRIES):
+        remaining = remaining_budget(deadline)
+        if remaining <= 0: return deadline_failure(tool), retry_count
         retry_count += 1
         result = invoke(remaining)
-        if result.safe or not result.retryable: break
     return result, retry_count
 
 def _serialize_step(step: AgentStep) -> dict[str, Any]: return {"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval}
@@ -179,7 +178,7 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
     executable: list[AgentStep] = []; blocked: list[AgentStep] = []; results: list[ToolResult] = []; retry_counts: list[int] = []
     deadline = time.monotonic() + MAX_AGENT_RUNTIME_SECONDS
     for position, step in enumerate(planned_steps):
-        if time.monotonic() >= deadline:
+        if remaining_budget(deadline) <= 0:
             blocked.extend(planned_steps[position:]); break
         decision = decide_tool(step.tool, approved, approval_tokens_tuple, user_id=user_id)
         if not decision.allowed: blocked.append(step); continue
@@ -202,7 +201,7 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
         if not result.safe:
             blocked.extend(planned_steps[position + 1:]); break
     unsafe_result = any(not result.safe for result in results)
-    timed_out = bool(blocked and len(executable) + len(blocked) >= len(planned_steps) and time.monotonic() >= deadline)
+    timed_out = bool(blocked and len(executable) + len(blocked) >= len(planned_steps) and remaining_budget(deadline) <= 0)
     status = "failed" if unsafe_result else ("blocked" if blocked and not results else ("timed_out" if timed_out else "completed"))
     execution = AgentExecution(message=normalized, steps=tuple(executable), results=tuple(results), memories=memory_context, blocked_steps=tuple(blocked), retry_counts=tuple(retry_counts), run_id=run_id)
     if user_id.strip() and run_id is not None:

@@ -235,6 +235,13 @@ def _is_retryable_exception(exc: BaseException) -> bool:
     return isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError))
 
 
+def _tool_error_message(exc: BaseException) -> str:
+    if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
+        return "Tool error: tool execution timed out"
+    message = str(exc).strip()
+    return f"Tool error: {message}" if message else f"Tool error: {type(exc).__name__}"
+
+
 async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
     """Run a tool from an async request without creating a thread for async tools."""
     normalized_name, prepared, error = _validate_tool_request(name, payload)
@@ -262,7 +269,7 @@ async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | N
             output = output[: spec.max_output_chars] + "\n[output truncated by policy]"
         return ToolResult(normalized_name, output, safe=True, retryable=False)
     except Exception as exc:
-        return ToolResult(normalized_name, f"Tool error: {exc}", safe=False, retryable=_is_retryable_exception(exc))
+        return ToolResult(normalized_name, _tool_error_message(exc), safe=False, retryable=_is_retryable_exception(exc))
 
 
 def run_tool(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
@@ -286,4 +293,4 @@ def run_tool(name: str, payload: str, max_runtime_seconds: float | None = None) 
             output = output[: spec.max_output_chars] + "\n[output truncated by policy]"
         return ToolResult(normalized_name, output, safe=True, retryable=False)
     except Exception as exc:
-        return ToolResult(normalized_name, f"Tool error: {exc}", safe=False, retryable=_is_retryable_exception(exc))
+        return ToolResult(normalized_name, _tool_error_message(exc), safe=False, retryable=_is_retryable_exception(exc))

@@ -18,6 +18,7 @@ async def test_rag_context_is_injected_into_generation(monkeypatch) -> None:
     monkeypatch.setattr(service, "_knowledge_base", knowledge)
     monkeypatch.setattr(service, "_runtime", None)
     monkeypatch.setattr(service._fallback_engine, "generate", fake_generate)
+    monkeypatch.setattr(service._fallback_engine, "ready", True)
 
     result = await service.LocalAIService().generate("What is the Indoone Pro price?")
 

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.ai.behavior_eval import load_cases, score_response
+from app.ai.behavior_eval import load_cases, score_case, score_response
 
 
 def test_load_behavior_cases() -> None:
@@ -21,3 +21,16 @@ def test_score_response_tracks_topic_coverage() -> None:
     assert score["response_nonempty"] is True
     assert score["matched_topics"] == ["permission", "authorized"]
     assert score["topic_coverage"] == 1.0
+
+
+def test_score_case_applies_answer_quality_gate() -> None:
+    case = {
+        "id": "quality",
+        "category": "honesty",
+        "prompt": "Tell me something.",
+        "expected_topics": ["permission"],
+    }
+    score = score_case(case, "Permission is required. Permission is required. Permission is required.")
+    assert score["quality_passed"] is False
+    assert score["quality_reason"] == "repeated_output"
+    assert score["passed"] is False

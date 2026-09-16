@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import inspect
 import json
 import operator
 import threading
 from dataclasses import dataclass
-from typing import Callable
+from typing import Awaitable, Callable
 
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
 from app.ai.code_sandbox import sandbox_execution_tool
@@ -20,6 +21,8 @@ MAX_CALCULATOR_EXPONENT = 1000
 MAX_TOOL_PAYLOAD = 100_000
 MAX_TOOL_TIMEOUT_SECONDS = 60.0
 MAX_SYNC_TOOL_WORKERS = 8
+
+ToolCallable = Callable[[str], str | Awaitable[str]]
 
 
 @dataclass(frozen=True)
@@ -126,38 +129,20 @@ def _phone_call_contact(payload: str) -> str:
     return json.dumps(action.as_dict(), ensure_ascii=False, sort_keys=True)
 
 
-def _run_async(coro, timeout_seconds: float):
+async def _run_async(coro, timeout_seconds: float):
+    """Await a coroutine with a bounded timeout on the current event loop.
+
+    Async callers stay on their existing loop, so timeout/cancellation can propagate
+    directly into the coroutine instead of spawning a second event loop in a thread.
+    """
     bounded_timeout = max(0.01, min(float(timeout_seconds), MAX_TOOL_TIMEOUT_SECONDS))
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(asyncio.wait_for(coro, timeout=bounded_timeout))
-
-    result: list[object] = []
-    errors: list[BaseException] = []
-
-    def runner() -> None:
-        try:
-            result.append(asyncio.run(asyncio.wait_for(coro, timeout=bounded_timeout)))
-        except BaseException as exc:
-            errors.append(exc)
-
-    thread = threading.Thread(target=runner, daemon=True, name="indoone-async-tool")
-    thread.start()
-    thread.join(bounded_timeout + 0.5)
-    if thread.is_alive():
-        raise TimeoutError("asynchronous tool timed out")
-    if errors:
-        raise errors[0]
-    if not result:
-        raise RuntimeError("asynchronous tool returned no result")
-    return result[0]
+    return await asyncio.wait_for(coro, timeout=bounded_timeout)
 
 
 _SYNC_TOOL_SEMAPHORE = threading.BoundedSemaphore(MAX_SYNC_TOOL_WORKERS)
 
 
-def _run_sync_with_timeout(tool: Callable[[str], str], payload: str, timeout_seconds: float) -> str:
+def _run_sync_with_timeout(tool: ToolCallable, payload: str, timeout_seconds: float) -> str:
     bounded_timeout = max(0.01, min(float(timeout_seconds), MAX_TOOL_TIMEOUT_SECONDS))
     if not _SYNC_TOOL_SEMAPHORE.acquire(blocking=False):
         raise RuntimeError("too many timed-out or running sync tools")
@@ -167,7 +152,10 @@ def _run_sync_with_timeout(tool: Callable[[str], str], payload: str, timeout_sec
 
     def runner() -> None:
         try:
-            result.append(tool(payload))
+            output = tool(payload)
+            if inspect.isawaitable(output):
+                output = asyncio.run(asyncio.wait_for(output, timeout=bounded_timeout))
+            result.append(output)
         except BaseException as exc:
             errors.append(exc)
         finally:
@@ -188,7 +176,7 @@ def _run_sync_with_timeout(tool: Callable[[str], str], payload: str, timeout_sec
     return output
 
 
-def _gmail_search(payload: str) -> str:
+async def _gmail_search(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
         raise ValueError("gmail_search payload must be an object")
@@ -196,7 +184,7 @@ def _gmail_search(payload: str) -> str:
     if not user_id:
         raise ValueError("user_id is required")
     spec = get_tool_spec("gmail_search")
-    result = _run_async(
+    result = await _run_async(
         list_gmail_messages(
             user_id=user_id,
             query=str(data.get("query", "")),
@@ -208,7 +196,7 @@ def _gmail_search(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
-def _gmail_read(payload: str) -> str:
+async def _gmail_read(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
         raise ValueError("gmail_read payload must be an object")
@@ -219,11 +207,11 @@ def _gmail_read(payload: str) -> str:
     if not message_id:
         raise ValueError("message_id is required")
     spec = get_tool_spec("gmail_read")
-    result = _run_async(get_gmail_message(user_id=user_id, message_id=message_id), spec.timeout_seconds if spec else 20.0)
+    result = await _run_async(get_gmail_message(user_id=user_id, message_id=message_id), spec.timeout_seconds if spec else 20.0)
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
-TOOLS: dict[str, Callable[[str], str]] = {
+TOOLS: dict[str, ToolCallable] = {
     "calculator": _calculate,
     "text_stats": _text_stats,
     "json_summary": _json_summary,

@@ -29,7 +29,6 @@ def assess_response_style(
 
     text = response.strip()
     normalized_prompt = _normalized(prompt)
-    normalized_response = _normalized(response)
 
     if not text:
         return ResponseStyle(False, "style_empty_response")

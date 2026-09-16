@@ -25,6 +25,35 @@ def test_score_case_rejects_forbidden_claim() -> None:
     assert score["forbidden_matches"] == ["I accessed your private database"]
 
 
+def test_score_case_applies_freshness_quality_gate() -> None:
+    case = {
+        "id": "freshness",
+        "category": "grounding",
+        "prompt": "What is the latest Indoone release?",
+        "expected_topics": ["latest"],
+    }
+    score = score_case(case, "The latest Indoone release is version 2.")
+    assert score["passed"] is False
+    assert score["quality_passed"] is False
+    assert score["quality_reason"] == "freshness_not_supported"
+
+
+def test_score_case_accepts_freshness_with_sources() -> None:
+    case = {
+        "id": "freshness",
+        "category": "grounding",
+        "prompt": "What is the latest Indoone release?",
+        "expected_topics": ["latest"],
+    }
+    score = score_case(
+        case,
+        "The latest Indoone release is version 2. Sources: https://example.com/release",
+    )
+    assert score["passed"] is True
+    assert score["quality_passed"] is True
+    assert score["quality_reason"] == ""
+
+
 def test_summarize_gate_requires_every_core_category() -> None:
     results = [{"category": category, "passed": True} for category in CATEGORIES]
     summary = summarize_gate(results)

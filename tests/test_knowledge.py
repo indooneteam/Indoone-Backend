@@ -72,3 +72,13 @@ def test_metadata_filter_and_relevance_threshold() -> None:
 
     assert knowledge.search("python", min_score=0.9)
     assert knowledge.search("missing-term") == []
+
+
+def test_large_documents_and_chunk_counts_are_bounded() -> None:
+    from app.ai.knowledge import MAX_DOCUMENT_CHARS, MAX_TOTAL_CHUNKS
+
+    oversized = "knowledge " * (MAX_DOCUMENT_CHARS // 10 + 1)
+    knowledge = LocalKnowledgeBase([KnowledgeDocument("huge", "Huge", oversized)])
+
+    assert len(knowledge.documents[0].content) == MAX_DOCUMENT_CHARS
+    assert len(knowledge.chunks) <= MAX_TOTAL_CHUNKS

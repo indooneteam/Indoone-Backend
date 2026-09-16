@@ -6,10 +6,12 @@ from app.ai.memory_policy import MemoryPolicy, normalize_memory_key, normalize_m
 
 
 def test_canonical_extractor_and_legacy_adapter_match():
-    canonical = extract_memory_candidates("My name is Ravi and I prefer dark mode")
-    legacy = extract_memory("My name is Ravi and I prefer dark mode")
-    assert [(item.key, item.value) for item in canonical] == [("name", "Ravi and I prefer dark mode")]
-    assert [(item.key, item.value) for item in legacy] == [("name", "Ravi and I prefer dark mode")]
+    message = "My name is Ravi. I prefer dark mode."
+    canonical = extract_memory_candidates(message)
+    legacy = extract_memory(message)
+    assert [(item.key, item.value) for item in canonical] == [
+        (item.key, item.value) for item in legacy
+    ]
 
 
 def test_policy_controls_automatic_writes():

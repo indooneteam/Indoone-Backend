@@ -140,9 +140,12 @@ def _unresolved_chain_references(payload: str, results: tuple[ToolResult, ...]) 
 def _run_with_retry(tool: str, payload: str, deadline: float, user_id: str = "") -> tuple[ToolResult, int]:
     def invoke(remaining: float) -> ToolResult:
         parameters = inspect.signature(run_tool).parameters
+        kwargs: dict[str, Any] = {}
         if "max_runtime_seconds" in parameters:
-            return run_tool(tool, payload, max_runtime_seconds=remaining, user_id=user_id)
-        return run_tool(tool, payload)
+            kwargs["max_runtime_seconds"] = remaining
+        if "user_id" in parameters:
+            kwargs["user_id"] = user_id
+        return run_tool(tool, payload, **kwargs)
     remaining = remaining_budget(deadline)
     if remaining <= 0: return deadline_failure(tool), 0
     result = invoke(remaining)

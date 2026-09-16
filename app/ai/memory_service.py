@@ -18,6 +18,15 @@ class MemoryService:
     def propose_update(self, existing: Mapping[str, str], message: str) -> dict[str, str]:
         return resolve_memory_update(existing, self.extract(message), policy=self.policy)
 
+    def list(self, user_id: str, *, key_prefix: str = "", source: str = "", limit: int = 100) -> list[dict[str, Any]]:
+        bounded_limit = max(1, min(limit, self.policy.max_items))
+        return store.list_memories(
+            user_id,
+            key_prefix=normalize_memory_key(key_prefix) if key_prefix.strip() else "",
+            source=" ".join(source.split()),
+            limit=bounded_limit,
+        )
+
     def write_candidate(
         self,
         user_id: str,
@@ -36,6 +45,7 @@ class MemoryService:
             return None
         normalized_key = normalize_memory_key(key)
         normalized_value = normalize_memory_value(value, self.policy)
+        normalized_source = " ".join(str(source).split())
         current = store.list_memories(user_id, limit=self.policy.max_items + 1)
         existing = {str(item["key"]): str(item["value"]) for item in current if "key" in item and "value" in item}
         merged = resolve_memory_update(
@@ -47,7 +57,7 @@ class MemoryService:
             return None
         if len(merged) > self.policy.max_items:
             return None
-        return store.upsert_memory(user_id, normalized_key, normalized_value, confidence, source)
+        return store.upsert_memory(user_id, normalized_key, normalized_value, confidence, normalized_source)
 
     def search(self, user_id: str, query: str, limit: int = 10) -> list[dict[str, object]]:
         limit = max(1, min(limit, self.policy.max_items))

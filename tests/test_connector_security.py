@@ -66,3 +66,20 @@ def test_connector_user_scope_accepts_matching_authenticated_user(monkeypatch) -
         )
 
     assert response.status_code in {200, 400, 502, 503}
+
+
+def test_connector_user_scope_requires_auth_when_enabled(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
+    monkeypatch.delenv("INDOONE_AUTH_SECRET", raising=False)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/integrations/github/repositories",
+            json={"user_id": "user-one"},
+        )
+
+    assert response.status_code == 401
+    payload = response.json()
+    assert payload["code"] == "HTTP_401"
+    assert payload["message"] == "authenticated connector user required"
+    assert "request_id" in payload

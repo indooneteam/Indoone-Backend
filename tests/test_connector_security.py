@@ -54,6 +54,35 @@ def test_connector_user_scope_blocks_cross_user_request(monkeypatch) -> None:
     assert "request_id" in payload
 
 
+def test_connector_user_scope_blocks_query_user_mismatch(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/integrations/github/repositories?user_id=user-two",
+            headers={"Authorization": _token("user-one")},
+            json={},
+        )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == "HTTP_403"
+
+
+def test_connector_user_scope_ignores_non_connector_prefix(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/integrations-evil/github/repositories",
+            headers={"Authorization": _token("user-one")},
+            json={"user_id": "user-two"},
+        )
+
+    assert response.status_code in {404, 405, 422}
+
+
 def test_connector_user_scope_accepts_matching_authenticated_user(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
     monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")

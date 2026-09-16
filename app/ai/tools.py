@@ -33,6 +33,7 @@ class ToolResult:
     output: str
     safe: bool = True
     retryable: bool = False
+    truncated: bool = False
 
 
 def _bounded_number(value: int | float) -> int | float:
@@ -265,9 +266,10 @@ async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | N
             raise TimeoutError("tool run budget exceeded")
         if not isinstance(output, str):
             raise TypeError("tool output must be text")
-        if len(output) > spec.max_output_chars:
+        truncated = len(output) > spec.max_output_chars
+        if truncated:
             output = output[: spec.max_output_chars] + "\n[output truncated by policy]"
-        return ToolResult(normalized_name, output, safe=True, retryable=False)
+        return ToolResult(normalized_name, output, safe=True, retryable=False, truncated=truncated)
     except Exception as exc:
         return ToolResult(normalized_name, _tool_error_message(exc), safe=False, retryable=_is_retryable_exception(exc))
 
@@ -289,8 +291,9 @@ def run_tool(name: str, payload: str, max_runtime_seconds: float | None = None) 
         output = _run_sync_with_timeout(tool, payload, timeout_seconds)
         if time.monotonic() - started > total_budget:
             raise TimeoutError("tool run budget exceeded")
-        if len(output) > spec.max_output_chars:
+        truncated = len(output) > spec.max_output_chars
+        if truncated:
             output = output[: spec.max_output_chars] + "\n[output truncated by policy]"
-        return ToolResult(normalized_name, output, safe=True, retryable=False)
+        return ToolResult(normalized_name, output, safe=True, retryable=False, truncated=truncated)
     except Exception as exc:
         return ToolResult(normalized_name, _tool_error_message(exc), safe=False, retryable=_is_retryable_exception(exc))

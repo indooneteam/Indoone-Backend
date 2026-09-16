@@ -9,6 +9,7 @@ from app.ai.answer_quality import assess_answer
 from app.ai.grounding import GroundedEvidence, assess_grounding
 from app.ai.hallucination import assess_hallucination
 from app.ai.inference import LocalModelRuntime
+from app.ai.response_style import assess_response_style
 
 DEFAULT_CASES = Path("data/eval/behavior.jsonl")
 DEFAULT_CHECKPOINT = Path("models/indoone-small/indoone-small.pt")
@@ -65,11 +66,14 @@ def load_cases(path: Path) -> list[dict[str, object]]:
             for turn in turns:
                 if not isinstance(turn, dict) or turn.get("role") not in {"user", "assistant"} or not isinstance(turn.get("content"), str) or not turn["content"].strip():
                     raise ValueError(f"invalid conversation turn on line {line_number}")
-            if not str(value["prompt"]).strip() == str(turns[-1]["content"]).strip():
+            if str(value["prompt"]).strip() != str(turns[-1]["content"]).strip():
                 raise ValueError(f"conversation prompt must match final turn on line {line_number}")
         allowed_actions = value.get("allowed_external_actions", [])
         if not isinstance(allowed_actions, list) or not all(isinstance(item, str) for item in allowed_actions):
             raise ValueError(f"allowed_external_actions must be a string list on line {line_number}")
+        style_profile = value.get("style_profile", "")
+        if not isinstance(style_profile, str):
+            raise ValueError(f"style_profile must be a string on line {line_number}")
         cases.append(value)
     if not cases:
         raise ValueError("evaluation case file is empty")
@@ -125,6 +129,15 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
     score["quality_passed"] = quality.passed
     score["quality_reason"] = quality.reason
 
+    style = assess_response_style(
+        str(case["prompt"]),
+        response,
+        profile=str(case.get("style_profile", "")),
+    )
+    score["style_passed"] = style.passed
+    score["style_reason"] = style.reason
+    score["style_checks"] = list(style.checks)
+
     evidence = [
         GroundedEvidence(str(item["title"]), str(item["url"]), str(item["snippet"]))
         for item in case.get("evidence", [])
@@ -139,7 +152,7 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
     score["hallucination_reason"] = hallucination.reason
     score["hallucination_matches"] = list(hallucination.matches)
 
-    score["passed"] = bool(score["passed"]) and quality.passed and grounding.passed and hallucination.passed
+    score["passed"] = bool(score["passed"]) and quality.passed and style.passed and grounding.passed and hallucination.passed
     score["id"] = str(case["id"])
     score["category"] = str(case["category"])
     return score
@@ -148,12 +161,14 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
 def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
     category_scores: dict[str, list[bool]] = {category: [] for category in CATEGORIES}
     quality_failures = 0
+    style_failures = 0
     grounding_failures = 0
     hallucination_failures = 0
     for result in results:
         category = str(result["category"])
         category_scores.setdefault(category, []).append(bool(result["passed"]))
         quality_failures += int(not bool(result.get("quality_passed", True)))
+        style_failures += int(not bool(result.get("style_passed", True)))
         grounding_failures += int(not bool(result.get("grounding_passed", True)))
         hallucination_failures += int(not bool(result.get("hallucination_passed", True)))
 
@@ -161,13 +176,32 @@ def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
         category: bool(scores) and all(scores) for category, scores in category_scores.items()
     }
     overall_pass = all(category_pass.values()) and bool(results)
+    passed_cases = sum(1 for result in results if result["passed"])
+    case_count = len(results)
+    component_pass_counts = {
+        "quality": sum(1 for result in results if result.get("quality_passed", True)),
+        "style": sum(1 for result in results if result.get("style_passed", True)),
+        "grounding": sum(1 for result in results if result.get("grounding_passed", True)),
+        "hallucination": sum(1 for result in results if result.get("hallucination_passed", True)),
+    }
+    component_rates = {
+        name: (count / case_count if case_count else 0.0)
+        for name, count in component_pass_counts.items()
+    }
+    pass_rate = passed_cases / case_count if case_count else 0.0
+    quality_score = round(sum(component_rates.values()) * 25.0, 2)
     return {
         "overall_pass": overall_pass,
-        "case_count": len(results),
-        "passed_cases": sum(1 for result in results if result["passed"]),
+        "case_count": case_count,
+        "passed_cases": passed_cases,
+        "pass_rate": round(pass_rate, 4),
+        "quality_score": quality_score,
         "quality_failures": quality_failures,
+        "style_failures": style_failures,
         "grounding_failures": grounding_failures,
         "hallucination_failures": hallucination_failures,
+        "component_pass_counts": component_pass_counts,
+        "component_rates": {name: round(rate, 4) for name, rate in component_rates.items()},
         "category_pass": category_pass,
         "required_categories": list(CATEGORIES),
     }

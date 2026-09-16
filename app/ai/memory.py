@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Mapping
 
-from app.ai.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value, should_store
+from app.ai.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value
 
 
 @dataclass(frozen=True)
@@ -54,13 +54,15 @@ def resolve_memory_update(
     *,
     policy: MemoryPolicy = MemoryPolicy(),
 ) -> dict[str, str]:
+    """Resolve an in-memory candidate update; persistence policy is enforced at write time."""
     updated = {
         normalize_memory_key(key): normalize_memory_value(value, policy)
         for key, value in existing.items()
     }
-    accepted = [candidate for candidate in candidates if should_store(candidate.confidence, policy)]
-    for candidate in accepted:
-        updated[normalize_memory_key(candidate.key)] = normalize_memory_value(candidate.value, policy)
+    for candidate in candidates:
+        normalized_key = normalize_memory_key(candidate.key)
+        normalized_value = normalize_memory_value(candidate.value, policy)
+        updated[normalized_key] = normalized_value
     if len(updated) > policy.max_items:
         updated = dict(list(updated.items())[-policy.max_items :])
     return updated

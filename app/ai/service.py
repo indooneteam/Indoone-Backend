@@ -12,6 +12,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.ai.answer_quality import user_safe_failure
 from app.ai.grounding import (
     GroundedEvidence,
     append_sources,
@@ -265,18 +266,28 @@ class LocalAIService:
 
         research = ""
         research_results: list[ResearchResult] = []
-        if _research_provider is not None and intent.needs_research:
-            try:
-                candidate_results = await _research_provider.search(prompt, limit=5)
-                if _research_has_enough_sources(candidate_results, intent.needs_cross_check):
-                    research_results = candidate_results
-                    research = format_results(candidate_results)
-                elif candidate_results:
-                    logger.warning("Insufficient independent research sources for query: %s", prompt)
+        research_blocked = False
+        if intent.needs_research:
+            if _research_provider is None:
+                research_blocked = True
+                logger.warning("Research provider unavailable for query: %s", prompt)
+            else:
+                try:
+                    candidate_results = await _research_provider.search(prompt, limit=5)
+                    if _research_has_enough_sources(candidate_results, intent.needs_cross_check):
+                        research_results = candidate_results
+                        research = format_results(candidate_results)
+                    else:
+                        research_blocked = True
+                        if candidate_results:
+                            logger.warning("Insufficient independent research sources for query: %s", prompt)
+                        else:
+                            logger.warning("No research sources returned for query: %s", prompt)
+                except (httpx.HTTPError, RuntimeError, ValueError):
+                    research_results = []
                     research = ""
-            except (httpx.HTTPError, RuntimeError, ValueError):
-                research_results = []
-                research = ""
+                    research_blocked = True
+                    logger.warning("Research provider failed for query: %s", prompt)
 
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
@@ -298,6 +309,9 @@ class LocalAIService:
                 answer = _fallback_reply(prompt)
         else:
             answer = _fallback_reply(prompt)
+
+        if research_blocked:
+            answer = user_safe_failure()
         return append_sources(answer, _evidence_from_results(research_results))
 
 

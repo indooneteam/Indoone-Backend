@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import time
-
 from app.ai.agent import execute_agent
 from app.ai.tools import ToolResult
 
@@ -12,7 +10,6 @@ def test_agent_propagates_remaining_runtime_to_tool(monkeypatch) -> None:
     def bounded_tool(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
         assert max_runtime_seconds is not None
         observed.append(max_runtime_seconds)
-        time.sleep(0.005)
         return ToolResult(name, payload, safe=True, retryable=False)
 
     monkeypatch.setattr("app.ai.agent.run_tool", bounded_tool)
@@ -20,13 +17,15 @@ def test_agent_propagates_remaining_runtime_to_tool(monkeypatch) -> None:
 
     execution = execute_agent("text stats: one; text stats: two")
 
-    assert execution.results
-    assert observed
+    assert len(execution.results) == 2
+    assert len(observed) == 2
     assert 0 < observed[0] <= 0.05
+    assert observed[1] < observed[0]
 
 
 def test_agent_does_not_start_retry_after_deadline(monkeypatch) -> None:
     calls = 0
+    clock = iter((100.0, 100.0, 100.0, 100.02, 100.02))
 
     def retryable_tool(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
         nonlocal calls
@@ -36,7 +35,7 @@ def test_agent_does_not_start_retry_after_deadline(monkeypatch) -> None:
 
     monkeypatch.setattr("app.ai.agent.run_tool", retryable_tool)
     monkeypatch.setattr("app.ai.agent.MAX_AGENT_RUNTIME_SECONDS", 0.01)
-    monkeypatch.setattr("app.ai.agent.time.monotonic", lambda: 100.0)
+    monkeypatch.setattr("app.ai.agent.time.monotonic", lambda: next(clock))
 
     execution = execute_agent("text stats: one")
 

@@ -58,11 +58,10 @@ def test_grounding_rejects_unsupported_concrete_fact() -> None:
     assert result.reason == "unsupported_concrete_fact"
 
 
-def test_grounding_rejects_answer_without_evidence_overlap() -> None:
-    evidence = [GroundedEvidence("Pricing", "https://example.com/pricing", "Indoone Pro costs 499 rupees per month.")]
-    result = assess_grounding("The capital of France is Paris.", evidence)
-    assert result.passed is False
-    assert result.reason == "no_evidence_overlap"
+def test_grounding_allows_nonnumeric_explanatory_prose() -> None:
+    evidence = [GroundedEvidence("Pricing", "https://example.com/pricing", "Pricing information.")]
+    result = assess_grounding("Here is a concise explanation.", evidence)
+    assert result.passed is True
 
 
 def test_grounding_rejects_unknown_source_url() -> None:

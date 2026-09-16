@@ -1,22 +1,19 @@
 from __future__ import annotations
 
-import asyncio
 import time
-from typing import Iterable, Any
+from typing import Any, Iterable
 
 from app.ai.agent import (
     AgentExecution,
-    MAX_AGENT_APPROVAL_TOKENS,
     MAX_AGENT_MESSAGE_LENGTH,
-    MAX_AGENT_PAYLOAD_LENGTH,
     MAX_AGENT_RETRIES,
     MAX_AGENT_RUNTIME_SECONDS,
+    MAX_AGENT_STEPS,
     _bounded_approval_tokens,
     _chain_payload,
     _load_memory_context,
     _serialize_result,
     _serialize_step,
-    _step,
     _unresolved_chain_references,
     build_agent_steps,
 )
@@ -64,9 +61,9 @@ async def execute_agent_async(
     if user_id.strip():
         run_id = str(create_agent_run(user_id, normalized)["id"])
 
-    planned_steps = build_agent_steps(normalized, user_id=user_id, contacts=contacts)[:4]
-    executable: list[Any] = []
-    blocked: list[Any] = []
+    planned_steps = build_agent_steps(normalized, user_id=user_id, contacts=contacts)[:MAX_AGENT_STEPS]
+    executable = []
+    blocked = []
     results: list[ToolResult] = []
     retry_counts: list[int] = []
     deadline = time.monotonic() + MAX_AGENT_RUNTIME_SECONDS

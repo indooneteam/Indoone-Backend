@@ -6,9 +6,10 @@ from pydantic import BaseModel, Field
 from app.ai.answer_quality import assess_answer, user_safe_failure
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
+from app.ai.final_answer import synthesize_tool_answer
 from app.ai.intent import classify_intent
 from app.ai.service import generate_reply
-from app.ai.tools import run_tool
+from app.ai.tools import run_tool_async
 from app.api.dependencies import current_user_id
 
 router = APIRouter(tags=["chat"])
@@ -39,12 +40,11 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     try:
         if is_new_conversation:
             history: list[tuple[str, str]] = []
+        elif _store.is_closed(conversation_id, user_id=user_id):
+            conversation_id = str(uuid4())
+            history = []
         else:
-            if _store.is_closed(conversation_id, user_id=user_id):
-                conversation_id = str(uuid4())
-                history = []
-            else:
-                history = _store.recent(conversation_id, user_id=user_id)
+            history = _store.recent(conversation_id, user_id=user_id)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -65,10 +65,9 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         expression = body.message
         for marker in ("calculate", "what is", "=", "ಲೆಕ್ಕ"):
             expression = expression.replace(marker, " ")
-        tool_result = run_tool("calculator", expression.strip())
-        if tool_result.safe:
-            reply = tool_result.output
-        else:
+        tool_result = await run_tool_async("calculator", expression.strip())
+        reply = synthesize_tool_answer((tool_result,))
+        if not reply:
             reply = user_safe_failure()
     else:
         try:

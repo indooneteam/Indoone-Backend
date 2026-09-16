@@ -9,11 +9,13 @@ from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
 from app.ai.final_answer import synthesize_tool_answer
 from app.ai.intent import classify_intent
+from app.ai.memory_service import MemoryService
 from app.ai.service import generate_reply
 from app.api.dependencies import current_user_id
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
+_memory_service = MemoryService()
 
 
 class ChatRequest(BaseModel):
@@ -29,6 +31,19 @@ class ChatResponse(BaseModel):
 
 def _principal(request: Request) -> str:
     return current_user_id(request)
+
+
+def _memory_context(user_id: str, query: str) -> str:
+    hits = _memory_service.search(user_id, query, limit=5)
+    if not hits:
+        return ""
+    lines = ["User memory:"]
+    for item in hits:
+        key = str(item.get("key", "")).strip()
+        value = str(item.get("value", "")).strip()
+        if key and value:
+            lines.append(f"- {key}: {value}")
+    return "\n".join(lines) if len(lines) > 1 else ""
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -60,6 +75,10 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    memory_context = _memory_context(user_id, body.message)
+    if memory_context:
+        history = [*history, ("memory", memory_context)]
 
     agent_execution = await execute_agent_async(body.message, user_id=user_id)
     has_agent_activity = bool(agent_execution.steps or agent_execution.blocked_steps)

@@ -21,6 +21,7 @@ MAX_AGENT_PAYLOAD_LENGTH = 8_000
 MAX_AGENT_RUNTIME_SECONDS = 15.0
 MAX_AGENT_APPROVAL_TOKENS = 16
 ALLOWED_AGENT_TOOLS = tool_names()
+_CHAIN_REFERENCE_PATTERN = re.compile(r"\$(?:last|result\d+)")
 
 @dataclass(frozen=True)
 class AgentStep:
@@ -113,9 +114,17 @@ def _load_memory_context(user_id: str, message: str) -> tuple[dict[str, Any], ..
     return tuple(search_memories(user_id, message[:MAX_AGENT_PAYLOAD_LENGTH], limit=MAX_AGENT_MEMORIES))
 
 def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
-    if not results: return payload[:MAX_AGENT_PAYLOAD_LENGTH]
-    chained = payload.replace("$last", results[-1].output)
-    for index, result in enumerate(results, start=1): chained = chained.replace(f"$result{index}", result.output)
+    payload = payload[:MAX_AGENT_PAYLOAD_LENGTH]
+    if not results: return payload
+    def replace_reference(match: re.Match[str]) -> str:
+        reference = match.group(0)
+        if reference == "$last":
+            return results[-1].output
+        index = int(reference.removeprefix("$result"))
+        if 1 <= index <= len(results):
+            return results[index - 1].output
+        return reference
+    chained = _CHAIN_REFERENCE_PATTERN.sub(replace_reference, payload)
     return chained[:MAX_AGENT_PAYLOAD_LENGTH]
 
 def _run_with_retry(tool: str, payload: str, deadline: float) -> tuple[ToolResult, int]:

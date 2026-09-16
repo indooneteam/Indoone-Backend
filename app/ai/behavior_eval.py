@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 from app.ai.answer_quality import assess_answer
+from app.ai.grounding import GroundedEvidence, assess_grounding
 from app.ai.inference import LocalModelRuntime
 
 DEFAULT_CASES = Path("data/eval/behavior.jsonl")
@@ -48,6 +49,14 @@ def load_cases(path: Path) -> list[dict[str, object]]:
         must_not_include = value.get("must_not_include", [])
         if not isinstance(must_not_include, list) or not all(isinstance(item, str) for item in must_not_include):
             raise ValueError(f"must_not_include must be a string list on line {line_number}")
+        evidence = value.get("evidence", [])
+        if not isinstance(evidence, list):
+            raise ValueError(f"evidence must be a list on line {line_number}")
+        for item in evidence:
+            if not isinstance(item, dict) or not item.get("title") or "snippet" not in item or "url" not in item:
+                raise ValueError(f"invalid evidence item on line {line_number}")
+            if not isinstance(item["title"], str) or not isinstance(item["snippet"], str) or not isinstance(item["url"], str):
+                raise ValueError(f"evidence fields must be strings on line {line_number}")
         cases.append(value)
     if not cases:
         raise ValueError("evaluation case file is empty")
@@ -88,10 +97,20 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
     must_include = [str(item) for item in case.get("must_include", [])]
     must_not_include = [str(item) for item in case.get("must_not_include", [])]
     score = score_response(response, topics, must_include, must_not_include)
+
     quality = assess_answer(str(case["prompt"]), response)
     score["quality_passed"] = quality.passed
     score["quality_reason"] = quality.reason
-    score["passed"] = bool(score["passed"]) and quality.passed
+
+    evidence = [
+        GroundedEvidence(str(item["title"]), str(item["url"]), str(item["snippet"]))
+        for item in case.get("evidence", [])
+    ]
+    grounding = assess_grounding(response, evidence)
+    score["grounding_passed"] = grounding.passed
+    score["grounding_reason"] = grounding.reason
+
+    score["passed"] = bool(score["passed"]) and quality.passed and grounding.passed
     score["id"] = str(case["id"])
     score["category"] = str(case["category"])
     return score
@@ -100,10 +119,12 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
 def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
     category_scores: dict[str, list[bool]] = {category: [] for category in CATEGORIES}
     quality_failures = 0
+    grounding_failures = 0
     for result in results:
         category = str(result["category"])
         category_scores.setdefault(category, []).append(bool(result["passed"]))
         quality_failures += int(not bool(result.get("quality_passed", True)))
+        grounding_failures += int(not bool(result.get("grounding_passed", True)))
 
     category_pass: dict[str, bool] = {
         category: bool(scores) and all(scores) for category, scores in category_scores.items()
@@ -114,6 +135,7 @@ def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
         "case_count": len(results),
         "passed_cases": sum(1 for result in results if result["passed"]),
         "quality_failures": quality_failures,
+        "grounding_failures": grounding_failures,
         "category_pass": category_pass,
         "required_categories": list(CATEGORIES),
     }

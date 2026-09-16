@@ -71,11 +71,37 @@ def test_reject_path_traversal_filename() -> None:
     assert result.filename == "sample.pdf"
 
 
+def test_reject_control_character_filename() -> None:
+    buffer = io.BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=300, height=300)
+    writer.write(buffer)
+
+    with pytest.raises(ValueError, match="invalid document filename"):
+        extract_document("sample\n.pdf", PDF_MIME, buffer.getvalue())
+
+
 def test_reject_malformed_pdf() -> None:
     with pytest.raises(ValueError, match="invalid PDF document"):
         extract_document("broken.pdf", PDF_MIME, b"not a real pdf")
 
 
+def test_reject_pdf_with_wrong_signature() -> None:
+    with pytest.raises(ValueError, match="invalid PDF document"):
+        extract_document("wrong.pdf", PDF_MIME, b"PK\x03\x04not a pdf")
+
+
 def test_reject_malformed_docx() -> None:
     with pytest.raises(ValueError, match="invalid DOCX document"):
         extract_document("broken.docx", DOCX_MIME, b"not a zip document")
+
+
+def test_reject_zip_that_is_not_docx() -> None:
+    buffer = io.BytesIO()
+    import zipfile
+
+    with zipfile.ZipFile(buffer, "w") as archive:
+        archive.writestr("payload.txt", "not a docx")
+
+    with pytest.raises(ValueError, match="invalid DOCX document"):
+        extract_document("wrong.docx", DOCX_MIME, buffer.getvalue())

@@ -29,13 +29,26 @@ from app.api.telegram import router as telegram_router
 from app.api.whatsapp import router as whatsapp_router
 from app.api.youtube import router as youtube_router
 from app.api.voice_session import router as voice_session_router
+from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
 from app.capabilities.store import initialize as initialize_capability_store
 
 ai_service._detect_response_language = detect_response_language
 
+_DEFAULT_MAX_REQUEST_BYTES = 50 * 1024 * 1024
+
+
+def _max_request_bytes() -> int:
+    raw = os.getenv("INDOONE_MAX_REQUEST_BYTES", str(_DEFAULT_MAX_REQUEST_BYTES)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return _DEFAULT_MAX_REQUEST_BYTES
+    return max(1, min(value, 100 * 1024 * 1024))
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    configure_sqlite_runtime()
     initialize_capability_store()
     yield
 
@@ -59,10 +72,25 @@ async def request_context_middleware(request: Request, call_next):
     elif os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
         return JSONResponse(status_code=401, content=error_response("AUTH_REQUIRED", "bearer authentication required"))
 
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            declared_length = int(content_length)
+        except ValueError:
+            return JSONResponse(status_code=400, content=error_response("CONTENT_LENGTH_INVALID", "invalid content-length header"))
+        if declared_length < 0 or declared_length > _max_request_bytes():
+            return JSONResponse(status_code=413, content=error_response("REQUEST_TOO_LARGE", "request body exceeds configured size limit"))
+
     if principal:
         request.state.principal_id = principal
     response = await call_next(request)
     response.headers["X-Request-ID"] = get_request_id() or request_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Cache-Control"] = "no-store"
+    if request.url.scheme == "https":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 
@@ -101,3 +129,8 @@ app.include_router(canva_router, prefix="/api")
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/health/details")
+async def health_details() -> dict[str, object]:
+    return {"status": "ok", "sqlite": sqlite_runtime_status()}

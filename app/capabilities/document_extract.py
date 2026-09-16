@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass
 from pathlib import Path
-from zipfile import BadZipFile
+from zipfile import BadZipFile, ZipFile
 
 from docx import Document
 from pypdf import PdfReader
@@ -18,6 +19,7 @@ MAX_TABLE_COLS = 100
 MAX_FILENAME_LENGTH = 255
 PDF_MIME = "application/pdf"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+_FILENAME_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 
 
 @dataclass(frozen=True)
@@ -57,9 +59,33 @@ def _validate(content: bytes) -> None:
 
 def _safe_filename(filename: str) -> str:
     candidate = Path(filename).name.strip()
-    if not candidate or candidate in {".", ".."} or len(candidate) > MAX_FILENAME_LENGTH:
+    if (
+        not candidate
+        or candidate in {".", ".."}
+        or len(candidate) > MAX_FILENAME_LENGTH
+        or _FILENAME_CONTROL_CHARS.search(candidate)
+    ):
         raise ValueError("invalid document filename")
     return candidate
+
+
+def _validate_signature(mime_type: str, content: bytes) -> None:
+    if mime_type == PDF_MIME:
+        if not content.startswith(b"%PDF-"):
+            raise ValueError("invalid PDF document")
+        return
+    if mime_type == DOCX_MIME:
+        if not content.startswith(b"PK\x03\x04"):
+            raise ValueError("invalid DOCX document")
+        try:
+            with ZipFile(io.BytesIO(content)) as archive:
+                names = set(archive.namelist())
+                if "[Content_Types].xml" not in names or "word/document.xml" not in names:
+                    raise ValueError("invalid DOCX document")
+        except (BadZipFile, OSError) as exc:
+            raise ValueError("invalid DOCX document") from exc
+        return
+    raise ValueError("unsupported document type")
 
 
 def _extract_pdf(filename: str, content: bytes) -> DocumentExtraction:
@@ -106,6 +132,7 @@ def extract_document(filename: str, mime_type: str, content: bytes) -> DocumentE
     mime_type = mime_type.strip().lower()
     if mime_type not in {PDF_MIME, DOCX_MIME}:
         raise ValueError("unsupported document type")
+    _validate_signature(mime_type, content)
 
     if mime_type == PDF_MIME:
         return _extract_pdf(filename, content)

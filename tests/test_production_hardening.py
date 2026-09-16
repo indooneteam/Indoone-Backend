@@ -22,3 +22,5 @@ def test_request_content_length_limit(monkeypatch) -> None:
         response = client.post("/api/chat", headers={"content-length": "11"}, json={"message": "x"})
 
     assert response.status_code == 413
+    assert response.headers.get("X-Request-ID")
+    assert response.headers["Cache-Control"] == "no-store"

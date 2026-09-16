@@ -54,6 +54,50 @@ def test_score_case_accepts_freshness_with_sources() -> None:
     assert score["quality_reason"] == ""
 
 
+def test_score_case_enforces_supplied_grounding_evidence() -> None:
+    case = {
+        "id": "grounding",
+        "category": "grounding",
+        "prompt": "Use only the supplied evidence.",
+        "expected_topics": ["SQLite"],
+        "evidence": [
+            {
+                "title": "Conversation storage",
+                "url": "",
+                "snippet": "Indoone stores conversation messages in a local SQLite store.",
+            }
+        ],
+    }
+    supported = score_case(case, "The evidence says Indoone stores conversation messages in SQLite.")
+    assert supported["passed"] is True
+    assert supported["grounding_passed"] is True
+
+    unsupported = score_case(case, "The evidence says Indoone stores conversation messages in PostgreSQL.")
+    assert unsupported["passed"] is False
+    assert unsupported["grounding_passed"] is True
+    assert unsupported["forbidden_matches"] == []
+
+
+def test_score_case_rejects_unsupported_grounding_fact() -> None:
+    case = {
+        "id": "grounding",
+        "category": "grounding",
+        "prompt": "Use only the supplied evidence.",
+        "expected_topics": ["price"],
+        "evidence": [
+            {
+                "title": "Pricing",
+                "url": "",
+                "snippet": "Indoone Pro costs 499 rupees per month.",
+            }
+        ],
+    }
+    score = score_case(case, "Indoone Pro costs 599 rupees per month.")
+    assert score["passed"] is False
+    assert score["grounding_passed"] is False
+    assert score["grounding_reason"] == "unsupported_concrete_fact"
+
+
 def test_summarize_gate_requires_every_core_category() -> None:
     results = [{"category": category, "passed": True} for category in CATEGORIES]
     summary = summarize_gate(results)

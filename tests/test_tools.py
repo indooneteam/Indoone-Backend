@@ -11,6 +11,7 @@ from app.ai.tools import MAX_CALCULATOR_ABS_VALUE, MAX_CALCULATOR_EXPONENT, TOOL
 def test_text_stats_tool_is_deterministic() -> None:
     result = run_tool("text_stats", "hello world\nagain")
     assert result.safe is True
+    assert result.truncated is False
     assert json.loads(result.output) == {"characters": 17, "lines": 2, "words": 3}
 
 
@@ -90,6 +91,17 @@ def test_total_tool_run_budget_is_enforced(monkeypatch) -> None:
     assert result.retryable is True
     assert "timed out" in result.output.lower()
     assert elapsed < 0.15
+
+
+def test_tool_output_truncation_is_explicit(monkeypatch) -> None:
+    original = TOOLS["text_stats"]
+    monkeypatch.setitem(TOOLS, "text_stats", lambda _: "abcdefghij")
+    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 4})())
+    result = run_tool("text_stats", "hello")
+    monkeypatch.setitem(TOOLS, "text_stats", original)
+    assert result.safe is True
+    assert result.truncated is True
+    assert result.output == "abcd\n[output truncated by policy]"
 
 
 def test_non_text_tool_output_is_unsafe(monkeypatch) -> None:

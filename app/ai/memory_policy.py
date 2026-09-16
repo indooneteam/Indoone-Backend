@@ -10,9 +10,17 @@ class MemoryPolicy:
     min_confidence: float = 0.55
     allow_automatic_write: bool = False
 
+    def __post_init__(self) -> None:
+        if self.max_items < 1:
+            raise ValueError("max_items must be at least 1")
+        if self.max_value_chars < 1:
+            raise ValueError("max_value_chars must be at least 1")
+        if not 0.0 <= self.min_confidence <= 1.0:
+            raise ValueError("min_confidence must be between 0 and 1")
+
 
 def should_store(confidence: float, policy: MemoryPolicy = MemoryPolicy()) -> bool:
-    return policy.allow_automatic_write and 0.0 <= policy.min_confidence <= confidence <= 1.0
+    return policy.allow_automatic_write and 0.0 <= confidence <= 1.0 and confidence >= policy.min_confidence
 
 
 def normalize_memory_value(value: str, policy: MemoryPolicy = MemoryPolicy()) -> str:

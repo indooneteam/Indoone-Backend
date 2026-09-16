@@ -132,11 +132,7 @@ def _phone_call_contact(payload: str) -> str:
 
 
 async def _run_async(coro, timeout_seconds: float):
-    """Await a coroutine with a bounded timeout on the current event loop.
-
-    Async callers stay on their existing loop, so timeout/cancellation can propagate
-    directly into the coroutine instead of spawning a second event loop in a thread.
-    """
+    """Await a coroutine with a bounded timeout on the current event loop."""
     bounded_timeout = max(0.01, min(float(timeout_seconds), MAX_TOOL_TIMEOUT_SECONDS))
     return await asyncio.wait_for(coro, timeout=bounded_timeout)
 
@@ -186,15 +182,7 @@ async def _gmail_search(payload: str) -> str:
     if not user_id:
         raise ValueError("user_id is required")
     spec = get_tool_spec("gmail_search")
-    result = await _run_async(
-        list_gmail_messages(
-            user_id=user_id,
-            query=str(data.get("query", "")),
-            page_token=str(data.get("page_token", "")),
-            max_results=int(data.get("max_results", 20)),
-        ),
-        spec.timeout_seconds if spec else 20.0,
-    )
+    result = await _run_async(list_gmail_messages(user_id=user_id, query=str(data.get("query", "")), page_token=str(data.get("page_token", "")), max_results=int(data.get("max_results", 20))), spec.timeout_seconds if spec else 20.0)
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
@@ -230,20 +218,58 @@ TOOLS: dict[str, ToolCallable] = {
 }
 
 
+def _validate_tool_request(name: str, payload: str) -> tuple[str, object, str | None]:
+    normalized_name = str(name).strip().lower()
+    if not isinstance(payload, str):
+        return normalized_name, None, "Tool payload must be text"
+    if len(payload) > MAX_TOOL_PAYLOAD:
+        return normalized_name, None, "Tool payload is too large"
+    spec = get_tool_spec(normalized_name)
+    tool = TOOLS.get(normalized_name)
+    if spec is None or tool is None:
+        return normalized_name, None, "Unknown or unregistered tool"
+    return normalized_name, (spec, tool), None
+
+
 def _is_retryable_exception(exc: BaseException) -> bool:
     return isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError))
 
 
+async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
+    """Run a tool from an async request without creating a thread for async tools."""
+    normalized_name, prepared, error = _validate_tool_request(name, payload)
+    if error is not None:
+        return ToolResult(normalized_name, error, safe=False, retryable=False)
+    spec, tool = prepared
+    started = time.monotonic()
+    requested_budget = MAX_TOOL_RUN_SECONDS if max_runtime_seconds is None else float(max_runtime_seconds)
+    total_budget = max(0.01, min(requested_budget, MAX_TOOL_RUN_SECONDS, MAX_TOOL_TIMEOUT_SECONDS))
+    try:
+        remaining = total_budget - (time.monotonic() - started)
+        if remaining <= 0:
+            raise TimeoutError("tool run budget exceeded")
+        timeout_seconds = min(float(spec.timeout_seconds), remaining)
+        output = tool(payload)
+        if inspect.isawaitable(output):
+            output = await _run_async(output, timeout_seconds)
+        else:
+            output = await asyncio.wait_for(asyncio.to_thread(_run_sync_with_timeout, tool, payload, timeout_seconds), timeout=timeout_seconds)
+        if time.monotonic() - started > total_budget:
+            raise TimeoutError("tool run budget exceeded")
+        if not isinstance(output, str):
+            raise TypeError("tool output must be text")
+        if len(output) > spec.max_output_chars:
+            output = output[: spec.max_output_chars] + "\n[output truncated by policy]"
+        return ToolResult(normalized_name, output, safe=True, retryable=False)
+    except Exception as exc:
+        return ToolResult(normalized_name, f"Tool error: {exc}", safe=False, retryable=_is_retryable_exception(exc))
+
+
 def run_tool(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
-    normalized_name = str(name).strip().lower()
-    if not isinstance(payload, str):
-        return ToolResult(normalized_name, "Tool payload must be text", safe=False, retryable=False)
-    if len(payload) > MAX_TOOL_PAYLOAD:
-        return ToolResult(normalized_name, "Tool payload is too large", safe=False, retryable=False)
-    spec = get_tool_spec(normalized_name)
-    tool = TOOLS.get(normalized_name)
-    if spec is None or tool is None:
-        return ToolResult(normalized_name, "Unknown or unregistered tool", safe=False, retryable=False)
+    normalized_name, prepared, error = _validate_tool_request(name, payload)
+    if error is not None:
+        return ToolResult(normalized_name, error, safe=False, retryable=False)
+    spec, tool = prepared
     started = time.monotonic()
     requested_budget = MAX_TOOL_RUN_SECONDS if max_runtime_seconds is None else float(max_runtime_seconds)
     total_budget = max(0.01, min(requested_budget, MAX_TOOL_RUN_SECONDS, MAX_TOOL_TIMEOUT_SECONDS))

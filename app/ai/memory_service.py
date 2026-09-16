@@ -30,7 +30,9 @@ class MemoryService:
     ) -> dict[str, Any] | None:
         if not self.policy.allow_automatic_write and not explicit_user_request:
             return None
-        if not should_store(confidence, self.policy):
+        if not 0.0 <= confidence <= 1.0 or confidence < self.policy.min_confidence:
+            return None
+        if self.policy.allow_automatic_write and not should_store(confidence, self.policy):
             return None
         normalized_key = normalize_memory_key(key)
         normalized_value = normalize_memory_value(value, self.policy)
@@ -41,13 +43,15 @@ class MemoryService:
             extract_memory_candidates(f"my {normalized_key} is {normalized_value}"),
             policy=self.policy,
         )
+        if normalized_key not in existing and len(existing) >= self.policy.max_items:
+            return None
         if len(merged) > self.policy.max_items:
             return None
         return store.upsert_memory(user_id, normalized_key, normalized_value, confidence, source)
 
     def search(self, user_id: str, query: str, limit: int = 10) -> list[dict[str, object]]:
         limit = max(1, min(limit, self.policy.max_items))
-        memories = store.list_memories(user_id, limit=100)
+        memories = store.list_memories(user_id, limit=self.policy.max_items)
         return rank_memory_matches(memories, query, limit=limit)
 
     def delete(self, user_id: str, memory_id: str) -> bool:

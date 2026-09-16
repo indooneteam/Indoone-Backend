@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Any
-
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
@@ -35,14 +33,11 @@ async def get_memories(
     user_id = current_user_id(request)
     if q.strip():
         return {"memories": _memory_service.search(user_id, q, limit=limit)}
-
-    from app.capabilities.store import list_memories
-
     return {
-        "memories": list_memories(
+        "memories": _memory_service.list(
             user_id,
-            key_prefix=key_prefix.strip(),
-            source=source.strip(),
+            key_prefix=key_prefix,
+            source=source,
             limit=limit,
         )
     }

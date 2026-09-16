@@ -33,6 +33,15 @@ def test_current_questions_need_sources() -> None:
     assert result.reason == "freshness_not_supported"
 
 
+def test_current_questions_require_a_source_url() -> None:
+    result = assess_answer(
+        "What is the latest news?",
+        "The latest report says the service launched a new update.\n\nSources:\n1. Example",
+    )
+    assert result.passed is False
+    assert result.reason == "freshness_source_url_missing"
+
+
 def test_current_questions_with_sources_pass() -> None:
     result = assess_answer(
         "What is the latest news?",

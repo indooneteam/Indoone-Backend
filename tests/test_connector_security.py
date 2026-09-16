@@ -48,7 +48,10 @@ def test_connector_user_scope_blocks_cross_user_request(monkeypatch) -> None:
         )
 
     assert response.status_code == 403
-    assert response.json()["error"]["code"] == "HTTP_403"
+    payload = response.json()
+    assert payload["code"] == "HTTP_403"
+    assert payload["message"] == "user scope mismatch"
+    assert "request_id" in payload
 
 
 def test_connector_user_scope_accepts_matching_authenticated_user(monkeypatch) -> None:

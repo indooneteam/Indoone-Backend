@@ -7,6 +7,7 @@ import re
 import time
 from typing import Any, Iterable
 
+from app.ai.agent_contracts import serialize_tool_result
 from app.ai.approval import decide_tool
 from app.ai.orchestrator import Plan, plan_request
 from app.ai.tool_registry import get_tool_spec, tool_names
@@ -106,8 +107,8 @@ def build_agent_steps(message: str, user_id: str = "", contacts: list[dict[str, 
     expressions = _extract_calculations(normalized)
     if expressions: return tuple(_step("calculator", expression, index) for index, expression in enumerate(expressions, start=1))
     plan: Plan = plan_request(normalized)
-    if not plan.tool or plan.tool_payload is None or plan.tool not in ALLOWED_AGENT_TOOLS: return ()
-    return (_step(plan.tool, plan.tool_payload, 1),)
+    if not plan.executable: return ()
+    return (_step(plan.tool or "", plan.tool_payload or "", 1),)
 
 def _load_memory_context(user_id: str, message: str) -> tuple[dict[str, Any], ...]:
     if not user_id.strip(): return ()
@@ -156,7 +157,7 @@ def _run_with_retry(tool: str, payload: str, deadline: float) -> tuple[ToolResul
     return result, retry_count
 
 def _serialize_step(step: AgentStep) -> dict[str, Any]: return {"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval}
-def _serialize_result(result: ToolResult) -> dict[str, Any]: return {"name": result.name, "output": result.output, "safe": result.safe, "retryable": result.retryable, "truncated": result.truncated}
+def _serialize_result(result: ToolResult) -> dict[str, Any]: return serialize_tool_result(result)
 
 def _bounded_approval_tokens(approval_tokens: Iterable[str] | None) -> tuple[str, ...]:
     if approval_tokens is None: return ()

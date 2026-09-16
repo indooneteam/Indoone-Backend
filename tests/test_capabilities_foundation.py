@@ -44,12 +44,18 @@ def test_memory_round_trip_search_and_isolation(tmp_path, monkeypatch) -> None:
         assert created.json()["memory"]["value"] == "Bro"
         other = client.post("/api/memory", headers=second_headers, json={"key": "nickname", "value": "Other"})
         assert other.status_code == 200
+        listed = client.get("/api/memory", headers=first_headers, params={"key_prefix": "nick"})
+        assert [item["value"] for item in listed.json()["memories"]] == ["Bro"]
         assert client.get("/api/memory", headers=first_headers).json()["memories"][0]["key"] == "nickname"
         assert [item["value"] for item in client.get("/api/memory", headers=first_headers, params={"q": "Bro"}).json()["memories"]] == ["Bro"]
         assert client.get("/api/memory", headers=second_headers, params={"q": "Bro"}).json()["memories"] == []
         updated = client.post("/api/memory", headers=first_headers, json={"key": "nickname", "value": "Boss", "confidence": 1.0})
         assert updated.json()["memory"]["id"] == created.json()["memory"]["id"]
         assert updated.json()["memory"]["created_at"] == created.json()["memory"]["created_at"]
+        deleted = client.request("DELETE", "/api/memory", headers=first_headers, json={"memory_id": created.json()["memory"]["id"]})
+        assert deleted.status_code == 200
+        assert client.get("/api/memory", headers=first_headers).json()["memories"] == []
+        assert client.get("/api/memory", headers=second_headers).json()["memories"][0]["value"] == "Other"
 
 
 def test_project_workspace_lifecycle_and_isolation(tmp_path, monkeypatch) -> None:

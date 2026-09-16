@@ -7,6 +7,7 @@ from typing import Iterable
 
 from app.ai.answer_quality import assess_answer
 from app.ai.grounding import GroundedEvidence, assess_grounding
+from app.ai.hallucination import assess_hallucination
 from app.ai.inference import LocalModelRuntime
 
 DEFAULT_CASES = Path("data/eval/behavior.jsonl")
@@ -66,6 +67,9 @@ def load_cases(path: Path) -> list[dict[str, object]]:
                     raise ValueError(f"invalid conversation turn on line {line_number}")
             if not str(value["prompt"]).strip() == str(turns[-1]["content"]).strip():
                 raise ValueError(f"conversation prompt must match final turn on line {line_number}")
+        allowed_actions = value.get("allowed_external_actions", [])
+        if not isinstance(allowed_actions, list) or not all(isinstance(item, str) for item in allowed_actions):
+            raise ValueError(f"allowed_external_actions must be a string list on line {line_number}")
         cases.append(value)
     if not cases:
         raise ValueError("evaluation case file is empty")
@@ -129,7 +133,13 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
     score["grounding_passed"] = grounding.passed
     score["grounding_reason"] = grounding.reason
 
-    score["passed"] = bool(score["passed"]) and quality.passed and grounding.passed
+    allowed_actions = [str(item) for item in case.get("allowed_external_actions", [])]
+    hallucination = assess_hallucination(response, allowed_actions)
+    score["hallucination_passed"] = hallucination.passed
+    score["hallucination_reason"] = hallucination.reason
+    score["hallucination_matches"] = list(hallucination.matches)
+
+    score["passed"] = bool(score["passed"]) and quality.passed and grounding.passed and hallucination.passed
     score["id"] = str(case["id"])
     score["category"] = str(case["category"])
     return score
@@ -139,11 +149,13 @@ def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
     category_scores: dict[str, list[bool]] = {category: [] for category in CATEGORIES}
     quality_failures = 0
     grounding_failures = 0
+    hallucination_failures = 0
     for result in results:
         category = str(result["category"])
         category_scores.setdefault(category, []).append(bool(result["passed"]))
         quality_failures += int(not bool(result.get("quality_passed", True)))
         grounding_failures += int(not bool(result.get("grounding_passed", True)))
+        hallucination_failures += int(not bool(result.get("hallucination_passed", True)))
 
     category_pass: dict[str, bool] = {
         category: bool(scores) and all(scores) for category, scores in category_scores.items()
@@ -155,6 +167,7 @@ def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
         "passed_cases": sum(1 for result in results if result["passed"]),
         "quality_failures": quality_failures,
         "grounding_failures": grounding_failures,
+        "hallucination_failures": hallucination_failures,
         "category_pass": category_pass,
         "required_categories": list(CATEGORIES),
     }

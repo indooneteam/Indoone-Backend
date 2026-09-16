@@ -310,7 +310,7 @@ class LocalAIService:
         else:
             answer = _fallback_reply(prompt)
 
-        if research_blocked:
+        if research_blocked and not knowledge.strip():
             answer = user_safe_failure()
         return append_sources(answer, _evidence_from_results(research_results))
 

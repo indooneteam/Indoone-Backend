@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from app.ai.answer_quality import assess_answer, user_safe_failure
@@ -16,6 +17,27 @@ class GroundedEvidence:
     snippet: str = ""
 
 
+@dataclass(frozen=True)
+class GroundingQuality:
+    """Deterministic evidence-consistency checks for grounded answers."""
+
+    passed: bool
+    reason: str = ""
+
+
+_WORD_RE = re.compile(r"[A-Za-z][A-Za-z0-9'-]{2,}")
+_FACT_RE = re.compile(r"(?<![A-Za-z0-9])(?:\d+(?:[.,]\d+)?%?|\d{4})(?![A-Za-z0-9])")
+_URL_RE = re.compile(r"https?://[^\s)]+", flags=re.IGNORECASE)
+_STOP_WORDS = {
+    "about", "after", "again", "also", "because", "before", "being", "between",
+    "could", "does", "doesn", "from", "have", "into", "more", "most", "only",
+    "other", "should", "some", "than", "that", "their", "there", "these", "they",
+    "this", "those", "through", "under", "using", "very", "what", "when", "where",
+    "which", "while", "with", "would", "your", "the", "and", "for", "are", "was",
+    "were", "has", "had", "not", "but", "you", "our", "its", "can", "may", "who",
+}
+
+
 def build_grounded_prompt_instruction() -> str:
     """Return a compact instruction that prioritizes supplied evidence."""
 
@@ -27,6 +49,51 @@ def build_grounded_prompt_instruction() -> str:
         "conflicting, say so clearly.\n"
         "</grounding>"
     )
+
+
+def _significant_words(text: str) -> set[str]:
+    return {
+        token.casefold()
+        for token in _WORD_RE.findall(text)
+        if token.casefold() not in _STOP_WORDS
+    }
+
+
+def assess_grounding(answer: str, evidence: list[GroundedEvidence]) -> GroundingQuality:
+    """Reject grounded output that contains unsupported concrete facts or no overlap.
+
+    This is a deterministic consistency check, not a proof of factual truth. It
+    validates concrete anchors such as numbers/years/percentages and requires
+    meaningful lexical overlap with the supplied evidence before user-facing
+    source attribution is added.
+    """
+
+    cleaned = answer.strip()
+    if not cleaned or not evidence:
+        return GroundingQuality(True)
+
+    evidence_text = "\n".join(
+        f"{item.title}\n{item.snippet}" for item in evidence if item.title.strip() or item.snippet.strip()
+    )
+    answer_body = re.split(r"\n\s*sources:\s*", cleaned, maxsplit=1, flags=re.IGNORECASE)[0]
+
+    answer_words = _significant_words(answer_body)
+    evidence_words = _significant_words(evidence_text)
+    if answer_words and not (answer_words & evidence_words):
+        return GroundingQuality(False, "no_evidence_overlap")
+
+    evidence_facts = {item.casefold() for item in _FACT_RE.findall(evidence_text)}
+    unsupported_facts = [item for item in _FACT_RE.findall(answer_body) if item.casefold() not in evidence_facts]
+    if unsupported_facts:
+        return GroundingQuality(False, "unsupported_concrete_fact")
+
+    evidence_urls = {item.url.strip().rstrip(".,;:") for item in evidence if item.url.strip()}
+    for url in _URL_RE.findall(answer_body):
+        normalized = url.rstrip(".,;:")
+        if normalized not in evidence_urls:
+            return GroundingQuality(False, "unsupported_source_url")
+
+    return GroundingQuality(True)
 
 
 def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
@@ -45,6 +112,11 @@ def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
             continue
         seen.add(key)
         unique.append(item)
+
+    grounding = assess_grounding(cleaned, unique)
+    if not grounding.passed:
+        return user_safe_failure()
+
     if not unique:
         return cleaned
 

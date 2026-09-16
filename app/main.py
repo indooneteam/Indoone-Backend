@@ -48,6 +48,13 @@ def _max_request_bytes() -> int:
     return max(1, min(value, 100 * 1024 * 1024))
 
 
+def _error_response_with_request_id(status_code: int, code: str, message: str, request_id: str, details=None) -> JSONResponse:
+    response = JSONResponse(status_code=status_code, content=error_response(code, message, details))
+    response.headers["X-Request-ID"] = request_id
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_sqlite_runtime()
@@ -71,18 +78,18 @@ async def request_context_middleware(request: Request, call_next):
             principal = extract_principal(authorization)
             set_principal_id(principal)
         except (RuntimeError, ValueError) as exc:
-            return JSONResponse(status_code=401, content=error_response("AUTH_INVALID", str(exc)))
+            return _error_response_with_request_id(401, "AUTH_INVALID", str(exc), request_id)
     elif os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
-        return JSONResponse(status_code=401, content=error_response("AUTH_REQUIRED", "bearer authentication required"))
+        return _error_response_with_request_id(401, "AUTH_REQUIRED", "bearer authentication required", request_id)
 
     content_length = request.headers.get("content-length")
     if content_length:
         try:
             declared_length = int(content_length)
         except ValueError:
-            return JSONResponse(status_code=400, content=error_response("CONTENT_LENGTH_INVALID", "invalid content-length header"))
+            return _error_response_with_request_id(400, "CONTENT_LENGTH_INVALID", "invalid content-length header", request_id)
         if declared_length < 0 or declared_length > _max_request_bytes():
-            return JSONResponse(status_code=413, content=error_response("REQUEST_TOO_LARGE", "request body exceeds configured size limit"))
+            return _error_response_with_request_id(413, "REQUEST_TOO_LARGE", "request body exceeds configured size limit", request_id)
 
     if principal:
         request.state.principal_id = principal
@@ -90,7 +97,7 @@ async def request_context_middleware(request: Request, call_next):
     try:
         await enforce_connector_user_scope(request)
     except HTTPException as exc:
-        return JSONResponse(status_code=exc.status_code, content=error_response(f"HTTP_{exc.status_code}", str(exc.detail)))
+        return _error_response_with_request_id(exc.status_code, f"HTTP_{exc.status_code}", str(exc.detail), request_id)
 
     response = await call_next(request)
     response.headers["X-Request-ID"] = get_request_id() or request_id
@@ -105,14 +112,14 @@ async def request_context_middleware(request: Request, call_next):
 
 
 @app.exception_handler(HTTPException)
-async def http_exception_handler(_: Request, exc: HTTPException) -> JSONResponse:
+async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     message = exc.detail if isinstance(exc.detail, str) else "request failed"
-    return JSONResponse(status_code=exc.status_code, content=error_response(f"HTTP_{exc.status_code}", message))
+    return _error_response_with_request_id(exc.status_code, f"HTTP_{exc.status_code}", message, get_request_id() or str(getattr(request.state, "request_id", "")))
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_exception_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
-    return JSONResponse(status_code=422, content=error_response("VALIDATION_ERROR", "request validation failed", {"errors": exc.errors()}))
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return _error_response_with_request_id(422, "VALIDATION_ERROR", "request validation failed", get_request_id() or str(getattr(request.state, "request_id", "")), {"errors": exc.errors()})
 
 
 app.include_router(chat_router, prefix="/api")

@@ -23,6 +23,7 @@ class B2Storage:
     """Small wrapper around Backblaze's native API and S3-compatible API."""
 
     AUTH_URL = "https://api.backblazeb2.com/b2api/v4/b2_authorize_account"
+    MAX_OBJECT_KEY_LENGTH = 1024
 
     def __init__(self) -> None:
         self.key_id = os.getenv("B2_APPLICATION_KEY_ID", "").strip()
@@ -59,6 +60,18 @@ class B2Storage:
         )
         self._download_url: str | None = None
         self._auth_token: str | None = None
+
+    @classmethod
+    def _validate_object_key(cls, object_key: str) -> str:
+        key = str(object_key).strip()
+        if not key or len(key) > cls.MAX_OBJECT_KEY_LENGTH:
+            raise B2StorageError("invalid B2 object key")
+        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in key):
+            raise B2StorageError("invalid B2 object key")
+        normalized = key.replace("\\", "/")
+        if normalized.startswith("/") or any(part in {"", ".", ".."} for part in normalized.split("/")):
+            raise B2StorageError("invalid B2 object key")
+        return normalized
 
     def _region_from_endpoint(self) -> str:
         marker = "https://s3."
@@ -110,6 +123,7 @@ class B2Storage:
             raise B2StorageError("B2 authorization response was incomplete")
 
     def upload_file(self, local_path: Path, object_key: str) -> None:
+        object_key = self._validate_object_key(object_key)
         try:
             with local_path.open("rb") as handle:
                 self._client.put_object(
@@ -122,6 +136,7 @@ class B2Storage:
             raise B2StorageError(f"B2 upload failed for {object_key}") from exc
 
     def download_file(self, object_key: str, local_path: Path) -> bool:
+        object_key = self._validate_object_key(object_key)
         if not self._download_url or not self._auth_token:
             self._authorize_native()
         assert self._download_url is not None

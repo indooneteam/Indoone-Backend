@@ -234,7 +234,7 @@ def _is_retryable_exception(exc: BaseException) -> bool:
     return isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError))
 
 
-def run_tool(name: str, payload: str) -> ToolResult:
+def run_tool(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
     normalized_name = str(name).strip().lower()
     if not isinstance(payload, str):
         return ToolResult(normalized_name, "Tool payload must be text", safe=False, retryable=False)
@@ -245,7 +245,8 @@ def run_tool(name: str, payload: str) -> ToolResult:
     if spec is None or tool is None:
         return ToolResult(normalized_name, "Unknown or unregistered tool", safe=False, retryable=False)
     started = time.monotonic()
-    total_budget = max(0.01, min(float(MAX_TOOL_RUN_SECONDS), MAX_TOOL_TIMEOUT_SECONDS))
+    requested_budget = MAX_TOOL_RUN_SECONDS if max_runtime_seconds is None else float(max_runtime_seconds)
+    total_budget = max(0.01, min(requested_budget, MAX_TOOL_RUN_SECONDS, MAX_TOOL_TIMEOUT_SECONDS))
     try:
         elapsed = time.monotonic() - started
         remaining = total_budget - elapsed

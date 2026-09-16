@@ -99,9 +99,11 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
 
 def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
     category_scores: dict[str, list[bool]] = {category: [] for category in CATEGORIES}
+    quality_failures = 0
     for result in results:
         category = str(result["category"])
         category_scores.setdefault(category, []).append(bool(result["passed"]))
+        quality_failures += int(not bool(result.get("quality_passed", True)))
 
     category_pass: dict[str, bool] = {
         category: bool(scores) and all(scores) for category, scores in category_scores.items()
@@ -111,7 +113,7 @@ def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
         "overall_pass": overall_pass,
         "case_count": len(results),
         "passed_cases": sum(1 for result in results if result["passed"]),
-        "quality_failures": sum(1 for result in results if not result["quality_passed"]),
+        "quality_failures": quality_failures,
         "category_pass": category_pass,
         "required_categories": list(CATEGORIES),
     }

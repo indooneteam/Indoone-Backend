@@ -45,12 +45,7 @@ def _step(tool: str, payload: str, index: int) -> AgentStep:
     if len(payload) > MAX_AGENT_PAYLOAD_LENGTH:
         payload = payload[:MAX_AGENT_PAYLOAD_LENGTH]
     spec = get_tool_spec(tool)
-    return AgentStep(
-        index=index,
-        tool=tool,
-        payload=payload,
-        requires_approval=True if spec is None else spec.requires_approval,
-    )
+    return AgentStep(index=index, tool=tool, payload=payload, requires_approval=True if spec is None else spec.requires_approval)
 
 
 def _extract_explicit_requests(message: str) -> list[tuple[int, str, str]]:
@@ -163,14 +158,20 @@ def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
     return chained[:MAX_AGENT_PAYLOAD_LENGTH]
 
 
-def _run_with_retry(tool: str, payload: str) -> tuple[ToolResult, int]:
-    result = run_tool(tool, payload)
+def _run_with_retry(tool: str, payload: str, deadline: float) -> tuple[ToolResult, int]:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return ToolResult(tool, "Tool execution deadline exceeded", safe=False, retryable=False), 0
+    result = run_tool(tool, payload, max_runtime_seconds=remaining)
     if result.safe or not result.retryable or MAX_AGENT_RETRIES == 0:
         return result, 0
     retry_count = 0
     while retry_count < MAX_AGENT_RETRIES:
         retry_count += 1
-        result = run_tool(tool, payload)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return ToolResult(tool, "Tool execution deadline exceeded", safe=False, retryable=False), retry_count
+        result = run_tool(tool, payload, max_runtime_seconds=remaining)
         if result.safe or not result.retryable:
             break
     return result, retry_count
@@ -231,7 +232,7 @@ def execute_agent(
             blocked.append(step)
             continue
         executable.append(step)
-        result, retry_count = _run_with_retry(step.tool, _chain_payload(step.payload, tuple(results)))
+        result, retry_count = _run_with_retry(step.tool, _chain_payload(step.payload, tuple(results)), deadline)
         results.append(result)
         retry_counts.append(retry_count)
         if not result.safe:

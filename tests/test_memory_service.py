@@ -65,4 +65,5 @@ def test_memory_service_enforces_item_limit_but_allows_updates(monkeypatch, tmp_
     assert service.write_candidate(
         "user-a", key="name", value="Rahul", confidence=0.99, explicit_user_request=True
     ) is not None
-    assert len(service.search("user-a", "", limit=10)) == 2
+    assert len(service.search("user-a", "name", limit=10)) == 1
+    assert service.search("user-a", "profession", limit=10)[0]["value"] == "engineer"

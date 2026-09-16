@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 import json
 import re
 import time
@@ -159,10 +160,16 @@ def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
 
 
 def _run_with_retry(tool: str, payload: str, deadline: float) -> tuple[ToolResult, int]:
+    def invoke(remaining: float) -> ToolResult:
+        parameters = inspect.signature(run_tool).parameters
+        if "max_runtime_seconds" in parameters:
+            return run_tool(tool, payload, max_runtime_seconds=remaining)
+        return run_tool(tool, payload)
+
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         return ToolResult(tool, "Tool execution deadline exceeded", safe=False, retryable=False), 0
-    result = run_tool(tool, payload, max_runtime_seconds=remaining)
+    result = invoke(remaining)
     if result.safe or not result.retryable or MAX_AGENT_RETRIES == 0:
         return result, 0
     retry_count = 0
@@ -171,7 +178,7 @@ def _run_with_retry(tool: str, payload: str, deadline: float) -> tuple[ToolResul
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             return ToolResult(tool, "Tool execution deadline exceeded", safe=False, retryable=False), retry_count
-        result = run_tool(tool, payload, max_runtime_seconds=remaining)
+        result = invoke(remaining)
         if result.safe or not result.retryable:
             break
     return result, retry_count

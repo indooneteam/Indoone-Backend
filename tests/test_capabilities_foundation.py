@@ -1,11 +1,26 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import hmac
+import time
 
 from fastapi.testclient import TestClient
 
 from app.capabilities.data_analysis import analyze_payload
 from app.main import app
+
+
+def _encode(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
+
+
+def _token(user_id: str) -> str:
+    user = _encode(user_id.encode("utf-8"))
+    timestamp = _encode(str(int(time.time())).encode("ascii"))
+    payload = f"{user}.{timestamp}".encode("ascii")
+    signature = _encode(hmac.new(b"x" * 32, payload, hashlib.sha256).digest())
+    return f"{user}.{timestamp}.{signature}"
 
 
 def test_capability_registry_exposes_core_features() -> None:
@@ -19,15 +34,17 @@ def test_capability_registry_exposes_core_features() -> None:
 def test_memory_round_trip_search_and_isolation(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     with TestClient(app) as client:
-        created = client.post("/api/memory", json={"user_id": "u1", "key": "nickname", "value": "Bro", "confidence": 0.99})
+        first_headers = {"Authorization": f"Bearer {_token('u1')}"}
+        second_headers = {"Authorization": f"Bearer {_token('u2')}"}
+        created = client.post("/api/memory", headers=first_headers, json={"key": "nickname", "value": "Bro", "confidence": 0.99})
         assert created.status_code == 200
         assert created.json()["memory"]["value"] == "Bro"
-        other = client.post("/api/memory", json={"user_id": "u2", "key": "nickname", "value": "Other"})
+        other = client.post("/api/memory", headers=second_headers, json={"key": "nickname", "value": "Other"})
         assert other.status_code == 200
-        assert client.get("/api/memory", params={"user_id": "u1"}).json()["memories"][0]["key"] == "nickname"
-        assert [item["value"] for item in client.get("/api/memory", params={"user_id": "u1", "q": "Bro"}).json()["memories"]] == ["Bro"]
-        assert client.get("/api/memory", params={"user_id": "u2", "q": "Bro"}).json()["memories"] == []
-        updated = client.post("/api/memory", json={"user_id": "u1", "key": "nickname", "value": "Boss", "confidence": 1.0})
+        assert client.get("/api/memory", headers=first_headers).json()["memories"][0]["key"] == "nickname"
+        assert [item["value"] for item in client.get("/api/memory", headers=first_headers, params={"q": "Bro"}).json()["memories"]] == ["Bro"]
+        assert client.get("/api/memory", headers=second_headers, params={"q": "Bro"}).json()["memories"] == []
+        updated = client.post("/api/memory", headers=first_headers, json={"key": "nickname", "value": "Boss", "confidence": 1.0})
         assert updated.json()["memory"]["id"] == created.json()["memory"]["id"]
         assert updated.json()["memory"]["created_at"] == created.json()["memory"]["created_at"]
 

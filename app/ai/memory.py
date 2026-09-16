@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Mapping
 
-from app.ai.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value
+from app.ai.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value, should_store
 
 
 @dataclass(frozen=True)
@@ -58,12 +58,11 @@ def resolve_memory_update(
         normalize_memory_key(key): normalize_memory_value(value, policy)
         for key, value in existing.items()
     }
-    accepted = [candidate for candidate in candidates if policy.should_store(candidate.confidence)]
+    accepted = [candidate for candidate in candidates if should_store(candidate.confidence, policy)]
     for candidate in accepted:
         updated[normalize_memory_key(candidate.key)] = normalize_memory_value(candidate.value, policy)
     if len(updated) > policy.max_items:
-        ordered = list(updated.items())[-policy.max_items :]
-        updated = dict(ordered)
+        updated = dict(list(updated.items())[-policy.max_items :])
     return updated
 
 
@@ -73,7 +72,7 @@ def rank_memory_matches(
     *,
     limit: int = 10,
 ) -> list[dict[str, object]]:
-    """Rank user-scoped memory records by token overlap, confidence, and recency."""
+    """Rank already user-scoped memory records by token overlap and confidence."""
     if limit <= 0:
         raise ValueError("limit must be greater than zero")
     query_tokens = {token.casefold() for token in re.findall(r"[\w'-]+", query) if len(token) > 1}
@@ -87,13 +86,13 @@ def rank_memory_matches(
         source = str(raw.get("source", ""))
         tokens = {token.casefold() for token in re.findall(r"[\w'-]+", f"{key} {value} {source}") if len(token) > 1}
         overlap = len(query_tokens & tokens) / len(query_tokens)
-        confidence = float(raw.get("confidence", 0.0) or 0.0)
+        confidence = max(0.0, min(1.0, float(raw.get("confidence", 0.0) or 0.0)))
         if overlap <= 0:
             continue
-        score = 0.7 * overlap + 0.3 * max(0.0, min(1.0, confidence))
+        score = 0.7 * overlap + 0.3 * confidence
         item = dict(raw)
         item["match_score"] = score
         scored.append((score, confidence, str(raw.get("updated_at", "")), item))
 
-    scored.sort(key=lambda item: (-item[0], -item[1], item[2]), reverse=False)
+    scored.sort(key=lambda item: (-item[0], -item[1], item[2]))
     return [item[3] for item in scored[:limit]]

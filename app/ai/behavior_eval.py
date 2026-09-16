@@ -124,6 +124,8 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
     must_include = [str(item) for item in case.get("must_include", [])]
     must_not_include = [str(item) for item in case.get("must_not_include", [])]
     score = score_response(response, topics, must_include, must_not_include)
+    response_passed = bool(score["passed"])
+    score["response_passed"] = response_passed
 
     quality = assess_answer(str(case["prompt"]), response)
     score["quality_passed"] = quality.passed
@@ -152,7 +154,7 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
     score["hallucination_reason"] = hallucination.reason
     score["hallucination_matches"] = list(hallucination.matches)
 
-    score["passed"] = bool(score["passed"]) and quality.passed and style.passed and grounding.passed and hallucination.passed
+    score["passed"] = response_passed and quality.passed and style.passed and grounding.passed and hallucination.passed
     score["id"] = str(case["id"])
     score["category"] = str(case["category"])
     return score
@@ -164,9 +166,11 @@ def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
     style_failures = 0
     grounding_failures = 0
     hallucination_failures = 0
+    response_failures = 0
     for result in results:
         category = str(result["category"])
         category_scores.setdefault(category, []).append(bool(result["passed"]))
+        response_failures += int(not bool(result.get("response_passed", result.get("passed", False))))
         quality_failures += int(not bool(result.get("quality_passed", True)))
         style_failures += int(not bool(result.get("style_passed", True)))
         grounding_failures += int(not bool(result.get("grounding_passed", True)))
@@ -179,6 +183,7 @@ def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
     passed_cases = sum(1 for result in results if result["passed"])
     case_count = len(results)
     component_pass_counts = {
+        "response": sum(1 for result in results if result.get("response_passed", result.get("passed", False))),
         "quality": sum(1 for result in results if result.get("quality_passed", True)),
         "style": sum(1 for result in results if result.get("style_passed", True)),
         "grounding": sum(1 for result in results if result.get("grounding_passed", True)),
@@ -189,13 +194,14 @@ def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
         for name, count in component_pass_counts.items()
     }
     pass_rate = passed_cases / case_count if case_count else 0.0
-    quality_score = round(sum(component_rates.values()) * 25.0, 2)
+    quality_score = round(sum(component_rates.values()) * 20.0, 2)
     return {
         "overall_pass": overall_pass,
         "case_count": case_count,
         "passed_cases": passed_cases,
         "pass_rate": round(pass_rate, 4),
         "quality_score": quality_score,
+        "response_failures": response_failures,
         "quality_failures": quality_failures,
         "style_failures": style_failures,
         "grounding_failures": grounding_failures,

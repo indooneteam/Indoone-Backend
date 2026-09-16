@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.ai import service as ai_service
 from app.ai.language_detection import detect_response_language
+from app.api.agent_async import router as agent_async_router
 from app.api.approvals import router as approvals_router
 from app.api.auth import extract_principal
 from app.api.capabilities import router as capabilities_router
@@ -78,6 +79,7 @@ async def validation_exception_handler(_: Request, exc: RequestValidationError) 
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
+app.include_router(agent_async_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(voice_session_router, prefix="/api")

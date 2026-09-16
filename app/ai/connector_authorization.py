@@ -22,7 +22,11 @@ _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
     "gmail": {
         "gmail.modify": frozenset(("messages.search", "messages.read", "messages.send")),
         "gmail.readonly": frozenset(("messages.search", "messages.read")),
-    }
+    },
+    "google_photos": {
+        "https://www.googleapis.com/auth/photoslibrary.readonly": frozenset(("media.search", "media.read")),
+        "https://www.googleapis.com/auth/photoslibrary.appendonly": frozenset(("media.upload",)),
+    },
 }
 
 

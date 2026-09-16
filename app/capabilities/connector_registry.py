@@ -23,7 +23,7 @@ CONNECTORS: tuple[ConnectorSpec, ...] = (
     ConnectorSpec("gmail", "Gmail", "communication", "oauth2", ("messages.search", "messages.read"), ("messages.send",)),
     ConnectorSpec("google_calendar", "Google Calendar", "productivity", "oauth2", ("events.read",), ("events.create", "events.update", "events.delete")),
     ConnectorSpec("google_drive", "Google Drive", "storage", "oauth2", ("files.search", "files.read"), ("files.upload",)),
-    ConnectorSpec("google_photos", "Google Photos", "media", "oauth2", ("media.search", "media.read")),
+    ConnectorSpec("google_photos", "Google Photos", "media", "oauth2", ("media.search", "media.read"), ("media.upload",)),
     ConnectorSpec("telegram", "Telegram", "communication", "bot", ("messages.read",), ("messages.send",)),
     ConnectorSpec("whatsapp", "WhatsApp", "communication", "oauth2", ("messages.read",), ("messages.send",)),
     ConnectorSpec("youtube", "YouTube", "media", "oauth2", ("search.read", "videos.read")),

@@ -9,12 +9,23 @@ from app.capabilities.store import upsert_integration_token
 def test_connector_registry_allows_registered_capability() -> None:
     assert allows_capability("gmail", "messages.read") is True
     assert allows_capability("gmail", "calendar.read") is False
+    assert allows_capability("google_photos", "media.upload") is True
 
 
 def test_gmail_scope_aliases_cover_normalized_capabilities() -> None:
     assert scope_allows("gmail", "gmail.readonly", "messages.search") is True
     assert scope_allows("gmail", "gmail.readonly", "messages.read") is True
     assert scope_allows("gmail", "gmail.readonly", "messages.send") is False
+
+
+def test_google_photos_scope_aliases_cover_read_and_upload() -> None:
+    read_scope = "https://www.googleapis.com/auth/photoslibrary.readonly"
+    append_scope = "https://www.googleapis.com/auth/photoslibrary.appendonly"
+    assert scope_allows("google_photos", read_scope, "media.search") is True
+    assert scope_allows("google_photos", read_scope, "media.read") is True
+    assert scope_allows("google_photos", read_scope, "media.upload") is False
+    assert scope_allows("google_photos", append_scope, "media.upload") is True
+    assert scope_allows("google_photos", append_scope, "media.read") is False
 
 
 def test_connector_authorization_denies_missing_connection(monkeypatch, tmp_path) -> None:
@@ -53,6 +64,21 @@ def test_connector_authorization_allows_read_scope(monkeypatch, tmp_path, scope:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     upsert_integration_token("user-one", "gmail", b"encrypted", None, "Bearer", scope, None)
     result = authorize_tool("user-one", "gmail_read")
+    assert result.allowed is True
+
+
+def test_google_photos_authorization_allows_append_scope(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    upsert_integration_token(
+        "user-one",
+        "google_photos",
+        b"encrypted",
+        None,
+        "Bearer",
+        "https://www.googleapis.com/auth/photoslibrary.appendonly",
+        None,
+    )
+    result = authorize_connector("user-one", "google_photos", "media.upload")
     assert result.allowed is True
 
 

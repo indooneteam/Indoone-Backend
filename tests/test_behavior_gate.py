@@ -1,4 +1,4 @@
-from app.ai.behavior_eval import CATEGORIES, score_case, score_response, summarize_gate
+from app.ai.behavior_eval import CATEGORIES, build_case_prompt, score_case, score_response, summarize_gate
 
 
 def test_score_response_requires_all_topics_and_required_terms() -> None:
@@ -96,6 +96,39 @@ def test_score_case_rejects_unsupported_grounding_fact() -> None:
     assert score["passed"] is False
     assert score["grounding_passed"] is False
     assert score["grounding_reason"] == "unsupported_concrete_fact"
+
+
+def test_build_case_prompt_preserves_multi_turn_context() -> None:
+    case = {
+        "prompt": "Now explain the topic concisely.",
+        "turns": [
+            {"role": "user", "content": "Please be concise."},
+            {"role": "assistant", "content": "I will be concise."},
+            {"role": "user", "content": "Now explain the topic concisely."},
+        ],
+    }
+    prompt = build_case_prompt(case)
+    assert prompt == (
+        "User: Please be concise.\n"
+        "Assistant: I will be concise.\n"
+        "User: Now explain the topic concisely."
+    )
+
+
+def test_score_case_accepts_multi_turn_conversation_response() -> None:
+    case = {
+        "id": "conversation",
+        "category": "conversation",
+        "prompt": "Now explain the topic concisely.",
+        "turns": [
+            {"role": "user", "content": "Please answer concisely."},
+            {"role": "assistant", "content": "Understood."},
+            {"role": "user", "content": "Now explain the topic concisely."},
+        ],
+        "expected_topics": ["attention", "tokens", "concise"],
+    }
+    score = score_case(case, "A concise Transformer explanation uses attention over tokens.")
+    assert score["passed"] is True
 
 
 def test_summarize_gate_requires_every_core_category() -> None:

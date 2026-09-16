@@ -21,6 +21,7 @@ from app.api.facebook import router as facebook_router
 from app.api.google_photos import router as google_photos_router
 from app.api.integrations import router as integrations_router
 from app.api.instagram import router as instagram_router
+from app.api.memory import router as memory_router
 from app.api.phone import router as phone_router
 from app.api.platform import router as platform_router
 from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
@@ -80,6 +81,7 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
 app.include_router(agent_async_router, prefix="/api")
+app.include_router(memory_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(voice_session_router, prefix="/api")

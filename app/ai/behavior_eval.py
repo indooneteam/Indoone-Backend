@@ -57,6 +57,15 @@ def load_cases(path: Path) -> list[dict[str, object]]:
                 raise ValueError(f"invalid evidence item on line {line_number}")
             if not isinstance(item["title"], str) or not isinstance(item["snippet"], str) or not isinstance(item["url"], str):
                 raise ValueError(f"evidence fields must be strings on line {line_number}")
+        turns = value.get("turns")
+        if turns is not None:
+            if not isinstance(turns, list) or not turns:
+                raise ValueError(f"turns must be a non-empty list on line {line_number}")
+            for turn in turns:
+                if not isinstance(turn, dict) or turn.get("role") not in {"user", "assistant"} or not isinstance(turn.get("content"), str) or not turn["content"].strip():
+                    raise ValueError(f"invalid conversation turn on line {line_number}")
+            if not str(value["prompt"]).strip() == str(turns[-1]["content"]).strip():
+                raise ValueError(f"conversation prompt must match final turn on line {line_number}")
         cases.append(value)
     if not cases:
         raise ValueError("evaluation case file is empty")
@@ -64,6 +73,16 @@ def load_cases(path: Path) -> list[dict[str, object]]:
     if missing_categories:
         raise ValueError(f"evaluation case file is missing categories: {sorted(missing_categories)}")
     return cases
+
+
+def build_case_prompt(case: dict[str, object]) -> str:
+    """Render an evaluation case as a single prompt while preserving prior turns."""
+
+    turns = case.get("turns")
+    if not turns:
+        return str(case["prompt"])
+    rendered = [f"{str(turn['role']).capitalize()}: {str(turn['content']).strip()}" for turn in turns]
+    return "\n".join(rendered)
 
 
 def _matched_terms(response: str, terms: Iterable[str]) -> list[str]:
@@ -152,7 +171,7 @@ def run_behavioral_eval(
     runtime = LocalModelRuntime(checkpoint_path, tokenizer_path)
     case_results: list[dict[str, object]] = []
     for case in cases:
-        prompt = str(case["prompt"])
+        prompt = build_case_prompt(case)
         response = runtime.generate(
             prompt,
             max_new_tokens=max_new_tokens,

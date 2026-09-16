@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 from typing import Iterable
 
+from app.ai.answer_quality import assess_answer
 from app.ai.inference import LocalModelRuntime
 
 DEFAULT_CASES = Path("data/eval/behavior.jsonl")
@@ -87,6 +88,10 @@ def score_case(case: dict[str, object], response: str) -> dict[str, object]:
     must_include = [str(item) for item in case.get("must_include", [])]
     must_not_include = [str(item) for item in case.get("must_not_include", [])]
     score = score_response(response, topics, must_include, must_not_include)
+    quality = assess_answer(str(case["prompt"]), response)
+    score["quality_passed"] = quality.passed
+    score["quality_reason"] = quality.reason
+    score["passed"] = bool(score["passed"]) and quality.passed
     score["id"] = str(case["id"])
     score["category"] = str(case["category"])
     return score
@@ -106,6 +111,7 @@ def summarize_gate(results: list[dict[str, object]]) -> dict[str, object]:
         "overall_pass": overall_pass,
         "case_count": len(results),
         "passed_cases": sum(1 for result in results if result["passed"]),
+        "quality_failures": sum(1 for result in results if not result["quality_passed"]),
         "category_pass": category_pass,
         "required_categories": list(CATEGORIES),
     }

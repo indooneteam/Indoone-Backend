@@ -156,7 +156,7 @@ def _run_with_retry(tool: str, payload: str, deadline: float) -> tuple[ToolResul
     return result, retry_count
 
 def _serialize_step(step: AgentStep) -> dict[str, Any]: return {"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval}
-def _serialize_result(result: ToolResult) -> dict[str, Any]: return {"name": result.name, "output": result.output, "safe": result.safe, "retryable": result.retryable}
+def _serialize_result(result: ToolResult) -> dict[str, Any]: return {"name": result.name, "output": result.output, "safe": result.safe, "retryable": result.retryable, "truncated": result.truncated}
 
 def _bounded_approval_tokens(approval_tokens: Iterable[str] | None) -> tuple[str, ...]:
     if approval_tokens is None: return ()

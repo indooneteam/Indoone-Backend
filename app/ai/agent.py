@@ -190,6 +190,10 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
             blocked.append(step)
             result = ToolResult(step.tool, f"Unresolved chain reference(s): {', '.join(unresolved)}", safe=False, retryable=False)
             retry_count = 0
+        elif chain_results and chain_results[-1].truncated:
+            blocked.append(step)
+            result = ToolResult(step.tool, "Cannot chain from truncated tool output", safe=False, retryable=False)
+            retry_count = 0
         else:
             executable.append(step)
             result, retry_count = _run_with_retry(step.tool, chained_payload, deadline)

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import zipfile
 
 from docx import Document
 from pypdf import PdfWriter
@@ -98,10 +99,20 @@ def test_reject_malformed_docx() -> None:
 
 def test_reject_zip_that_is_not_docx() -> None:
     buffer = io.BytesIO()
-    import zipfile
 
     with zipfile.ZipFile(buffer, "w") as archive:
         archive.writestr("payload.txt", "not a docx")
 
     with pytest.raises(ValueError, match="invalid DOCX document"):
         extract_document("wrong.docx", DOCX_MIME, buffer.getvalue())
+
+
+def test_reject_docx_archive_that_expands_beyond_limit() -> None:
+    buffer = io.BytesIO()
+    payload = b"A" * 17_000_000
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", "types")
+        archive.writestr("word/document.xml", payload)
+
+    with pytest.raises(ValueError, match="expands beyond safety limit"):
+        extract_document("large.docx", DOCX_MIME, buffer.getvalue())

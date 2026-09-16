@@ -18,6 +18,13 @@ def test_gmail_scope_aliases_cover_normalized_capabilities() -> None:
     assert scope_allows("gmail", "gmail.readonly", "messages.send") is False
 
 
+def test_gmail_send_oauth_scope_allows_only_send() -> None:
+    scope = "https://www.googleapis.com/auth/gmail.send"
+    assert scope_allows("gmail", scope, "messages.send") is True
+    assert scope_allows("gmail", scope, "messages.read") is False
+    assert scope_allows("gmail", scope, "messages.search") is False
+
+
 def test_google_photos_scope_aliases_cover_read_and_upload() -> None:
     read_scope = "https://www.googleapis.com/auth/photoslibrary.readonly"
     append_scope = "https://www.googleapis.com/auth/photoslibrary.appendonly"

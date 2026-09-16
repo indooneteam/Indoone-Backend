@@ -25,6 +25,9 @@ _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
     "gmail": {
         "gmail.modify": frozenset(("messages.search", "messages.read", "messages.send")),
         "gmail.readonly": frozenset(("messages.search", "messages.read")),
+        "https://www.googleapis.com/auth/gmail.modify": frozenset(("messages.search", "messages.read", "messages.send")),
+        "https://www.googleapis.com/auth/gmail.readonly": frozenset(("messages.search", "messages.read")),
+        "https://www.googleapis.com/auth/gmail.send": frozenset(("messages.send",)),
     },
     "google_calendar": {
         "https://www.googleapis.com/auth/calendar": frozenset(("events.read", "events.create", "events.update", "events.delete")),

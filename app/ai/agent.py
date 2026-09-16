@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import re
+import time
 from typing import Any, Iterable
 
 from app.ai.approval import decide_tool
@@ -16,6 +17,7 @@ MAX_AGENT_MEMORIES = 5
 MAX_AGENT_RETRIES = 1
 MAX_AGENT_MESSAGE_LENGTH = 20_000
 MAX_AGENT_PAYLOAD_LENGTH = 8_000
+MAX_AGENT_RUNTIME_SECONDS = 15.0
 ALLOWED_AGENT_TOOLS = tool_names()
 
 
@@ -202,7 +204,11 @@ def execute_agent(
     blocked: list[AgentStep] = []
     results: list[ToolResult] = []
     retry_counts: list[int] = []
-    for step in planned_steps:
+    deadline = time.monotonic() + MAX_AGENT_RUNTIME_SECONDS
+    for position, step in enumerate(planned_steps):
+        if time.monotonic() >= deadline:
+            blocked.extend(planned_steps[position:])
+            break
         decision = decide_tool(step.tool, approved, approval_tokens_tuple, user_id=user_id)
         if not decision.allowed:
             blocked.append(step)
@@ -215,10 +221,11 @@ def execute_agent(
         results.append(result)
         retry_counts.append(retry_count)
         if not result.safe:
-            blocked.extend(planned_steps[step.index:])
+            blocked.extend(planned_steps[position + 1:])
             break
     unsafe_result = any(not result.safe for result in results)
-    status = "failed" if unsafe_result else ("blocked" if blocked and not results else "completed")
+    timed_out = bool(blocked and len(executable) + len(blocked) >= len(planned_steps) and time.monotonic() >= deadline)
+    status = "failed" if unsafe_result else ("blocked" if blocked and not results else ("timed_out" if timed_out else "completed"))
     execution = AgentExecution(message=normalized, steps=tuple(executable), results=tuple(results), memories=memory_context, blocked_steps=tuple(blocked), retry_counts=tuple(retry_counts), run_id=run_id)
     if user_id.strip() and run_id is not None:
         update_agent_run(user_id=user_id, run_id=run_id, status=status, steps=[_serialize_step(step) for step in execution.steps], results=[_serialize_result(result) for result in execution.results], blocked_steps=[_serialize_step(step) for step in execution.blocked_steps], retry_counts=list(execution.retry_counts))

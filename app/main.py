@@ -14,6 +14,7 @@ from app.api.auth import extract_principal
 from app.api.capabilities import router as capabilities_router
 from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
+from app.api.connector_security import enforce_connector_user_scope
 from app.api.contacts import router as contacts_router
 from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
@@ -82,6 +83,11 @@ async def request_context_middleware(request: Request, call_next):
             return JSONResponse(status_code=400, content=error_response("CONTENT_LENGTH_INVALID", "invalid content-length header"))
         if declared_length < 0 or declared_length > _max_request_bytes():
             return JSONResponse(status_code=413, content=error_response("REQUEST_TOO_LARGE", "request body exceeds configured size limit"))
+
+    try:
+        await enforce_connector_user_scope(request)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content=error_response(f"HTTP_{exc.status_code}", str(exc.detail)))
 
     if principal:
         request.state.principal_id = principal

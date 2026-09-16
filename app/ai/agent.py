@@ -183,14 +183,15 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
         decision = decide_tool(step.tool, approved, approval_tokens_tuple, user_id=user_id)
         if not decision.allowed: blocked.append(step); continue
         if results and not results[-1].safe: blocked.append(step); continue
-        executable.append(step)
         chain_results = tuple(results)
         chained_payload = _chain_payload(step.payload, chain_results)
         unresolved = _unresolved_chain_references(chained_payload, chain_results)
         if unresolved:
+            blocked.append(step)
             result = ToolResult(step.tool, f"Unresolved chain reference(s): {', '.join(unresolved)}", safe=False, retryable=False)
             retry_count = 0
         else:
+            executable.append(step)
             result, retry_count = _run_with_retry(step.tool, chained_payload, deadline)
         results.append(result); retry_counts.append(retry_count)
         if not result.safe:

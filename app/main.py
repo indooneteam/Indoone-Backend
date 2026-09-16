@@ -84,13 +84,14 @@ async def request_context_middleware(request: Request, call_next):
         if declared_length < 0 or declared_length > _max_request_bytes():
             return JSONResponse(status_code=413, content=error_response("REQUEST_TOO_LARGE", "request body exceeds configured size limit"))
 
+    if principal:
+        request.state.principal_id = principal
+
     try:
         await enforce_connector_user_scope(request)
     except HTTPException as exc:
         return JSONResponse(status_code=exc.status_code, content=error_response(f"HTTP_{exc.status_code}", str(exc.detail)))
 
-    if principal:
-        request.state.principal_id = principal
     response = await call_next(request)
     response.headers["X-Request-ID"] = get_request_id() or request_id
     response.headers["X-Content-Type-Options"] = "nosniff"

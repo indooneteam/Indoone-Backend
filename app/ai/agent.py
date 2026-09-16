@@ -21,7 +21,7 @@ MAX_AGENT_PAYLOAD_LENGTH = 8_000
 MAX_AGENT_RUNTIME_SECONDS = 15.0
 MAX_AGENT_APPROVAL_TOKENS = 16
 ALLOWED_AGENT_TOOLS = tool_names()
-_CHAIN_REFERENCE_PATTERN = re.compile(r"\$(?:last|result\d+)")
+_CHAIN_REFERENCE_PATTERN = re.compile(r"(?<!\w)\$(?:last|result\d+)(?!\w)")
 
 @dataclass(frozen=True)
 class AgentStep:
@@ -127,6 +127,16 @@ def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
     chained = _CHAIN_REFERENCE_PATTERN.sub(replace_reference, payload)
     return chained[:MAX_AGENT_PAYLOAD_LENGTH]
 
+def _unresolved_chain_references(payload: str, results: tuple[ToolResult, ...]) -> tuple[str, ...]:
+    unresolved: set[str] = set()
+    for reference in _CHAIN_REFERENCE_PATTERN.findall(payload):
+        if reference == "$last":
+            if not results: unresolved.add(reference)
+            continue
+        index = int(reference.removeprefix("$result"))
+        if index < 1 or index > len(results): unresolved.add(reference)
+    return tuple(sorted(unresolved, key=lambda value: (value != "$last", value)))
+
 def _run_with_retry(tool: str, payload: str, deadline: float) -> tuple[ToolResult, int]:
     def invoke(remaining: float) -> ToolResult:
         parameters = inspect.signature(run_tool).parameters
@@ -174,7 +184,14 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
         if not decision.allowed: blocked.append(step); continue
         if results and not results[-1].safe: blocked.append(step); continue
         executable.append(step)
-        result, retry_count = _run_with_retry(step.tool, _chain_payload(step.payload, tuple(results)), deadline)
+        chain_results = tuple(results)
+        chained_payload = _chain_payload(step.payload, chain_results)
+        unresolved = _unresolved_chain_references(chained_payload, chain_results)
+        if unresolved:
+            result = ToolResult(step.tool, f"Unresolved chain reference(s): {', '.join(unresolved)}", safe=False, retryable=False)
+            retry_count = 0
+        else:
+            result, retry_count = _run_with_retry(step.tool, chained_payload, deadline)
         results.append(result); retry_counts.append(retry_count)
         if not result.safe:
             blocked.extend(planned_steps[position + 1:]); break

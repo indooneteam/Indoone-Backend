@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from app.ai.tools import TOOLS, ToolResult, run_tool_async
-
+from app.ai.tools import TOOLS, run_tool_async
 
 
 def test_async_tool_runtime_keeps_async_tool_on_current_loop(monkeypatch) -> None:
@@ -21,7 +20,6 @@ def test_async_tool_runtime_keeps_async_tool_on_current_loop(monkeypatch) -> Non
     asyncio.run(scenario())
 
 
-
 def test_async_tool_runtime_cancels_timed_out_coroutine(monkeypatch) -> None:
     cancelled = False
 
@@ -35,9 +33,12 @@ def test_async_tool_runtime_cancels_timed_out_coroutine(monkeypatch) -> None:
             raise
 
     monkeypatch.setitem(TOOLS, "text_stats", slow_tool)
-    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.01, "max_output_chars": 100})())
+    monkeypatch.setattr(
+        "app.ai.tools.get_tool_spec",
+        lambda _: type("Spec", (), {"timeout_seconds": 0.01, "max_output_chars": 100})(),
+    )
 
-    async def scenario() -> ToolResult:
+    async def scenario():
         return await run_tool_async("text_stats", "hello", max_runtime_seconds=0.01)
 
     result = asyncio.run(scenario())

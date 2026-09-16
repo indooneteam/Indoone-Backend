@@ -12,6 +12,8 @@ from pypdf.errors import PdfReadError
 
 
 MAX_DOCUMENT_BYTES = 8_000_000
+MAX_DOCX_UNCOMPRESSED_BYTES = 16_000_000
+MAX_DOCX_ARCHIVE_ENTRIES = 2_048
 MAX_TEXT_CHARS = 200_000
 MAX_TABLES = 100
 MAX_TABLE_ROWS = 500
@@ -69,6 +71,23 @@ def _safe_filename(filename: str) -> str:
     return candidate
 
 
+def _validate_docx_archive(archive: ZipFile) -> None:
+    infos = archive.infolist()
+    if len(infos) > MAX_DOCX_ARCHIVE_ENTRIES:
+        raise ValueError("invalid DOCX document")
+    total_uncompressed = 0
+    for info in infos:
+        if info.flag_bits & 0x1:
+            raise ValueError("invalid DOCX document")
+        filename = info.filename.replace("\\", "/")
+        parts = [part for part in filename.split("/") if part]
+        if filename.startswith("/") or ".." in parts:
+            raise ValueError("invalid DOCX document")
+        total_uncompressed += max(0, int(info.file_size))
+        if total_uncompressed > MAX_DOCX_UNCOMPRESSED_BYTES:
+            raise ValueError("DOCX archive expands beyond safety limit")
+
+
 def _validate_signature(mime_type: str, content: bytes) -> None:
     if mime_type == PDF_MIME:
         if not content.startswith(b"%PDF-"):
@@ -79,6 +98,7 @@ def _validate_signature(mime_type: str, content: bytes) -> None:
             raise ValueError("invalid DOCX document")
         try:
             with ZipFile(io.BytesIO(content)) as archive:
+                _validate_docx_archive(archive)
                 names = set(archive.namelist())
                 if "[Content_Types].xml" not in names or "word/document.xml" not in names:
                     raise ValueError("invalid DOCX document")

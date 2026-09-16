@@ -29,10 +29,17 @@ def test_agent_stops_when_total_runtime_budget_is_exhausted(monkeypatch) -> None
 
 
 def test_agent_runtime_budget_is_independent_of_step_limit(monkeypatch) -> None:
-    monkeypatch.setattr("app.ai.agent.MAX_AGENT_RUNTIME_SECONDS", 0.001)
-    monkeypatch.setattr("app.ai.agent.run_tool", lambda name, payload: ToolResult(name, payload))
+    monkeypatch.setattr("app.ai.agent.MAX_AGENT_RUNTIME_SECONDS", 0.02)
+
+    def slow_tool(name: str, payload: str) -> ToolResult:
+        time.sleep(0.03)
+        return ToolResult(name, payload)
+
+    monkeypatch.setattr("app.ai.agent.run_tool", slow_tool)
 
     execution = execute_agent("text stats: one; text stats: two")
 
     assert len(execution.steps) == 1
+    assert len(execution.results) == 1
     assert len(execution.blocked_steps) == 1
+    assert execution.blocked_steps[0].index == 2

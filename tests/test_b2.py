@@ -51,3 +51,13 @@ def test_b2_infers_region_from_endpoint(monkeypatch: pytest.MonkeyPatch) -> None
     assert captured["service"] == "s3"
     assert captured["region_name"] == "eu-central-003"
     assert captured["endpoint_url"] == "https://s3.eu-central-003.backblazeb2.com"
+
+
+def test_b2_object_key_validation_rejects_unsafe_values() -> None:
+    for value in ("", "/absolute/path", "models/../secret", "models//file", "models/./file", "models/file\n"):
+        with pytest.raises(B2StorageError, match="invalid B2 object key"):
+            B2Storage._validate_object_key(value)
+
+
+def test_b2_object_key_validation_normalizes_backslashes() -> None:
+    assert B2Storage._validate_object_key("models\\indoone\\weights.bin") == "models/indoone/weights.bin"

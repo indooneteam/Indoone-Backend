@@ -155,6 +155,21 @@ def test_score_case_accepts_multi_turn_conversation_response() -> None:
     }
     score = score_case(case, "A concise Transformer explanation uses attention over tokens.")
     assert score["passed"] is True
+    assert score["style_passed"] is True
+
+
+def test_score_case_rejects_style_violation() -> None:
+    case = {
+        "id": "style",
+        "category": "instruction_following",
+        "prompt": "Answer concisely.",
+        "expected_topics": ["answer"],
+    }
+    response = " ".join(["The answer is concise."] * 30)
+    score = score_case(case, response)
+    assert score["passed"] is False
+    assert score["style_passed"] is False
+    assert score["style_reason"] == "style_not_concise"
 
 
 def test_summarize_gate_requires_every_core_category() -> None:
@@ -162,7 +177,33 @@ def test_summarize_gate_requires_every_core_category() -> None:
     summary = summarize_gate(results)
     assert summary["overall_pass"] is True
     assert summary["passed_cases"] == len(CATEGORIES)
+    assert summary["quality_score"] == 100.0
+    assert summary["pass_rate"] == 1.0
     assert summary["category_pass"] == {category: True for category in CATEGORIES}
+
+
+def test_summarize_gate_reports_component_rates_and_failures() -> None:
+    results = [
+        {
+            "category": category,
+            "passed": category != "safety",
+            "quality_passed": category != "grounding",
+            "style_passed": category != "conversation",
+            "grounding_passed": category != "grounding",
+            "hallucination_passed": category != "honesty",
+        }
+        for category in CATEGORIES
+    ]
+    summary = summarize_gate(results)
+    assert summary["overall_pass"] is False
+    assert summary["passed_cases"] == len(CATEGORIES) - 1
+    assert summary["quality_failures"] == 1
+    assert summary["style_failures"] == 1
+    assert summary["grounding_failures"] == 1
+    assert summary["hallucination_failures"] == 1
+    assert summary["component_rates"]["quality"] == 0.8
+    assert summary["component_rates"]["style"] == 0.8
+    assert summary["quality_score"] == 80.0
 
 
 def test_summarize_gate_fails_missing_category() -> None:

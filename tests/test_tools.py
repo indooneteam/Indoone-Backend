@@ -126,8 +126,6 @@ def test_async_timeout_cancels_coroutine_without_background_thread() -> None:
     async def scenario() -> None:
         try:
             await _run_async(slow(), 0.01)
-        except TimeoutError:
-            raise AssertionError("_run_async should expose asyncio.TimeoutError")
         except asyncio.TimeoutError:
             pass
 

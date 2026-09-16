@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from typing import Iterable
 
+from app.ai.connector_authorization import authorize_tool
 from app.ai.tool_registry import get_tool_spec
 
 MAX_APPROVAL_USER_LENGTH = 256
@@ -115,6 +116,11 @@ def decide_tool(
     spec = get_tool_spec(name)
     if spec is None:
         return ApprovalDecision(False, True, "tool is not registered")
+
+    connector_decision = authorize_tool(user_id, spec.name)
+    if not connector_decision.allowed:
+        return ApprovalDecision(False, spec.requires_approval, connector_decision.reason)
+
     if not spec.requires_approval:
         return ApprovalDecision(True, False, "tool is auto-approved by policy")
     if not user_id.strip():

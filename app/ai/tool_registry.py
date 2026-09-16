@@ -13,6 +13,8 @@ class ToolSpec:
     timeout_seconds: float = 20.0
     max_output_chars: int = 20_000
     categories: tuple[str, ...] = ()
+    connector_id: str | None = None
+    capability: str | None = None
 
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
@@ -27,8 +29,8 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("contact_resolve", "Resolve a client-authorized contact.", categories=("contacts",)),
     ToolSpec("phone_call", "Prepare a phone call action.", risk="external", requires_approval=True, categories=("phone", "external")),
     ToolSpec("phone_call_contact", "Prepare a phone call action for a contact.", risk="external", requires_approval=True, categories=("phone", "external")),
-    ToolSpec("gmail_search", "Search the authenticated user's Gmail mailbox.", categories=("gmail", "external")),
-    ToolSpec("gmail_read", "Read one message from the authenticated user's Gmail mailbox.", categories=("gmail", "external")),
+    ToolSpec("gmail_search", "Search the authenticated user's Gmail mailbox.", categories=("gmail", "external"), connector_id="gmail", capability="messages.search"),
+    ToolSpec("gmail_read", "Read one message from the authenticated user's Gmail mailbox.", categories=("gmail", "external"), connector_id="gmail", capability="messages.read"),
 )
 
 
@@ -60,6 +62,8 @@ def describe_tools() -> list[dict[str, Any]]:
             "timeout_seconds": item.timeout_seconds,
             "max_output_chars": item.max_output_chars,
             "categories": list(item.categories),
+            "connector_id": item.connector_id,
+            "capability": item.capability,
         }
         for item in TOOL_SPECS
     ]

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from app.ai.answer_quality import assess_answer, user_safe_failure
+
 
 @dataclass(frozen=True)
 class GroundedEvidence:
@@ -28,11 +30,13 @@ def build_grounded_prompt_instruction() -> str:
 
 
 def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
-    """Append deterministic source attribution to a research-backed answer."""
+    """Quality-gate user-facing output and append deterministic source attribution."""
 
     cleaned = answer.strip()
-    if not evidence:
-        return cleaned
+    quality = assess_answer("", cleaned)
+    if not quality.passed:
+        return user_safe_failure()
+
     unique: list[GroundedEvidence] = []
     seen: set[str] = set()
     for item in evidence:

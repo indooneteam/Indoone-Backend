@@ -12,6 +12,7 @@ from typing import Awaitable, Callable
 
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
 from app.ai.code_sandbox import sandbox_execution_tool
+from app.ai.connector_authorization import authorize_tool
 from app.ai.tool_registry import get_tool_spec
 from app.capabilities.contacts import parse_contacts, resolve_contact, search_contacts
 from app.capabilities.gmail import get_gmail_message, list_gmail_messages
@@ -232,6 +233,19 @@ def _validate_tool_request(name: str, payload: str) -> tuple[str, object, str | 
     return normalized_name, (spec, tool), None
 
 
+def _authorize_execution(user_id: str, spec: object) -> str | None:
+    connector_id = getattr(spec, "connector_id", None)
+    if not connector_id:
+        return None
+    if not user_id.strip():
+        return "authenticated user is required for connector tools"
+    capability = getattr(spec, "capability", None)
+    if not capability:
+        return "tool connector metadata is incomplete"
+    decision = authorize_tool(user_id, getattr(spec, "name", ""))
+    return None if decision.allowed else decision.reason
+
+
 def _is_retryable_exception(exc: BaseException) -> bool:
     return isinstance(exc, (TimeoutError, asyncio.TimeoutError, ConnectionError))
 
@@ -243,12 +257,15 @@ def _tool_error_message(exc: BaseException) -> str:
     return f"Tool error: {message}" if message else f"Tool error: {type(exc).__name__}"
 
 
-async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
+async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None, user_id: str = "") -> ToolResult:
     """Run a tool from an async request without creating a thread for async tools."""
     normalized_name, prepared, error = _validate_tool_request(name, payload)
     if error is not None:
         return ToolResult(normalized_name, error, safe=False, retryable=False)
     spec, tool = prepared
+    authorization_error = _authorize_execution(user_id, spec)
+    if authorization_error is not None:
+        return ToolResult(normalized_name, f"Tool error: {authorization_error}", safe=False, retryable=False)
     started = time.monotonic()
     requested_budget = MAX_TOOL_RUN_SECONDS if max_runtime_seconds is None else float(max_runtime_seconds)
     total_budget = max(0.01, min(requested_budget, MAX_TOOL_RUN_SECONDS, MAX_TOOL_TIMEOUT_SECONDS))
@@ -274,11 +291,14 @@ async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | N
         return ToolResult(normalized_name, _tool_error_message(exc), safe=False, retryable=_is_retryable_exception(exc))
 
 
-def run_tool(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
+def run_tool(name: str, payload: str, max_runtime_seconds: float | None = None, user_id: str = "") -> ToolResult:
     normalized_name, prepared, error = _validate_tool_request(name, payload)
     if error is not None:
         return ToolResult(normalized_name, error, safe=False, retryable=False)
     spec, tool = prepared
+    authorization_error = _authorize_execution(user_id, spec)
+    if authorization_error is not None:
+        return ToolResult(normalized_name, f"Tool error: {authorization_error}", safe=False, retryable=False)
     started = time.monotonic()
     requested_budget = MAX_TOOL_RUN_SECONDS if max_runtime_seconds is None else float(max_runtime_seconds)
     total_budget = max(0.01, min(requested_budget, MAX_TOOL_RUN_SECONDS, MAX_TOOL_TIMEOUT_SECONDS))

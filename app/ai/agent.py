@@ -120,11 +120,9 @@ def _chain_payload(payload: str, results: tuple[ToolResult, ...]) -> str:
     if not results: return payload
     def replace_reference(match: re.Match[str]) -> str:
         reference = match.group(0)
-        if reference == "$last":
-            return results[-1].output
+        if reference == "$last": return results[-1].output
         index = int(reference.removeprefix("$result"))
-        if 1 <= index <= len(results):
-            return results[index - 1].output
+        if 1 <= index <= len(results): return results[index - 1].output
         return reference
     chained = _CHAIN_REFERENCE_PATTERN.sub(replace_reference, payload)
     return chained[:MAX_AGENT_PAYLOAD_LENGTH]
@@ -139,10 +137,11 @@ def _unresolved_chain_references(payload: str, results: tuple[ToolResult, ...]) 
         if index < 1 or index > len(results): unresolved.add(reference)
     return tuple(sorted(unresolved, key=lambda value: (value != "$last", value)))
 
-def _run_with_retry(tool: str, payload: str, deadline: float) -> tuple[ToolResult, int]:
+def _run_with_retry(tool: str, payload: str, deadline: float, user_id: str = "") -> tuple[ToolResult, int]:
     def invoke(remaining: float) -> ToolResult:
         parameters = inspect.signature(run_tool).parameters
-        if "max_runtime_seconds" in parameters: return run_tool(tool, payload, max_runtime_seconds=remaining)
+        if "max_runtime_seconds" in parameters:
+            return run_tool(tool, payload, max_runtime_seconds=remaining, user_id=user_id)
         return run_tool(tool, payload)
     remaining = remaining_budget(deadline)
     if remaining <= 0: return deadline_failure(tool), 0
@@ -196,7 +195,7 @@ def execute_agent(message: str, user_id: str = "", approved_tools: set[str] | fr
             retry_count = 0
         else:
             executable.append(step)
-            result, retry_count = _run_with_retry(step.tool, chained_payload, deadline)
+            result, retry_count = _run_with_retry(step.tool, chained_payload, deadline, user_id=user_id)
         results.append(result); retry_counts.append(retry_count)
         if not result.safe:
             blocked.extend(planned_steps[position + 1:]); break

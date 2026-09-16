@@ -54,6 +54,21 @@ def test_non_string_payload_is_rejected() -> None:
     assert "payload" in result.output.lower()
 
 
+def test_connector_tool_requires_explicit_execution_identity() -> None:
+    payload = '{"user_id":"user-one","query":"from:alice"}'
+    result = run_tool("gmail_search", payload)
+    assert result.safe is False
+    assert "authenticated user is required" in result.output.lower()
+
+
+def test_connector_tool_requires_connected_identity(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    payload = '{"user_id":"user-one","query":"from:alice"}'
+    result = run_tool("gmail_search", payload, user_id="user-one")
+    assert result.safe is False
+    assert "not connected for this user" in result.output.lower()
+
+
 def test_sync_tool_timeout_is_bounded(monkeypatch) -> None:
     original = TOOLS["text_stats"]
 
@@ -62,7 +77,7 @@ def test_sync_tool_timeout_is_bounded(monkeypatch) -> None:
         return "done"
 
     monkeypatch.setitem(TOOLS, "text_stats", slow_tool)
-    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.05, "max_output_chars": 100})())
+    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.05, "max_output_chars": 100, "connector_id": None})())
     started = time.monotonic()
     result = run_tool("text_stats", "hello")
     elapsed = time.monotonic() - started
@@ -82,7 +97,7 @@ def test_total_tool_run_budget_is_enforced(monkeypatch) -> None:
 
     monkeypatch.setitem(TOOLS, "text_stats", slow_tool)
     monkeypatch.setattr("app.ai.tools.MAX_TOOL_RUN_SECONDS", 0.05)
-    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 100})())
+    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 100, "connector_id": None})())
     started = time.monotonic()
     result = run_tool("text_stats", "hello")
     elapsed = time.monotonic() - started
@@ -96,7 +111,7 @@ def test_total_tool_run_budget_is_enforced(monkeypatch) -> None:
 def test_tool_output_truncation_is_explicit(monkeypatch) -> None:
     original = TOOLS["text_stats"]
     monkeypatch.setitem(TOOLS, "text_stats", lambda _: "abcdefghij")
-    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 4})())
+    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 4, "connector_id": None})())
     result = run_tool("text_stats", "hello")
     monkeypatch.setitem(TOOLS, "text_stats", original)
     assert result.safe is True
@@ -122,7 +137,7 @@ def test_sync_tool_worker_slots_are_bounded(monkeypatch) -> None:
         return "done"
 
     monkeypatch.setitem(TOOLS, "text_stats", blocked_tool)
-    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.2, "max_output_chars": 100})())
+    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.2, "max_output_chars": 100, "connector_id": None})())
     results: list[object] = []
     lock = threading.Lock()
 

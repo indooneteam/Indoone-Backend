@@ -32,6 +32,22 @@ def test_connector_authorization_denies_wrong_scope(monkeypatch, tmp_path) -> No
     assert result.reason == "connected token scope does not allow this capability"
 
 
+def test_connector_authorization_denies_expired_token(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    upsert_integration_token("user-one", "gmail", b"encrypted", None, "Bearer", "gmail.readonly", "2000-01-01T00:00:00+00:00")
+    result = authorize_connector("user-one", "gmail", "messages.read")
+    assert result.allowed is False
+    assert result.reason == "connector authorization has expired"
+
+
+def test_connector_authorization_denies_malformed_expiry(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    upsert_integration_token("user-one", "gmail", b"encrypted", None, "Bearer", "gmail.readonly", "not-a-date")
+    result = authorize_connector("user-one", "gmail", "messages.read")
+    assert result.allowed is False
+    assert result.reason == "connector authorization has expired"
+
+
 @pytest.mark.parametrize("scope", ["gmail.modify", "gmail.readonly messages.read"])
 def test_connector_authorization_allows_read_scope(monkeypatch, tmp_path, scope: str) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))

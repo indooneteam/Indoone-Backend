@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from app.ai.tool_registry import get_tool_spec
 from app.capabilities.connector_registry import get_connector
 from app.capabilities.store import get_integration_token_metadata
 
@@ -13,13 +14,10 @@ class ConnectorAuthorization:
     reason: str = ""
 
 
-_TOOL_REQUIREMENTS: dict[str, tuple[str, str]] = {
-    "gmail_search": ("gmail", "messages.search"),
-    "gmail_read": ("gmail", "messages.read"),
-}
+def _scope_tokens(scope: str) -> tuple[str, ...]:
+    return tuple(token for token in scope.replace(",", " ").split() if token)
 
-# Provider scopes are translated to the normalized connector capabilities exposed
-# by connector_registry. Exact capability names remain valid for future providers.
+
 _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
     "gmail": {
         "gmail.modify": frozenset(("messages.search", "messages.read", "messages.send")),
@@ -28,24 +26,16 @@ _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
 }
 
 
-def connector_requirement_for_tool(tool: str) -> tuple[str, str] | None:
-    return _TOOL_REQUIREMENTS.get(tool.strip().lower())
-
-
-def _scope_tokens(scope: str) -> tuple[str, ...]:
-    return tuple(token for token in scope.replace(",", " ").split() if token)
-
-
 def scope_allows(connector_id: str, scope: str, capability: str) -> bool:
     normalized_connector = connector_id.strip().lower()
     normalized_capability = capability.strip().lower()
     if not normalized_capability:
         return False
+    aliases = _SCOPE_ALIASES.get(normalized_connector, {})
     for token in _scope_tokens(scope):
         token_key = token.casefold()
         if token_key == normalized_capability:
             return True
-        aliases = _SCOPE_ALIASES.get(normalized_connector, {})
         if normalized_capability in aliases.get(token_key, frozenset()):
             return True
     return False
@@ -56,11 +46,11 @@ def _token_is_expired(expires_at: object) -> bool:
         return False
     try:
         value = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
-        if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        return value <= datetime.now(timezone.utc)
     except (TypeError, ValueError):
-        return False
+        return True
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value <= datetime.now(timezone.utc)
 
 
 def authorize_connector(user_id: str, connector_id: str, capability: str) -> ConnectorAuthorization:
@@ -89,8 +79,11 @@ def authorize_connector(user_id: str, connector_id: str, capability: str) -> Con
 
 
 def authorize_tool(user_id: str, tool: str) -> ConnectorAuthorization:
-    requirement = connector_requirement_for_tool(tool)
-    if requirement is None:
+    spec = get_tool_spec(tool)
+    if spec is None:
+        return ConnectorAuthorization(False, "tool is not registered")
+    if not spec.connector_id and not spec.capability:
         return ConnectorAuthorization(True, "tool does not require a connector")
-    connector_id, capability = requirement
-    return authorize_connector(user_id, connector_id, capability)
+    if not spec.connector_id or not spec.capability:
+        return ConnectorAuthorization(False, "tool connector metadata is incomplete")
+    return authorize_connector(user_id, spec.connector_id, spec.capability)

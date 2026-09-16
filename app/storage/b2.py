@@ -63,10 +63,13 @@ class B2Storage:
 
     @classmethod
     def _validate_object_key(cls, object_key: str) -> str:
-        key = str(object_key).strip()
-        if not key or len(key) > cls.MAX_OBJECT_KEY_LENGTH:
+        raw_key = str(object_key)
+        if not raw_key or len(raw_key) > cls.MAX_OBJECT_KEY_LENGTH:
             raise B2StorageError("invalid B2 object key")
-        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in key):
+        if any(ord(char) < 0x20 or ord(char) == 0x7F for char in raw_key):
+            raise B2StorageError("invalid B2 object key")
+        key = raw_key.strip()
+        if not key:
             raise B2StorageError("invalid B2 object key")
         normalized = key.replace("\\", "/")
         if normalized.startswith("/") or any(part in {"", ".", ".."} for part in normalized.split("/")):

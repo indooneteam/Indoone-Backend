@@ -15,14 +15,15 @@ class HallucinationQuality:
     matches: tuple[str, ...] = ()
 
 
+_ACTION_VERBS = r"(?:checked|accessed|verified|searched|opened|called|sent|looked at)"
 _ACTION_PATTERNS = (
-    r"\bi\s+(?:checked|accessed|verified|searched|opened|called|sent|looked at)\b",
-    r"\bi\s+have\s+(?:checked|accessed|verified|searched|opened|called|sent)\b",
+    rf"\bi\s+{_ACTION_VERBS}\b",
+    rf"\bi\s+have\s+{_ACTION_VERBS}\b",
+    rf"\band\s+{_ACTION_VERBS}\b",
 )
 _ACTION_RE = re.compile("|".join(f"(?:{pattern})" for pattern in _ACTION_PATTERNS), re.IGNORECASE)
 _NEGATION_RE = re.compile(
-    r"\b(?:i\s+(?:didn'?t|did not|can'?t|cannot|can not|haven'?t|have not))\s+"
-    r"(?:checked|accessed|verified|searched|opened|called|sent|looked at)\b",
+    rf"\b(?:i\s+(?:didn'?t|did not|can'?t|cannot|can not|haven'?t|have not))\s+{_ACTION_VERBS}\b",
     re.IGNORECASE,
 )
 

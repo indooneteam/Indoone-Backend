@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import os
+import time
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -58,6 +59,7 @@ app = FastAPI(title="Indoone Backend", version="0.3.0", lifespan=lifespan)
 
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
+    started = time.perf_counter()
     request_id = new_request_id()
     clear_principal_id()
     request.state.principal_id = ""
@@ -89,6 +91,7 @@ async def request_context_middleware(request: Request, call_next):
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Process-Time-Ms"] = f"{(time.perf_counter() - started) * 1000:.2f}"
     if request.url.scheme == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response

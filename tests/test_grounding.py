@@ -23,3 +23,14 @@ def test_append_sources_is_deterministic_and_deduplicates_urls() -> None:
 
 def test_append_sources_without_evidence_returns_clean_answer() -> None:
     assert append_sources("  Answer  ", []) == "Answer"
+
+
+def test_append_sources_rejects_internal_model_details() -> None:
+    result = append_sources("The trained local model is not available yet.", [])
+    assert "reliable information" in result
+    assert "trained local model" not in result
+
+
+def test_append_sources_rejects_repeated_output() -> None:
+    result = append_sources("Same answer. Same answer. Same answer.", [])
+    assert "reliable information" in result

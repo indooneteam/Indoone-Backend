@@ -156,6 +156,7 @@ def test_score_case_accepts_multi_turn_conversation_response() -> None:
     score = score_case(case, "A concise Transformer explanation uses attention over tokens.")
     assert score["passed"] is True
     assert score["style_passed"] is True
+    assert score["response_passed"] is True
 
 
 def test_score_case_rejects_style_violation() -> None:
@@ -187,6 +188,7 @@ def test_summarize_gate_reports_component_rates_and_failures() -> None:
         {
             "category": category,
             "passed": category != "safety",
+            "response_passed": category != "safety",
             "quality_passed": category != "grounding",
             "style_passed": category != "conversation",
             "grounding_passed": category != "grounding",
@@ -197,12 +199,13 @@ def test_summarize_gate_reports_component_rates_and_failures() -> None:
     summary = summarize_gate(results)
     assert summary["overall_pass"] is False
     assert summary["passed_cases"] == len(CATEGORIES) - 1
+    assert summary["response_failures"] == 1
     assert summary["quality_failures"] == 1
     assert summary["style_failures"] == 1
     assert summary["grounding_failures"] == 1
     assert summary["hallucination_failures"] == 1
+    assert summary["component_rates"]["response"] == 0.8
     assert summary["component_rates"]["quality"] == 0.8
-    assert summary["component_rates"]["style"] == 0.8
     assert summary["quality_score"] == 80.0
 
 

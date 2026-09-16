@@ -18,14 +18,16 @@ def test_agent_api_exposes_result_execution_metadata() -> None:
 def test_agent_api_exposes_truncated_result_metadata(monkeypatch) -> None:
     from app.ai.tools import ToolResult
 
-    def fake_execute_agent(*args, **kwargs):
+    async def fake_execute_agent_async(*args, **kwargs):
         from app.ai.agent import AgentExecution, AgentStep
 
         step = AgentStep(index=1, tool="text_stats", payload="hello")
         result = ToolResult("text_stats", "partial", safe=True, truncated=True)
         return AgentExecution(message="text stats: hello", steps=(step,), results=(result,))
 
-    monkeypatch.setattr("app.api.capabilities.execute_agent", fake_execute_agent)
+    # /api/agent is served by the async agent router, which is registered
+    # before the legacy capabilities router.
+    monkeypatch.setattr("app.api.agent_async.execute_agent_async", fake_execute_agent_async)
 
     with TestClient(app) as client:
         response = client.post("/api/agent", json={"message": "text stats: hello"})

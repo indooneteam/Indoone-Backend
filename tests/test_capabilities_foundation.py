@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import time
 
 from fastapi.testclient import TestClient
@@ -19,7 +20,8 @@ def _token(user_id: str) -> str:
     user = _encode(user_id.encode("utf-8"))
     timestamp = _encode(str(int(time.time())).encode("ascii"))
     payload = f"{user}.{timestamp}".encode("ascii")
-    signature = _encode(hmac.new(b"x" * 32, payload, hashlib.sha256).digest())
+    secret = os.environ["INDOONE_AUTH_SECRET"].encode("utf-8")
+    signature = _encode(hmac.new(secret, payload, hashlib.sha256).digest())
     return f"{user}.{timestamp}.{signature}"
 
 
@@ -33,6 +35,7 @@ def test_capability_registry_exposes_core_features() -> None:
 
 def test_memory_round_trip_search_and_isolation(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
     with TestClient(app) as client:
         first_headers = {"Authorization": f"Bearer {_token('u1')}"}
         second_headers = {"Authorization": f"Bearer {_token('u2')}"}

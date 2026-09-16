@@ -18,6 +18,7 @@ MAX_AGENT_RETRIES = 1
 MAX_AGENT_MESSAGE_LENGTH = 20_000
 MAX_AGENT_PAYLOAD_LENGTH = 8_000
 MAX_AGENT_RUNTIME_SECONDS = 15.0
+MAX_AGENT_APPROVAL_TOKENS = 16
 ALLOWED_AGENT_TOOLS = tool_names()
 
 
@@ -183,6 +184,19 @@ def _serialize_result(result: ToolResult) -> dict[str, Any]:
     return {"name": result.name, "output": result.output, "safe": result.safe, "retryable": result.retryable}
 
 
+def _bounded_approval_tokens(approval_tokens: Iterable[str] | None) -> tuple[str, ...]:
+    if approval_tokens is None:
+        return ()
+    iterator = iter(approval_tokens)
+    tokens: list[str] = []
+    for _ in range(MAX_AGENT_APPROVAL_TOKENS):
+        try:
+            tokens.append(next(iterator))
+        except StopIteration:
+            return tuple(tokens)
+    return tuple(tokens)
+
+
 def execute_agent(
     message: str,
     user_id: str = "",
@@ -194,7 +208,7 @@ def execute_agent(
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH:
         return AgentExecution(message=message, steps=(), results=())
     approved = frozenset(approved_tools or ())
-    approval_tokens_tuple = tuple(approval_tokens or ())
+    approval_tokens_tuple = _bounded_approval_tokens(approval_tokens)
     memory_context = _load_memory_context(user_id, normalized)
     run_id: str | None = None
     if user_id.strip():

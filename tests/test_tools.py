@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import threading
 import time
 
-from app.ai.tools import MAX_CALCULATOR_ABS_VALUE, MAX_CALCULATOR_EXPONENT, TOOLS, run_tool
+from app.ai.tools import MAX_CALCULATOR_ABS_VALUE, MAX_CALCULATOR_EXPONENT, TOOLS, _run_async, run_tool
 
 
 def test_text_stats_tool_is_deterministic() -> None:
@@ -108,3 +109,39 @@ def test_sync_tool_worker_slots_are_bounded(monkeypatch) -> None:
     unsafe = [item for item in results if getattr(item, "safe", True) is False]
     assert len(results) == 9
     assert any("too many" in getattr(item, "output", "").lower() for item in unsafe)
+
+
+def test_async_timeout_cancels_coroutine_without_background_thread() -> None:
+    cancelled = False
+
+    async def slow() -> str:
+        nonlocal cancelled
+        try:
+            await asyncio.sleep(1)
+            return "done"
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
+
+    async def scenario() -> None:
+        try:
+            await _run_async(slow(), 0.01)
+        except TimeoutError:
+            raise AssertionError("_run_async should expose asyncio.TimeoutError")
+        except asyncio.TimeoutError:
+            pass
+
+    asyncio.run(scenario())
+    assert cancelled is True
+
+
+def test_async_run_stays_on_current_loop() -> None:
+    async def scenario() -> None:
+        loop = asyncio.get_running_loop()
+
+        async def current_loop() -> bool:
+            return asyncio.get_running_loop() is loop
+
+        assert await _run_async(current_loop(), 0.2) is True
+
+    asyncio.run(scenario())

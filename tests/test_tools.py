@@ -72,6 +72,26 @@ def test_sync_tool_timeout_is_bounded(monkeypatch) -> None:
     assert elapsed < 0.15
 
 
+def test_total_tool_run_budget_is_enforced(monkeypatch) -> None:
+    original = TOOLS["text_stats"]
+
+    def slow_tool(_: str) -> str:
+        time.sleep(0.2)
+        return "done"
+
+    monkeypatch.setitem(TOOLS, "text_stats", slow_tool)
+    monkeypatch.setattr("app.ai.tools.MAX_TOOL_RUN_SECONDS", 0.05)
+    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 100})())
+    started = time.monotonic()
+    result = run_tool("text_stats", "hello")
+    elapsed = time.monotonic() - started
+    monkeypatch.setitem(TOOLS, "text_stats", original)
+    assert result.safe is False
+    assert result.retryable is True
+    assert "timed out" in result.output.lower()
+    assert elapsed < 0.15
+
+
 def test_non_text_tool_output_is_unsafe(monkeypatch) -> None:
     original = TOOLS["text_stats"]
     monkeypatch.setitem(TOOLS, "text_stats", lambda _: 123)  # type: ignore[assignment]

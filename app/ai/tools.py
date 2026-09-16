@@ -6,6 +6,7 @@ import inspect
 import json
 import operator
 import threading
+import time
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
@@ -20,6 +21,7 @@ MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
 MAX_TOOL_PAYLOAD = 100_000
 MAX_TOOL_TIMEOUT_SECONDS = 60.0
+MAX_TOOL_RUN_SECONDS = 60.0
 MAX_SYNC_TOOL_WORKERS = 8
 
 ToolCallable = Callable[[str], str | Awaitable[str]]
@@ -242,8 +244,17 @@ def run_tool(name: str, payload: str) -> ToolResult:
     tool = TOOLS.get(normalized_name)
     if spec is None or tool is None:
         return ToolResult(normalized_name, "Unknown or unregistered tool", safe=False, retryable=False)
+    started = time.monotonic()
+    total_budget = max(0.01, min(float(MAX_TOOL_RUN_SECONDS), MAX_TOOL_TIMEOUT_SECONDS))
     try:
-        output = _run_sync_with_timeout(tool, payload, spec.timeout_seconds)
+        elapsed = time.monotonic() - started
+        remaining = total_budget - elapsed
+        if remaining <= 0:
+            raise TimeoutError("tool run budget exceeded")
+        timeout_seconds = min(float(spec.timeout_seconds), remaining)
+        output = _run_sync_with_timeout(tool, payload, timeout_seconds)
+        if time.monotonic() - started > total_budget:
+            raise TimeoutError("tool run budget exceeded")
         if len(output) > spec.max_output_chars:
             output = output[: spec.max_output_chars] + "\n[output truncated by policy]"
         return ToolResult(normalized_name, output, safe=True, retryable=False)

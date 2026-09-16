@@ -1,6 +1,7 @@
 import asyncio
 
 import app.ai.service as service
+from app.ai.answer_quality import user_safe_failure
 from app.ai.intent import classify_intent
 from app.ai.research import ResearchResult
 
@@ -24,7 +25,7 @@ def test_service_includes_research_results(monkeypatch) -> None:
     class FakeEngine:
         async def generate(self, message: str) -> str:
             captured.append(message)
-            return "ok"
+            return "The latest report is summarized from the supplied evidence."
 
     class FakeResearch:
         async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
@@ -42,7 +43,7 @@ def test_service_includes_research_results(monkeypatch) -> None:
 
     reply = asyncio.run(service.generate_reply("latest Indoone news"))
 
-    assert reply.startswith("ok")
+    assert reply.startswith("The latest report is summarized")
     assert "Sources:" in reply
     assert "https://example.com/indoone" in reply
     assert "https://example.org/indoone" in reply
@@ -59,7 +60,7 @@ def test_single_source_is_not_treated_as_cross_checked(monkeypatch) -> None:
     class FakeEngine:
         async def generate(self, message: str) -> str:
             captured.append(message)
-            return "ok"
+            return "The available source could not be independently cross-checked."
 
     class FakeResearch:
         async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
@@ -72,7 +73,8 @@ def test_single_source_is_not_treated_as_cross_checked(monkeypatch) -> None:
 
     reply = asyncio.run(service.generate_reply("latest Indoone news"))
 
-    assert reply == "ok"
+    assert reply == user_safe_failure()
+    assert "<research>" not in captured[0]
     assert "Sources:" not in reply
 
 
@@ -82,7 +84,7 @@ def test_service_survives_research_failure(monkeypatch) -> None:
     class FakeEngine:
         async def generate(self, message: str) -> str:
             captured.append(message)
-            return "ok"
+            return "Fresh research is currently unavailable, so I cannot verify the latest information."
 
     class BrokenResearch:
         async def search(self, query: str, limit: int = 5):
@@ -95,5 +97,5 @@ def test_service_survives_research_failure(monkeypatch) -> None:
 
     reply = asyncio.run(service.generate_reply("latest Indoone news"))
 
-    assert reply == "ok"
+    assert reply == user_safe_failure()
     assert "<research>" not in captured[0]

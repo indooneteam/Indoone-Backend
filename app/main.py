@@ -177,7 +177,17 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     request_id = get_request_id() or str(getattr(request.state, "request_id", ""))
-    logger.exception("unhandled request exception", extra={"request_id": request_id, "path": request.url.path})
+    route = getattr(request.scope.get("route"), "path", None) or request.url.path
+    logger.exception(
+        "unhandled request exception",
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "route": route,
+            "exception_type": type(exc).__name__,
+        },
+    )
     return _error_response_with_request_id(500, "INTERNAL_ERROR", "internal server error", request_id)
 
 

@@ -10,6 +10,7 @@ from app.capabilities.store import create_oauth_state
 from app.capabilities.youtube import (
     build_youtube_authorization,
     exchange_youtube_code,
+    get_channel_dashboard,
     get_my_channel,
     get_videos,
     search_youtube,
@@ -46,6 +47,12 @@ class VideoRequest(BaseModel):
 
 class ChannelRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=256)
+
+
+class DashboardRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    max_results: int = Field(default=20, ge=1, le=50)
+    page_token: str = Field(default="", max_length=2048)
 
 
 class UploadRequest(BaseModel):
@@ -156,6 +163,16 @@ async def my_channel(request: ChannelRequest) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
         raise HTTPException(status_code=502, detail=f"youtube channel lookup failed: {exc}") from exc
+
+
+@router.post("/dashboard")
+async def dashboard(request: DashboardRequest) -> dict[str, object]:
+    try:
+        return await get_channel_dashboard(request.user_id, request.max_results, request.page_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube dashboard failed: {exc}") from exc
 
 
 @router.post("/upload")

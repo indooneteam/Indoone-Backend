@@ -14,6 +14,7 @@ from pypdf.errors import PdfReadError
 MAX_DOCUMENT_BYTES = 8_000_000
 MAX_DOCX_UNCOMPRESSED_BYTES = 16_000_000
 MAX_DOCX_ARCHIVE_ENTRIES = 2_048
+MAX_PDF_PAGES = 500
 MAX_TEXT_CHARS = 200_000
 MAX_TABLES = 100
 MAX_TABLE_ROWS = 500
@@ -111,8 +112,13 @@ def _validate_signature(mime_type: str, content: bytes) -> None:
 def _extract_pdf(filename: str, content: bytes) -> DocumentExtraction:
     try:
         reader = PdfReader(io.BytesIO(content))
+        page_count = len(reader.pages)
+        if page_count > MAX_PDF_PAGES:
+            raise ValueError("PDF exceeds page limit")
         pages = [page.extract_text() or "" for page in reader.pages]
-    except (PdfReadError, ValueError, OSError) as exc:
+    except ValueError:
+        raise
+    except (PdfReadError, OSError) as exc:
         raise ValueError("invalid PDF document") from exc
     tables: list[list[list[str]]] = []
     for page_text in pages:
@@ -135,7 +141,7 @@ def _extract_pdf(filename: str, content: bytes) -> DocumentExtraction:
     return DocumentExtraction(
         filename=filename,
         mime_type=PDF_MIME,
-        page_count=len(reader.pages),
+        page_count=page_count,
         paragraphs=len([p for p in text.split("\n\n") if p.strip()]),
         characters=len(text),
         text=text,

@@ -7,7 +7,7 @@ from docx import Document
 from pypdf import PdfWriter
 import pytest
 
-from app.capabilities.document_extract import DOCX_MIME, PDF_MIME, extract_document
+from app.capabilities.document_extract import DOCX_MIME, MAX_PDF_PAGES, PDF_MIME, extract_document
 
 
 def test_extract_docx_text() -> None:
@@ -116,3 +116,14 @@ def test_reject_docx_archive_that_expands_beyond_limit() -> None:
 
     with pytest.raises(ValueError, match="expands beyond safety limit"):
         extract_document("large.docx", DOCX_MIME, buffer.getvalue())
+
+
+def test_reject_pdf_that_exceeds_page_limit() -> None:
+    buffer = io.BytesIO()
+    writer = PdfWriter()
+    for _ in range(MAX_PDF_PAGES + 1):
+        writer.add_blank_page(width=300, height=300)
+    writer.write(buffer)
+
+    with pytest.raises(ValueError, match="PDF exceeds page limit"):
+        extract_document("too-many-pages.pdf", PDF_MIME, buffer.getvalue())

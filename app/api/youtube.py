@@ -14,6 +14,7 @@ from app.capabilities.youtube import (
     get_videos,
     search_youtube,
     upload_video,
+    youtube_connect_capabilities,
 )
 
 router = APIRouter(prefix="/youtube", tags=["youtube"])
@@ -22,7 +23,8 @@ router = APIRouter(prefix="/youtube", tags=["youtube"])
 class ConnectRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=256)
     redirect_uri: str = Field(min_length=1, max_length=2000)
-    read_only: bool = False
+    connect_mode: str = Field(default="channel", max_length=32)
+    read_only: bool | None = None
 
 
 class CallbackRequest(BaseModel):
@@ -57,12 +59,59 @@ class UploadRequest(BaseModel):
     approved: bool = False
 
 
+@router.get("/capabilities")
+async def capabilities() -> dict[str, object]:
+    return {
+        "integration": "youtube",
+        "modes": {
+            "normal": youtube_connect_capabilities("normal"),
+            "channel": youtube_connect_capabilities("channel"),
+        },
+        "secrets_exposed": False,
+    }
+
+
+def _create_connect_response(request: ConnectRequest, mode: str) -> dict[str, object]:
+    state = token_urlsafe(32)
+    create_oauth_state(state, request.user_id, "youtube", request.redirect_uri.strip())
+    return {
+        **build_youtube_authorization(
+            state,
+            request.redirect_uri,
+            read_only=(mode == "normal"),
+            connect_mode=mode,
+        ),
+        "state": state,
+    }
+
+
 @router.post("/connect")
 async def connect(request: ConnectRequest) -> dict[str, object]:
-    state = token_urlsafe(32)
+    requested_mode = request.connect_mode.strip().lower()
+    if request.read_only is not None:
+        requested_mode = "normal" if request.read_only else "channel"
     try:
-        create_oauth_state(state, request.user_id, "youtube", request.redirect_uri.strip())
-        return {**build_youtube_authorization(state, request.redirect_uri, request.read_only), "state": state}
+        return _create_connect_response(request, requested_mode)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/normal/connect")
+async def normal_connect(request: ConnectRequest) -> dict[str, object]:
+    try:
+        return _create_connect_response(request, "normal")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/channel/connect")
+async def channel_connect(request: ConnectRequest) -> dict[str, object]:
+    try:
+        return _create_connect_response(request, "channel")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:

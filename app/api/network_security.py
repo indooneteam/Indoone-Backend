@@ -7,8 +7,6 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
-from app.api.environment_security import validate_environment_security_config
-
 _PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 _DEFAULT_ALLOWED_HOSTS = ("testserver", "localhost", "127.0.0.1")
 
@@ -38,8 +36,7 @@ def trusted_proxy_ips() -> list[str]:
 
 
 def validate_network_security_config() -> None:
-    """Reject unsafe production host, CORS, proxy, and environment configuration."""
-    validate_environment_security_config()
+    """Reject unsafe production host, CORS, and proxy-header configuration."""
     hosts = _csv_env("INDOONE_ALLOWED_HOSTS")
     origins = allowed_origins()
     trust_proxy_headers = os.getenv("INDOONE_TRUST_PROXY_HEADERS", "false").strip().lower() == "true"

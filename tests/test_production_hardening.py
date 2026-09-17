@@ -24,3 +24,22 @@ def test_request_content_length_limit(monkeypatch) -> None:
     assert response.status_code == 413
     assert response.headers.get("X-Request-ID")
     assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_unhandled_exception_has_safe_error_contract() -> None:
+    async def boom() -> None:
+        raise RuntimeError("secret implementation detail")
+
+    app.add_api_route("/__test_unhandled", boom, methods=["GET"])
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client:
+            response = client.get("/__test_unhandled")
+    finally:
+        app.router.routes = [route for route in app.router.routes if getattr(route, "path", "") != "/__test_unhandled"]
+
+    assert response.status_code == 500
+    assert response.headers.get("X-Request-ID")
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.json()["code"] == "INTERNAL_ERROR"
+    assert response.json()["message"] == "internal server error"
+    assert "secret implementation detail" not in response.text

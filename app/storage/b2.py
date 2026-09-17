@@ -24,6 +24,9 @@ class B2Storage:
 
     AUTH_URL = "https://api.backblazeb2.com/b2api/v4/b2_authorize_account"
     MAX_OBJECT_KEY_LENGTH = 1024
+    DEFAULT_MAX_UPLOAD_BYTES = 128 * 1024 * 1024
+    DEFAULT_MAX_DOWNLOAD_BYTES = 128 * 1024 * 1024
+    MAX_CONFIGURED_STORAGE_BYTES = 1024 * 1024 * 1024
 
     def __init__(self) -> None:
         self.key_id = os.getenv("B2_APPLICATION_KEY_ID", "").strip()
@@ -60,6 +63,23 @@ class B2Storage:
         )
         self._download_url: str | None = None
         self._auth_token: str | None = None
+
+    @classmethod
+    def _configured_limit(cls, env_name: str, default: int) -> int:
+        raw = os.getenv(env_name, str(default)).strip()
+        try:
+            value = int(raw)
+        except ValueError:
+            return default
+        return max(1, min(value, cls.MAX_CONFIGURED_STORAGE_BYTES))
+
+    @classmethod
+    def _max_upload_bytes(cls) -> int:
+        return cls._configured_limit("B2_MAX_UPLOAD_BYTES", cls.DEFAULT_MAX_UPLOAD_BYTES)
+
+    @classmethod
+    def _max_download_bytes(cls) -> int:
+        return cls._configured_limit("B2_MAX_DOWNLOAD_BYTES", cls.DEFAULT_MAX_DOWNLOAD_BYTES)
 
     @classmethod
     def _validate_object_key(cls, object_key: str) -> str:
@@ -128,13 +148,18 @@ class B2Storage:
     def upload_file(self, local_path: Path, object_key: str) -> None:
         object_key = self._validate_object_key(object_key)
         try:
+            size = local_path.stat().st_size
+            if size > self._max_upload_bytes():
+                raise B2StorageError("B2 upload exceeds configured size limit")
             with local_path.open("rb") as handle:
                 self._client.put_object(
                     Bucket=self.bucket_name,
                     Key=object_key,
                     Body=handle,
-                    ContentLength=local_path.stat().st_size,
+                    ContentLength=size,
                 )
+        except B2StorageError:
+            raise
         except (BotoCoreError, ClientError, OSError) as exc:
             raise B2StorageError(f"B2 upload failed for {object_key}") from exc
 
@@ -153,12 +178,26 @@ class B2Storage:
         request = Request(url, headers={"Authorization": self._auth_token}, method="GET")
         local_path.parent.mkdir(parents=True, exist_ok=True)
         temp_path = local_path.with_suffix(local_path.suffix + ".download")
+        max_bytes = self._max_download_bytes()
         try:
             with urlopen(request, timeout=60) as response, temp_path.open("wb") as handle:
+                declared = response.headers.get("Content-Length")
+                if declared:
+                    try:
+                        declared_size = int(declared)
+                    except ValueError as exc:
+                        raise B2StorageError("B2 download returned invalid content length") from exc
+                    if declared_size < 0 or declared_size > max_bytes:
+                        raise B2StorageError("B2 download exceeds configured size limit")
+
+                downloaded = 0
                 while True:
                     chunk = response.read(1024 * 1024)
                     if not chunk:
                         break
+                    downloaded += len(chunk)
+                    if downloaded > max_bytes:
+                        raise B2StorageError("B2 download exceeds configured size limit")
                     handle.write(chunk)
             temp_path.replace(local_path)
             return True
@@ -167,6 +206,9 @@ class B2Storage:
             if exc.code == 404:
                 return False
             raise B2StorageError("B2 model download failed") from exc
+        except B2StorageError:
+            temp_path.unlink(missing_ok=True)
+            raise
         except (URLError, TimeoutError, OSError) as exc:
             temp_path.unlink(missing_ok=True)
             raise B2StorageError("B2 model download failed") from exc

@@ -38,3 +38,19 @@ def test_plan_message_rule() -> None:
 def test_invalid_rule_is_rejected() -> None:
     with pytest.raises(ValueError):
         plan_automation({"entries": []}, [{"trigger": "unknown", "action": "send_message", "response": "x"}])
+
+
+def test_non_list_entries_are_rejected() -> None:
+    with pytest.raises(ValueError, match="entries must be a list"):
+        plan_automation({"entries": {}}, [{"trigger": "comment", "action": "reply_comment", "response": "x"}])
+
+
+def test_action_fanout_is_bounded() -> None:
+    payload = {
+        "entries": [
+            {"changes": [{"field": "comments", "value": {"id": f"c{i}", "text": "hello"}} for i in range(101)]}
+        ]
+    }
+    rules = [{"trigger": "comment", "action": "reply_comment", "response": "Thanks"}]
+    with pytest.raises(ValueError, match="too many actions"):
+        plan_automation(payload, rules)

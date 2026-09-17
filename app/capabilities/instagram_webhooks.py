@@ -6,6 +6,9 @@ import json
 import os
 from typing import Any
 
+_MAX_ENTRIES = 100
+_MAX_EVENTS_PER_ENTRY = 100
+
 
 def _verify_token() -> str:
     token = os.getenv("INDOONE_INSTAGRAM_WEBHOOK_VERIFY_TOKEN", "").strip()
@@ -44,18 +47,27 @@ def verify_signature(raw_body: bytes, signature: str) -> None:
 
 
 def normalize_event(payload: dict[str, Any]) -> dict[str, object]:
+    if str(payload.get("object", "")).strip().lower() != "instagram":
+        raise ValueError("instagram webhook object is invalid")
+
     raw_entries = payload.get("entry", [])
-    entries = raw_entries if isinstance(raw_entries, list) else []
+    if not isinstance(raw_entries, list):
+        raise ValueError("instagram webhook entries must be a list")
+    if len(raw_entries) > _MAX_ENTRIES:
+        raise ValueError("instagram webhook contains too many entries")
+
     normalized_entries: list[dict[str, object]] = []
     event_count = 0
 
-    for entry in entries:
+    for entry in raw_entries:
         if not isinstance(entry, dict):
             continue
         changes = entry.get("changes", [])
         messaging = entry.get("messaging", [])
         change_items = changes if isinstance(changes, list) else []
         messaging_items = messaging if isinstance(messaging, list) else []
+        if len(change_items) > _MAX_EVENTS_PER_ENTRY or len(messaging_items) > _MAX_EVENTS_PER_ENTRY:
+            raise ValueError("instagram webhook entry contains too many events")
         event_count += len(change_items) + len(messaging_items)
         normalized_entries.append(
             {
@@ -70,7 +82,7 @@ def normalize_event(payload: dict[str, Any]) -> dict[str, object]:
     event_id = hashlib.sha256(event_id_source).hexdigest()
     return {
         "integration": "instagram",
-        "object": payload.get("object"),
+        "object": "instagram",
         "event_id": event_id,
         "event_count": event_count,
         "entries": normalized_entries,

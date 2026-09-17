@@ -49,3 +49,20 @@ def test_event_id_is_deterministic() -> None:
     first = instagram_webhooks.normalize_event(payload)
     second = instagram_webhooks.normalize_event(json.loads(json.dumps(payload)))
     assert first["event_id"] == second["event_id"]
+
+
+def test_invalid_object_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        instagram_webhooks.normalize_event({"object": "facebook", "entry": []})
+
+
+def test_entry_event_counts_are_bounded() -> None:
+    payload = {"object": "instagram", "entry": [{"changes": [{}] * 101}]}
+    with pytest.raises(ValueError, match="too many events"):
+        instagram_webhooks.normalize_event(payload)
+
+
+def test_entry_count_is_bounded() -> None:
+    payload = {"object": "instagram", "entry": [{}] * 101}
+    with pytest.raises(ValueError, match="too many entries"):
+        instagram_webhooks.normalize_event(payload)

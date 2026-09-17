@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -31,14 +32,25 @@ def main() -> None:
     python = sys.executable
     eval_prompts = Path("data/evaluation/behavior_prompts.jsonl")
     assembled_instructions = Path("data/processed/instructions_train.jsonl")
+    allow_cpu_training = os.getenv("INDOONE_ALLOW_CPU_TRAINING", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     run([python, "scripts/build_multilingual_training_pack.py"])
     run([python, "scripts/validate_dataset_quality.py"])
 
     if shutil.which("nvidia-smi") is None:
-        raise SystemExit(
-            "NVIDIA GPU not detected. Run this pipeline on a CUDA-capable machine; "
-            "the local CPU environment is intentionally not used for the full training run."
+        if not allow_cpu_training:
+            raise SystemExit(
+                "NVIDIA GPU not detected. Run this pipeline on a CUDA-capable machine, "
+                "or explicitly set INDOONE_ALLOW_CPU_TRAINING=true for a hosted CPU training run."
+            )
+        print(
+            "NVIDIA GPU not detected; explicit CPU training mode is enabled for this run.",
+            flush=True,
         )
 
     run(

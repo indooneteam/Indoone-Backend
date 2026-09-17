@@ -106,7 +106,8 @@ def run_smoke() -> None:
                 content=b"x" * 2048,
             )
             assert response.status_code == 413
-            assert response.json()["error"]["code"] == "REQUEST_TOO_LARGE"
+            assert response.json()["code"] == "REQUEST_TOO_LARGE"
+            assert response.headers["X-Request-ID"]
 
         with TestClient(app, base_url="http://testserver") as http_client:
             response = http_client.get(

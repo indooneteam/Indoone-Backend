@@ -72,6 +72,12 @@ class ConversationStore:
         connection.execute("DROP TABLE messages")
         connection.execute("ALTER TABLE messages_new RENAME TO messages")
 
+    @staticmethod
+    def _validate_integrity(connection: sqlite3.Connection) -> None:
+        violations = connection.execute("PRAGMA foreign_key_check").fetchall()
+        if violations:
+            raise sqlite3.IntegrityError("database foreign key integrity check failed")
+
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
@@ -101,6 +107,7 @@ class ConversationStore:
             connection.execute("CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id ON messages(conversation_id, id)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_conversations_status_updated ON conversations(status, updated_at)")
+            self._validate_integrity(connection)
 
     @staticmethod
     def _normalize_user_id(user_id: str | None) -> str:

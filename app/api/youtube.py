@@ -28,6 +28,7 @@ from app.capabilities.youtube_playlist_manager import (
     add_video_to_playlist,
     create_playlist,
     delete_playlist,
+    get_playlist,
     list_playlist_items,
     list_playlists,
     remove_playlist_item,
@@ -127,6 +128,7 @@ class PlaylistListRequest(BaseModel):
 class PlaylistRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=256)
     playlist_id: str = Field(min_length=1, max_length=128)
+    approved: bool = False
 
 
 class PlaylistCreateRequest(BaseModel):
@@ -347,13 +349,7 @@ async def video_delete(request: VideoDeleteRequest) -> dict[str, object]:
 async def video_thumbnail(request: ThumbnailRequest) -> dict[str, object]:
     try:
         content = base64.b64decode(request.content_base64, validate=True)
-        return await set_video_thumbnail(
-            request.user_id,
-            request.video_id,
-            content,
-            request.mime_type,
-            approved=request.approved,
-        )
+        return await set_video_thumbnail(request.user_id, request.video_id, content, request.mime_type, approved=request.approved)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -375,7 +371,7 @@ async def playlist_list(request: PlaylistListRequest) -> dict[str, object]:
 @router.post("/playlist/get")
 async def playlist_get(request: PlaylistRequest) -> dict[str, object]:
     try:
-        return await __import__("app.capabilities.youtube_playlist_manager", fromlist=["get_playlist"]).get_playlist(request.user_id, request.playlist_id)
+        return await get_playlist(request.user_id, request.playlist_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
@@ -385,13 +381,7 @@ async def playlist_get(request: PlaylistRequest) -> dict[str, object]:
 @router.post("/playlist/create")
 async def playlist_create(request: PlaylistCreateRequest) -> dict[str, object]:
     try:
-        return await create_playlist(
-            request.user_id,
-            request.title,
-            request.description,
-            request.privacy_status,
-            approved=request.approved,
-        )
+        return await create_playlist(request.user_id, request.title, request.description, request.privacy_status, approved=request.approved)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -403,14 +393,7 @@ async def playlist_create(request: PlaylistCreateRequest) -> dict[str, object]:
 @router.post("/playlist/update")
 async def playlist_update(request: PlaylistUpdateRequest) -> dict[str, object]:
     try:
-        return await update_playlist(
-            request.user_id,
-            request.playlist_id,
-            title=request.title,
-            description=request.description,
-            privacy_status=request.privacy_status,
-            approved=request.approved,
-        )
+        return await update_playlist(request.user_id, request.playlist_id, title=request.title, description=request.description, privacy_status=request.privacy_status, approved=request.approved)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -422,7 +405,7 @@ async def playlist_update(request: PlaylistUpdateRequest) -> dict[str, object]:
 @router.post("/playlist/delete")
 async def playlist_delete(request: PlaylistRequest) -> dict[str, object]:
     try:
-        return await delete_playlist(request.user_id, request.playlist_id, approved=True)
+        return await delete_playlist(request.user_id, request.playlist_id, approved=request.approved)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
@@ -481,16 +464,7 @@ async def playlist_reorder(request: PlaylistItemReorderRequest) -> dict[str, obj
 async def upload(request: UploadRequest) -> dict[str, object]:
     try:
         content = base64.b64decode(request.content_base64, validate=True)
-        return await upload_video(
-            request.user_id,
-            content,
-            request.title,
-            request.description,
-            request.privacy_status,
-            request.category_id,
-            request.mime_type,
-            request.approved,
-        )
+        return await upload_video(request.user_id, content, request.title, request.description, request.privacy_status, request.category_id, request.mime_type, request.approved)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:

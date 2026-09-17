@@ -24,6 +24,16 @@ from app.capabilities.youtube_video_manager import (
     set_video_thumbnail,
     update_video,
 )
+from app.capabilities.youtube_playlist_manager import (
+    add_video_to_playlist,
+    create_playlist,
+    delete_playlist,
+    list_playlist_items,
+    list_playlists,
+    remove_playlist_item,
+    reorder_playlist_item,
+    update_playlist,
+)
 
 router = APIRouter(prefix="/youtube", tags=["youtube"])
 
@@ -108,6 +118,62 @@ class ThumbnailRequest(BaseModel):
     approved: bool = False
 
 
+class PlaylistListRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    max_results: int = Field(default=20, ge=1, le=50)
+    page_token: str = Field(default="", max_length=2048)
+
+
+class PlaylistRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    playlist_id: str = Field(min_length=1, max_length=128)
+
+
+class PlaylistCreateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    title: str = Field(min_length=1, max_length=150)
+    description: str = Field(default="", max_length=5000)
+    privacy_status: str = Field(default="private", max_length=32)
+    approved: bool = False
+
+
+class PlaylistUpdateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    playlist_id: str = Field(min_length=1, max_length=128)
+    title: str | None = Field(default=None, max_length=150)
+    description: str | None = Field(default=None, max_length=5000)
+    privacy_status: str | None = Field(default=None, max_length=32)
+    approved: bool = False
+
+
+class PlaylistItemListRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    playlist_id: str = Field(min_length=1, max_length=128)
+    max_results: int = Field(default=50, ge=1, le=50)
+    page_token: str = Field(default="", max_length=2048)
+
+
+class PlaylistAddRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    playlist_id: str = Field(min_length=1, max_length=128)
+    video_id: str = Field(min_length=1, max_length=128)
+    position: int | None = Field(default=None, ge=0, le=10000)
+    approved: bool = False
+
+
+class PlaylistItemRemoveRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    playlist_item_id: str = Field(min_length=1, max_length=128)
+    approved: bool = False
+
+
+class PlaylistItemReorderRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    playlist_item_id: str = Field(min_length=1, max_length=128)
+    position: int = Field(ge=0, le=10000)
+    approved: bool = False
+
+
 @router.get("/capabilities")
 async def capabilities() -> dict[str, object]:
     return {
@@ -119,6 +185,8 @@ async def capabilities() -> dict[str, object]:
                 "edit video title, description, category, tags, and privacy",
                 "delete videos with explicit approval",
                 "set custom video thumbnails with explicit approval",
+                "list, create, edit, and delete playlists with explicit approval for writes",
+                "list playlist videos and add, remove, or reorder them with explicit approval for writes",
             ],
         },
         "secrets_exposed": False,
@@ -292,6 +360,121 @@ async def video_thumbnail(request: ThumbnailRequest) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
         raise HTTPException(status_code=502, detail=f"youtube thumbnail update failed: {exc}") from exc
+
+
+@router.post("/playlist/list")
+async def playlist_list(request: PlaylistListRequest) -> dict[str, object]:
+    try:
+        return await list_playlists(request.user_id, request.max_results, request.page_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube playlist list failed: {exc}") from exc
+
+
+@router.post("/playlist/get")
+async def playlist_get(request: PlaylistRequest) -> dict[str, object]:
+    try:
+        return await __import__("app.capabilities.youtube_playlist_manager", fromlist=["get_playlist"]).get_playlist(request.user_id, request.playlist_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube playlist get failed: {exc}") from exc
+
+
+@router.post("/playlist/create")
+async def playlist_create(request: PlaylistCreateRequest) -> dict[str, object]:
+    try:
+        return await create_playlist(
+            request.user_id,
+            request.title,
+            request.description,
+            request.privacy_status,
+            approved=request.approved,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube playlist create failed: {exc}") from exc
+
+
+@router.post("/playlist/update")
+async def playlist_update(request: PlaylistUpdateRequest) -> dict[str, object]:
+    try:
+        return await update_playlist(
+            request.user_id,
+            request.playlist_id,
+            title=request.title,
+            description=request.description,
+            privacy_status=request.privacy_status,
+            approved=request.approved,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube playlist update failed: {exc}") from exc
+
+
+@router.post("/playlist/delete")
+async def playlist_delete(request: PlaylistRequest) -> dict[str, object]:
+    try:
+        return await delete_playlist(request.user_id, request.playlist_id, approved=True)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube playlist delete failed: {exc}") from exc
+
+
+@router.post("/playlist/items")
+async def playlist_items(request: PlaylistItemListRequest) -> dict[str, object]:
+    try:
+        return await list_playlist_items(request.user_id, request.playlist_id, request.max_results, request.page_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube playlist items failed: {exc}") from exc
+
+
+@router.post("/playlist/add")
+async def playlist_add(request: PlaylistAddRequest) -> dict[str, object]:
+    try:
+        return await add_video_to_playlist(request.user_id, request.playlist_id, request.video_id, request.position, approved=request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube playlist add failed: {exc}") from exc
+
+
+@router.post("/playlist/remove")
+async def playlist_remove(request: PlaylistItemRemoveRequest) -> dict[str, object]:
+    try:
+        return await remove_playlist_item(request.user_id, request.playlist_item_id, approved=request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube playlist remove failed: {exc}") from exc
+
+
+@router.post("/playlist/reorder")
+async def playlist_reorder(request: PlaylistItemReorderRequest) -> dict[str, object]:
+    try:
+        return await reorder_playlist_item(request.user_id, request.playlist_item_id, request.position, approved=request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube playlist reorder failed: {exc}") from exc
 
 
 @router.post("/upload")

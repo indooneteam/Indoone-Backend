@@ -100,13 +100,6 @@ def run_smoke() -> None:
             )
             assert response.status_code == 400
 
-            response = client.get(
-                "/health",
-                headers={**auth, "X-Forwarded-Proto": "https"},
-            )
-            assert response.status_code == 200
-            assert "Strict-Transport-Security" not in response.headers
-
             response = client.post(
                 "/health",
                 headers=auth,
@@ -114,6 +107,14 @@ def run_smoke() -> None:
             )
             assert response.status_code == 413
             assert response.json()["error"]["code"] == "REQUEST_TOO_LARGE"
+
+        with TestClient(app, base_url="http://testserver") as http_client:
+            response = http_client.get(
+                "/health",
+                headers={**auth, "X-Forwarded-Proto": "https"},
+            )
+            assert response.status_code == 200
+            assert "Strict-Transport-Security" not in response.headers
 
 
 if __name__ == "__main__":

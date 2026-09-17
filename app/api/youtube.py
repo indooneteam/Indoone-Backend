@@ -17,6 +17,13 @@ from app.capabilities.youtube import (
     upload_video,
     youtube_connect_capabilities,
 )
+from app.capabilities.youtube_video_manager import (
+    build_youtube_manager_authorization,
+    delete_video,
+    exchange_youtube_manager_code,
+    set_video_thumbnail,
+    update_video,
+)
 
 router = APIRouter(prefix="/youtube", tags=["youtube"])
 
@@ -66,6 +73,41 @@ class UploadRequest(BaseModel):
     approved: bool = False
 
 
+class ManagerConnectRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    redirect_uri: str = Field(min_length=1, max_length=2000)
+
+
+class ManagerCallbackRequest(BaseModel):
+    state: str = Field(min_length=16, max_length=512)
+    code: str = Field(min_length=1, max_length=8000)
+
+
+class VideoUpdateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    video_id: str = Field(min_length=1, max_length=128)
+    title: str | None = Field(default=None, max_length=500)
+    description: str | None = Field(default=None, max_length=5000)
+    category_id: str | None = Field(default=None, max_length=16)
+    privacy_status: str | None = Field(default=None, max_length=32)
+    tags: list[str] | None = Field(default=None, max_length=500)
+    approved: bool = False
+
+
+class VideoDeleteRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    video_id: str = Field(min_length=1, max_length=128)
+    approved: bool = False
+
+
+class ThumbnailRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    video_id: str = Field(min_length=1, max_length=128)
+    mime_type: str = Field(min_length=1, max_length=64)
+    content_base64: str = Field(min_length=1, max_length=70_000_000)
+    approved: bool = False
+
+
 @router.get("/capabilities")
 async def capabilities() -> dict[str, object]:
     return {
@@ -73,6 +115,11 @@ async def capabilities() -> dict[str, object]:
         "modes": {
             "normal": youtube_connect_capabilities("normal"),
             "channel": youtube_connect_capabilities("channel"),
+            "channel_manager": [
+                "edit video title, description, category, tags, and privacy",
+                "delete videos with explicit approval",
+                "set custom video thumbnails with explicit approval",
+            ],
         },
         "secrets_exposed": False,
     }
@@ -125,6 +172,16 @@ async def channel_connect(request: ConnectRequest) -> dict[str, object]:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@router.post("/video-manager/connect")
+async def video_manager_connect(request: ManagerConnectRequest) -> dict[str, object]:
+    state = token_urlsafe(32)
+    try:
+        create_oauth_state(state, request.user_id, "youtube_video_manager", request.redirect_uri.strip())
+        return {**build_youtube_manager_authorization(state, request.redirect_uri), "state": state}
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @router.post("/callback")
 async def callback(request: CallbackRequest) -> dict[str, object]:
     try:
@@ -133,6 +190,16 @@ async def callback(request: CallbackRequest) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
         raise HTTPException(status_code=502, detail=f"youtube oauth failed: {exc}") from exc
+
+
+@router.post("/video-manager/callback")
+async def video_manager_callback(request: ManagerCallbackRequest) -> dict[str, object]:
+    try:
+        return await exchange_youtube_manager_code(request.state, request.code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube video manager oauth failed: {exc}") from exc
 
 
 @router.post("/search")
@@ -173,6 +240,58 @@ async def dashboard(request: DashboardRequest) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
         raise HTTPException(status_code=502, detail=f"youtube dashboard failed: {exc}") from exc
+
+
+@router.post("/video/update")
+async def video_update(request: VideoUpdateRequest) -> dict[str, object]:
+    try:
+        return await update_video(
+            request.user_id,
+            request.video_id,
+            title=request.title,
+            description=request.description,
+            category_id=request.category_id,
+            privacy_status=request.privacy_status,
+            tags=request.tags,
+            approved=request.approved,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube video update failed: {exc}") from exc
+
+
+@router.post("/video/delete")
+async def video_delete(request: VideoDeleteRequest) -> dict[str, object]:
+    try:
+        return await delete_video(request.user_id, request.video_id, approved=request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube video delete failed: {exc}") from exc
+
+
+@router.post("/video/thumbnail")
+async def video_thumbnail(request: ThumbnailRequest) -> dict[str, object]:
+    try:
+        content = base64.b64decode(request.content_base64, validate=True)
+        return await set_video_thumbnail(
+            request.user_id,
+            request.video_id,
+            content,
+            request.mime_type,
+            approved=request.approved,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube thumbnail update failed: {exc}") from exc
 
 
 @router.post("/upload")

@@ -33,7 +33,7 @@ def server_settings() -> dict[str, object]:
     reload = os.getenv("INDOONE_SERVER_RELOAD", "false").strip().lower() == "true"
 
     if reload and workers != 1:
-        raise RuntimeError("INDOONE_SERVER_RELOAD requires INDOONE_SERVER_WORKERS=1")
+        raise RuntimeError("server reload requires INDOONE_SERVER_WORKERS=1")
     if _is_production() and reload:
         raise RuntimeError("INDOONE_SERVER_RELOAD must be false in production")
 

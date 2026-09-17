@@ -91,6 +91,6 @@ async def test_youtube_channel_dashboard_combines_channel_and_uploaded_videos(
 
 
 @pytest.mark.asyncio
-async def test_youtube_dashboard_requires_safe_result_count() -> None:
+async def test_youtube_upload_list_requires_safe_result_count() -> None:
     with pytest.raises(ValueError, match="max_results must be between 1 and 50"):
-        await youtube.get_channel_dashboard("user-1", max_results=0)
+        await youtube.list_my_videos("user-1", max_results=0)

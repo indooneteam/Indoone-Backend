@@ -7,6 +7,8 @@ from typing import Iterable
 
 DEFAULT_DB_PATH = Path(os.getenv("INDOONE_CONVERSATION_DB", "data/indoone_conversations.sqlite3"))
 DEFAULT_MAX_MESSAGES = 50
+SQLITE_TIMEOUT_SECONDS = 30.0
+SQLITE_BUSY_TIMEOUT_MS = 30_000
 
 
 class ConversationStore:
@@ -21,12 +23,15 @@ class ConversationStore:
 
     def _connect(self) -> sqlite3.Connection:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.db_path)
+        connection = sqlite3.connect(self.db_path, timeout=SQLITE_TIMEOUT_SECONDS)
         connection.row_factory = sqlite3.Row
+        connection.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
         return connection
 
     def _initialize(self) -> None:
         with self._connect() as connection:
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("PRAGMA synchronous=NORMAL")
             connection.execute("""CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('user', 'assistant')), content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
             connection.execute("""CREATE TABLE IF NOT EXISTS conversations (conversation_id TEXT PRIMARY KEY, user_id TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed')), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, closed_at TEXT)""")
             columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(conversations)").fetchall()}

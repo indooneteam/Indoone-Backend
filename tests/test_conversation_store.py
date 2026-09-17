@@ -17,6 +17,16 @@ def test_conversation_history_is_persistent_and_ordered(tmp_path: Path) -> None:
     assert second.recent("c1", user_id=OWNER) == [("user", "Hello"), ("assistant", "Namaskara")]
 
 
+def test_sqlite_uses_busy_timeout_and_wal_mode(tmp_path: Path) -> None:
+    store = ConversationStore(tmp_path / "conversations.sqlite3")
+    with store._connect() as connection:
+        busy_timeout = int(connection.execute("PRAGMA busy_timeout").fetchone()[0])
+        journal_mode = str(connection.execute("PRAGMA journal_mode").fetchone()[0]).lower()
+
+    assert busy_timeout == 30_000
+    assert journal_mode == "wal"
+
+
 def test_recent_history_is_bounded(tmp_path: Path) -> None:
     store = ConversationStore(tmp_path / "conversations.sqlite3", max_messages=2)
     store.append(

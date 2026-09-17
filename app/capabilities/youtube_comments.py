@@ -106,6 +106,8 @@ async def _request(
                 json=json,
             )
         response.raise_for_status()
+        if response.status_code == 204 or not getattr(response, "content", b""):
+            return {}
         body = response.json()
     if not isinstance(body, dict):
         raise RuntimeError("youtube returned an invalid comments response")
@@ -194,13 +196,14 @@ async def create_top_level_comment(
     text = _validate_comment_text(text)
     video_id = (video_id or "").strip()
     channel_id = (channel_id or "").strip()
-    if not video_id and not channel_id:
-        raise ValueError("video_id or channel_id is required")
-    snippet: dict[str, object] = {"topLevelComment": {"snippet": {"textOriginal": text}}}
+    if not channel_id:
+        raise ValueError("channel_id is required")
+    snippet: dict[str, object] = {
+        "channelId": channel_id,
+        "topLevelComment": {"snippet": {"textOriginal": text}},
+    }
     if video_id:
         snippet["videoId"] = video_id
-    if channel_id:
-        snippet["channelId"] = channel_id
     result = await _request(
         user_id,
         "POST",

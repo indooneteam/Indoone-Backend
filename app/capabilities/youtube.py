@@ -18,6 +18,25 @@ _TOKEN_URL = "https://oauth2.googleapis.com/token"
 _YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 _YOUTUBE_READ_SCOPE = "https://www.googleapis.com/auth/youtube.readonly"
 _MAX_UPLOAD_BYTES = 256 * 1024 * 1024
+_CONNECT_MODES = {"normal", "channel"}
+
+
+def youtube_connect_capabilities(connect_mode: str = "channel") -> list[str]:
+    """Return the user-facing capabilities granted by a YouTube connect mode."""
+    mode = connect_mode.strip().lower()
+    if mode not in _CONNECT_MODES:
+        raise ValueError("connect_mode must be normal or channel")
+    if mode == "normal":
+        return [
+            "search videos, channels, and playlists",
+            "get public video details and statistics",
+        ]
+    return [
+        "search videos, channels, and playlists",
+        "get public video details and statistics",
+        "view the authenticated user's YouTube channel",
+        "upload videos with explicit approval",
+    ]
 
 
 def _fernet() -> Fernet:
@@ -38,9 +57,21 @@ def _google_credentials() -> tuple[str, str]:
     return client_id, client_secret
 
 
-def build_youtube_authorization(state: str, redirect_uri: str, read_only: bool = False) -> dict[str, object]:
+def build_youtube_authorization(
+    state: str,
+    redirect_uri: str,
+    read_only: bool = False,
+    connect_mode: str | None = None,
+) -> dict[str, object]:
+    """Build OAuth authorization for normal read-only or channel-capable access.
+
+    ``read_only`` is retained for backward compatibility. New callers should use
+    ``connect_mode`` with ``normal`` or ``channel``.
+    """
+    mode = connect_mode.strip().lower() if connect_mode else ("normal" if read_only else "channel")
+    capabilities = youtube_connect_capabilities(mode)
     client_id, _ = _google_credentials()
-    scope = _YOUTUBE_READ_SCOPE if read_only else _YOUTUBE_SCOPE
+    scope = _YOUTUBE_READ_SCOPE if mode == "normal" else _YOUTUBE_SCOPE
     params = {
         "client_id": client_id,
         "redirect_uri": redirect_uri.strip(),
@@ -53,9 +84,11 @@ def build_youtube_authorization(state: str, redirect_uri: str, read_only: bool =
     }
     return {
         "integration": "youtube",
+        "connect_mode": mode,
         "authorization_url": f"{_OAUTH_URL}?{urlencode(params)}",
         "scope": scope,
         "state_required": True,
+        "capabilities": capabilities,
         "secrets_exposed": False,
     }
 
@@ -110,6 +143,7 @@ async def exchange_youtube_code(state: str, code: str) -> dict[str, object]:
         "user_id": state_data["user_id"],
         "connected": True,
         "scope": str(body.get("scope") or ""),
+        "connect_mode": "channel" if "youtube.upload" in str(body.get("scope") or "") else "normal",
         "secrets_exposed": False,
     }
 

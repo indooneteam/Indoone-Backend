@@ -49,6 +49,28 @@ def test_health_emits_structured_request_log(caplog) -> None:
     assert isinstance(record.duration_ms, float)
 
 
+def test_unhandled_exception_emits_structured_error_log(monkeypatch, caplog) -> None:
+    def fail_health_details() -> dict[str, object]:
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr("app.main.sqlite_runtime_status", fail_health_details)
+    caplog.set_level(logging.ERROR, logger="indoone.api")
+    error_client = TestClient(app, raise_server_exceptions=False)
+
+    response = error_client.get("/health/details")
+
+    assert response.status_code == 500
+    assert response.json()["code"] == "INTERNAL_ERROR"
+    records = [record for record in caplog.records if record.name == "indoone.api" and record.message == "unhandled request exception"]
+    assert records
+    record = records[-1]
+    assert record.request_id == response.headers["X-Request-ID"]
+    assert record.method == "GET"
+    assert record.path == "/health/details"
+    assert record.route == "/health/details"
+    assert record.exception_type == "RuntimeError"
+
+
 def test_ready_reports_readiness() -> None:
     response = client.get("/ready")
 

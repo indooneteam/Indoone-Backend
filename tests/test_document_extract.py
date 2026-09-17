@@ -72,6 +72,16 @@ def test_reject_path_traversal_filename() -> None:
     assert result.filename == "sample.pdf"
 
 
+def test_normalize_windows_path_filename() -> None:
+    buffer = io.BytesIO()
+    writer = PdfWriter()
+    writer.add_blank_page(width=300, height=300)
+    writer.write(buffer)
+
+    result = extract_document(r"..\\sample.pdf", PDF_MIME, buffer.getvalue())
+    assert result.filename == "sample.pdf"
+
+
 def test_reject_control_character_filename() -> None:
     buffer = io.BytesIO()
     writer = PdfWriter()

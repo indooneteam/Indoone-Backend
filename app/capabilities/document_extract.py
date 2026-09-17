@@ -61,7 +61,8 @@ def _validate(content: bytes) -> None:
 
 
 def _safe_filename(filename: str) -> str:
-    candidate = Path(filename).name.strip()
+    normalized = str(filename).replace("\\", "/")
+    candidate = Path(normalized).name.strip()
     if (
         not candidate
         or candidate in {".", ".."}

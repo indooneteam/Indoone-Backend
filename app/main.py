@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import logging
 import os
 import time
 
@@ -34,6 +35,7 @@ from app.api.voice_session import router as voice_session_router
 from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
 from app.capabilities.store import initialize as initialize_capability_store
 
+logger = logging.getLogger("indoone.api")
 ai_service._detect_response_language = detect_response_language
 
 _DEFAULT_MAX_REQUEST_BYTES = 50 * 1024 * 1024
@@ -120,6 +122,13 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
     return _error_response_with_request_id(422, "VALIDATION_ERROR", "request validation failed", get_request_id() or str(getattr(request.state, "request_id", "")), {"errors": exc.errors()})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    request_id = get_request_id() or str(getattr(request.state, "request_id", ""))
+    logger.exception("unhandled request exception", extra={"request_id": request_id, "path": request.url.path})
+    return _error_response_with_request_id(500, "INTERNAL_ERROR", "internal server error", request_id)
 
 
 app.include_router(chat_router, prefix="/api")

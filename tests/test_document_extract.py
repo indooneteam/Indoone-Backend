@@ -72,13 +72,13 @@ def test_reject_path_traversal_filename() -> None:
     assert result.filename == "sample.pdf"
 
 
-def test_normalize_windows_path_filename() -> None:
+def test_reject_windows_style_path_filename() -> None:
     buffer = io.BytesIO()
     writer = PdfWriter()
     writer.add_blank_page(width=300, height=300)
     writer.write(buffer)
 
-    result = extract_document(r"..\\sample.pdf", PDF_MIME, buffer.getvalue())
+    result = extract_document(r"..\uploads\sample.pdf", PDF_MIME, buffer.getvalue())
     assert result.filename == "sample.pdf"
 
 
@@ -126,6 +126,24 @@ def test_reject_docx_archive_that_expands_beyond_limit() -> None:
 
     with pytest.raises(ValueError, match="expands beyond safety limit"):
         extract_document("large.docx", DOCX_MIME, buffer.getvalue())
+
+
+def test_reject_docx_with_too_many_table_cells(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.capabilities.document_extract.MAX_TOTAL_TABLE_CELLS",
+        3,
+    )
+    buffer = io.BytesIO()
+    document = Document()
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).text = "a"
+    table.cell(0, 1).text = "b"
+    table.cell(1, 0).text = "c"
+    table.cell(1, 1).text = "d"
+    document.save(buffer)
+
+    with pytest.raises(ValueError, match="too many table cells"):
+        extract_document("large-table.docx", DOCX_MIME, buffer.getvalue())
 
 
 def test_reject_pdf_that_exceeds_page_limit() -> None:

@@ -19,6 +19,7 @@ MAX_TEXT_CHARS = 200_000
 MAX_TABLES = 100
 MAX_TABLE_ROWS = 500
 MAX_TABLE_COLS = 100
+MAX_TOTAL_TABLE_CELLS = 100_000
 MAX_FILENAME_LENGTH = 255
 PDF_MIME = "application/pdf"
 DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
@@ -122,6 +123,7 @@ def _extract_pdf(filename: str, content: bytes) -> DocumentExtraction:
     except (PdfReadError, OSError) as exc:
         raise ValueError("invalid PDF document") from exc
     tables: list[list[list[str]]] = []
+    total_table_cells = 0
     for page_text in pages:
         candidate_rows: list[list[str]] = []
         for line in page_text.splitlines():
@@ -135,7 +137,12 @@ def _extract_pdf(filename: str, content: bytes) -> DocumentExtraction:
             if len(cells) >= 2 and any(cells):
                 candidate_rows.append(cells)
         if len(candidate_rows) >= 2 and len(tables) < MAX_TABLES:
-            tables.append(_normalize_table(candidate_rows))
+            normalized_table = _normalize_table(candidate_rows)
+            table_cells = sum(len(row) for row in normalized_table)
+            if total_table_cells + table_cells > MAX_TOTAL_TABLE_CELLS:
+                raise ValueError("document contains too many table cells")
+            tables.append(normalized_table)
+            total_table_cells += table_cells
 
     raw_text = "\n\n".join(pages)
     text, truncated = _limit_text(raw_text)
@@ -172,10 +179,16 @@ def extract_document(filename: str, mime_type: str, content: bytes) -> DocumentE
     raw_text = "\n\n".join(paragraphs)
     text, truncated = _limit_text(raw_text)
     tables: list[list[list[str]]] = []
+    total_table_cells = 0
     for table in document.tables[:MAX_TABLES]:
         rows = [[cell.text for cell in row.cells] for row in table.rows]
         if rows:
-            tables.append(_normalize_table(rows))
+            normalized_table = _normalize_table(rows)
+            table_cells = sum(len(row) for row in normalized_table)
+            if total_table_cells + table_cells > MAX_TOTAL_TABLE_CELLS:
+                raise ValueError("document contains too many table cells")
+            tables.append(normalized_table)
+            total_table_cells += table_cells
 
     return DocumentExtraction(
         filename=filename,

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 import app.capabilities.youtube_playlist_manager as manager
@@ -45,10 +47,6 @@ def test_validate_playlist_fields() -> None:
 
 def test_playlist_writes_require_explicit_approval() -> None:
     with pytest.raises(PermissionError, match="explicit approval"):
-        pytest.raises(AssertionError)
-        # direct coroutine checks keep authorization before token access
-    with pytest.raises(PermissionError, match="explicit approval"):
-        import asyncio
         asyncio.run(manager.create_playlist("user-1", "List"))
     with pytest.raises(PermissionError, match="explicit approval"):
         asyncio.run(manager.update_playlist("user-1", "playlist-1", title="New"))

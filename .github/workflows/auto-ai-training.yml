@@ -23,6 +23,7 @@ concurrency:
   group: indoone-ai-training
   cancel-in-progress: false
 
+# Intentional no-op change to retrigger training after the main-branch sync.
 jobs:
   prepare:
     name: Audit training readiness

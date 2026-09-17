@@ -17,7 +17,18 @@ def normalize_text(text: str) -> str:
 
 def split_documents(text: str) -> list[str]:
     normalized = normalize_text(text)
-    return [part.strip() for part in re.split(r"\n\s*\n", normalized) if part.strip()]
+    documents = [part.strip() for part in re.split(r"\n\s*\n", normalized) if part.strip()]
+    if len(documents) >= 3:
+        return documents
+
+    # Support line-delimited corpora as well as paragraph-delimited corpora.
+    # The multilingual training pack emits one instruction/response example per
+    # line, so treating non-empty lines as documents prevents the entire pack
+    # from collapsing into a single document when no blank-line separators exist.
+    lines = [line.strip() for line in normalized.split("\n") if line.strip()]
+    if len(lines) >= 3:
+        return lines
+    return documents
 
 
 def fingerprint(text: str) -> str:

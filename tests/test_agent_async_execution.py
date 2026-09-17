@@ -41,3 +41,23 @@ def test_async_agent_retries_retryable_result(monkeypatch) -> None:
         assert calls == 2
 
     asyncio.run(scenario())
+
+
+def test_async_agent_records_timeout_status_when_budget_expires(monkeypatch) -> None:
+    recorded: dict[str, object] = {}
+    monkeypatch.setattr("app.ai.agent_async.MAX_AGENT_RUNTIME_SECONDS", -1.0)
+    monkeypatch.setattr("app.ai.agent_async.create_agent_run", lambda user_id, message: {"id": "run-1"})
+
+    def capture_update(**kwargs):
+        recorded.update(kwargs)
+
+    monkeypatch.setattr("app.ai.agent_async.update_agent_run", capture_update)
+
+    async def scenario() -> None:
+        execution = await execute_agent_async("text stats: hello", user_id="user-one")
+        assert execution.steps == ()
+        assert execution.results == ()
+        assert execution.blocked_steps
+        assert recorded["status"] == "timed_out"
+
+    asyncio.run(scenario())

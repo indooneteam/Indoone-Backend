@@ -104,7 +104,7 @@ async def execute_agent_async(
         and len(executable) + len(blocked) >= len(planned_steps)
         and remaining_budget(deadline) <= 0
     )
-    status = "failed" if unsafe_result else ("blocked" if blocked and not results else ("timed_out" if timed_out else "completed"))
+    status = "timed_out" if timed_out else ("failed" if unsafe_result else ("blocked" if blocked and not results else "completed"))
     execution = AgentExecution(
         message=normalized,
         steps=tuple(executable),

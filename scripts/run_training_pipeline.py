@@ -32,6 +32,7 @@ def main() -> None:
     python = sys.executable
     eval_prompts = Path("data/evaluation/behavior_prompts.jsonl")
     assembled_instructions = Path("data/processed/instructions_train.jsonl")
+    assembled_validation = Path("data/processed/instructions_validation.jsonl")
     allow_cpu_training = os.getenv("INDOONE_ALLOW_CPU_TRAINING", "false").strip().lower() in {
         "1",
         "true",
@@ -40,7 +41,6 @@ def main() -> None:
     }
 
     run([python, "scripts/build_multilingual_training_pack.py"])
-    run([python, "scripts/validate_dataset_quality.py"])
 
     if shutil.which("nvidia-smi") is None:
         if not allow_cpu_training:
@@ -72,9 +72,19 @@ def main() -> None:
             "--output",
             str(assembled_instructions),
             "--validation-output",
-            "data/processed/instructions_validation.jsonl",
+            str(assembled_validation),
             "--seed",
             str(args.seed),
+        ]
+    )
+    run(
+        [
+            python,
+            "scripts/validate_dataset_quality.py",
+            "--source",
+            str(assembled_instructions),
+            "--source",
+            str(assembled_validation),
         ]
     )
     run(

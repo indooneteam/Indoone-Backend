@@ -7,6 +7,7 @@ _TRIGGER_TYPES = {"comment", "message"}
 _ACTION_TYPES = {"reply_comment", "send_message"}
 _MAX_RULES = 50
 _MAX_RESPONSE_LENGTH = 2200
+_MAX_ACTIONS = 100
 _ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,256}$")
 
 
@@ -62,7 +63,12 @@ def plan_automation(payload: dict[str, Any], rules: list[dict[str, Any]]) -> dic
     matched_rules: list[int] = []
     entries = payload.get("entries", [])
     if not isinstance(entries, list):
-        entries = []
+        raise ValueError("payload entries must be a list")
+
+    def append_action(action: dict[str, object]) -> None:
+        if len(actions) >= _MAX_ACTIONS:
+            raise ValueError("automation event produced too many actions")
+        actions.append(action)
 
     for entry in entries:
         if not isinstance(entry, dict):
@@ -84,7 +90,7 @@ def plan_automation(payload: dict[str, Any], rules: list[dict[str, Any]]) -> dic
                 if not _message_matches(text, str(rule["keyword"])):
                     continue
                 matched_rules.append(index)
-                actions.append(
+                append_action(
                     {
                         "rule_index": index,
                         "action": "reply_comment",
@@ -108,7 +114,7 @@ def plan_automation(payload: dict[str, Any], rules: list[dict[str, Any]]) -> dic
                 if not _message_matches(text, str(rule["keyword"])):
                     continue
                 matched_rules.append(index)
-                actions.append(
+                append_action(
                     {
                         "rule_index": index,
                         "action": "send_message",

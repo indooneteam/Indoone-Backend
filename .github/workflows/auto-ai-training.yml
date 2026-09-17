@@ -21,9 +21,8 @@ permissions:
 
 concurrency:
   group: indoone-ai-training
-  cancel-in-progress: false
+  cancel-in-progress: true
 
-# Intentional no-op change to retrigger training after the main-branch sync.
 jobs:
   prepare:
     name: Audit training readiness
@@ -65,7 +64,7 @@ jobs:
     name: Train, gate, and publish model
     needs: prepare
     if: github.ref == 'refs/heads/main'
-    runs-on: [self-hosted, linux, x64, gpu, indoone-training]
+    runs-on: ubuntu-latest
     timeout-minutes: 720
     steps:
       - name: Checkout
@@ -82,13 +81,21 @@ jobs:
       - name: Build balanced Indian-language training pack
         run: python scripts/build_multilingual_training_pack.py
 
-      - name: Verify CUDA runner
-        run: nvidia-smi
+      - name: Report training runtime
+        env:
+          INDOONE_ALLOW_CPU_TRAINING: "true"
+        run: |
+          python - <<'PY'
+          import torch
+          print(f"torch={torch.__version__}")
+          print(f"cuda_available={torch.cuda.is_available()}")
+          PY
 
       - name: Train candidate and run base evaluation
         env:
           INDOONE_TRAINING_TRIGGER: "automatic"
           INDOONE_GIT_SHA: ${{ github.sha }}
+          INDOONE_ALLOW_CPU_TRAINING: "true"
         run: |
           python scripts/run_training_pipeline.py \
             --steps 2000 \

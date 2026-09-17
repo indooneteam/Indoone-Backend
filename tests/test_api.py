@@ -71,6 +71,21 @@ def test_unhandled_exception_emits_structured_error_log(monkeypatch, caplog) -> 
     assert record.exception_type == "RuntimeError"
 
 
+def test_health_details_exposes_runtime_metrics() -> None:
+    client.get("/health")
+
+    response = client.get("/health/details")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "ok"
+    assert isinstance(payload["uptime_seconds"], (int, float))
+    assert payload["uptime_seconds"] >= 0
+    assert payload["requests_total"] >= 1
+    assert payload["responses_by_status"]["200"] >= 1
+    assert payload["sqlite"]["foreign_keys"] is True
+
+
 def test_ready_reports_readiness() -> None:
     response = client.get("/ready")
 

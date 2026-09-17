@@ -207,6 +207,16 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/ready")
+async def ready() -> JSONResponse:
+    try:
+        sqlite_runtime_status()
+    except Exception:
+        logger.exception("readiness check failed")
+        return _error_response_with_request_id(503, "NOT_READY", "service dependencies are not ready", get_request_id() or "")
+    return JSONResponse(status_code=200, content={"status": "ready"})
+
+
 @app.get("/health/details")
 async def health_details() -> dict[str, object]:
     return {"status": "ok", "sqlite": sqlite_runtime_status()}

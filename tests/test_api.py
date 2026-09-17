@@ -49,6 +49,29 @@ def test_health_emits_structured_request_log(caplog) -> None:
     assert isinstance(record.duration_ms, float)
 
 
+def test_ready_reports_readiness() -> None:
+    response = client.get("/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready"}
+    assert response.headers["X-Request-ID"]
+
+
+def test_ready_returns_503_when_sqlite_unavailable(monkeypatch, caplog) -> None:
+    def fail_readiness() -> None:
+        raise RuntimeError("db unavailable")
+
+    monkeypatch.setattr("app.main.sqlite_runtime_status", fail_readiness)
+    caplog.set_level(logging.ERROR, logger="indoone.api")
+
+    response = client.get("/ready")
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "NOT_READY"
+    assert response.headers["X-Request-ID"]
+    assert any(record.message == "readiness check failed" for record in caplog.records)
+
+
 def test_chat_rejects_empty_message(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
     response = client.post("/api/chat", json={"message": ""}, headers=_auth_headers())

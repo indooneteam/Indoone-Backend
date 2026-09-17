@@ -49,7 +49,9 @@ async def verify(request: Request) -> str:
 async def webhook(request: Request) -> dict[str, object]:
     raw = await request.body()
     app_secret = os.getenv("INDOONE_WHATSAPP_APP_SECRET", "").strip()
-    if app_secret and not validate_signature(app_secret, request.headers.get("X-Hub-Signature-256"), raw):
+    if not app_secret:
+        raise HTTPException(status_code=503, detail="whatsapp webhook signature validation is not configured")
+    if not validate_signature(app_secret, request.headers.get("X-Hub-Signature-256"), raw):
         raise HTTPException(status_code=403, detail="invalid whatsapp webhook signature")
     try:
         payload = await request.json()

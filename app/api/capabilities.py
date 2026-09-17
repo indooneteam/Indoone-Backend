@@ -1,27 +1,52 @@
 from __future__ import annotations
 
 import base64
-import os
 from typing import Any
+from secrets import token_urlsafe
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from app.ai.orchestrator import execute_plan, plan_request
+from app.ai.agent import MAX_AGENT_STEPS, execute_agent
 from app.ai.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
 from app.capabilities.document_extract import extract_document
+from app.capabilities.image_generation import generate_image
+from app.capabilities.integrations import (
+    build_oauth_authorization,
+    exchange_oauth_code,
+    get_integration,
+    list_integrations,
+)
 from app.capabilities.media import save_media
 from app.capabilities.registry import list_capabilities
 from app.capabilities.store import (
+    create_oauth_state,
     create_project,
     create_task,
     delete_memory,
+    delete_project,
+    get_agent_run,
+    get_project,
+    get_integration_token_metadata,
+    list_agent_runs,
     list_memories,
     list_projects,
     list_tasks,
+    search_memories,
+    search_projects,
+    update_project,
     upsert_memory,
+)
+from app.capabilities.vision import analyze_image
+from app.capabilities.voice import synthesize_speech, transcribe_audio
+from app.capabilities.voice_session import (
+    VoiceSessionState,
+    handle_audio_message,
+    handle_speak_message,
+    normalize_request_id,
+    ready_event,
 )
 
 router = APIRouter(tags=["capabilities"])
@@ -47,6 +72,19 @@ class ProjectRequest(BaseModel):
     context: dict[str, Any] = Field(default_factory=dict)
 
 
+class ProjectUpdateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    instructions: str | None = Field(default=None, max_length=8_000)
+    context: dict[str, Any] | None = None
+    archived: bool | None = None
+
+
+class ProjectDeleteRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    project_id: str = Field(min_length=1, max_length=128)
+
+
 class TaskRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=256)
     title: str = Field(min_length=1, max_length=200)
@@ -66,10 +104,12 @@ class MediaRequest(BaseModel):
     content_base64: str = Field(min_length=1, max_length=12_000_000)
 
 
-class DocumentRequest(BaseModel):
-    filename: str = Field(min_length=1, max_length=255)
-    mime_type: str = Field(min_length=1, max_length=120)
-    content_base64: str = Field(min_length=1, max_length=12_000_000)
+class DocumentRequest(MediaRequest):
+    pass
+
+
+class VisionRequest(MediaRequest):
+    pass
 
 
 class ResearchRequest(BaseModel):
@@ -85,6 +125,9 @@ class DeepResearchRequest(BaseModel):
 
 class AgentRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
+    user_id: str = Field(default="", max_length=256)
+    approved_tools: list[str] = Field(default_factory=list, max_length=8)
+    contacts: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
 
 
 class ImageGenerationRequest(BaseModel):
@@ -93,14 +136,88 @@ class ImageGenerationRequest(BaseModel):
     height: int = Field(default=1024, ge=256, le=2048)
 
 
+class VoiceTranscriptionRequest(BaseModel):
+    audio_base64: str = Field(min_length=1, max_length=16_000_000)
+    mime_type: str = Field(default="audio/wav", min_length=1, max_length=120)
+    language: str = Field(default="", max_length=32)
+
+
+class VoiceSynthesisRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=8_000)
+    language: str = Field(default="", max_length=32)
+    voice: str = Field(default="", max_length=128)
+    format: str = Field(default="wav", min_length=1, max_length=16)
+
+
+class IntegrationConnectRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    redirect_uri: str = Field(min_length=1, max_length=2_000)
+
+
+class IntegrationCallbackRequest(BaseModel):
+    state: str = Field(min_length=16, max_length=512)
+    code: str = Field(min_length=1, max_length=8_000)
+
+
 @router.get("/capabilities")
 async def capabilities() -> dict[str, object]:
     return {"capabilities": list_capabilities()}
 
 
+@router.get("/integrations")
+async def integrations() -> dict[str, object]:
+    return {"integrations": list_integrations()}
+
+
+@router.get("/integrations/{integration_id}")
+async def integration(integration_id: str) -> dict[str, object]:
+    item = get_integration(integration_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="integration not found")
+    return {"integration": item}
+
+
+@router.post("/integrations/{integration_id}/connect")
+async def connect_integration(integration_id: str, request: IntegrationConnectRequest) -> dict[str, object]:
+    state = token_urlsafe(32)
+    try:
+        create_oauth_state(state, request.user_id, integration_id.strip().lower(), request.redirect_uri.strip())
+        result = build_oauth_authorization(integration_id, state, request.redirect_uri)
+        return {**result, "state": state}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/integrations/{integration_id}/callback")
+async def integration_callback(integration_id: str, request: IntegrationCallbackRequest) -> dict[str, object]:
+    try:
+        return await exchange_oauth_code(integration_id, request.state, request.code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (RuntimeError, httpx.HTTPError) as exc:
+        raise HTTPException(status_code=502, detail=f"oauth exchange failed: {exc}") from exc
+
+
+@router.get("/integrations/{integration_id}/status")
+async def integration_status(integration_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    if get_integration(integration_id) is None:
+        raise HTTPException(status_code=404, detail="integration not found")
+    metadata = get_integration_token_metadata(user_id, integration_id.strip().lower())
+    return {"integration": integration_id.strip().lower(), "connected": metadata is not None, "metadata": metadata}
+
+
 @router.get("/memory")
-async def get_memories(user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
-    return {"memories": list_memories(user_id)}
+async def get_memories(
+    user_id: str = Query(..., min_length=1, max_length=256),
+    key_prefix: str = Query(default="", max_length=128),
+    source: str = Query(default="", max_length=128),
+    limit: int = Query(default=100, ge=1, le=500),
+    q: str = Query(default="", max_length=500),
+) -> dict[str, object]:
+    memories = search_memories(user_id, q, limit) if q.strip() else list_memories(user_id, key_prefix, source, limit)
+    return {"memories": memories}
 
 
 @router.post("/memory")
@@ -110,8 +227,7 @@ async def write_memory(request: MemoryRequest) -> dict[str, object]:
 
 @router.delete("/memory")
 async def remove_memory(request: MemoryDeleteRequest) -> dict[str, bool]:
-    deleted = delete_memory(request.user_id, request.memory_id)
-    if not deleted:
+    if not delete_memory(request.user_id, request.memory_id):
         raise HTTPException(status_code=404, detail="memory not found")
     return {"deleted": True}
 
@@ -122,8 +238,37 @@ async def create_project_endpoint(request: ProjectRequest) -> dict[str, object]:
 
 
 @router.get("/projects")
-async def get_projects(user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
-    return {"projects": list_projects(user_id)}
+async def get_projects(
+    user_id: str = Query(..., min_length=1, max_length=256),
+    include_archived: bool = False,
+    limit: int = Query(default=100, ge=1, le=500),
+    q: str = Query(default="", max_length=500),
+) -> dict[str, object]:
+    projects = search_projects(user_id, q, limit) if q.strip() else list_projects(user_id, include_archived, limit)
+    return {"projects": projects}
+
+
+@router.get("/projects/{project_id}")
+async def get_project_endpoint(project_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    project = get_project(user_id, project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return {"project": project}
+
+
+@router.patch("/projects/{project_id}")
+async def update_project_endpoint(project_id: str, request: ProjectUpdateRequest) -> dict[str, object]:
+    project = update_project(request.user_id, project_id, request.name, request.instructions, request.context, request.archived)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return {"project": project}
+
+
+@router.delete("/projects/{project_id}")
+async def delete_project_endpoint(project_id: str, request: ProjectDeleteRequest) -> dict[str, bool]:
+    if not delete_project(request.user_id, request.project_id):
+        raise HTTPException(status_code=404, detail="project not found")
+    return {"deleted": True}
 
 
 @router.post("/tasks")
@@ -134,6 +279,19 @@ async def create_task_endpoint(request: TaskRequest) -> dict[str, object]:
 @router.get("/tasks")
 async def get_tasks(user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
     return {"tasks": list_tasks(user_id)}
+
+
+@router.get("/agent/runs")
+async def agent_runs(user_id: str = Query(..., min_length=1, max_length=256), limit: int = Query(default=50, ge=1, le=100)) -> dict[str, object]:
+    return {"runs": list_agent_runs(user_id, limit)}
+
+
+@router.get("/agent/runs/{run_id}")
+async def agent_run(run_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    result = get_agent_run(user_id, run_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail="agent run not found")
+    return {"run": result}
 
 
 @router.post("/analysis")
@@ -166,6 +324,14 @@ async def extract_document_endpoint(request: DocumentRequest) -> dict[str, objec
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.post("/vision")
+async def vision(request: VisionRequest) -> dict[str, object]:
+    try:
+        return {"vision": analyze_image(request.filename, request.mime_type, request.content_base64)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/media")
 async def upload_media(request: MediaRequest) -> dict[str, object]:
     try:
@@ -183,10 +349,7 @@ async def research(request: ResearchRequest) -> dict[str, object]:
         results = await provider.search(request.query, request.limit)
     except (RuntimeError, ValueError, httpx.HTTPError) as exc:
         raise HTTPException(status_code=502, detail=f"research provider failed: {exc}") from exc
-    return {
-        "query": request.query,
-        "results": [{"title": item.title, "url": item.url, "snippet": item.snippet} for item in results],
-    }
+    return {"query": request.query, "results": [{"title": item.title, "url": item.url, "snippet": item.snippet} for item in results]}
 
 
 @router.post("/deep-research")
@@ -194,11 +357,7 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
     provider = build_research_provider()
     if provider is None:
         raise HTTPException(status_code=503, detail="live research provider is not configured")
-    queries = [
-        request.query,
-        f"{request.query} official sources",
-        f"{request.query} recent developments",
-    ][: request.queries]
+    queries = [request.query, f"{request.query} official sources", f"{request.query} recent developments"][: request.queries]
     results: list[dict[str, str]] = []
     seen: set[str] = set()
     for query in queries:
@@ -216,30 +375,106 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
 
 @router.post("/agent")
 async def agent(request: AgentRequest) -> dict[str, object]:
-    plan = plan_request(request.message)
-    tool_result = execute_plan(plan)
+    execution = execute_agent(
+        request.message,
+        user_id=request.user_id,
+        approved_tools=frozenset(request.approved_tools),
+        contacts=request.contacts,
+    )
+    if not execution.steps and not execution.blocked_steps:
+        return {
+            "intent": "general",
+            "tool": None,
+            "tool_payload": None,
+            "result": None,
+            "steps": [],
+            "results": [],
+            "memories": list(execution.memories),
+            "blocked_steps": [],
+            "retry_counts": list(execution.retry_counts),
+            "run_id": execution.run_id,
+            "max_steps": MAX_AGENT_STEPS,
+        }
+    first = execution.steps[0] if execution.steps else execution.blocked_steps[0]
+    first_result = execution.results[0] if execution.results else None
     return {
-        "intent": plan.intent.name,
-        "tool": plan.tool,
-        "tool_payload": plan.tool_payload,
-        "result": None if tool_result is None else {
-            "name": tool_result.name,
-            "output": tool_result.output,
-            "safe": tool_result.safe,
+        "intent": "tool",
+        "tool": first.tool,
+        "tool_payload": first.payload,
+        "result": None if first_result is None else {
+            "name": first_result.name,
+            "output": first_result.output,
+            "safe": first_result.safe,
+            "retryable": first_result.retryable,
+            "truncated": first_result.truncated,
         },
+        "steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.steps],
+        "results": [{
+            "name": result.name,
+            "output": result.output,
+            "safe": result.safe,
+            "retryable": result.retryable,
+            "truncated": result.truncated,
+        } for result in execution.results],
+        "memories": list(execution.memories),
+        "blocked_steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.blocked_steps],
+        "retry_counts": list(execution.retry_counts),
+        "run_id": execution.run_id,
+        "max_steps": MAX_AGENT_STEPS,
     }
 
 
 @router.post("/image-generation")
 async def image_generation(request: ImageGenerationRequest) -> dict[str, object]:
-    endpoint = os.getenv("INDOONE_IMAGE_GENERATOR_URL", "").strip()
-    if not endpoint:
-        raise HTTPException(status_code=503, detail="image generation model endpoint is not configured")
-    payload = {"prompt": request.prompt, "width": request.width, "height": request.height}
     try:
-        async with httpx.AsyncClient(timeout=120.0, follow_redirects=False) as client:
-            response = await client.post(endpoint, json=payload)
-            response.raise_for_status()
-            return {"result": response.json()}
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"image generator failed: {exc}") from exc
+        result = await generate_image(request.prompt, request.width, request.height)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"result": {"provider": result.provider, "model": result.model, "mime_type": result.mime_type, "image_base64": result.image_base64, "metadata": result.metadata}}
+
+
+@router.post("/voice/transcribe")
+async def voice_transcribe(request: VoiceTranscriptionRequest) -> dict[str, object]:
+    try:
+        result = await transcribe_audio(request.audio_base64, mime_type=request.mime_type, language=request.language)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"result": {"text": result.text, "language": result.language, "provider": result.provider}}
+
+
+@router.post("/voice/synthesize")
+async def voice_synthesize(request: VoiceSynthesisRequest) -> dict[str, object]:
+    try:
+        result = await synthesize_speech(request.text, language=request.language, voice=request.voice, audio_format=request.format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"result": {"audio_base64": result.audio_base64, "mime_type": result.mime_type, "language": result.language, "voice": result.voice, "provider": result.provider}}
+
+
+@router.websocket("/voice/stream")
+async def voice_stream(websocket: WebSocket) -> None:
+    await websocket.accept()
+    session = VoiceSessionState()
+    try:
+        await websocket.send_json(ready_event(session))
+        while True:
+            message = await websocket.receive_json()
+            if not isinstance(message, dict):
+                await websocket.send_json({"type": "error", "detail": "message must be an object"})
+                continue
+            message_type = str(message.get("type", ""))
+            request_id = normalize_request_id(message.get("request_id"))
+            if message_type == "audio":
+                await handle_audio_message(websocket, session, message, request_id)
+            elif message_type == "speak":
+                await handle_speak_message(websocket, session, message, request_id)
+            else:
+                await websocket.send_json({"type": "error", "request_id": request_id, "detail": "unsupported message type"})
+    except WebSocketDisconnect:
+        return

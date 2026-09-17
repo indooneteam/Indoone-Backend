@@ -10,7 +10,7 @@ def test_service_includes_retrieved_knowledge(monkeypatch) -> None:
     class FakeEngine:
         async def generate(self, message: str) -> str:
             captured.append(message)
-            return "ok"
+            return "Indoone uses a local Transformer model."
 
     monkeypatch.setattr(service, "_runtime", None)
     monkeypatch.setattr(
@@ -24,6 +24,6 @@ def test_service_includes_retrieved_knowledge(monkeypatch) -> None:
 
     reply = asyncio.run(service.generate_reply("What model does Indoone use?"))
 
-    assert reply == "ok"
+    assert reply == "Indoone uses a local Transformer model."
     assert "Indoone Architecture" in captured[0]
     assert "local Transformer model" in captured[0]

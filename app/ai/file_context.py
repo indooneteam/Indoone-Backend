@@ -1,38 +1,115 @@
 from __future__ import annotations
 
+import json
+import shutil
 from pathlib import Path
 from uuid import UUID, uuid4
 
 
 FILE_ROOT = Path("data/uploads")
 MAX_TEXT_BYTES = 2_000_000
+MAX_FILENAME_LENGTH = 255
 SUPPORTED_SUFFIXES = {".txt", ".md", ".json", ".csv", ".log"}
 
 
-def save_text_file(filename: str, content: bytes) -> dict[str, str | int]:
-    if len(content) > MAX_TEXT_BYTES:
-        raise ValueError("File is too large")
-    suffix = Path(filename).suffix.lower()
-    if suffix not in SUPPORTED_SUFFIXES:
-        raise ValueError("Text intake currently supports txt, md, json, csv, and log files")
-    file_id = str(uuid4())
-    target = FILE_ROOT / file_id / Path(filename).name
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(content)
-    text = content.decode("utf-8", errors="replace")
-    return {"file_id": file_id, "filename": target.name, "bytes": len(content), "text": text}
-
-
-def read_text_file(file_id: str) -> str:
-    """Read a previously uploaded text file without allowing path traversal."""
+def _safe_directory(file_id: str) -> Path:
     try:
         safe_id = str(UUID(file_id))
     except (ValueError, AttributeError, TypeError) as exc:
         raise ValueError("Invalid file_id") from exc
+    return FILE_ROOT / safe_id
 
-    directory = FILE_ROOT / safe_id
-    matches = [path for path in directory.iterdir() if path.is_file()] if directory.exists() else []
-    if len(matches) != 1:
+
+def _load_metadata(directory: Path) -> dict[str, object]:
+    metadata_path = directory / ".metadata.json"
+    if not metadata_path.exists():
+        raise PermissionError("uploaded file owner metadata is missing")
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError("Uploaded file metadata is invalid") from exc
+    if not isinstance(metadata, dict):
+        raise ValueError("Uploaded file metadata is invalid")
+    return metadata
+
+
+def _safe_filename(filename: str) -> str:
+    candidate = Path(filename).name.strip()
+    if not candidate or candidate in {".", ".."} or len(candidate) > MAX_FILENAME_LENGTH:
+        raise ValueError("Invalid filename")
+    return candidate
+
+
+def _metadata_owner(metadata: dict[str, object]) -> str:
+    owner = metadata.get("user_id")
+    if not isinstance(owner, str):
+        raise PermissionError("uploaded file owner metadata is missing")
+    owner = owner.strip()
+    if not owner or len(owner) > 256:
+        raise PermissionError("uploaded file owner metadata is missing")
+    return owner
+
+
+def _metadata_filename(metadata: dict[str, object]) -> str:
+    filename = metadata.get("filename")
+    if not isinstance(filename, str):
+        raise ValueError("Uploaded file metadata is invalid")
+    return _safe_filename(filename)
+
+
+def save_text_file(filename: str, content: bytes, user_id: str = "") -> dict[str, str | int]:
+    if len(content) > MAX_TEXT_BYTES:
+        raise ValueError("File is too large")
+    safe_filename = _safe_filename(filename)
+    suffix = Path(safe_filename).suffix.lower()
+    if suffix not in SUPPORTED_SUFFIXES:
+        raise ValueError("Text intake currently supports txt, md, json, csv, and log files")
+    owner = user_id.strip()
+    if not owner or len(owner) > 256:
+        raise ValueError("authenticated user is required")
+    file_id = str(uuid4())
+    directory = FILE_ROOT / file_id
+    target = directory / safe_filename
+    try:
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        target.write_bytes(content)
+        target.chmod(0o600)
+        metadata = {"user_id": owner, "filename": target.name}
+        metadata_path = directory / ".metadata.json"
+        temporary_metadata = directory / ".metadata.json.tmp"
+        temporary_metadata.write_text(json.dumps(metadata, ensure_ascii=False), encoding="utf-8")
+        temporary_metadata.chmod(0o600)
+        temporary_metadata.replace(metadata_path)
+        metadata_path.chmod(0o600)
+    except (OSError, ValueError, TypeError) as exc:
+        shutil.rmtree(directory, ignore_errors=True)
+        raise ValueError("Uploaded file could not be stored") from exc
+    text = content.decode("utf-8", errors="replace")
+    return {"file_id": file_id, "filename": target.name, "bytes": len(content), "text": text}
+
+
+def get_file_owner(file_id: str) -> str:
+    directory = _safe_directory(file_id)
+    if not directory.exists():
+        raise ValueError("Uploaded file was not found")
+    return _metadata_owner(_load_metadata(directory))
+
+
+def read_text_file(file_id: str, user_id: str = "") -> str:
+    directory = _safe_directory(file_id)
+    owner = user_id.strip()
+    if not owner or len(owner) > 256:
+        raise PermissionError("authenticated user required")
+    metadata = _load_metadata(directory) if directory.exists() else None
+    if metadata is None:
+        raise ValueError("Uploaded file was not found")
+    stored_owner = _metadata_owner(metadata)
+    if stored_owner != owner:
+        raise PermissionError("file belongs to another user")
+    expected_filename = _metadata_filename(metadata)
+
+    matches = [path for path in directory.iterdir() if path.is_file() and path.name != ".metadata.json"]
+    if len(matches) != 1 or matches[0].name != expected_filename:
         raise ValueError("Uploaded file was not found")
     target = matches[0]
     if target.suffix.lower() not in SUPPORTED_SUFFIXES:

@@ -35,6 +35,7 @@ _CURRENT_MARKERS = (
     "news",
 )
 
+_SOURCE_URL_RE = re.compile(r"https?://[^\s)]+", flags=re.IGNORECASE)
 _SENTENCE_RE = re.compile(r"(?<=[.!?।!?])\s+")
 
 
@@ -75,9 +76,11 @@ def assess_answer(question: str, answer: str) -> AnswerQuality:
 
     if any(marker in question_text for marker in _CURRENT_MARKERS):
         # Freshness is only considered reliable when the response includes the
-        # service's explicit source section.
+        # service's explicit source section plus at least one real URL.
         if "sources:" not in answer_text:
             return AnswerQuality(False, "freshness_not_supported")
+        if not _SOURCE_URL_RE.search(answer):
+            return AnswerQuality(False, "freshness_source_url_missing")
 
     return AnswerQuality(True)
 

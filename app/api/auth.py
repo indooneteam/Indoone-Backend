@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import os
+import time
+
+_DEFAULT_TOKEN_AGE_SECONDS = 3600
+_DEFAULT_CLOCK_SKEW_SECONDS = 30
+_PRODUCTION_ENVIRONMENTS = {"prod", "production"}
+
+
+def _bounded_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return max(minimum, min(maximum, value))
+
+
+def _max_token_age_seconds() -> int:
+    return _bounded_int("INDOONE_AUTH_TOKEN_MAX_AGE", _DEFAULT_TOKEN_AGE_SECONDS, minimum=60, maximum=86_400)
+
+
+def _clock_skew_seconds() -> int:
+    return _bounded_int("INDOONE_AUTH_CLOCK_SKEW", _DEFAULT_CLOCK_SKEW_SECONDS, minimum=0, maximum=300)
+
+
+def _secret() -> bytes:
+    value = os.getenv("INDOONE_AUTH_SECRET", "").strip()
+    if len(value) < 32:
+        raise RuntimeError("INDOONE_AUTH_SECRET must contain at least 32 characters")
+    return value.encode("utf-8")
+
+
+def validate_production_security_config() -> None:
+    """Fail closed when production is configured without required auth secrets."""
+    environment = os.getenv("INDOONE_ENV", "development").strip().lower()
+    if environment not in _PRODUCTION_ENVIRONMENTS:
+        return
+
+    auth_required = os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true"
+    if not auth_required:
+        raise RuntimeError("INDOONE_AUTH_REQUIRED must be true in production")
+
+    auth_secret = _secret()
+    approval_secret = os.getenv("INDOONE_APPROVAL_SECRET", "").strip()
+    if len(approval_secret) < 32:
+        raise RuntimeError("INDOONE_APPROVAL_SECRET must contain at least 32 characters in production")
+    if auth_secret == approval_secret.encode("utf-8"):
+        raise RuntimeError("INDOONE_APPROVAL_SECRET must differ from INDOONE_AUTH_SECRET")
+
+
+def _decode_part(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode((value + padding).encode("ascii"))
+
+
+def _validate_principal(user_id: str) -> str:
+    normalized = user_id.strip()
+    if not normalized or len(normalized) > 256:
+        raise ValueError("invalid principal")
+    if any(char.isspace() or ord(char) < 32 or ord(char) == 127 for char in normalized):
+        raise ValueError("invalid principal")
+    return normalized
+
+
+def extract_principal(authorization: str) -> str:
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise ValueError("bearer authentication required")
+    token = token.strip()
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise ValueError("invalid bearer token")
+    encoded_user, encoded_timestamp, encoded_signature = parts
+    try:
+        user_id = _decode_part(encoded_user).decode("utf-8")
+        issued_at = int(_decode_part(encoded_timestamp).decode("ascii"))
+        signature = _decode_part(encoded_signature)
+    except (ValueError, UnicodeDecodeError, base64.binascii.Error) as exc:
+        raise ValueError("invalid bearer token") from exc
+    user_id = _validate_principal(user_id)
+    age = int(time.time()) - issued_at
+    if age < -_clock_skew_seconds() or age > _max_token_age_seconds():
+        raise ValueError("expired bearer token")
+    payload = f"{encoded_user}.{encoded_timestamp}".encode("ascii")
+    expected = hmac.new(_secret(), payload, hashlib.sha256).digest()
+    if not hmac.compare_digest(signature, expected):
+        raise ValueError("invalid bearer signature")
+    return user_id

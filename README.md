@@ -46,7 +46,7 @@ The processed dataset is a generated training artifact and should not be committ
 - `data/knowledge/` — approved local knowledge sources
 - `data/processed/` — generated train/validation/test splits
 - `models/` — generated local checkpoints (ignored by Git)
-- `scripts/` — dataset and training utilities
+- `scripts/` — dataset, training, and runtime utilities
 - `tests/` — API, dataset, AI, and integration tests
 
 ## Train the first model
@@ -61,11 +61,25 @@ Training writes a tokenizer, checkpoint, and metadata under `models/indoone-smal
 
 ## Run the backend
 
+Development:
+
 ```bash
 uvicorn app.main:app --reload
 ```
 
+Production/deployment:
+
+```bash
+python -m scripts.run_server
+```
+
+The production entrypoint honors a deployment-provided `PORT`, defaults to one worker, disables reload in production, bounds concurrency and keep-alive/graceful-shutdown settings, suppresses the Uvicorn `Server` header, and keeps Uvicorn-level forwarded-header trust disabled. The application only enables forwarded-header handling through its explicit trusted-proxy configuration.
+
 Health check: `GET /health`
+
+Readiness check: `GET /ready`
+
+Detailed health: `GET /health/details`
 
 Chat endpoint: `POST /api/chat` with `{ "message": "Hello Indoone" }`
 

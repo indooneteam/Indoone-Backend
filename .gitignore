@@ -6,3 +6,8 @@ models/*/*.pt
 models/*/tokenizer.json
 models/*/metadata.json
 data/processed/
+
+# Local environment files can contain production credentials. Keep only the template tracked.
+.env
+.env.*
+!.env.example

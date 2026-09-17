@@ -4,12 +4,17 @@ import base64
 import hashlib
 import hmac
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 _AUTH_SECRET = "smoke-auth-secret-32-characters-long-0001"
 _APPROVAL_SECRET = "smoke-approval-secret-32-characters-0002"

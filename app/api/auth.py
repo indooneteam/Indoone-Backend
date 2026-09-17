@@ -8,6 +8,7 @@ import time
 
 _DEFAULT_TOKEN_AGE_SECONDS = 3600
 _DEFAULT_CLOCK_SKEW_SECONDS = 30
+_PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 
 
 def _bounded_int(name: str, default: int, *, minimum: int, maximum: int) -> int:
@@ -32,6 +33,24 @@ def _secret() -> bytes:
     if len(value) < 32:
         raise RuntimeError("INDOONE_AUTH_SECRET must contain at least 32 characters")
     return value.encode("utf-8")
+
+
+def validate_production_security_config() -> None:
+    """Fail closed when production is configured without required auth secrets."""
+    environment = os.getenv("INDOONE_ENV", "development").strip().lower()
+    if environment not in _PRODUCTION_ENVIRONMENTS:
+        return
+
+    auth_required = os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true"
+    if not auth_required:
+        raise RuntimeError("INDOONE_AUTH_REQUIRED must be true in production")
+
+    auth_secret = _secret()
+    approval_secret = os.getenv("INDOONE_APPROVAL_SECRET", "").strip()
+    if len(approval_secret) < 32:
+        raise RuntimeError("INDOONE_APPROVAL_SECRET must contain at least 32 characters in production")
+    if auth_secret == approval_secret.encode("utf-8"):
+        raise RuntimeError("INDOONE_APPROVAL_SECRET must differ from INDOONE_AUTH_SECRET")
 
 
 def _decode_part(value: str) -> bytes:

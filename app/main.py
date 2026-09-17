@@ -11,7 +11,7 @@ from app.ai import service as ai_service
 from app.ai.language_detection import detect_response_language
 from app.api.agent_async import router as agent_async_router
 from app.api.approvals import router as approvals_router
-from app.api.auth import extract_principal
+from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
 from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
@@ -98,6 +98,7 @@ def _log_request(request: Request, request_id: str, started: float, status_code:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    validate_production_security_config()
     configure_sqlite_runtime()
     initialize_capability_store()
     yield

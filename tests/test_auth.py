@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from app.api.auth import extract_principal
+from app.api.auth import extract_principal, validate_production_security_config
 
 
 def _encode(value: bytes) -> str:
@@ -38,3 +38,32 @@ def test_extract_principal_rejects_whitespace_in_identity(monkeypatch) -> None:
     token = _token("user one", int(time.time()))
     with pytest.raises(ValueError, match="invalid principal"):
         extract_principal(f"Bearer {token}")
+
+
+def test_production_security_config_requires_global_auth(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_ENV", "production")
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "a" * 32)
+    monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "b" * 32)
+
+    with pytest.raises(RuntimeError, match="INDOONE_AUTH_REQUIRED must be true"):
+        validate_production_security_config()
+
+
+def test_production_security_config_requires_strong_separate_secrets(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_ENV", "production")
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "a" * 32)
+    monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "a" * 32)
+
+    with pytest.raises(RuntimeError, match="must differ"):
+        validate_production_security_config()
+
+
+def test_production_security_config_accepts_secure_configuration(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_ENV", "production")
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "a" * 32)
+    monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "b" * 32)
+
+    validate_production_security_config()

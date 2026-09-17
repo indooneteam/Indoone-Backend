@@ -41,6 +41,10 @@ ai_service._detect_response_language = detect_response_language
 _DEFAULT_MAX_REQUEST_BYTES = 50 * 1024 * 1024
 
 
+class RequestBodyTooLarge(Exception):
+    pass
+
+
 def _max_request_bytes() -> int:
     raw = os.getenv("INDOONE_MAX_REQUEST_BYTES", str(_DEFAULT_MAX_REQUEST_BYTES)).strip()
     try:
@@ -48,6 +52,21 @@ def _max_request_bytes() -> int:
     except ValueError:
         return _DEFAULT_MAX_REQUEST_BYTES
     return max(1, min(value, 100 * 1024 * 1024))
+
+
+def _limited_receive(receive, max_bytes: int):
+    received = 0
+
+    async def wrapped_receive():
+        nonlocal received
+        message = await receive()
+        if message.get("type") == "http.request":
+            received += len(message.get("body", b""))
+            if received > max_bytes:
+                raise RequestBodyTooLarge
+        return message
+
+    return wrapped_receive
 
 
 def _error_response_with_request_id(status_code: int, code: str, message: str, request_id: str, details=None) -> JSONResponse:
@@ -85,23 +104,28 @@ async def request_context_middleware(request: Request, call_next):
         return _error_response_with_request_id(401, "AUTH_REQUIRED", "bearer authentication required", request_id)
 
     content_length = request.headers.get("content-length")
+    max_request_bytes = _max_request_bytes()
     if content_length:
         try:
             declared_length = int(content_length)
         except ValueError:
             return _error_response_with_request_id(400, "CONTENT_LENGTH_INVALID", "invalid content-length header", request_id)
-        if declared_length < 0 or declared_length > _max_request_bytes():
+        if declared_length < 0 or declared_length > max_request_bytes:
             return _error_response_with_request_id(413, "REQUEST_TOO_LARGE", "request body exceeds configured size limit", request_id)
+
+    request._receive = _limited_receive(request._receive, max_request_bytes)
 
     if principal:
         request.state.principal_id = principal
 
     try:
         await enforce_connector_user_scope(request)
+        response = await call_next(request)
+    except RequestBodyTooLarge:
+        return _error_response_with_request_id(413, "REQUEST_TOO_LARGE", "request body exceeds configured size limit", request_id)
     except HTTPException as exc:
         return _error_response_with_request_id(exc.status_code, f"HTTP_{exc.status_code}", str(exc.detail), request_id)
 
-    response = await call_next(request)
     response.headers["X-Request-ID"] = get_request_id() or request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"

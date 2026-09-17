@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import logging
 import time
 from pathlib import Path
 
@@ -30,6 +31,22 @@ def test_health() -> None:
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_health_emits_structured_request_log(caplog) -> None:
+    caplog.set_level(logging.INFO, logger="indoone.api")
+
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    records = [record for record in caplog.records if record.name == "indoone.api" and record.message == "request completed"]
+    assert records
+    record = records[-1]
+    assert record.request_id == response.headers["X-Request-ID"]
+    assert record.method == "GET"
+    assert record.path == "/health"
+    assert record.status_code == 200
+    assert isinstance(record.duration_ms, float)
 
 
 def test_chat_rejects_empty_message(monkeypatch) -> None:

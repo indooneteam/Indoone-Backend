@@ -34,6 +34,7 @@ from app.api.telegram import router as telegram_router
 from app.api.whatsapp import router as whatsapp_router
 from app.api.youtube import router as youtube_router
 from app.api.youtube_analytics import router as youtube_analytics_router
+from app.api.youtube_live import router as youtube_live_router
 from app.api.voice_session import router as voice_session_router
 from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
 from app.capabilities.store import initialize as initialize_capability_store
@@ -221,6 +222,7 @@ app.include_router(telegram_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
 app.include_router(youtube_router, prefix="/api")
 app.include_router(youtube_analytics_router, prefix="/api")
+app.include_router(youtube_live_router, prefix="/api")
 app.include_router(instagram_router, prefix="/api")
 app.include_router(facebook_router, prefix="/api")
 app.include_router(google_photos_router, prefix="/api")

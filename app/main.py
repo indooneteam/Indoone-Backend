@@ -76,6 +76,19 @@ def _error_response_with_request_id(status_code: int, code: str, message: str, r
     return response
 
 
+def _log_request(request: Request, request_id: str, started: float, status_code: int) -> None:
+    logger.info(
+        "request completed",
+        extra={
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": status_code,
+            "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+        },
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_sqlite_runtime()
@@ -99,9 +112,13 @@ async def request_context_middleware(request: Request, call_next):
             principal = extract_principal(authorization)
             set_principal_id(principal)
         except (RuntimeError, ValueError) as exc:
-            return _error_response_with_request_id(401, "AUTH_INVALID", str(exc), request_id)
+            response = _error_response_with_request_id(401, "AUTH_INVALID", str(exc), request_id)
+            _log_request(request, request_id, started, response.status_code)
+            return response
     elif os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
-        return _error_response_with_request_id(401, "AUTH_REQUIRED", "bearer authentication required", request_id)
+        response = _error_response_with_request_id(401, "AUTH_REQUIRED", "bearer authentication required", request_id)
+        _log_request(request, request_id, started, response.status_code)
+        return response
 
     content_length = request.headers.get("content-length")
     max_request_bytes = _max_request_bytes()
@@ -109,9 +126,13 @@ async def request_context_middleware(request: Request, call_next):
         try:
             declared_length = int(content_length)
         except ValueError:
-            return _error_response_with_request_id(400, "CONTENT_LENGTH_INVALID", "invalid content-length header", request_id)
+            response = _error_response_with_request_id(400, "CONTENT_LENGTH_INVALID", "invalid content-length header", request_id)
+            _log_request(request, request_id, started, response.status_code)
+            return response
         if declared_length < 0 or declared_length > max_request_bytes:
-            return _error_response_with_request_id(413, "REQUEST_TOO_LARGE", "request body exceeds configured size limit", request_id)
+            response = _error_response_with_request_id(413, "REQUEST_TOO_LARGE", "request body exceeds configured size limit", request_id)
+            _log_request(request, request_id, started, response.status_code)
+            return response
 
     request._receive = _limited_receive(request._receive, max_request_bytes)
 
@@ -122,9 +143,13 @@ async def request_context_middleware(request: Request, call_next):
         await enforce_connector_user_scope(request)
         response = await call_next(request)
     except RequestBodyTooLarge:
-        return _error_response_with_request_id(413, "REQUEST_TOO_LARGE", "request body exceeds configured size limit", request_id)
+        response = _error_response_with_request_id(413, "REQUEST_TOO_LARGE", "request body exceeds configured size limit", request_id)
+        _log_request(request, request_id, started, response.status_code)
+        return response
     except HTTPException as exc:
-        return _error_response_with_request_id(exc.status_code, f"HTTP_{exc.status_code}", str(exc.detail), request_id)
+        response = _error_response_with_request_id(exc.status_code, f"HTTP_{exc.status_code}", str(exc.detail), request_id)
+        _log_request(request, request_id, started, response.status_code)
+        return response
 
     response.headers["X-Request-ID"] = get_request_id() or request_id
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -134,6 +159,7 @@ async def request_context_middleware(request: Request, call_next):
     response.headers["X-Process-Time-Ms"] = f"{(time.perf_counter() - started) * 1000:.2f}"
     if request.url.scheme == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    _log_request(request, request_id, started, response.status_code)
     return response
 
 

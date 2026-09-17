@@ -28,6 +28,7 @@ from app.api.memory import router as memory_router
 from app.api.phone import router as phone_router
 from app.api.platform import router as platform_router
 from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
+from app.api.network_security import configure_network_security, validate_network_security_config
 from app.api.telegram import router as telegram_router
 from app.api.whatsapp import router as whatsapp_router
 from app.api.youtube import router as youtube_router
@@ -99,12 +100,14 @@ def _log_request(request: Request, request_id: str, started: float, status_code:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_production_security_config()
+    validate_network_security_config()
     configure_sqlite_runtime()
     initialize_capability_store()
     yield
 
 
 app = FastAPI(title="Indoone Backend", version="0.3.0", lifespan=lifespan)
+configure_network_security(app)
 
 
 @app.middleware("http")

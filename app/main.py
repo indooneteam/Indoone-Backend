@@ -30,6 +30,7 @@ from app.api.instagram_messaging import router as instagram_messaging_router
 from app.api.instagram_advanced import router as instagram_advanced_router
 from app.api.instagram_publishing import router as instagram_publishing_router
 from app.api.instagram_webhooks import router as instagram_webhooks_router
+from app.api.instagram_automation import router as instagram_automation_router
 from app.api.memory import router as memory_router
 from app.api.phone import router as phone_router
 from app.api.platform import router as platform_router
@@ -238,6 +239,7 @@ app.include_router(instagram_messaging_router, prefix="/api")
 app.include_router(instagram_advanced_router, prefix="/api")
 app.include_router(instagram_publishing_router, prefix="/api")
 app.include_router(instagram_webhooks_router, prefix="/api")
+app.include_router(instagram_automation_router, prefix="/api")
 app.include_router(facebook_router, prefix="/api")
 app.include_router(google_photos_router, prefix="/api")
 app.include_router(canva_router, prefix="/api")

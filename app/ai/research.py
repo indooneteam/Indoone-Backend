@@ -12,6 +12,7 @@ import httpx
 MAX_TITLE_LENGTH = 500
 MAX_SNIPPET_LENGTH = 2_000
 MAX_RESEARCH_QUERIES = 6
+MAX_RESEARCH_TIMEOUT_SECONDS = 60.0
 
 @dataclass(frozen=True)
 class ResearchResult:
@@ -46,7 +47,9 @@ class HttpResearchProvider(ResearchProvider):
         parsed = urlparse(base_url)
         if not base_url or parsed.scheme not in {"http", "https"} or not parsed.netloc:
             raise ValueError("base_url must be an absolute HTTP(S) URL")
-        if timeout <= 0 or max_response_bytes <= 0:
+        if timeout <= 0 or timeout > MAX_RESEARCH_TIMEOUT_SECONDS:
+            raise ValueError("timeout must not exceed 60 seconds and must be greater than zero")
+        if max_response_bytes <= 0:
             raise ValueError("timeout and max_response_bytes must be greater than zero")
         self.base_url = base_url
         self.bearer_token = bearer_token.strip() if bearer_token else None

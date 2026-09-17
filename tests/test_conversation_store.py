@@ -52,6 +52,7 @@ def test_legacy_messages_schema_is_migrated_to_foreign_key(tmp_path: Path) -> No
     db = tmp_path / "conversations.sqlite3"
     store = ConversationStore(db)
     with store._connect() as connection:
+        connection.execute("INSERT INTO conversations(conversation_id, user_id) VALUES (?, ?)", ("c1", OWNER))
         connection.execute("DROP TABLE messages")
         connection.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
         connection.execute("INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)", ("c1", "user", "legacy"))

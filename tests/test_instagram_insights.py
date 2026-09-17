@@ -1,3 +1,5 @@
+import asyncio
+
 import pytest
 
 from app.capabilities import instagram_insights
@@ -16,8 +18,7 @@ def test_validate_range_rejects_inverted_window() -> None:
         instagram_insights._validate_range(200, 100)
 
 
-@pytest.mark.anyio
-async def test_account_insights_builds_expected_request(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_account_insights_builds_expected_request(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, dict[str, object]]] = []
 
     async def fake_get_json(user_id: str, path: str, params: dict[str, object]) -> dict[str, object]:
@@ -26,12 +27,14 @@ async def test_account_insights_builds_expected_request(monkeypatch: pytest.Monk
         return {"data": [{"name": "reach", "values": [{"value": 42}]}]}
 
     monkeypatch.setattr(instagram_insights, "_get_json_with_retry", fake_get_json)
-    result = await instagram_insights.get_account_insights(
-        "user-1",
-        ["reach", "accounts_engaged", "reach"],
-        "day",
-        100,
-        200,
+    result = asyncio.run(
+        instagram_insights.get_account_insights(
+            "user-1",
+            ["reach", "accounts_engaged", "reach"],
+            "day",
+            100,
+            200,
+        )
     )
 
     assert calls == [
@@ -50,14 +53,12 @@ async def test_account_insights_builds_expected_request(monkeypatch: pytest.Monk
     assert result["secrets_exposed"] is False
 
 
-@pytest.mark.anyio
-async def test_media_insights_reject_empty_media_id() -> None:
+def test_media_insights_reject_empty_media_id() -> None:
     with pytest.raises(ValueError, match="media_id is required"):
-        await instagram_insights.get_media_insights("user-1", "", ["reach"])
+        asyncio.run(instagram_insights.get_media_insights("user-1", "", ["reach"]))
 
 
-@pytest.mark.anyio
-async def test_media_insights_returns_provider_data(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_media_insights_returns_provider_data(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_get_json(user_id: str, path: str, params: dict[str, object]) -> dict[str, object]:
         assert user_id == "user-1"
         assert path == "media-1/insights"
@@ -65,7 +66,7 @@ async def test_media_insights_returns_provider_data(monkeypatch: pytest.MonkeyPa
         return {"data": [{"name": "likes", "values": [{"value": 7}]}]}
 
     monkeypatch.setattr(instagram_insights, "_get_json_with_retry", fake_get_json)
-    result = await instagram_insights.get_media_insights("user-1", "media-1", ["reach", "likes"])
+    result = asyncio.run(instagram_insights.get_media_insights("user-1", "media-1", ["reach", "likes"]))
 
     assert result["scope"] == "media"
     assert result["media_id"] == "media-1"

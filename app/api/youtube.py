@@ -35,6 +35,15 @@ from app.capabilities.youtube_playlist_manager import (
     reorder_playlist_item,
     update_playlist,
 )
+from app.capabilities.youtube_comments import (
+    create_top_level_comment,
+    delete_comment,
+    list_comment_replies,
+    list_comment_threads,
+    moderate_comments,
+    reply_to_comment,
+    update_comment,
+)
 
 router = APIRouter(prefix="/youtube", tags=["youtube"])
 
@@ -176,6 +185,63 @@ class PlaylistItemReorderRequest(BaseModel):
     approved: bool = False
 
 
+class CommentThreadListRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    video_id: str | None = Field(default=None, max_length=128)
+    channel_id: str | None = Field(default=None, max_length=256)
+    all_threads_related_to_channel_id: str | None = Field(default=None, max_length=256)
+    max_results: int = Field(default=20, ge=1, le=100)
+    page_token: str = Field(default="", max_length=2048)
+    moderation_status: str | None = Field(default=None, max_length=32)
+    search_terms: str | None = Field(default=None, max_length=500)
+    order: str | None = Field(default=None, max_length=32)
+    text_format: str = Field(default="plainText", max_length=32)
+
+
+class CommentRepliesRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    parent_id: str = Field(min_length=1, max_length=128)
+    max_results: int = Field(default=50, ge=1, le=100)
+    page_token: str = Field(default="", max_length=2048)
+    text_format: str = Field(default="plainText", max_length=32)
+
+
+class TopLevelCommentRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    channel_id: str = Field(min_length=1, max_length=256)
+    video_id: str | None = Field(default=None, max_length=128)
+    text: str = Field(min_length=1, max_length=10000)
+    approved: bool = False
+
+
+class CommentReplyRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    parent_id: str = Field(min_length=1, max_length=128)
+    text: str = Field(min_length=1, max_length=10000)
+    approved: bool = False
+
+
+class CommentUpdateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    comment_id: str = Field(min_length=1, max_length=128)
+    text: str = Field(min_length=1, max_length=10000)
+    approved: bool = False
+
+
+class CommentDeleteRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    comment_id: str = Field(min_length=1, max_length=128)
+    approved: bool = False
+
+
+class CommentModerateRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    comment_ids: list[str] = Field(min_length=1, max_length=50)
+    moderation_status: str = Field(min_length=1, max_length=32)
+    ban_author: bool = False
+    approved: bool = False
+
+
 @router.get("/capabilities")
 async def capabilities() -> dict[str, object]:
     return {
@@ -189,6 +255,10 @@ async def capabilities() -> dict[str, object]:
                 "set custom video thumbnails with explicit approval",
                 "list, create, edit, and delete playlists with explicit approval for writes",
                 "list playlist videos and add, remove, or reorder them with explicit approval for writes",
+                "list comment threads and replies",
+                "create comments and replies with explicit approval",
+                "edit and delete comments with explicit approval",
+                "moderate comments with explicit approval",
             ],
         },
         "secrets_exposed": False,
@@ -458,6 +528,115 @@ async def playlist_reorder(request: PlaylistItemReorderRequest) -> dict[str, obj
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
         raise HTTPException(status_code=502, detail=f"youtube playlist reorder failed: {exc}") from exc
+
+
+@router.post("/comments/list")
+async def comments_list(request: CommentThreadListRequest) -> dict[str, object]:
+    try:
+        return await list_comment_threads(
+            request.user_id,
+            video_id=request.video_id,
+            channel_id=request.channel_id,
+            all_threads_related_to_channel_id=request.all_threads_related_to_channel_id,
+            max_results=request.max_results,
+            page_token=request.page_token,
+            moderation_status=request.moderation_status,
+            search_terms=request.search_terms,
+            order=request.order,
+            text_format=request.text_format,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube comment list failed: {exc}") from exc
+
+
+@router.post("/comments/replies")
+async def comments_replies(request: CommentRepliesRequest) -> dict[str, object]:
+    try:
+        return await list_comment_replies(
+            request.user_id,
+            request.parent_id,
+            max_results=request.max_results,
+            page_token=request.page_token,
+            text_format=request.text_format,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube comment replies failed: {exc}") from exc
+
+
+@router.post("/comments/create")
+async def comments_create(request: TopLevelCommentRequest) -> dict[str, object]:
+    try:
+        return await create_top_level_comment(
+            request.user_id,
+            request.text,
+            channel_id=request.channel_id,
+            video_id=request.video_id,
+            approved=request.approved,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube comment create failed: {exc}") from exc
+
+
+@router.post("/comments/reply")
+async def comments_reply(request: CommentReplyRequest) -> dict[str, object]:
+    try:
+        return await reply_to_comment(request.user_id, request.parent_id, request.text, approved=request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube comment reply failed: {exc}") from exc
+
+
+@router.post("/comments/update")
+async def comments_update(request: CommentUpdateRequest) -> dict[str, object]:
+    try:
+        return await update_comment(request.user_id, request.comment_id, request.text, approved=request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube comment update failed: {exc}") from exc
+
+
+@router.post("/comments/delete")
+async def comments_delete(request: CommentDeleteRequest) -> dict[str, object]:
+    try:
+        return await delete_comment(request.user_id, request.comment_id, approved=request.approved)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube comment delete failed: {exc}") from exc
+
+
+@router.post("/comments/moderate")
+async def comments_moderate(request: CommentModerateRequest) -> dict[str, object]:
+    try:
+        return await moderate_comments(
+            request.user_id,
+            request.comment_ids,
+            request.moderation_status,
+            ban_author=request.ban_author,
+            approved=request.approved,
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except (httpx.HTTPError, RuntimeError) as exc:
+        raise HTTPException(status_code=502, detail=f"youtube comment moderation failed: {exc}") from exc
 
 
 @router.post("/upload")

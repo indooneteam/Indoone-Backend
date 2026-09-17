@@ -41,4 +41,7 @@ async def receive(request: Request) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="instagram webhook payload must be an object")
 
-    return normalize_event(payload)
+    try:
+        return normalize_event(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

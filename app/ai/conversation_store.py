@@ -26,17 +26,78 @@ class ConversationStore:
         connection = sqlite3.connect(self.db_path, timeout=SQLITE_TIMEOUT_SECONDS)
         connection.row_factory = sqlite3.Row
         connection.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
+        connection.execute("PRAGMA foreign_keys=ON")
         return connection
+
+    @staticmethod
+    def _create_messages_table(connection: sqlite3.Connection, table_name: str = "messages") -> None:
+        connection.execute(
+            f"""CREATE TABLE IF NOT EXISTS {table_name} (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
+            )"""
+        )
+
+    @staticmethod
+    def _ensure_message_foreign_key(connection: sqlite3.Connection) -> None:
+        foreign_keys = connection.execute("PRAGMA foreign_key_list(messages)").fetchall()
+        if foreign_keys:
+            return
+
+        orphan_count = int(
+            connection.execute(
+                """SELECT COUNT(*)
+                   FROM messages AS messages
+                   LEFT JOIN conversations AS conversations
+                     ON conversations.conversation_id = messages.conversation_id
+                  WHERE conversations.conversation_id IS NULL"""
+            ).fetchone()[0]
+        )
+        if orphan_count:
+            raise sqlite3.IntegrityError(
+                "cannot enable message foreign key with orphaned messages"
+            )
+
+        connection.execute("DROP INDEX IF EXISTS idx_messages_conversation_id_id")
+        ConversationStore._create_messages_table(connection, "messages_new")
+        connection.execute(
+            """INSERT INTO messages_new(id, conversation_id, role, content, created_at)
+               SELECT id, conversation_id, role, content, created_at
+                 FROM messages"""
+        )
+        connection.execute("DROP TABLE messages")
+        connection.execute("ALTER TABLE messages_new RENAME TO messages")
 
     def _initialize(self) -> None:
         with self._connect() as connection:
             connection.execute("PRAGMA journal_mode=WAL")
             connection.execute("PRAGMA synchronous=NORMAL")
-            connection.execute("""CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('user', 'assistant')), content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)""")
-            connection.execute("""CREATE TABLE IF NOT EXISTS conversations (conversation_id TEXT PRIMARY KEY, user_id TEXT, status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed')), created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, closed_at TEXT)""")
+            connection.execute(
+                """CREATE TABLE IF NOT EXISTS conversations (
+                    conversation_id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed')),
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    closed_at TEXT
+                )"""
+            )
             columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(conversations)").fetchall()}
             if "user_id" not in columns:
                 connection.execute("ALTER TABLE conversations ADD COLUMN user_id TEXT")
+
+            messages_exists = connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'"
+            ).fetchone()
+            if messages_exists is None:
+                self._create_messages_table(connection)
+            else:
+                self._ensure_message_foreign_key(connection)
+
             connection.execute("CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id ON messages(conversation_id, id)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_conversations_status_updated ON conversations(status, updated_at)")

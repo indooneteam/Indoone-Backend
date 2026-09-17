@@ -1,3 +1,4 @@
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,52 @@ def test_sqlite_uses_busy_timeout_and_wal_mode(tmp_path: Path) -> None:
 
     assert busy_timeout == 30_000
     assert journal_mode == "wal"
+
+
+def test_sqlite_enforces_message_foreign_key_and_cascade(tmp_path: Path) -> None:
+    store = ConversationStore(tmp_path / "conversations.sqlite3")
+    store.append("c1", [("user", "private")], user_id=OWNER)
+
+    with store._connect() as connection:
+        foreign_keys = connection.execute("PRAGMA foreign_key_list(messages)").fetchall()
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)",
+                ("missing", "user", "orphan"),
+            )
+        connection.execute("DELETE FROM conversations WHERE conversation_id=?", ("c1",))
+        remaining = int(
+            connection.execute("SELECT COUNT(*) FROM messages WHERE conversation_id=?", ("c1",)).fetchone()[0]
+        )
+
+    assert foreign_keys
+    assert remaining == 0
+
+
+def test_legacy_messages_schema_is_migrated_to_foreign_key(tmp_path: Path) -> None:
+    db = tmp_path / "conversations.sqlite3"
+    store = ConversationStore(db)
+    with store._connect() as connection:
+        connection.execute("DROP TABLE messages")
+        connection.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        connection.execute("INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)", ("c1", "user", "legacy"))
+
+    reopened = ConversationStore(db)
+    with reopened._connect() as connection:
+        assert connection.execute("PRAGMA foreign_key_list(messages)").fetchall()
+        assert connection.execute("SELECT content FROM messages WHERE conversation_id=?", ("c1",)).fetchone()[0] == "legacy"
+
+
+def test_legacy_orphaned_messages_block_migration(tmp_path: Path) -> None:
+    db = tmp_path / "conversations.sqlite3"
+    store = ConversationStore(db)
+    with store._connect() as connection:
+        connection.execute("DROP TABLE messages")
+        connection.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
+        connection.execute("INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)", ("missing", "user", "orphan"))
+
+    with pytest.raises(sqlite3.IntegrityError, match="orphaned messages"):
+        ConversationStore(db)
 
 
 def test_recent_history_is_bounded(tmp_path: Path) -> None:

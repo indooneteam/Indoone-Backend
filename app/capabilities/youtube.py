@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import base64
 import json
 import os
 from datetime import datetime, timedelta, timezone
@@ -34,7 +33,8 @@ def youtube_connect_capabilities(connect_mode: str = "channel") -> list[str]:
     return [
         "search videos, channels, and playlists",
         "get public video details and statistics",
-        "view the authenticated user's YouTube channel",
+        "view the authenticated user's YouTube channel dashboard",
+        "list the authenticated user's uploaded videos",
         "upload videos with explicit approval",
     ]
 
@@ -297,6 +297,104 @@ async def get_my_channel(user_id: str) -> dict[str, object]:
     if not isinstance(body, dict):
         raise RuntimeError("youtube returned an invalid channel response")
     return {"integration": "youtube", "channels": body.get("items") if isinstance(body.get("items"), list) else [], "secrets_exposed": False}
+
+
+async def list_my_videos(
+    user_id: str,
+    max_results: int = 20,
+    page_token: str = "",
+) -> dict[str, object]:
+    """List videos from the authenticated channel's uploads playlist."""
+    if not 1 <= max_results <= 50:
+        raise ValueError("max_results must be between 1 and 50")
+    channel_result = await get_my_channel(user_id)
+    channels = channel_result.get("channels")
+    if not isinstance(channels, list) or not channels:
+        return {
+            "integration": "youtube",
+            "videos": [],
+            "next_page_token": None,
+            "total_results": 0,
+            "secrets_exposed": False,
+        }
+    channel = channels[0] if isinstance(channels[0], dict) else {}
+    content_details = channel.get("contentDetails") if isinstance(channel, dict) else None
+    related_playlists = content_details.get("relatedPlaylists") if isinstance(content_details, dict) else None
+    uploads_playlist_id = related_playlists.get("uploads") if isinstance(related_playlists, dict) else None
+    if not isinstance(uploads_playlist_id, str) or not uploads_playlist_id:
+        raise RuntimeError("authenticated channel has no uploads playlist")
+
+    token = await _access_token(user_id)
+    params: dict[str, object] = {
+        "part": "snippet,contentDetails",
+        "playlistId": uploads_playlist_id,
+        "maxResults": max_results,
+    }
+    if page_token.strip():
+        params["pageToken"] = page_token.strip()
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(f"{_API_BASE}/playlistItems", headers=_auth_headers(token), params=params)
+        if response.status_code == 401:
+            token = await _refresh(user_id, _token_row(user_id))
+            response = await client.get(f"{_API_BASE}/playlistItems", headers=_auth_headers(token), params=params)
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict):
+        raise RuntimeError("youtube returned an invalid uploads response")
+
+    items = body.get("items") if isinstance(body.get("items"), list) else []
+    video_ids = [
+        str(item.get("contentDetails", {}).get("videoId"))
+        for item in items
+        if isinstance(item, dict) and isinstance(item.get("contentDetails"), dict) and item.get("contentDetails", {}).get("videoId")
+    ]
+    details = await get_videos(video_ids, user_id) if video_ids else {"videos": []}
+    details_by_id = {
+        str(video.get("id")): video
+        for video in details.get("videos", [])
+        if isinstance(video, dict) and video.get("id")
+    }
+    videos = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        video_id = str(item.get("contentDetails", {}).get("videoId", ""))
+        video = details_by_id.get(video_id, {})
+        videos.append({
+            "id": video_id,
+            "title": item.get("snippet", {}).get("title") if isinstance(item.get("snippet"), dict) else None,
+            "description": item.get("snippet", {}).get("description") if isinstance(item.get("snippet"), dict) else None,
+            "published_at": item.get("snippet", {}).get("publishedAt") if isinstance(item.get("snippet"), dict) else None,
+            "channel_title": item.get("snippet", {}).get("channelTitle") if isinstance(item.get("snippet"), dict) else None,
+            "video": video,
+        })
+    return {
+        "integration": "youtube",
+        "videos": videos,
+        "next_page_token": body.get("nextPageToken"),
+        "total_results": body.get("pageInfo", {}).get("totalResults", 0) if isinstance(body.get("pageInfo"), dict) else 0,
+        "secrets_exposed": False,
+    }
+
+
+async def get_channel_dashboard(
+    user_id: str,
+    max_results: int = 20,
+    page_token: str = "",
+) -> dict[str, object]:
+    """Return authenticated channel summary plus recent uploaded videos."""
+    channel_result = await get_my_channel(user_id)
+    videos_result = await list_my_videos(user_id, max_results=max_results, page_token=page_token)
+    channels = channel_result.get("channels")
+    channel = channels[0] if isinstance(channels, list) and channels else None
+    return {
+        "integration": "youtube",
+        "channel": channel,
+        "videos": videos_result.get("videos", []),
+        "next_page_token": videos_result.get("next_page_token"),
+        "total_results": videos_result.get("total_results", 0),
+        "secrets_exposed": False,
+    }
 
 
 async def upload_video(

@@ -111,7 +111,7 @@ def _manager_scope(user_id: str) -> str:
     if row is None:
         raise ValueError("integration is not connected for user")
     scope = str(row.get("scope") or "")
-    if _YOUTUBE_MANAGER_SCOPE not in scope:
+    if _YOUTUBE_MANAGER_SCOPE not in set(scope.split()):
         raise PermissionError("youtube video manager access is not connected; authorize channel manager access")
     return scope
 

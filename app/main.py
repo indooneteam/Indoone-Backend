@@ -24,6 +24,7 @@ from app.api.facebook import router as facebook_router
 from app.api.google_photos import router as google_photos_router
 from app.api.integrations import router as integrations_router
 from app.api.instagram import router as instagram_router
+from app.api.instagram_comments import router as instagram_comments_router
 from app.api.instagram_insights import router as instagram_insights_router
 from app.api.memory import router as memory_router
 from app.api.phone import router as phone_router
@@ -228,6 +229,7 @@ app.include_router(youtube_live_router, prefix="/api")
 app.include_router(youtube_advanced_router, prefix="/api")
 app.include_router(instagram_router, prefix="/api")
 app.include_router(instagram_insights_router, prefix="/api")
+app.include_router(instagram_comments_router, prefix="/api")
 app.include_router(facebook_router, prefix="/api")
 app.include_router(google_photos_router, prefix="/api")
 app.include_router(canva_router, prefix="/api")

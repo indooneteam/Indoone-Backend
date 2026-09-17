@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from threading import RLock
 from typing import Any
 
 from app.capabilities import store
 
 _DEFAULT_BUSY_TIMEOUT_MS = 5_000
 _OAUTH_STATE_MAX_AGE_SECONDS = 600
+_RUNTIME_LOCK = RLock()
 
 
 def _configured_busy_timeout_ms() -> int:
@@ -24,8 +26,11 @@ def _configured_busy_timeout_ms() -> int:
 
 def _consume_oauth_state_atomic(state: str, integration_id: str, max_age_seconds: int = _OAUTH_STATE_MAX_AGE_SECONDS) -> dict[str, str] | None:
     """Consume one OAuth state under a write lock so replay cannot race a parallel callback."""
+    max_age_seconds = max(0, int(max_age_seconds))
     with store._connect() as db:
         db.execute("BEGIN IMMEDIATE")
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)).isoformat()
+        db.execute("DELETE FROM oauth_states WHERE created_at < ?", (cutoff,))
         row = db.execute(
             "SELECT user_id, integration_id, redirect_uri, created_at FROM oauth_states WHERE state = ? AND integration_id = ?",
             (state, integration_id),
@@ -53,24 +58,35 @@ def _consume_oauth_state_atomic(state: str, integration_id: str, max_age_seconds
 
 
 def configure_sqlite_runtime() -> None:
-    """Apply safe SQLite connection pragmas to the capability-store runtime."""
-    original_connect: Callable[[], sqlite3.Connection] = store._connect
-    if not getattr(original_connect, "_indoone_hardened", False):
+    """Apply safe SQLite connection pragmas and concurrency guards to the capability-store runtime."""
+    with _RUNTIME_LOCK:
+        original_connect: Callable[[], sqlite3.Connection] = store._connect
+        if not getattr(original_connect, "_indoone_hardened", False):
 
-        def hardened_connect() -> sqlite3.Connection:
-            connection = original_connect()
-            connection.execute(f"PRAGMA busy_timeout={_configured_busy_timeout_ms()}")
-            connection.execute("PRAGMA foreign_keys=ON")
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute("PRAGMA synchronous=NORMAL")
-            return connection
+            def hardened_connect() -> sqlite3.Connection:
+                connection = original_connect()
+                connection.execute(f"PRAGMA busy_timeout={_configured_busy_timeout_ms()}")
+                connection.execute("PRAGMA foreign_keys=ON")
+                connection.execute("PRAGMA journal_mode=WAL")
+                connection.execute("PRAGMA synchronous=NORMAL")
+                return connection
 
-        setattr(hardened_connect, "_indoone_hardened", True)
-        store._connect = hardened_connect
+            setattr(hardened_connect, "_indoone_hardened", True)
+            store._connect = hardened_connect
 
-    if not getattr(store.consume_oauth_state, "_indoone_atomic", False):
-        setattr(_consume_oauth_state_atomic, "_indoone_atomic", True)
-        store.consume_oauth_state = _consume_oauth_state_atomic
+        original_initialize = store.initialize
+        if not getattr(original_initialize, "_indoone_hardened", False):
+
+            def hardened_initialize() -> None:
+                with _RUNTIME_LOCK:
+                    original_initialize()
+
+            setattr(hardened_initialize, "_indoone_hardened", True)
+            store.initialize = hardened_initialize
+
+        if not getattr(store.consume_oauth_state, "_indoone_atomic", False):
+            setattr(_consume_oauth_state_atomic, "_indoone_atomic", True)
+            store.consume_oauth_state = _consume_oauth_state_atomic
 
 
 def sqlite_runtime_status() -> dict[str, Any]:

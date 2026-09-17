@@ -39,6 +39,9 @@ logger = logging.getLogger("indoone.api")
 ai_service._detect_response_language = detect_response_language
 
 _DEFAULT_MAX_REQUEST_BYTES = 50 * 1024 * 1024
+_PROCESS_STARTED = time.monotonic()
+_REQUEST_COUNT = 0
+_STATUS_COUNTS: dict[str, int] = {}
 
 
 class RequestBodyTooLarge(Exception):
@@ -77,6 +80,10 @@ def _error_response_with_request_id(status_code: int, code: str, message: str, r
 
 
 def _log_request(request: Request, request_id: str, started: float, status_code: int) -> None:
+    global _REQUEST_COUNT
+    _REQUEST_COUNT += 1
+    status_key = str(status_code)
+    _STATUS_COUNTS[status_key] = _STATUS_COUNTS.get(status_key, 0) + 1
     logger.info(
         "request completed",
         extra={
@@ -229,4 +236,10 @@ async def ready() -> JSONResponse:
 
 @app.get("/health/details")
 async def health_details() -> dict[str, object]:
-    return {"status": "ok", "sqlite": sqlite_runtime_status()}
+    return {
+        "status": "ok",
+        "uptime_seconds": round(time.monotonic() - _PROCESS_STARTED, 2),
+        "requests_total": _REQUEST_COUNT,
+        "responses_by_status": dict(sorted(_STATUS_COUNTS.items())),
+        "sqlite": sqlite_runtime_status(),
+    }

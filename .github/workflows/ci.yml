@@ -29,7 +29,10 @@ jobs:
         run: python -m pip check
 
       - name: Compile Python sources
-        run: python -m compileall -q app tests
+        run: python -m compileall -q app tests scripts
 
       - name: Run tests
         run: python -m pytest -q
+
+      - name: Run production security smoke test
+        run: python scripts/security_smoke.py

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
@@ -8,7 +7,7 @@ from urllib.parse import urlencode
 import httpx
 
 from app.capabilities.store import consume_oauth_state, get_integration_token, upsert_integration_token
-from app.capabilities.youtube import _access_token, _auth_headers, _decrypt, _fernet, _refresh, get_videos
+from app.capabilities.youtube import _auth_headers, _fernet, get_videos
 
 _API_BASE = "https://www.googleapis.com/youtube/v3"
 _UPLOAD_THUMBNAIL_URL = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set"
@@ -117,9 +116,67 @@ def _manager_scope(user_id: str) -> str:
     return scope
 
 
+async def _manager_refresh(user_id: str, row: dict[str, object]) -> str:
+    refresh_raw = row.get("refresh_token")
+    if refresh_raw is None:
+        raise RuntimeError("youtube manager access token expired and no refresh token is stored")
+    try:
+        refresh_token = _fernet().decrypt(bytes(refresh_raw)).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("stored youtube manager refresh token cannot be decrypted") from exc
+    client_id = os.getenv("INDOONE_GOOGLE_CLIENT_ID", "").strip()
+    client_secret = os.getenv("INDOONE_GOOGLE_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        raise RuntimeError("google oauth client credentials are not configured")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            _TOKEN_URL,
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+            headers={"Accept": "application/json"},
+        )
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict):
+        raise RuntimeError("youtube manager oauth refresh returned an invalid response")
+    _store_manager_token(user_id, body, fallback_refresh=refresh_token)
+    refreshed = get_integration_token(user_id.strip(), "youtube")
+    if refreshed is None:
+        raise RuntimeError("refreshed youtube manager token could not be loaded")
+    raw = refreshed.get("access_token")
+    if raw is None:
+        raise RuntimeError("refreshed youtube manager access token is empty")
+    try:
+        return _fernet().decrypt(bytes(raw)).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("refreshed youtube manager access token cannot be decrypted") from exc
+
+
 async def _manager_token(user_id: str) -> str:
     _manager_scope(user_id)
-    return await _access_token(user_id)
+    row = get_integration_token(user_id.strip(), "youtube")
+    if row is None:
+        raise ValueError("integration is not connected for user")
+    raw = row.get("access_token")
+    if raw is None:
+        raise RuntimeError("stored youtube manager access token is empty")
+    try:
+        token = _fernet().decrypt(bytes(raw)).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("stored youtube manager access token cannot be decrypted") from exc
+    expires_at = row.get("expires_at")
+    if isinstance(expires_at, str) and expires_at:
+        try:
+            expiry = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            if expiry <= datetime.now(timezone.utc) + timedelta(seconds=30):
+                return await _manager_refresh(user_id, row)
+        except ValueError:
+            pass
+    return token
 
 
 def build_video_update_payload(
@@ -138,7 +195,6 @@ def build_video_update_payload(
         raise ValueError("at least one video field must be provided")
 
     snippet = current_video.get("snippet") if isinstance(current_video.get("snippet"), dict) else {}
-    status = current_video.get("status") if isinstance(current_video.get("status"), dict) else {}
     snippet_update_requested = any(value is not None for value in (title, description, category_id, tags))
     status_update_requested = privacy_status is not None
 
@@ -190,7 +246,6 @@ async def update_video(
     video_id = video_id.strip()
     if not video_id:
         raise ValueError("video_id is required")
-    await _manager_token(user_id)
     existing = await get_videos([video_id], user_id)
     videos = existing.get("videos") if isinstance(existing.get("videos"), list) else []
     if not videos:
@@ -213,7 +268,8 @@ async def update_video(
             json=payload,
         )
         if response.status_code == 401:
-            token = await _refresh(user_id, get_integration_token(user_id.strip(), "youtube") or {})
+            row = get_integration_token(user_id.strip(), "youtube") or {}
+            token = await _manager_refresh(user_id, row)
             response = await client.put(
                 f"{_API_BASE}/videos",
                 params=params,
@@ -250,7 +306,8 @@ async def delete_video(user_id: str, video_id: str, *, approved: bool = False) -
             headers=_auth_headers(token),
         )
         if response.status_code == 401:
-            token = await _refresh(user_id, get_integration_token(user_id.strip(), "youtube") or {})
+            row = get_integration_token(user_id.strip(), "youtube") or {}
+            token = await _manager_refresh(user_id, row)
             response = await client.delete(
                 f"{_API_BASE}/videos",
                 params={"id": video_id},
@@ -300,7 +357,8 @@ async def set_video_thumbnail(
             content=content,
         )
         if response.status_code == 401:
-            token = await _refresh(user_id, get_integration_token(user_id.strip(), "youtube") or {})
+            row = get_integration_token(user_id.strip(), "youtube") or {}
+            token = await _manager_refresh(user_id, row)
             headers["Authorization"] = f"Bearer {token}"
             response = await client.post(
                 _UPLOAD_THUMBNAIL_URL,

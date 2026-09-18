@@ -1,4 +1,4 @@
-name: Indoone Auto AI Training
+name: Indoone AI Training Readiness
 
 on:
   push:
@@ -15,6 +15,12 @@ on:
       - "training_manifest.json"
       - ".github/workflows/auto-ai-training.yml"
   workflow_dispatch:
+    inputs:
+      run_hosted_training:
+        description: "Run the slow GitHub-hosted CPU training path (Colab GPU is the normal training path)."
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -63,7 +69,7 @@ jobs:
   train_and_promote:
     name: Train, gate, and publish model
     needs: prepare
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.run_hosted_training == true && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 720
     steps:
@@ -91,15 +97,10 @@ jobs:
           print(f"cuda_available={torch.cuda.is_available()}")
           if torch.cuda.is_available():
               print("Using full GPU training budget.")
-              print("INDOONE_TRAIN_STEPS=2000")
-              print("INDOONE_TRAIN_BATCH_SIZE=16")
-              print("INDOONE_TRAIN_CHECKPOINT_INTERVAL=500")
           else:
-              print("Using bounded CPU training budget so hosted training completes in a practical time.")
-              print("INDOONE_TRAIN_STEPS=300")
-              print("INDOONE_TRAIN_BATCH_SIZE=2")
-              print("INDOONE_TRAIN_CHECKPOINT_INTERVAL=100")
+              print("Using bounded CPU training budget; Colab GPU remains the preferred path.")
           PY
+
           if python -c 'import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)'; then
             {
               echo 'INDOONE_TRAIN_STEPS=2000'
@@ -116,7 +117,7 @@ jobs:
 
       - name: Train candidate and run base evaluation
         env:
-          INDOONE_TRAINING_TRIGGER: "automatic"
+          INDOONE_TRAINING_TRIGGER: "manual-hosted"
           INDOONE_GIT_SHA: ${{ github.sha }}
           INDOONE_ALLOW_CPU_TRAINING: "true"
         run: |
@@ -167,6 +168,18 @@ jobs:
             data/processed/
             models/registry.json
           if-no-files-found: error
+
+  colab_note:
+    name: Colab GPU training path
+    needs: prepare
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Explain training path
+        run: |
+          echo "Hosted GitHub CPU training is disabled for automatic pushes."
+          echo "Run colab/Indoone_AI_Training_GPU.ipynb on a Colab GPU for the actual training."
+          echo "The notebook runs training, behavioral gating, response-diversity testing, promotion, and optional B2 upload."
 
   note:
     name: Explain blocked automatic training

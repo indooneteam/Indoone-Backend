@@ -118,6 +118,7 @@ def train(
     instruction_path: Path | None = None,
     multilingual_instruction_path: Path | None = None,
     capability_instruction_path: Path | None = None,
+    instruction_mix_ratio: float = 0.7,
 ) -> float:
     if steps <= 0:
         raise ValueError("steps must be greater than zero")
@@ -127,6 +128,8 @@ def train(
         raise ValueError("checkpoint_interval must be greater than zero")
     if learning_rate <= 0:
         raise ValueError("learning_rate must be greater than zero")
+    if not 0.0 <= instruction_mix_ratio <= 1.0:
+        raise ValueError("instruction_mix_ratio must be between 0 and 1")
 
     random.seed(seed)
     torch.manual_seed(seed)
@@ -160,6 +163,13 @@ def train(
         tokenizer.encode(train_text, add_special_tokens=True),
         dtype=torch.long,
     )
+    instruction_encoded: torch.Tensor | None = None
+    if instruction_enabled:
+        instruction_text = (output_dir / "instruction_corpus.txt").read_text(encoding="utf-8")
+        instruction_encoded = torch.tensor(
+            tokenizer.encode(instruction_text, add_special_tokens=True),
+            dtype=torch.long,
+        )
     if len(train_encoded) < 4:
         raise ValueError("training corpus is too small after tokenization")
 
@@ -187,6 +197,8 @@ def train(
 
     train_generator = torch.Generator()
     train_generator.manual_seed(seed)
+    instruction_generator = torch.Generator()
+    instruction_generator.manual_seed(seed + 1)
     history: list[dict[str, float | int | None]] = []
     last_loss = float("inf")
     best_validation_loss = float("inf")
@@ -195,7 +207,20 @@ def train(
 
     model.train()
     for step in range(1, steps + 1):
-        x, y = batchify(train_encoded, block_size, batch_size, device, train_generator)
+        use_instruction_batch = (
+            instruction_encoded is not None
+            and torch.rand((), generator=train_generator).item() < instruction_mix_ratio
+        )
+        if use_instruction_batch:
+            x, y = batchify(
+                instruction_encoded,
+                block_size,
+                batch_size,
+                device,
+                instruction_generator,
+            )
+        else:
+            x, y = batchify(train_encoded, block_size, batch_size, device, train_generator)
         _, loss = model(x, y)
         assert loss is not None
         optimizer.zero_grad(set_to_none=True)
@@ -286,6 +311,8 @@ def train(
                 ),
                 "instruction_data_enabled": instruction_enabled,
                 "instruction_example_count": instruction_example_count,
+                "instruction_mix_ratio": instruction_mix_ratio,
+                "instruction_token_count": int(instruction_encoded.numel()) if instruction_encoded is not None else 0,
                 "instruction_fingerprints": instruction_fingerprints,
                 "source_fingerprint": _file_fingerprint(corpus_path),
                 "validation_fingerprint": validation_fingerprint,
@@ -312,6 +339,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--checkpoint-interval", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument("--instruction-mix-ratio", type=float, default=0.7)
     args = parser.parse_args()
     loss = train(
         args.corpus,
@@ -325,6 +353,7 @@ def main() -> None:
         args.instructions,
         args.multilingual_instructions,
         args.capability_instructions,
+        args.instruction_mix_ratio,
     )
     print(f"training complete; final loss={loss:.4f}")
 

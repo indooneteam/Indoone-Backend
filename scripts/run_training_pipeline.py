@@ -21,6 +21,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--checkpoint-interval", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument("--instruction-mix-ratio", type=float, default=0.7)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--skip-upload", action="store_true")
     parser.add_argument("--skip-eval", action="store_true")
@@ -28,6 +29,8 @@ def main() -> None:
 
     if args.steps <= 0:
         raise SystemExit("--steps must be positive")
+    if not 0.0 <= args.instruction_mix_ratio <= 1.0:
+        raise SystemExit("--instruction-mix-ratio must be between 0 and 1")
 
     python = sys.executable
     eval_prompts = Path("data/evaluation/behavior_prompts.jsonl")
@@ -110,6 +113,8 @@ def main() -> None:
             str(args.checkpoint_interval),
             "--learning-rate",
             str(args.learning_rate),
+            "--instruction-mix-ratio",
+            str(args.instruction_mix_ratio),
             "--seed",
             str(args.seed),
         ]

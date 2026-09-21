@@ -64,4 +64,5 @@ def test_write_corpus_is_deterministic(tmp_path: Path) -> None:
     assert output.read_text(encoding="utf-8") == (
         "<instruction>\nQuestion\n</instruction>\n"
         "<response>\nAnswer\n</response>\n"
+        "<eos>\n"
     )

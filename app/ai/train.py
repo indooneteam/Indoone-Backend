@@ -170,6 +170,10 @@ def train(
             tokenizer.encode(instruction_text, add_special_tokens=True),
             dtype=torch.long,
         )
+        if len(instruction_encoded) <= 3:
+            raise ValueError(
+                "instruction corpus is too small after tokenization; add more instruction examples"
+            )
     if len(train_encoded) < 4:
         raise ValueError("training corpus is too small after tokenization")
 
@@ -212,9 +216,10 @@ def train(
             and torch.rand((), generator=train_generator).item() < instruction_mix_ratio
         )
         if use_instruction_batch:
+            instruction_block_size = min(block_size, len(instruction_encoded) - 2)
             x, y = batchify(
                 instruction_encoded,
-                block_size,
+                instruction_block_size,
                 batch_size,
                 device,
                 instruction_generator,

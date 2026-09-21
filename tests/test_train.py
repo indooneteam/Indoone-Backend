@@ -3,7 +3,28 @@ from pathlib import Path
 import json
 import torch
 
+from app.ai.tokenizer import BPETokenizer
 from app.ai.train import train
+
+
+def test_bpe_tokenizer_round_trip(tmp_path: Path) -> None:
+    text = "Namaskara! Hello. Kannada: ನಮಸ್ಕಾರ. Hindi: नमस्ते."
+    tokenizer = BPETokenizer.train(text, vocab_size=128, min_frequency=1)
+
+    encoded = tokenizer.encode(text, add_special_tokens=True)
+    decoded = tokenizer.decode(encoded)
+
+    assert tokenizer.vocab_size <= 128
+    assert tokenizer.stoi["<bos>"] in encoded
+    assert tokenizer.stoi["<eos>"] in encoded
+    assert decoded == text
+
+    path = tmp_path / "tokenizer.json"
+    tokenizer.save(path)
+    loaded = BPETokenizer.load(path)
+
+    assert loaded.decode(encoded) == text
+    assert loaded.stoi["<bos>"] == tokenizer.stoi["<bos>"]
 
 
 def test_train_writes_checkpoint_and_history(tmp_path: Path) -> None:

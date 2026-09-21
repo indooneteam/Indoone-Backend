@@ -30,7 +30,6 @@ _CURRENT_MARKERS = (
     "current",
     "currently",
     "recent",
-    "right now",
     "this week",
     "news",
 )

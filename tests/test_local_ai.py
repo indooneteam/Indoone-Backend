@@ -30,6 +30,24 @@ def test_bpe_special_tokens_round_trip() -> None:
     assert tokenizer.decode(ids) == "Hello"
 
 
+def test_instruction_prompt_uses_training_format(tmp_path) -> None:
+    corpus = ("<instruction>\nSay hello\n</instruction>\n<response>\nHello from Indoone\n</response>" * 4)
+    tokenizer = BPETokenizer.train(corpus, vocab_size=64, min_frequency=1)
+    runtime = object.__new__(LocalModelRuntime)
+    runtime.tokenizer = tokenizer
+
+    prompt_ids = runtime._prompt_ids("Say hello")
+    rendered = tokenizer.decode(prompt_ids)
+    assert rendered.endswith("<instruction>\nSay hello\n</instruction>\n<response>\n")
+
+
+def test_clean_completion_strips_training_markers() -> None:
+    cleaned = LocalModelRuntime._clean_completion(
+        "Hello from Indoone</response>\n\n<instruction>Next task"
+    )
+    assert cleaned == "Hello from Indoone"
+
+
 def test_transformer_forward_shapes_and_config() -> None:
     model = IndooneTransformer(
         vocab_size=32,

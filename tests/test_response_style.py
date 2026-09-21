@@ -55,3 +55,13 @@ def test_no_markdown_constraint_rejects_markdown() -> None:
     )
     assert result.passed is False
     assert result.reason == "style_markdown_not_allowed"
+
+
+def test_exactly_three_steps_accepts_first_second_third_prose() -> None:
+    result = assess_response_style(
+        "Give me exactly three simple steps.",
+        "First, plan. Second, execute. Third, review.",
+        profile="exactly_three_steps",
+    )
+    assert result.passed is True
+    assert "exactly_three_items" in result.checks

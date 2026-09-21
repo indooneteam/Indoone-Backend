@@ -135,6 +135,21 @@ def main() -> None:
         if eval_prompts.is_file():
             command.extend(["--prompts", str(eval_prompts)])
         run(command)
+        run(
+            [
+                python,
+                "-m",
+                "app.ai.evaluate",
+                "--checkpoint",
+                "models/indoone-small/indoone-small.pt",
+                "--tokenizer",
+                "models/indoone-small/tokenizer.json",
+                "--corpus",
+                "data/processed/test.txt",
+                "--output",
+                "models/indoone-small/evaluation_report.json",
+            ]
+        )
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import torch
 
+from app.ai.inference import LocalModelRuntime
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 
@@ -26,6 +27,7 @@ class LocalAIEngine:
         self.tokenizer_path = tokenizer_path
         self.model: IndooneTransformer | None = None
         self.tokenizer: BPETokenizer | None = None
+        self._runtime: LocalModelRuntime | None = None
         self._load_error: str | None = None
         self._load()
 
@@ -39,23 +41,11 @@ class LocalAIEngine:
             return
 
         try:
-            payload = torch.load(
-                self.checkpoint,
-                map_location="cpu",
-                weights_only=False,
-            )
-            self.tokenizer = BPETokenizer.load(self.tokenizer_path)
-
-            raw_config = dict(payload["config"])
-            raw_config.pop("model_version", None)
-
-            self.model = IndooneTransformer(
-                vocab_size=self.tokenizer.vocab_size,
-                **raw_config,
-            )
-            self.model.load_state_dict(payload["model_state"])
-            self.model.eval()
+            self._runtime = LocalModelRuntime(self.checkpoint, self.tokenizer_path)
+            self.model = self._runtime.model
+            self.tokenizer = self._runtime.tokenizer
         except Exception as exc:
+            self._runtime = None
             self._load_error = f"failed to load Indoone model: {exc}"
 
     @property
@@ -82,9 +72,24 @@ class LocalAIEngine:
         return int(torch.multinomial(probabilities, num_samples=1).item())
 
     def _prompt_ids(self, prompt: str) -> list[int]:
-        """Encode a prompt with BOS and leave EOS for generated output."""
+        """Encode a raw prompt using the shared inference prompt contract."""
 
-        token_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
+        if self._runtime is not None:
+            return self._runtime._prompt_ids(prompt)
+        if self.tokenizer is None:
+            raise RuntimeError(self._load_error or "Indoone local model is unavailable")
+        stripped_prompt = prompt.strip()
+        formatted_prompt = (
+            stripped_prompt
+            if stripped_prompt.startswith("<instruction>") and stripped_prompt.endswith("<response>")
+            else (
+                "<instruction>\n"
+                f"{stripped_prompt}\n"
+                "</instruction>\n"
+                "<response>\n"
+            )
+        )
+        token_ids = self.tokenizer.encode(formatted_prompt, add_special_tokens=False)
         return [self.tokenizer.stoi["<bos>"]] + token_ids
 
     @torch.inference_mode()
@@ -101,31 +106,10 @@ class LocalAIEngine:
                 self._load_error or "Indoone local model is unavailable"
             )
 
-        assert self.model is not None
-        assert self.tokenizer is not None
-
-        prompt = message.strip()
-        if not prompt:
-            raise ValueError("message cannot be empty")
-        if max_new_tokens < 0:
-            raise ValueError("max_new_tokens must not be negative")
-        if temperature < 0:
-            raise ValueError("temperature must be non-negative")
-
-        prompt_ids = self._prompt_ids(prompt)
-        generated_ids = list(prompt_ids)
-        eos_id = self.tokenizer.stoi["<eos>"]
-
-        for _ in range(max_new_tokens):
-            context_ids = generated_ids[-self.model.block_size :]
-            context = torch.tensor([context_ids], dtype=torch.long)
-            logits, _ = self.model(context)
-            next_logits = logits[:, -1, :]
-            next_id = self._select_next_token(next_logits, temperature)
-
-            generated_ids.append(next_id)
-            if next_id == eos_id:
-                break
-
-        completion_ids = generated_ids[len(prompt_ids) :]
-        return self.tokenizer.decode(completion_ids).strip()
+        if self._runtime is None:
+            raise RuntimeError(self._load_error or "Indoone local model is unavailable")
+        return self._runtime.generate(
+            message,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+        )

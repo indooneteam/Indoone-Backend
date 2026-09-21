@@ -18,6 +18,9 @@ def _load_evaluation(report_path: Path) -> tuple[dict[str, object], float, float
         raise ValueError("evaluation report must contain a JSON object")
 
     evaluation = report.get("evaluation")
+    if evaluation is None:
+        # app.ai.evaluate writes the metrics object directly.
+        evaluation = report
     if not isinstance(evaluation, dict):
         raise ValueError("evaluation report is missing the evaluation object")
 

@@ -82,10 +82,28 @@ class LocalModelRuntime:
         return logits
 
     def _prompt_ids(self, prompt: str) -> list[int]:
-        """Encode a prompt with BOS but without a trailing EOS token."""
+        """Render a user request in the same instruction format used for training."""
 
-        token_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
+        formatted_prompt = (
+            "<instruction>\n"
+            f"{prompt.strip()}\n"
+            "</instruction>\n"
+            "<response>\n"
+        )
+        token_ids = self.tokenizer.encode(formatted_prompt, add_special_tokens=False)
         return [self.tokenizer.stoi["<bos>"]] + token_ids
+
+    @staticmethod
+    def _clean_completion(text: str) -> str:
+        """Keep only the assistant response and strip leaked training markers."""
+
+        cleaned = text.strip()
+        for marker in ("</response>", "<instruction>", "\n<instruction>", "USER:", "\nUSER:"):
+            if marker in cleaned:
+                cleaned = cleaned.split(marker, 1)[0].strip()
+        if cleaned.startswith("<response>"):
+            cleaned = cleaned[len("<response>") :].strip()
+        return cleaned
 
     @torch.inference_mode()
     def generate(
@@ -136,4 +154,4 @@ class LocalModelRuntime:
                 break
 
         completion_ids = generated_ids[len(prompt_ids) :]
-        return self.tokenizer.decode(completion_ids).strip()
+        return self._clean_completion(self.tokenizer.decode(completion_ids))

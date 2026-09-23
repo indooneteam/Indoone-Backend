@@ -25,6 +25,12 @@ DEFAULT_MODEL_CONFIG = {
 DEFAULT_VOCAB_SIZE = 8192
 DEFAULT_MIN_FREQUENCY = 2
 
+DEFAULT_TRAINING_STEPS = 8000
+DEFAULT_BATCH_SIZE = 16
+DEFAULT_CHECKPOINT_INTERVAL = 500
+DEFAULT_LEARNING_RATE = 1e-4
+DEFAULT_INSTRUCTION_MIX_RATIO = 0.8
+
 
 def _file_fingerprint(path: Path) -> str:
     digest = hashlib.sha256()
@@ -303,14 +309,14 @@ def train(
     steps: int,
     seed: int,
     validation_path: Path | None = None,
-    batch_size: int = 8,
-    checkpoint_interval: int = 500,
-    learning_rate: float = 1e-4,
+    batch_size: int = DEFAULT_BATCH_SIZE,
+    checkpoint_interval: int = DEFAULT_CHECKPOINT_INTERVAL,
+    learning_rate: float = DEFAULT_LEARNING_RATE,
     instruction_path: Path | None = None,
     multilingual_instruction_path: Path | None = None,
     capability_instruction_path: Path | None = None,
     instruction_validation_path: Path | None = None,
-    instruction_mix_ratio: float = 0.8,
+    instruction_mix_ratio: float = DEFAULT_INSTRUCTION_MIX_RATIO,
 ) -> float:
     if steps <= 0:
         raise ValueError("steps must be greater than zero")
@@ -577,12 +583,12 @@ def main() -> None:
     parser.add_argument("--capability-instructions", type=Path, default=Path("data/raw/indoone_phone_contacts_examples.jsonl"))
     parser.add_argument("--instruction-validation", type=Path, default=Path("data/processed/instructions_validation.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
-    parser.add_argument("--steps", type=int, default=10000)
+    parser.add_argument("--steps", type=int, default=DEFAULT_TRAINING_STEPS)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--batch-size", type=int, default=8)
-    parser.add_argument("--checkpoint-interval", type=int, default=500)
-    parser.add_argument("--learning-rate", type=float, default=1e-4)
-    parser.add_argument("--instruction-mix-ratio", type=float, default=0.8)
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    parser.add_argument("--checkpoint-interval", type=int, default=DEFAULT_CHECKPOINT_INTERVAL)
+    parser.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)
+    parser.add_argument("--instruction-mix-ratio", type=float, default=DEFAULT_INSTRUCTION_MIX_RATIO)
     args = parser.parse_args()
     loss = train(
         args.corpus,

@@ -381,7 +381,7 @@ def _load_or_train_tokenizer(
     )
     output_dir.mkdir(parents=True, exist_ok=True)
     tokenizer.save(tokenizer_path)
-    fingerprint_path.write_text(source_fingerprint + "\\n", encoding="utf-8")
+    fingerprint_path.write_text(source_fingerprint + "\n", encoding="utf-8")
     print(f"tokenizer cache: trained in {time.monotonic() - started:.1f}s", flush=True)
     return tokenizer
 

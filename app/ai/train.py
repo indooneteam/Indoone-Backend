@@ -152,12 +152,7 @@ def _prepare_instruction_examples(
     eos_id = tokenizer.stoi["<eos>"]
     prepared: list[tuple[list[int], list[int]]] = []
     for example in examples:
-        prefix = (
-            "<instruction>\\n"
-            f"{example.instruction.strip()}\\n"
-            "</instruction>\\n"
-            "<response>\\n"
-        )
+        prefix = format_instruction_prompt(example.instruction)
         prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
         response_ids = tokenizer.encode(example.response, add_special_tokens=False)
         max_response_tokens = block_size - len(prefix_ids) - 1

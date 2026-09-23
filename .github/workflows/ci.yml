@@ -36,3 +36,11 @@ jobs:
 
       - name: Run production security smoke test
         run: python scripts/security_smoke.py
+      - name: Prepare and validate final training recipe
+        run: |
+          python scripts/build_multilingual_training_pack.py
+          python scripts/prepare_dataset.py             --source data/raw/indoone_corpus.txt             --output-dir data/processed
+          python scripts/assemble_training_dataset.py             --source data/raw/indoone_instructions.jsonl             --source data/raw/core_instruction_seed.jsonl             --source data/raw/indoone_multilingual_examples.jsonl             --output data/processed/curated_instructions.jsonl             --validation-output data/processed/instructions_validation.jsonl
+          python scripts/validate_dataset_quality.py             --source data/processed/curated_instructions.jsonl             --source data/processed/instructions_validation.jsonl             --source data/processed/generated_multilingual_examples.jsonl             --source data/raw/indoone_phone_contacts_examples.jsonl
+          python scripts/validate_training_manifest.py
+          python scripts/validate_final_training_recipe.py

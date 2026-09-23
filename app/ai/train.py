@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import random
+import time
 from pathlib import Path
 
 import torch
@@ -140,6 +141,39 @@ def batchify(
     return x, y
 
 
+def _prepare_instruction_examples(
+    examples: list[TrainingExample],
+    tokenizer: BPETokenizer,
+    block_size: int,
+) -> list[tuple[list[int], list[int]]]:
+    """Pre-tokenize instruction sequences so training does not repeat CPU tokenization."""
+
+    bos_id = tokenizer.stoi["<bos>"]
+    eos_id = tokenizer.stoi["<eos>"]
+    prepared: list[tuple[list[int], list[int]]] = []
+    for example in examples:
+        prefix = (
+            "<instruction>\\n"
+            f"{example.instruction.strip()}\\n"
+            "</instruction>\\n"
+            "<response>\\n"
+        )
+        prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
+        response_ids = tokenizer.encode(example.response, add_special_tokens=False)
+        max_response_tokens = block_size - len(prefix_ids) - 1
+        if max_response_tokens < 1:
+            raise ValueError("instruction example exceeds the configured block size")
+        if len(response_ids) >= max_response_tokens:
+            response_ids = response_ids[: max_response_tokens - 1]
+
+        sequence = [bos_id] + prefix_ids + response_ids + [eos_id]
+        inputs = sequence[:-1]
+        targets = sequence[1:]
+        targets[: len(prefix_ids)] = [-100] * len(prefix_ids)
+        prepared.append((inputs, targets))
+    return prepared
+
+
 def _instruction_batchify(
     examples: list[TrainingExample],
     tokenizer: BPETokenizer,
@@ -149,6 +183,7 @@ def _instruction_batchify(
     generator: torch.Generator,
     sampling_weights: list[float] | None = None,
     example_indices: list[int] | None = None,
+    prepared_examples: list[tuple[list[int], list[int]]] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Build supervised instruction batches with loss only on response tokens."""
 
@@ -162,6 +197,8 @@ def _instruction_batchify(
     bos_id = tokenizer.stoi["<bos>"]
     eos_id = tokenizer.stoi["<eos>"]
     pad_id = tokenizer.stoi["<pad>"]
+    if prepared_examples is not None and len(prepared_examples) != len(examples):
+        raise ValueError("prepared_examples must match the instruction example count")
 
     batch_inputs: list[list[int]] = []
     batch_targets: list[list[int]] = []
@@ -193,29 +230,32 @@ def _instruction_batchify(
             generator=generator,
         )
     for index in sample_indices.tolist():
-        example = examples[index]
-        prefix = (
-            "<instruction>\n"
-            f"{example.instruction.strip()}\n"
-            "</instruction>\n"
-            "<response>\n"
-        )
-        prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
-        response_ids = tokenizer.encode(example.response, add_special_tokens=False)
+        if prepared_examples is not None:
+            inputs, targets = prepared_examples[index]
+        else:
+            example = examples[index]
+            prefix = (
+                "<instruction>\\n"
+                f"{example.instruction.strip()}\\n"
+                "</instruction>\\n"
+                "<response>\\n"
+            )
+            prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
+            response_ids = tokenizer.encode(example.response, add_special_tokens=False)
 
-        # Leave room for BOS and EOS while keeping the input length <= block_size.
-        max_response_tokens = block_size - len(prefix_ids) - 1
-        if max_response_tokens < 1:
-            raise ValueError("instruction example exceeds the configured block size")
-        if len(response_ids) >= max_response_tokens:
-            response_ids = response_ids[: max_response_tokens - 1]
+            # Leave room for BOS and EOS while keeping the input length <= block_size.
+            max_response_tokens = block_size - len(prefix_ids) - 1
+            if max_response_tokens < 1:
+                raise ValueError("instruction example exceeds the configured block size")
+            if len(response_ids) >= max_response_tokens:
+                response_ids = response_ids[: max_response_tokens - 1]
 
-        sequence = [bos_id] + prefix_ids + response_ids + [eos_id]
-        inputs = sequence[:-1]
-        targets = sequence[1:]
+            sequence = [bos_id] + prefix_ids + response_ids + [eos_id]
+            inputs = sequence[:-1]
+            targets = sequence[1:]
 
-        # Only response tokens (plus EOS) should contribute to the SFT loss.
-        targets[: len(prefix_ids)] = [-100] * len(prefix_ids)
+            # Only response tokens (plus EOS) should contribute to the SFT loss.
+            targets[: len(prefix_ids)] = [-100] * len(prefix_ids)
 
         batch_inputs.append(inputs)
         batch_targets.append(targets)
@@ -394,6 +434,12 @@ def train(
     if len(train_encoded) <= block_size + 1:
         raise ValueError("training corpus is too small for the selected block size")
 
+    prepared_instruction_examples = (
+        _prepare_instruction_examples(instruction_examples, tokenizer, block_size)
+        if instruction_examples
+        else None
+    )
+
     validation_encoded: torch.Tensor | None = None
     validation_fingerprint = None
     instruction_validation_examples: list[TrainingExample] = []
@@ -429,6 +475,7 @@ def train(
     best_model_state: dict[str, torch.Tensor] | None = None
 
     model.train()
+    training_started = time.monotonic()
     for step in range(1, steps + 1):
         use_instruction_batch = (
             bool(instruction_examples)
@@ -443,6 +490,7 @@ def train(
                 device,
                 instruction_generator,
                 instruction_sampling_weights,
+                prepared_examples=prepared_instruction_examples,
             )
         else:
             x, y = batchify(train_encoded, block_size, batch_size, device, train_generator)
@@ -453,6 +501,14 @@ def train(
         nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
         last_loss = float(loss.detach().cpu())
+        if step == 1 or step % 100 == 0 or step == steps:
+            elapsed = time.monotonic() - training_started
+            steps_per_second = step / elapsed if elapsed > 0 else 0.0
+            print(
+                f"training progress: step {step}/{steps}; loss={last_loss:.4f}; "
+                f"speed={steps_per_second:.2f} steps/s",
+                flush=True,
+            )
 
         if step == 1 or step % checkpoint_interval == 0 or step == steps:
             validation_loss = (

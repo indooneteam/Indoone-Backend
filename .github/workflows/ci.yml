@@ -34,6 +34,20 @@ jobs:
       - name: Validate Colab notebook JSON
         run: python -m json.tool colab/Indoone_AI_Training_GPU.ipynb >/dev/null
 
+      - name: Validate Colab notebook Python cells
+        run: |
+          python - <<'PY'
+          import ast
+          import json
+          from pathlib import Path
+
+          notebook = json.loads(Path("colab/Indoone_AI_Training_GPU.ipynb").read_text(encoding="utf-8"))
+          for index, cell in enumerate(notebook.get("cells", [])):
+              if cell.get("cell_type") == "code":
+                  ast.parse("".join(cell.get("source", [])), filename=f"colab-cell-{index}")
+          print("colab_notebook_python=valid")
+          PY
+
       - name: Run tests
         run: python -m pytest -q -W error
 

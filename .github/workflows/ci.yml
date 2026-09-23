@@ -31,8 +31,11 @@ jobs:
       - name: Compile Python sources
         run: python -m compileall -q app tests scripts
 
+      - name: Validate Colab notebook JSON
+        run: python -m json.tool colab/Indoone_AI_Training_GPU.ipynb >/dev/null
+
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q -W error
 
       - name: Run production security smoke test
         run: python scripts/security_smoke.py

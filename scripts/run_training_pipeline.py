@@ -16,6 +16,7 @@ from app.ai.train import (
     DEFAULT_TRAINING_STEPS,
 )
 
+
 def run(command: list[str]) -> None:
     print("$", " ".join(command), flush=True)
     subprocess.run(command, check=True)

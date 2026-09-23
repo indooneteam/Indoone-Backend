@@ -88,7 +88,7 @@ def _merge_instruction_sets_weighted(
             continue
 
         if "generated_multilingual_examples.jsonl" in path.name:
-            target = 0.25
+            target = 0.05
         elif "phone_contacts_examples.jsonl" in path.name:
             target = 0.05
         else:

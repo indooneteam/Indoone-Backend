@@ -4,7 +4,7 @@ import json
 import torch
 
 from app.ai.tokenizer import BPETokenizer
-from app.ai.train import train
+from app.ai.train import _instruction_batchify, _prepare_instruction_examples, train
 
 
 def test_bpe_tokenizer_round_trip(tmp_path: Path) -> None:
@@ -25,6 +25,38 @@ def test_bpe_tokenizer_round_trip(tmp_path: Path) -> None:
 
     assert loaded.decode(encoded) == text
     assert loaded.stoi["<bos>"] == tokenizer.stoi["<bos>"]
+
+
+
+def test_prepared_instruction_batches_match_on_demand_tokenization() -> None:
+    examples = [
+        type("Example", (), {"instruction": "Hello", "response": "Hi", "category": "general"})(),
+        type("Example", (), {"instruction": "What is 2+2?", "response": "4", "category": "math"})(),
+    ]
+    text = "Hello Hi What is 2+2? 4"
+    tokenizer = BPETokenizer.train(text, vocab_size=64, min_frequency=1)
+    uncached = _instruction_batchify(
+        examples,
+        tokenizer,
+        block_size=128,
+        batch_size=2,
+        device="cpu",
+        generator=torch.Generator().manual_seed(7),
+        example_indices=[0, 1],
+    )
+    prepared = _prepare_instruction_examples(examples, tokenizer, block_size=128)
+    cached = _instruction_batchify(
+        examples,
+        tokenizer,
+        block_size=128,
+        batch_size=2,
+        device="cpu",
+        generator=torch.Generator().manual_seed(7),
+        example_indices=[0, 1],
+        prepared_examples=prepared,
+    )
+    assert torch.equal(uncached[0], cached[0])
+    assert torch.equal(uncached[1], cached[1])
 
 
 def test_train_writes_checkpoint_and_history(tmp_path: Path) -> None:

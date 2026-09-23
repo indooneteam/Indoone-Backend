@@ -121,6 +121,8 @@ def validate() -> dict[str, object]:
     if not bool((y != -100).any()):
         raise SystemExit("response-only loss mask suppresses every target")
 
+    validation_examples = load_examples(CURATED_FILE.parent / "instructions_validation.jsonl")
+
     eval_cases = [
         json.loads(line)
         for line in EVAL_FILE.read_text(encoding="utf-8").splitlines()

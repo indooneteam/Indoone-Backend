@@ -12,7 +12,7 @@ from torch import nn
 
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
-from app.ai.training_data import TrainingExample, load_examples, write_corpus
+from app.ai.training_data import TrainingExample, format_instruction_prompt, load_examples, write_corpus
 
 
 # V2 is intentionally larger while remaining practical for CPU inference.
@@ -234,12 +234,7 @@ def _instruction_batchify(
             inputs, targets = prepared_examples[index]
         else:
             example = examples[index]
-            prefix = (
-                "<instruction>\\n"
-                f"{example.instruction.strip()}\\n"
-                "</instruction>\\n"
-                "<response>\\n"
-            )
+            prefix = format_instruction_prompt(example.instruction)
             prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
             response_ids = tokenizer.encode(example.response, add_special_tokens=False)
 

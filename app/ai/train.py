@@ -63,7 +63,6 @@ def _merge_instruction_sets_weighted(
     """
     pool_targets = {
         "generated_multilingual_examples.jsonl": 0.25,
-        "phone_contacts_examples.jsonl": 0.05,
     }
     default_target = 0.70
 
@@ -88,7 +87,12 @@ def _merge_instruction_sets_weighted(
         if not pool:
             continue
 
-        target = pool_targets.get(path.name, default_target)
+        if "generated_multilingual_examples.jsonl" in path.name:
+            target = 0.25
+        elif "phone_contacts_examples.jsonl" in path.name:
+            target = 0.05
+        else:
+            target = default_target
         per_example_weight = target / len(pool)
         start = len(merged)
         merged.extend(pool)

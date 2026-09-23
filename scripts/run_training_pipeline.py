@@ -19,8 +19,8 @@ def main() -> None:
     parser.add_argument("--steps", type=int, default=8000)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--checkpoint-interval", type=int, default=500)
-    parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--instruction-mix-ratio", type=float, default=0.9)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--instruction-mix-ratio", type=float, default=0.8)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--skip-upload", action="store_true")
     parser.add_argument("--skip-eval", action="store_true")
@@ -107,6 +107,8 @@ def main() -> None:
             str(curated_instructions),
             "--validation-output",
             str(validation_instructions),
+            "--validation-ratio",
+            "0.2",
             "--seed",
             str(args.seed),
         ]

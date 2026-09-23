@@ -138,6 +138,7 @@ def _instruction_batchify(
     device: str,
     generator: torch.Generator,
     sampling_weights: list[float] | None = None,
+    example_indices: list[int] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Build supervised instruction batches with loss only on response tokens."""
 
@@ -156,7 +157,13 @@ def _instruction_batchify(
     batch_targets: list[list[int]] = []
     max_length = 0
 
-    if sampling_weights is None:
+    if example_indices is not None:
+        if len(example_indices) != batch_size:
+            raise ValueError("example_indices must contain exactly batch_size indices")
+        if any(index < 0 or index >= len(examples) for index in example_indices):
+            raise ValueError("example_indices contains an out-of-range index")
+        sample_indices = torch.tensor(example_indices, dtype=torch.long)
+    elif sampling_weights is None:
         sample_indices = torch.randint(
             0,
             len(examples),
@@ -248,6 +255,43 @@ def evaluate(
     return sum(losses) / len(losses)
 
 
+
+def evaluate_instruction_loss(
+    model: IndooneTransformer,
+    examples: list[TrainingExample],
+    tokenizer: BPETokenizer,
+    block_size: int,
+    batch_size: int,
+    device: str,
+) -> float | None:
+    """Evaluate response-only loss on a deterministic held-out instruction set."""
+    if not examples:
+        return None
+    model.eval()
+    losses: list[float] = []
+    with torch.inference_mode():
+        for offset in range(0, len(examples), batch_size):
+            batch_indices = list(range(offset, min(offset + batch_size, len(examples))))
+            if len(batch_indices) < batch_size:
+                # Pad the final evaluation batch by repeating its final example;
+                # repeated rows are weighted equally in the deterministic loss check.
+                batch_indices.extend([batch_indices[-1]] * (batch_size - len(batch_indices)))
+            x, y = _instruction_batchify(
+                examples,
+                tokenizer,
+                block_size,
+                batch_size,
+                device,
+                torch.Generator().manual_seed(0),
+                example_indices=batch_indices,
+            )
+            _, loss = model(x, y)
+            assert loss is not None
+            losses.append(float(loss.cpu()))
+    model.train()
+    return sum(losses) / len(losses)
+
+
 def _snapshot_state(model: IndooneTransformer) -> dict[str, torch.Tensor]:
     """Clone model weights so a later optimizer step cannot mutate the snapshot."""
     return {
@@ -268,6 +312,7 @@ def train(
     instruction_path: Path | None = None,
     multilingual_instruction_path: Path | None = None,
     capability_instruction_path: Path | None = None,
+    instruction_validation_path: Path | None = None,
     instruction_mix_ratio: float = 0.9,
 ) -> float:
     if steps <= 0:
@@ -344,6 +389,11 @@ def train(
 
     validation_encoded: torch.Tensor | None = None
     validation_fingerprint = None
+    instruction_validation_examples: list[TrainingExample] = []
+    instruction_validation_fingerprint = None
+    if instruction_validation_path is not None and instruction_validation_path.exists():
+        instruction_validation_examples = load_examples(instruction_validation_path)
+        instruction_validation_fingerprint = _file_fingerprint(instruction_validation_path)
     if validation_path is not None and validation_path.exists():
         validation_text = validation_path.read_text(encoding="utf-8")
         if validation_text.strip():
@@ -367,6 +417,7 @@ def train(
     history: list[dict[str, float | int | None]] = []
     last_loss = float("inf")
     best_validation_loss = float("inf")
+    best_validation_kind: str | None = None
     best_validation_step: int | None = None
     best_model_state: dict[str, torch.Tensor] | None = None
 
@@ -402,16 +453,37 @@ def train(
                 if validation_encoded is not None
                 else None
             )
+            instruction_validation_loss = evaluate_instruction_loss(
+                model,
+                instruction_validation_examples,
+                tokenizer,
+                block_size,
+                batch_size,
+                device,
+            )
+            selection_loss = (
+                instruction_validation_loss
+                if instruction_validation_loss is not None
+                else validation_loss
+            )
+            selection_kind = (
+                "instruction_validation"
+                if instruction_validation_loss is not None
+                else "general_validation"
+            )
             history.append(
                 {
                     "step": step,
                     "train_loss": last_loss,
                     "validation_loss": validation_loss,
+                    "instruction_validation_loss": instruction_validation_loss,
+                    "selection_loss": selection_loss,
                 }
             )
 
-            if validation_loss is not None and validation_loss < best_validation_loss:
-                best_validation_loss = validation_loss
+            if selection_loss is not None and selection_loss < best_validation_loss:
+                best_validation_loss = selection_loss
+                best_validation_kind = selection_kind
                 best_validation_step = step
                 best_model_state = _snapshot_state(model)
                 torch.save(
@@ -471,6 +543,9 @@ def train(
                     best_validation_loss if best_model_state is not None else None
                 ),
                 "best_validation_step": best_validation_step,
+                "best_validation_kind": best_validation_kind,
+                "instruction_validation_enabled": bool(instruction_validation_examples),
+                "instruction_validation_fingerprint": instruction_validation_fingerprint,
                 "final_model_selection": (
                     "best_validation_loss"
                     if best_model_state is not None
@@ -501,6 +576,7 @@ def main() -> None:
     parser.add_argument("--instructions", type=Path, default=Path("data/raw/indoone_instructions.jsonl"))
     parser.add_argument("--multilingual-instructions", type=Path, default=Path("data/raw/indoone_multilingual_examples.jsonl"))
     parser.add_argument("--capability-instructions", type=Path, default=Path("data/raw/indoone_phone_contacts_examples.jsonl"))
+    parser.add_argument("--instruction-validation", type=Path, default=Path("data/processed/instructions_validation.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
     parser.add_argument("--steps", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=42)
@@ -521,6 +597,7 @@ def main() -> None:
         args.instructions,
         args.multilingual_instructions,
         args.capability_instructions,
+        args.instruction_validation,
         args.instruction_mix_ratio,
     )
     print(f"training complete; final loss={loss:.4f}")

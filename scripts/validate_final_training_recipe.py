@@ -18,6 +18,7 @@ from app.ai.train import (
     DEFAULT_CHECKPOINT_INTERVAL,
     DEFAULT_INSTRUCTION_MIX_RATIO,
     DEFAULT_LEARNING_RATE,
+    DEFAULT_SEED,
     DEFAULT_TRAINING_STEPS,
     DEFAULT_WEIGHT_DECAY,
     GENERATED_INSTRUCTION_WEIGHT,
@@ -72,7 +73,7 @@ def validate() -> dict[str, object]:
         "checkpoint_interval": DEFAULT_CHECKPOINT_INTERVAL,
         "learning_rate": DEFAULT_LEARNING_RATE,
         "weight_decay": DEFAULT_WEIGHT_DECAY,
-        "seed": 42,
+        "seed": DEFAULT_SEED,
         "instruction_mix_ratio": DEFAULT_INSTRUCTION_MIX_RATIO,
     }
     if {key: defaults.get(key) for key in expected_defaults} != expected_defaults:

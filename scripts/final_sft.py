@@ -65,6 +65,7 @@ def run_sft(
 
     if resume_path.exists():
         model_config = dict(checkpoint["model_config"])
+        model_config.pop("model_version", None)
         model_state = checkpoint["model_state"]
         completed = int(checkpoint["step"])
         optimizer_state = checkpoint.get("optimizer_state")

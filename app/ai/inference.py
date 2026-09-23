@@ -7,6 +7,7 @@ import torch
 
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
+from app.ai.training_data import format_instruction_prompt
 
 
 DEFAULT_MAX_NEW_TOKENS = 192
@@ -91,12 +92,7 @@ class LocalModelRuntime:
         if stripped_prompt.startswith("<instruction>") and stripped_prompt.endswith("<response>"):
             formatted_prompt = stripped_prompt
         else:
-            formatted_prompt = (
-                "<instruction>\n"
-                f"{stripped_prompt}\n"
-                "</instruction>\n"
-                "<response>\n"
-            )
+            formatted_prompt = format_instruction_prompt(stripped_prompt)
         token_ids = self.tokenizer.encode(formatted_prompt, add_special_tokens=False)
         return [self.tokenizer.stoi["<bos>"]] + token_ids
 

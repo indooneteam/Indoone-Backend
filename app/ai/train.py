@@ -30,6 +30,10 @@ DEFAULT_BATCH_SIZE = 16
 DEFAULT_CHECKPOINT_INTERVAL = 500
 DEFAULT_LEARNING_RATE = 1e-4
 DEFAULT_INSTRUCTION_MIX_RATIO = 0.8
+DEFAULT_WEIGHT_DECAY = 0.01
+CURATED_INSTRUCTION_WEIGHT = 0.90
+GENERATED_INSTRUCTION_WEIGHT = 0.05
+CAPABILITY_INSTRUCTION_WEIGHT = 0.05
 
 
 def _file_fingerprint(path: Path) -> str:
@@ -68,9 +72,10 @@ def _merge_instruction_sets_weighted(
     much larger generated pool.
     """
     pool_targets = {
-        "generated_multilingual_examples.jsonl": 0.05,
+        "generated_multilingual_examples.jsonl": GENERATED_INSTRUCTION_WEIGHT,
+        "indoone_phone_contacts_examples.jsonl": CAPABILITY_INSTRUCTION_WEIGHT,
     }
-    default_target = 0.90
+    default_target = CURATED_INSTRUCTION_WEIGHT
 
     merged: list[TrainingExample] = []
     sampling_weights: list[float] = []
@@ -94,9 +99,9 @@ def _merge_instruction_sets_weighted(
             continue
 
         if "generated_multilingual_examples.jsonl" in path.name:
-            target = 0.05
+            target = GENERATED_INSTRUCTION_WEIGHT
         elif "phone_contacts_examples.jsonl" in path.name:
-            target = 0.05
+            target = CAPABILITY_INSTRUCTION_WEIGHT
         else:
             target = default_target
         per_example_weight = target / len(pool)
@@ -408,7 +413,7 @@ def train(
 
     config = {**DEFAULT_MODEL_CONFIG, "block_size": block_size}
     model = IndooneTransformer(vocab_size=tokenizer.vocab_size, **config).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=DEFAULT_WEIGHT_DECAY)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     tokenizer.save(output_dir / "tokenizer.json")

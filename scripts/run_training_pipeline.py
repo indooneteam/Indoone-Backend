@@ -7,6 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+def run(command: list[str]) -> None:
+    print("$", " ".join(command), flush=True)
+    subprocess.run(command, check=True)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(

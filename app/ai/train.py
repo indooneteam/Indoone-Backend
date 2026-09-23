@@ -490,8 +490,10 @@ def train(
                         "optimizer_state": optimizer.state_dict(),
                         "model_state": best_model_state,
                         "seed": seed,
-                        "selection": "best_validation_loss",
+                        "selection": selection_kind,
                         "validation_loss": validation_loss,
+                        "instruction_validation_loss": instruction_validation_loss,
+                        "selection_loss": selection_loss,
                     },
                     output_dir / "best_checkpoint.pt",
                 )

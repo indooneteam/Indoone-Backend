@@ -28,6 +28,15 @@ def test_repetition_penalty_ignores_prompt_tokens() -> None:
     )
     assert torch.equal(adjusted, logits)
 
+
+def test_ngram_blocking_ignores_prompt_tokens() -> None:
+    logits = torch.zeros((1, 8))
+    adjusted = LocalModelRuntime._block_repeated_ngram(
+        logits,
+        [1, 2, 3],
+        3,
+    )
+    assert torch.equal(adjusted, logits)
 def test_local_engine_select_next_token_uses_greedy_choice_at_zero_temperature() -> None:
     logits = torch.tensor([[0.1, 2.5, 1.0]])
     assert LocalAIEngine._select_next_token(logits, 0.0) == 1

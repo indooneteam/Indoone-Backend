@@ -70,6 +70,7 @@ class LocalModelRuntime:
         generated_ids: list[int],
         ngram_size: int,
     ) -> torch.Tensor:
+        """Block repeated n-grams from the assistant completion, not the prompt."""
         if ngram_size < 2 or len(generated_ids) < ngram_size - 1:
             return logits
         prefix = tuple(generated_ids[-(ngram_size - 1):])
@@ -154,7 +155,7 @@ class LocalModelRuntime:
             )
             next_logits = self._block_repeated_ngram(
                 next_logits,
-                generated_ids,
+                completion_ids,
                 no_repeat_ngram_size,
             )
             next_id = self._select_next_token(next_logits, temperature)

@@ -27,9 +27,10 @@ from app.ai.training_data import load_examples
 DEFAULT_MODEL_DIR = Path("models/indoone-small")
 DEFAULT_TRAIN_INSTRUCTIONS = Path("data/processed/curated_instructions.jsonl")
 DEFAULT_VALIDATION_INSTRUCTIONS = Path("data/processed/instructions_validation.jsonl")
-DEFAULT_STEPS = 1500
+DEFAULT_CAPABILITY_INSTRUCTIONS = Path("data/raw/indoone_phone_contacts_examples.jsonl")
+DEFAULT_STEPS = 5000
 DEFAULT_BATCH_SIZE = 16
-DEFAULT_LEARNING_RATE = 2e-5
+DEFAULT_LEARNING_RATE = 5e-5
 DEFAULT_EVAL_INTERVAL = 100
 DEFAULT_SEED = 4242
 DEFAULT_WEIGHT_DECAY = 0.01
@@ -39,6 +40,7 @@ def run_sft(
     model_dir: Path,
     train_instructions: Path,
     validation_instructions: Path,
+    capability_instructions: Path,
     steps: int,
     batch_size: int,
     learning_rate: float,
@@ -65,7 +67,7 @@ def run_sft(
     if not base_backup.exists():
         shutil.copy2(model_path, base_backup)
 
-    source_path = resume_path if resume_path.exists() else model_path
+    source_path = resume_path if resume_path.exists() else base_backup
     checkpoint = torch.load(source_path, map_location="cpu", weights_only=False)
 
     if resume_path.exists():
@@ -87,6 +89,12 @@ def run_sft(
 
     tokenizer = BPETokenizer.load(tokenizer_path)
     train_examples = load_examples(train_instructions)
+    capability_examples = (
+        load_examples(capability_instructions)
+        if capability_instructions.is_file()
+        else []
+    )
+    train_examples = train_examples + capability_examples
     validation_examples = load_examples(validation_instructions)
     if not train_examples or not validation_examples:
         raise ValueError("SFT train/validation sets must both be non-empty")
@@ -231,6 +239,7 @@ def main() -> None:
     parser.add_argument("--model-dir", type=Path, default=DEFAULT_MODEL_DIR)
     parser.add_argument("--train-instructions", type=Path, default=DEFAULT_TRAIN_INSTRUCTIONS)
     parser.add_argument("--validation-instructions", type=Path, default=DEFAULT_VALIDATION_INSTRUCTIONS)
+    parser.add_argument("--capability-instructions", type=Path, default=DEFAULT_CAPABILITY_INSTRUCTIONS)
     parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)
@@ -244,6 +253,7 @@ def main() -> None:
                 model_dir=args.model_dir,
                 train_instructions=args.train_instructions,
                 validation_instructions=args.validation_instructions,
+                capability_instructions=args.capability_instructions,
                 steps=args.steps,
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,

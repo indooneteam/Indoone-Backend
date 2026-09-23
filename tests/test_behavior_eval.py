@@ -23,6 +23,17 @@ def test_score_response_tracks_topic_coverage() -> None:
     assert score["topic_coverage"] == 1.0
 
 
+def test_three_step_case_accepts_valid_ordinal_response() -> None:
+    case = load_cases(Path("data/eval/behavior.jsonl"))[0]
+    score = score_case(
+        case,
+        "First step: plan the workday. Second step: prioritize important tasks. Third step: review the day.",
+    )
+    assert score["response_passed"] is True
+    assert score["style_passed"] is True
+    assert score["passed"] is True
+
+
 def test_score_case_applies_answer_quality_gate() -> None:
     case = {
         "id": "quality",

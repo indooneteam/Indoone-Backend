@@ -143,6 +143,8 @@ def main() -> None:
             str(generated_instructions),
             "--capability-instructions",
             "data/raw/indoone_phone_contacts_examples.jsonl",
+            "--instruction-validation",
+            str(validation_instructions),
             "--output",
             "models/indoone-small",
             "--steps",

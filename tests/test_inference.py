@@ -18,6 +18,16 @@ def test_select_next_token_rejects_negative_temperature() -> None:
         LocalModelRuntime._select_next_token(logits, -0.1)
 
 
+
+def test_repetition_penalty_ignores_prompt_tokens() -> None:
+    logits = torch.tensor([[1.0, -2.0, 3.0]])
+    adjusted = LocalModelRuntime._apply_repetition_penalty(
+        logits,
+        [],
+        1.08,
+    )
+    assert torch.equal(adjusted, logits)
+
 def test_local_engine_select_next_token_uses_greedy_choice_at_zero_temperature() -> None:
     logits = torch.tensor([[0.1, 2.5, 1.0]])
     assert LocalAIEngine._select_next_token(logits, 0.0) == 1

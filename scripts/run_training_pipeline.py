@@ -12,6 +12,7 @@ from app.ai.train import (
     DEFAULT_CHECKPOINT_INTERVAL,
     DEFAULT_INSTRUCTION_MIX_RATIO,
     DEFAULT_LEARNING_RATE,
+    DEFAULT_SEED,
     DEFAULT_TRAINING_STEPS,
 )
 
@@ -29,7 +30,7 @@ def main() -> None:
     parser.add_argument("--checkpoint-interval", type=int, default=DEFAULT_CHECKPOINT_INTERVAL)
     parser.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)
     parser.add_argument("--instruction-mix-ratio", type=float, default=DEFAULT_INSTRUCTION_MIX_RATIO)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--skip-upload", action="store_true")
     parser.add_argument("--skip-eval", action="store_true")
     args = parser.parse_args()

@@ -61,3 +61,11 @@ def test_safe_failure_message_is_user_facing() -> None:
     message = user_safe_failure()
     assert "reliable information" in message
     assert "fallback mode" not in message
+
+
+def test_private_access_question_does_not_require_freshness_sources() -> None:
+    result = assess_answer(
+        "Tell me about a private company database you can access right now.",
+        "No. I do not have access to a private company database without authorized access.",
+    )
+    assert result.passed is True

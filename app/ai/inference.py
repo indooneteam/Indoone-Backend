@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import torch
 
@@ -84,12 +85,16 @@ class LocalModelRuntime:
     def _prompt_ids(self, prompt: str) -> list[int]:
         """Render a user request in the same instruction format used for training."""
 
-        formatted_prompt = (
-            "<instruction>\n"
-            f"{prompt.strip()}\n"
-            "</instruction>\n"
-            "<response>\n"
-        )
+        stripped_prompt = prompt.strip()
+        if stripped_prompt.startswith("<instruction>") and stripped_prompt.endswith("<response>"):
+            formatted_prompt = stripped_prompt
+        else:
+            formatted_prompt = (
+                "<instruction>\n"
+                f"{stripped_prompt}\n"
+                "</instruction>\n"
+                "<response>\n"
+            )
         token_ids = self.tokenizer.encode(formatted_prompt, add_special_tokens=False)
         return [self.tokenizer.stoi["<bos>"]] + token_ids
 
@@ -98,7 +103,10 @@ class LocalModelRuntime:
         """Keep only the assistant response and strip leaked training markers."""
 
         cleaned = text.strip()
-        for marker in ("</response>", "<instruction>", "\n<instruction>", "USER:", "\nUSER:"):
+        marker_match = re.search(r"</?(?:instruction|response|conversation|grounding|response_language)[^>]*>", cleaned, flags=re.IGNORECASE)
+        if marker_match:
+            cleaned = cleaned[:marker_match.start()].strip()
+        for marker in ("USER:", "\nUSER:"):
             if marker in cleaned:
                 cleaned = cleaned.split(marker, 1)[0].strip()
         if cleaned.startswith("<response>"):

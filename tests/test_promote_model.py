@@ -94,3 +94,27 @@ def test_promotion_rejects_missing_model_version(tmp_path: Path) -> None:
             behavior_cases=cases,
             registry_path=registry,
         )
+
+
+def test_promotion_accepts_flat_evaluation_report(monkeypatch, tmp_path: Path) -> None:
+    model_dir, cases, registry, report_path = _prepare_candidate(
+        tmp_path,
+        '{"model_version":"indoone-gpt-v2","loss":1.0,"perplexity":2.0}\n',
+    )
+
+    monkeypatch.setattr(
+        promotion,
+        "run_behavioral_eval",
+        lambda **_: {"gate": {"overall_pass": True}},
+    )
+
+    promoted = promotion.promote_model(
+        version="v2",
+        model_dir=model_dir,
+        behavior_cases=cases,
+        registry_path=registry,
+        evaluation_report_path=report_path,
+    )
+
+    assert promoted.version == "v2"
+    assert promoted.status == "active"

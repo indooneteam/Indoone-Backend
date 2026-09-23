@@ -27,7 +27,8 @@ class TrainingExample:
             "</instruction>\n"
             "<response>\n"
             f"{self.response.strip()}\n"
-            "</response>"
+            "</response>\n"
+            "<eos>"
         )
 
 

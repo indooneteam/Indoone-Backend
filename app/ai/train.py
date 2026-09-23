@@ -72,6 +72,84 @@ def batchify(
     return x, y
 
 
+def _instruction_batchify(
+    examples: list[TrainingExample],
+    tokenizer: BPETokenizer,
+    block_size: int,
+    batch_size: int,
+    device: str,
+    generator: torch.Generator,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Build supervised instruction batches with loss only on response tokens."""
+
+    if not examples:
+        raise ValueError("instruction examples cannot be empty")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be greater than zero")
+    if block_size < 8:
+        raise ValueError("block_size must be large enough for instruction formatting")
+
+    bos_id = tokenizer.stoi["<bos>"]
+    eos_id = tokenizer.stoi["<eos>"]
+    pad_id = tokenizer.stoi["<pad>"]
+
+    batch_inputs: list[list[int]] = []
+    batch_targets: list[list[int]] = []
+    max_length = 0
+
+    sample_indices = torch.randint(
+        0,
+        len(examples),
+        (batch_size,),
+        generator=generator,
+    )
+    for index in sample_indices.tolist():
+        example = examples[index]
+        prefix = (
+            "<instruction>\n"
+            f"{example.instruction.strip()}\n"
+            "</instruction>\n"
+            "<response>\n"
+        )
+        prefix_ids = tokenizer.encode(prefix, add_special_tokens=False)
+        response_ids = tokenizer.encode(example.response, add_special_tokens=False)
+
+        # Leave room for BOS and EOS while keeping the input length <= block_size.
+        max_response_tokens = block_size - len(prefix_ids) - 1
+        if max_response_tokens < 1:
+            raise ValueError("instruction example exceeds the configured block size")
+        if len(response_ids) >= max_response_tokens:
+            response_ids = response_ids[: max_response_tokens - 1]
+
+        sequence = [bos_id] + prefix_ids + response_ids + [eos_id]
+        inputs = sequence[:-1]
+        targets = sequence[1:]
+
+        # Only response tokens (plus EOS) should contribute to the SFT loss.
+        targets[: len(prefix_ids)] = [-100] * len(prefix_ids)
+
+        batch_inputs.append(inputs)
+        batch_targets.append(targets)
+        max_length = max(max_length, len(inputs))
+
+    input_batch = torch.full(
+        (batch_size, max_length),
+        pad_id,
+        dtype=torch.long,
+    )
+    target_batch = torch.full(
+        (batch_size, max_length),
+        -100,
+        dtype=torch.long,
+    )
+    for row, (inputs, targets) in enumerate(zip(batch_inputs, batch_targets)):
+        length = len(inputs)
+        input_batch[row, :length] = torch.tensor(inputs, dtype=torch.long)
+        target_batch[row, :length] = torch.tensor(targets, dtype=torch.long)
+
+    return input_batch.to(device), target_batch.to(device)
+
+
 def evaluate(
     model: IndooneTransformer,
     data: torch.Tensor,
@@ -144,18 +222,25 @@ def train(
     instruction_enabled = any(path.exists() for path in instruction_paths)
     instruction_fingerprints: list[str] = []
     instruction_example_count = 0
+    instruction_examples: list[TrainingExample] = []
     if instruction_enabled:
-        examples, instruction_fingerprints = _merge_instruction_sets(instruction_paths)
+        instruction_examples, instruction_fingerprints = _merge_instruction_sets(instruction_paths)
         output_dir.mkdir(parents=True, exist_ok=True)
         instruction_corpus = output_dir / "instruction_corpus.txt"
-        write_corpus(examples, instruction_corpus)
-        train_text = train_text.rstrip() + "\n\n" + instruction_corpus.read_text(encoding="utf-8")
-        instruction_example_count = len(examples)
+        write_corpus(instruction_examples, instruction_corpus)
+        instruction_example_count = len(instruction_examples)
     if len(train_text) < 32:
         raise ValueError("training corpus is too small; add more text")
 
+    tokenizer_text = train_text
+    if instruction_examples:
+        tokenizer_text = (
+            train_text.rstrip()
+            + "\n\n"
+            + (output_dir / "instruction_corpus.txt").read_text(encoding="utf-8")
+        )
     tokenizer = BPETokenizer.train(
-        train_text,
+        tokenizer_text,
         vocab_size=DEFAULT_VOCAB_SIZE,
         min_frequency=DEFAULT_MIN_FREQUENCY,
     )
@@ -163,14 +248,11 @@ def train(
         tokenizer.encode(train_text, add_special_tokens=True),
         dtype=torch.long,
     )
-    instruction_encoded: torch.Tensor | None = None
-    if instruction_enabled:
+    instruction_token_count = 0
+    if instruction_examples:
         instruction_text = (output_dir / "instruction_corpus.txt").read_text(encoding="utf-8")
-        instruction_encoded = torch.tensor(
-            tokenizer.encode(instruction_text, add_special_tokens=True),
-            dtype=torch.long,
-        )
-        if len(instruction_encoded) <= 3:
+        instruction_token_count = len(tokenizer.encode(instruction_text, add_special_tokens=False))
+        if instruction_token_count <= 3:
             raise ValueError(
                 "instruction corpus is too small after tokenization; add more instruction examples"
             )
@@ -212,14 +294,14 @@ def train(
     model.train()
     for step in range(1, steps + 1):
         use_instruction_batch = (
-            instruction_encoded is not None
+            bool(instruction_examples)
             and torch.rand((), generator=train_generator).item() < instruction_mix_ratio
         )
         if use_instruction_batch:
-            instruction_block_size = min(block_size, len(instruction_encoded) - 2)
-            x, y = batchify(
-                instruction_encoded,
-                instruction_block_size,
+            x, y = _instruction_batchify(
+                instruction_examples,
+                tokenizer,
+                block_size,
                 batch_size,
                 device,
                 instruction_generator,
@@ -317,7 +399,7 @@ def train(
                 "instruction_data_enabled": instruction_enabled,
                 "instruction_example_count": instruction_example_count,
                 "instruction_mix_ratio": instruction_mix_ratio,
-                "instruction_token_count": int(instruction_encoded.numel()) if instruction_encoded is not None else 0,
+                "instruction_token_count": instruction_token_count,
                 "instruction_fingerprints": instruction_fingerprints,
                 "source_fingerprint": _file_fingerprint(corpus_path),
                 "validation_fingerprint": validation_fingerprint,

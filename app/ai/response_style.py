@@ -48,9 +48,17 @@ def assess_response_style(
 
     if exact_three:
         items = _LIST_ITEM_RE.findall(response)
-        if len(items) != 3:
-            return ResponseStyle(False, "style_exactly_three_items", tuple(checks))
-        checks.append("exactly_three_items")
+        if len(items) == 3:
+            checks.append("exactly_three_items")
+        else:
+            sentences = [part.strip() for part in _SENTENCE_RE.split(text) if part.strip()]
+            ordinal_prefixes = ("first", "second", "third")
+            if len(sentences) != 3 or any(
+                not sentence.casefold().startswith(prefix)
+                for sentence, prefix in zip(sentences, ordinal_prefixes)
+            ):
+                return ResponseStyle(False, "style_exactly_three_items", tuple(checks))
+            checks.append("exactly_three_items")
 
     if bullets_requested and not _LIST_ITEM_RE.search(response):
         return ResponseStyle(False, "style_bullets_missing", tuple(checks))

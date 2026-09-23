@@ -1,6 +1,10 @@
 from pathlib import Path
 
-from app.ai.train import train
+import torch
+
+from app.ai.tokenizer import BPETokenizer
+from app.ai.train import _instruction_batchify, train
+from app.ai.training_data import TrainingExample
 
 
 def test_train_accepts_instruction_dataset(tmp_path: Path) -> None:
@@ -33,3 +37,23 @@ def test_train_accepts_instruction_dataset(tmp_path: Path) -> None:
     assert (output / "instruction_corpus.txt").exists()
     assert (output / "indoone-small.pt").exists()
     assert (output / "tokenizer.json").exists()
+
+
+def test_instruction_batch_only_scores_response_tokens() -> None:
+    tokenizer = BPETokenizer.train(
+        "<instruction>\\nSay hello\\n</instruction>\\n<response>\\nHello\\n</response>\\n<eos>",
+        vocab_size=64,
+        min_frequency=1,
+    )
+    x, y = _instruction_batchify(
+        [TrainingExample("Say hello", "Hello", "greeting")],
+        tokenizer,
+        block_size=64,
+        batch_size=1,
+        device="cpu",
+        generator=torch.Generator().manual_seed(1),
+    )
+    assert x.shape == y.shape
+    assert (y == -100).any()
+    assert (y != -100).any()
+    assert y[0, -1].item() == tokenizer.stoi["<eos>"]

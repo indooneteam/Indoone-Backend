@@ -10,6 +10,8 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+import torch
+
 from app.ai.tokenizer import BPETokenizer
 from app.ai.train import (
     CAPABILITY_INSTRUCTION_WEIGHT,
@@ -26,7 +28,6 @@ from app.ai.train import (
     _merge_instruction_sets_weighted,
 )
 from app.ai.training_data import load_examples
-import torch
 
 
 RAW_FILES = (

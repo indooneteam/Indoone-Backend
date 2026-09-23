@@ -105,9 +105,9 @@ def test_weighted_instruction_pools_prioritize_curated_examples(tmp_path: Path) 
 
     assert len(examples) == 23
     assert abs(sum(weights) - 1.0) < 1e-6
-    assert policy[curated.name]["target_probability"] == 0.70
-    assert policy[generated.name]["target_probability"] == 0.25
+    assert policy[curated.name]["target_probability"] == 0.90
+    assert policy[generated.name]["target_probability"] == 0.05
     assert policy[capability.name]["target_probability"] == 0.05
-    assert abs(sum(weights[:2]) - 0.70) < 1e-6
-    assert abs(sum(weights[2:22]) - 0.25) < 1e-6
+    assert abs(sum(weights[:2]) - 0.90) < 1e-6
+    assert abs(sum(weights[2:22]) - 0.05) < 1e-6
     assert abs(weights[-1] - 0.05) < 1e-6

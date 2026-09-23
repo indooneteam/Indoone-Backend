@@ -124,16 +124,12 @@ def validate() -> dict[str, object]:
     ]
     validation_examples = load_examples(CURATED_FILE.parent / "instructions_validation.jsonl")
     trained_prompts = {
-        str(row["instruction"]).strip().casefold()
-        for row in curated
+        example.instruction.strip().casefold()
+        for example in curated
     }
     validation_prompts = {
         example.instruction.strip().casefold()
         for example in validation_examples
-    }
-    evaluation_prompt_set = {
-        str(case.get("prompt", "")).strip().casefold()
-        for case in eval_cases
     }
     exact_eval_overlap = [
         str(case["id"])

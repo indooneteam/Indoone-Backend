@@ -52,6 +52,64 @@ def _merge_instruction_sets(paths: list[Path]) -> tuple[list[TrainingExample], l
     return merged, fingerprints
 
 
+def _merge_instruction_sets_weighted(
+    paths: list[Path],
+) -> tuple[list[TrainingExample], list[str], list[float], dict[str, dict[str, int | float]]]:
+    """Merge instruction pools with explicit sampling priority.
+
+    Curated behavior examples are deliberately oversampled relative to synthetic
+    augmentation so the evaluation-driving examples are not drowned out by a
+    much larger generated pool.
+    """
+    pool_targets = {
+        "generated_multilingual_examples.jsonl": 0.25,
+    }
+    default_target = 0.70
+
+    merged: list[TrainingExample] = []
+    sampling_weights: list[float] = []
+    seen: set[tuple[str, str]] = set()
+    fingerprints: list[str] = []
+    policy: dict[str, dict[str, int | float]] = {}
+
+    for path in paths:
+        if not path.exists():
+            continue
+        fingerprints.append(_file_fingerprint(path))
+        pool: list[TrainingExample] = []
+        for example in load_examples(path):
+            key = (example.instruction.casefold(), example.response.casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            pool.append(example)
+
+        if not pool:
+            continue
+
+        if "generated_multilingual_examples.jsonl" in path.name:
+            target = 0.25
+        elif "phone_contacts_examples.jsonl" in path.name:
+            target = 0.05
+        else:
+            target = default_target
+        per_example_weight = target / len(pool)
+        start = len(merged)
+        merged.extend(pool)
+        sampling_weights.extend([per_example_weight] * len(pool))
+        policy[path.name] = {
+            "examples": len(pool),
+            "target_probability": target,
+            "start_index": start,
+        }
+
+    total_weight = sum(sampling_weights)
+    if total_weight <= 0:
+        raise ValueError("instruction dataset is empty")
+    sampling_weights = [weight / total_weight for weight in sampling_weights]
+    return merged, fingerprints, sampling_weights, policy
+
+
 def batchify(
     data: torch.Tensor,
     block_size: int,
@@ -79,6 +137,8 @@ def _instruction_batchify(
     batch_size: int,
     device: str,
     generator: torch.Generator,
+    sampling_weights: list[float] | None = None,
+    example_indices: list[int] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Build supervised instruction batches with loss only on response tokens."""
 
@@ -97,12 +157,31 @@ def _instruction_batchify(
     batch_targets: list[list[int]] = []
     max_length = 0
 
-    sample_indices = torch.randint(
-        0,
-        len(examples),
-        (batch_size,),
-        generator=generator,
-    )
+    if example_indices is not None:
+        if len(example_indices) != batch_size:
+            raise ValueError("example_indices must contain exactly batch_size indices")
+        if any(index < 0 or index >= len(examples) for index in example_indices):
+            raise ValueError("example_indices contains an out-of-range index")
+        sample_indices = torch.tensor(example_indices, dtype=torch.long)
+    elif sampling_weights is None:
+        sample_indices = torch.randint(
+            0,
+            len(examples),
+            (batch_size,),
+            generator=generator,
+        )
+    else:
+        if len(sampling_weights) != len(examples):
+            raise ValueError("sampling_weights must match the instruction example count")
+        weights = torch.tensor(sampling_weights, dtype=torch.float32)
+        if torch.any(weights < 0) or float(weights.sum()) <= 0:
+            raise ValueError("instruction sampling weights must be non-negative and non-zero")
+        sample_indices = torch.multinomial(
+            weights,
+            num_samples=batch_size,
+            replacement=True,
+            generator=generator,
+        )
     for index in sample_indices.tolist():
         example = examples[index]
         prefix = (
@@ -176,6 +255,40 @@ def evaluate(
     return sum(losses) / len(losses)
 
 
+
+def evaluate_instruction_loss(
+    model: IndooneTransformer,
+    examples: list[TrainingExample],
+    tokenizer: BPETokenizer,
+    block_size: int,
+    batch_size: int,
+    device: str,
+) -> float | None:
+    """Evaluate response-only loss on a deterministic held-out instruction set."""
+    if not examples:
+        return None
+    model.eval()
+    losses: list[float] = []
+    with torch.inference_mode():
+        for offset in range(0, len(examples), batch_size):
+            batch_indices = list(range(offset, min(offset + batch_size, len(examples))))
+            current_batch_size = len(batch_indices)
+            x, y = _instruction_batchify(
+                examples,
+                tokenizer,
+                block_size,
+                current_batch_size,
+                device,
+                torch.Generator().manual_seed(0),
+                example_indices=batch_indices,
+            )
+            _, loss = model(x, y)
+            assert loss is not None
+            losses.append(float(loss.cpu()))
+    model.train()
+    return sum(losses) / len(losses)
+
+
 def _snapshot_state(model: IndooneTransformer) -> dict[str, torch.Tensor]:
     """Clone model weights so a later optimizer step cannot mutate the snapshot."""
     return {
@@ -196,7 +309,8 @@ def train(
     instruction_path: Path | None = None,
     multilingual_instruction_path: Path | None = None,
     capability_instruction_path: Path | None = None,
-    instruction_mix_ratio: float = 0.7,
+    instruction_validation_path: Path | None = None,
+    instruction_mix_ratio: float = 0.9,
 ) -> float:
     if steps <= 0:
         raise ValueError("steps must be greater than zero")
@@ -223,8 +337,15 @@ def train(
     instruction_fingerprints: list[str] = []
     instruction_example_count = 0
     instruction_examples: list[TrainingExample] = []
+    instruction_sampling_weights: list[float] | None = None
+    instruction_sampling_policy: dict[str, dict[str, int | float]] = {}
     if instruction_enabled:
-        instruction_examples, instruction_fingerprints = _merge_instruction_sets(instruction_paths)
+        (
+            instruction_examples,
+            instruction_fingerprints,
+            instruction_sampling_weights,
+            instruction_sampling_policy,
+        ) = _merge_instruction_sets_weighted(instruction_paths)
         output_dir.mkdir(parents=True, exist_ok=True)
         instruction_corpus = output_dir / "instruction_corpus.txt"
         write_corpus(instruction_examples, instruction_corpus)
@@ -265,6 +386,11 @@ def train(
 
     validation_encoded: torch.Tensor | None = None
     validation_fingerprint = None
+    instruction_validation_examples: list[TrainingExample] = []
+    instruction_validation_fingerprint = None
+    if instruction_validation_path is not None and instruction_validation_path.exists():
+        instruction_validation_examples = load_examples(instruction_validation_path)
+        instruction_validation_fingerprint = _file_fingerprint(instruction_validation_path)
     if validation_path is not None and validation_path.exists():
         validation_text = validation_path.read_text(encoding="utf-8")
         if validation_text.strip():
@@ -288,6 +414,7 @@ def train(
     history: list[dict[str, float | int | None]] = []
     last_loss = float("inf")
     best_validation_loss = float("inf")
+    best_validation_kind: str | None = None
     best_validation_step: int | None = None
     best_model_state: dict[str, torch.Tensor] | None = None
 
@@ -305,6 +432,7 @@ def train(
                 batch_size,
                 device,
                 instruction_generator,
+                instruction_sampling_weights,
             )
         else:
             x, y = batchify(train_encoded, block_size, batch_size, device, train_generator)
@@ -322,16 +450,37 @@ def train(
                 if validation_encoded is not None
                 else None
             )
+            instruction_validation_loss = evaluate_instruction_loss(
+                model,
+                instruction_validation_examples,
+                tokenizer,
+                block_size,
+                batch_size,
+                device,
+            )
+            selection_loss = (
+                instruction_validation_loss
+                if instruction_validation_loss is not None
+                else validation_loss
+            )
+            selection_kind = (
+                "instruction_validation"
+                if instruction_validation_loss is not None
+                else "general_validation"
+            )
             history.append(
                 {
                     "step": step,
                     "train_loss": last_loss,
                     "validation_loss": validation_loss,
+                    "instruction_validation_loss": instruction_validation_loss,
+                    "selection_loss": selection_loss,
                 }
             )
 
-            if validation_loss is not None and validation_loss < best_validation_loss:
-                best_validation_loss = validation_loss
+            if selection_loss is not None and selection_loss < best_validation_loss:
+                best_validation_loss = selection_loss
+                best_validation_kind = selection_kind
                 best_validation_step = step
                 best_model_state = _snapshot_state(model)
                 torch.save(
@@ -341,8 +490,10 @@ def train(
                         "optimizer_state": optimizer.state_dict(),
                         "model_state": best_model_state,
                         "seed": seed,
-                        "selection": "best_validation_loss",
+                        "selection": selection_kind,
                         "validation_loss": validation_loss,
+                        "instruction_validation_loss": instruction_validation_loss,
+                        "selection_loss": selection_loss,
                     },
                     output_dir / "best_checkpoint.pt",
                 )
@@ -391,6 +542,9 @@ def train(
                     best_validation_loss if best_model_state is not None else None
                 ),
                 "best_validation_step": best_validation_step,
+                "best_validation_kind": best_validation_kind,
+                "instruction_validation_enabled": bool(instruction_validation_examples),
+                "instruction_validation_fingerprint": instruction_validation_fingerprint,
                 "final_model_selection": (
                     "best_validation_loss"
                     if best_model_state is not None
@@ -401,6 +555,7 @@ def train(
                 "instruction_mix_ratio": instruction_mix_ratio,
                 "instruction_token_count": instruction_token_count,
                 "instruction_fingerprints": instruction_fingerprints,
+                "instruction_sampling_policy": instruction_sampling_policy,
                 "source_fingerprint": _file_fingerprint(corpus_path),
                 "validation_fingerprint": validation_fingerprint,
                 "training_text_characters": len(train_text),
@@ -420,13 +575,14 @@ def main() -> None:
     parser.add_argument("--instructions", type=Path, default=Path("data/raw/indoone_instructions.jsonl"))
     parser.add_argument("--multilingual-instructions", type=Path, default=Path("data/raw/indoone_multilingual_examples.jsonl"))
     parser.add_argument("--capability-instructions", type=Path, default=Path("data/raw/indoone_phone_contacts_examples.jsonl"))
+    parser.add_argument("--instruction-validation", type=Path, default=Path("data/processed/instructions_validation.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
     parser.add_argument("--steps", type=int, default=10000)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--checkpoint-interval", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--instruction-mix-ratio", type=float, default=0.7)
+    parser.add_argument("--instruction-mix-ratio", type=float, default=0.9)
     args = parser.parse_args()
     loss = train(
         args.corpus,
@@ -440,6 +596,7 @@ def main() -> None:
         args.instructions,
         args.multilingual_instructions,
         args.capability_instructions,
+        args.instruction_validation,
         args.instruction_mix_ratio,
     )
     print(f"training complete; final loss={loss:.4f}")

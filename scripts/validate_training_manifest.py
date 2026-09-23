@@ -50,6 +50,18 @@ def main() -> int:
             raise SystemExit(f"training default {key} must be a positive integer")
     if not isinstance(defaults.get("learning_rate"), (int, float)) or defaults["learning_rate"] <= 0:
         raise SystemExit("training default learning_rate must be positive")
+    if defaults["steps"] != 8000:
+        raise SystemExit("final training manifest requires exactly 8000 steps")
+    instruction_mix_ratio = defaults.get("instruction_mix_ratio")
+    if not isinstance(instruction_mix_ratio, (int, float)) or not 0.0 < float(instruction_mix_ratio) <= 1.0:
+        raise SystemExit("training default instruction_mix_ratio must be in (0, 1]")
+    sampling = defaults.get("instruction_sampling")
+    if not isinstance(sampling, dict) or set(sampling) != {"curated", "generated_multilingual", "capability"}:
+        raise SystemExit("training default instruction_sampling must define curated, generated_multilingual, and capability")
+    if any(not isinstance(value, (int, float)) or value <= 0 for value in sampling.values()):
+        raise SystemExit("instruction sampling probabilities must be positive numbers")
+    if abs(sum(float(value) for value in sampling.values()) - 1.0) > 1e-9:
+        raise SystemExit("instruction sampling probabilities must sum to 1")
 
     print("training_manifest=valid")
     print("automatic_training=enabled")

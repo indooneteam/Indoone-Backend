@@ -7,7 +7,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
 def run(command: list[str]) -> None:
     print("$", " ".join(command), flush=True)
     subprocess.run(command, check=True)
@@ -15,13 +14,13 @@ def run(command: list[str]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Prepare, validate, assemble, train, publish, and evaluate an Indoone model in one command."
+        description="Prepare, validate, train, evaluate, and optionally publish an Indoone model."
     )
-    parser.add_argument("--steps", type=int, default=2000)
+    parser.add_argument("--steps", type=int, default=8000)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--checkpoint-interval", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--instruction-mix-ratio", type=float, default=0.7)
+    parser.add_argument("--instruction-mix-ratio", type=float, default=0.9)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--skip-upload", action="store_true")
     parser.add_argument("--skip-eval", action="store_true")
@@ -34,8 +33,9 @@ def main() -> None:
 
     python = sys.executable
     eval_prompts = Path("data/evaluation/behavior_prompts.jsonl")
-    assembled_instructions = Path("data/processed/instructions_train.jsonl")
-    assembled_validation = Path("data/processed/instructions_validation.jsonl")
+    curated_instructions = Path("data/processed/curated_instructions.jsonl")
+    generated_instructions = Path("data/processed/generated_multilingual_examples.jsonl")
+    validation_instructions = Path("data/processed/instructions_validation.jsonl")
     allow_cpu_training = os.getenv("INDOONE_ALLOW_CPU_TRAINING", "false").strip().lower() in {
         "1",
         "true",
@@ -43,7 +43,30 @@ def main() -> None:
         "on",
     }
 
+    # Build deterministic augmentation into generated/processed artifacts only.
     run([python, "scripts/build_multilingual_training_pack.py"])
+
+    # Readiness audit includes the generated augmentation but never rewrites raw sources.
+    run(
+        [
+            python,
+            "scripts/audit_dataset.py",
+            "--corpus",
+            "data/processed/generated_multilingual_corpus.txt",
+            "--instructions",
+            "data/raw/indoone_instructions.jsonl",
+            "--instructions",
+            "data/raw/core_instruction_seed.jsonl",
+            "--instructions",
+            "data/raw/indoone_multilingual_examples.jsonl",
+            "--instructions",
+            "data/raw/indoone_phone_contacts_examples.jsonl",
+            "--instructions",
+            str(generated_instructions),
+            "--multilingual",
+            str(generated_instructions),
+        ]
+    )
 
     if shutil.which("nvidia-smi") is None:
         if not allow_cpu_training:
@@ -67,15 +90,23 @@ def main() -> None:
             "data/processed",
         ]
     )
+
+    # Curated instruction data is kept in its own pool so it can be deliberately
+    # oversampled during supervised training.
     run(
         [
             python,
-            "-m",
-            "scripts.assemble_training_dataset",
+            "scripts/assemble_training_dataset.py",
+            "--source",
+            "data/raw/indoone_instructions.jsonl",
+            "--source",
+            "data/raw/core_instruction_seed.jsonl",
+            "--source",
+            "data/raw/indoone_multilingual_examples.jsonl",
             "--output",
-            str(assembled_instructions),
+            str(curated_instructions),
             "--validation-output",
-            str(assembled_validation),
+            str(validation_instructions),
             "--seed",
             str(args.seed),
         ]
@@ -85,11 +116,18 @@ def main() -> None:
             python,
             "scripts/validate_dataset_quality.py",
             "--source",
-            str(assembled_instructions),
+            str(curated_instructions),
             "--source",
-            str(assembled_validation),
+            str(validation_instructions),
+            "--source",
+            str(generated_instructions),
+            "--source",
+            "data/raw/indoone_phone_contacts_examples.jsonl",
         ]
     )
+    run([python, "scripts/validate_training_manifest.py"])
+    run([python, "scripts/validate_final_training_recipe.py"])
+
     run(
         [
             python,
@@ -100,9 +138,13 @@ def main() -> None:
             "--validation",
             "data/processed/validation.txt",
             "--instructions",
-            str(assembled_instructions),
+            str(curated_instructions),
             "--multilingual-instructions",
-            "data/raw/indoone_multilingual_examples.jsonl",
+            str(generated_instructions),
+            "--capability-instructions",
+            "data/raw/indoone_phone_contacts_examples.jsonl",
+            "--instruction-validation",
+            str(validation_instructions),
             "--output",
             "models/indoone-small",
             "--steps",

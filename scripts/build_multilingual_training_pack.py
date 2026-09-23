@@ -5,9 +5,9 @@ from pathlib import Path
 
 
 SOURCE = "synthetic_multilingual_v1"
-INSTRUCTION_PATH = Path("data/raw/indoone_instructions.jsonl")
-MULTILINGUAL_PATH = Path("data/raw/indoone_multilingual_examples.jsonl")
-CORPUS_PATH = Path("data/raw/indoone_corpus.txt")
+INSTRUCTION_PATH = Path("data/processed/generated_multilingual_examples.jsonl")
+MULTILINGUAL_PATH = INSTRUCTION_PATH
+CORPUS_PATH = Path("data/processed/generated_multilingual_corpus.txt")
 
 # This is deterministic augmentation, not a replacement for curated human data.
 # It is intentionally balanced across the initial Indian-language target set so
@@ -205,7 +205,9 @@ def _make_rows(per_template: int = 100) -> list[dict[str, object]]:
             a = 11 * i + 3
             b = 7 * i + 2
             values = {
-                "a": a, "b": b, "r": a + b,
+                "a": a,
+                "b": b,
+                "r": a + b,
             }
             rows.append({"instruction": t["add"].format(**values), "response": t["add_r"].format(**values), "category": "math", "language": lang, "source": SOURCE})
             rows.append({"instruction": t["sub"].format(a=a + b, b=b), "response": t["sub_r"].format(a=a + b, b=b, r=a), "category": "math", "language": lang, "source": SOURCE})
@@ -228,21 +230,36 @@ def _make_rows(per_template: int = 100) -> list[dict[str, object]]:
 
 
 def build() -> dict[str, int]:
-    instructions = _load(INSTRUCTION_PATH)
-    multilingual = _load(MULTILINGUAL_PATH)
     generated = _make_rows()
-    instructions.extend(generated)
-    multilingual.extend(generated)
 
     INSTRUCTION_PATH.parent.mkdir(parents=True, exist_ok=True)
-    INSTRUCTION_PATH.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in instructions), encoding="utf-8")
-    MULTILINGUAL_PATH.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in multilingual), encoding="utf-8")
+    MULTILINGUAL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    INSTRUCTION_PATH.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in generated),
+        encoding="utf-8",
+    )
+    MULTILINGUAL_PATH.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in generated),
+        encoding="utf-8",
+    )
 
     corpus_seed = "\n".join(f"{row['instruction']} {row['response']}" for row in generated)
     repeats = max(1, (1_000_000 // max(1, len(corpus_seed))) + 1)
     corpus = (corpus_seed + "\n") * repeats
-    CORPUS_PATH.write_text(corpus[:1_100_000], encoding="utf-8")
-    return {"generated_rows": len(generated), "instruction_rows": len(instructions), "multilingual_rows": len(multilingual), "corpus_chars": min(len(corpus), 1_100_000)}
+    CORPUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    CORPUS_PATH.write_text(
+        corpus[:1_100_000],
+        encoding="utf-8",
+    )
+
+    return {
+        "generated_rows": len(generated),
+        "instruction_rows": len(generated),
+        "multilingual_rows": len(generated),
+        "generated_path": str(INSTRUCTION_PATH),
+        "generated_corpus_path": str(CORPUS_PATH),
+        "corpus_chars": min(len(corpus), 1_100_000),
+    }
 
 
 if __name__ == "__main__":

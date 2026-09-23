@@ -72,3 +72,42 @@ def test_train_writes_checkpoint_and_history(tmp_path: Path) -> None:
     )
     assert checkpoint["model_state"]
     assert checkpoint["config"]["block_size"] >= 2
+
+
+
+def test_weighted_instruction_pools_prioritize_curated_examples(tmp_path: Path) -> None:
+    curated = tmp_path / "curated_instructions.jsonl"
+    generated = tmp_path / "generated_multilingual_examples.jsonl"
+    capability = tmp_path / "indoone_phone_contacts_examples.jsonl"
+
+    curated.write_text(
+        json.dumps({"instruction": "Curated one", "response": "Useful curated response", "category": "general"}) + "\n"
+        + json.dumps({"instruction": "Curated two", "response": "Another curated response", "category": "general"}) + "\n",
+        encoding="utf-8",
+    )
+    generated.write_text(
+        "".join(
+            json.dumps({"instruction": f"Generated {i}", "response": f"Generated response {i}", "category": "math"}) + "\n"
+            for i in range(20)
+        ),
+        encoding="utf-8",
+    )
+    capability.write_text(
+        json.dumps({"instruction": "Call contact", "response": "Ask for confirmation before calling.", "category": "tools"}) + "\n",
+        encoding="utf-8",
+    )
+
+    from app.ai.train import _merge_instruction_sets_weighted
+
+    examples, _, weights, policy = _merge_instruction_sets_weighted(
+        [curated, generated, capability]
+    )
+
+    assert len(examples) == 23
+    assert abs(sum(weights) - 1.0) < 1e-6
+    assert policy[curated.name]["target_probability"] == 0.70
+    assert policy[generated.name]["target_probability"] == 0.25
+    assert policy[capability.name]["target_probability"] == 0.05
+    assert abs(sum(weights[:2]) - 0.70) < 1e-6
+    assert abs(sum(weights[2:22]) - 0.25) < 1e-6
+    assert abs(weights[-1] - 0.05) < 1e-6

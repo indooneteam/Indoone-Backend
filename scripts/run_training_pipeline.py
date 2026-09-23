@@ -8,23 +8,6 @@ import sys
 from pathlib import Path
 
 
-RAW_TRAINING_FILES = (
-    Path("data/raw/indoone_corpus.txt"),
-    Path("data/raw/indoone_instructions.jsonl"),
-    Path("data/raw/indoone_multilingual_examples.jsonl"),
-)
-
-
-def run(command: list[str]) -> None:
-    print("$", " ".join(command), flush=True)
-    subprocess.run(command, check=True)
-
-
-def restore_curated_raw_sources() -> None:
-    """Undo readiness-only synthetic augmentation before the actual training run."""
-    run(["git", "checkout", "--", *(str(path) for path in RAW_TRAINING_FILES)])
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Prepare, validate, train, evaluate, and optionally publish an Indoone model."

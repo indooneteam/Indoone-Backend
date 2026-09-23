@@ -4,6 +4,7 @@ import json
 import torch
 
 from app.ai.tokenizer import BPETokenizer
+from app.ai.training_data import format_instruction_prompt
 import app.ai.train as train_module
 from app.ai.train import _instruction_batchify, _prepare_instruction_examples, train
 
@@ -27,6 +28,12 @@ def test_bpe_tokenizer_round_trip(tmp_path: Path) -> None:
     assert loaded.decode(encoded) == text
     assert loaded.stoi["<bos>"] == tokenizer.stoi["<bos>"]
 
+
+
+def test_instruction_training_prompt_uses_real_newlines() -> None:
+    rendered = format_instruction_prompt("Hello")
+    assert rendered == "<instruction>\nHello\n</instruction>\n<response>\n"
+    assert "\\n" not in rendered
 
 
 def test_prepared_instruction_batches_match_on_demand_tokenization() -> None:

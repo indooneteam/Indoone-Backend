@@ -14,6 +14,16 @@ from pathlib import Path
 MAX_TEXT_LENGTH = 8_000
 
 
+def format_instruction_prompt(instruction: str) -> str:
+    """Render an instruction prompt exactly as the inference runtime expects."""
+    return (
+        "<instruction>\n"
+        f"{instruction.strip()}\n"
+        "</instruction>\n"
+        "<response>\n"
+    )
+
+
 @dataclass(frozen=True)
 class TrainingExample:
     instruction: str
@@ -22,11 +32,8 @@ class TrainingExample:
 
     def as_text(self) -> str:
         return (
-            "<instruction>\n"
-            f"{self.instruction.strip()}\n"
-            "</instruction>\n"
-            "<response>\n"
-            f"{self.response.strip()}\n"
+            format_instruction_prompt(self.instruction)
+            + f"{self.response.strip()}\n"
             "</response>\n"
             "<eos>"
         )

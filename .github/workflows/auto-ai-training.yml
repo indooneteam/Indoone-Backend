@@ -48,23 +48,24 @@ jobs:
       - name: Build balanced Indian-language training pack
         run: python scripts/build_multilingual_training_pack.py
 
-      - name: Audit dataset size and diversity
-        run: python scripts/audit_dataset.py --json
-
-      - name: Assemble deduplicated training dataset
+      - name: Audit final training data sources
         run: |
-          python scripts/assemble_training_dataset.py \
-            --output data/processed/instructions_train.jsonl \
-            --validation-output data/processed/instructions_validation.jsonl
+          python scripts/audit_dataset.py --json             --corpus data/processed/generated_multilingual_corpus.txt             --instructions data/raw/indoone_instructions.jsonl             --instructions data/raw/core_instruction_seed.jsonl             --instructions data/raw/indoone_multilingual_examples.jsonl             --instructions data/raw/indoone_phone_contacts_examples.jsonl             --instructions data/processed/generated_multilingual_examples.jsonl             --multilingual data/processed/generated_multilingual_examples.jsonl
 
-      - name: Validate curated dataset quality
+      - name: Assemble curated training dataset
         run: |
-          python scripts/validate_dataset_quality.py \
-            --source data/processed/instructions_train.jsonl \
-            --source data/processed/instructions_validation.jsonl
+          python scripts/assemble_training_dataset.py             --source data/raw/indoone_instructions.jsonl             --source data/raw/core_instruction_seed.jsonl             --source data/raw/indoone_multilingual_examples.jsonl             --output data/processed/curated_instructions.jsonl             --validation-output data/processed/instructions_validation.jsonl
+
+      - name: Validate final curated and generated data
+        run: |
+          python scripts/validate_dataset_quality.py             --source data/processed/curated_instructions.jsonl             --source data/processed/instructions_validation.jsonl             --source data/processed/generated_multilingual_examples.jsonl             --source data/raw/indoone_phone_contacts_examples.jsonl
 
       - name: Validate training manifest
         run: python scripts/validate_training_manifest.py
+
+      - name: Validate final training recipe
+        run: python scripts/validate_final_training_recipe.py
+
 
   train_and_promote:
     name: Train, gate, and publish model

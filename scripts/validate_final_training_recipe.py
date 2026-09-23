@@ -21,6 +21,7 @@ RAW_FILES = (
 GENERATED_FILE = Path("data/processed/generated_multilingual_examples.jsonl")
 GENERATED_CORPUS = Path("data/processed/generated_multilingual_corpus.txt")
 CURATED_FILE = Path("data/processed/curated_instructions.jsonl")
+CAPABILITY_FILE = Path("data/raw/indoone_phone_contacts_examples.jsonl")
 EVAL_FILE = Path("data/eval/behavior.jsonl")
 
 
@@ -61,7 +62,7 @@ def validate() -> dict[str, object]:
         raise SystemExit("generated multilingual readiness corpus is unexpectedly small")
 
     examples, fingerprints, weights, policy = _merge_instruction_sets_weighted(
-        [CURATED_FILE, GENERATED_FILE]
+        [CURATED_FILE, GENERATED_FILE, CAPABILITY_FILE]
     )
     if not examples:
         raise SystemExit("final instruction pool is empty")
@@ -70,12 +71,15 @@ def validate() -> dict[str, object]:
 
     curated_policy = policy.get(CURATED_FILE.name)
     generated_policy = policy.get(GENERATED_FILE.name)
-    if not curated_policy or not generated_policy:
+    capability_policy = policy.get(CAPABILITY_FILE.name)
+    if not curated_policy or not generated_policy or not capability_policy:
         raise SystemExit("final instruction pool policy is incomplete")
     if abs(float(curated_policy["target_probability"]) - 0.70) > 1e-9:
         raise SystemExit("curated instruction sampling target changed unexpectedly")
     if abs(float(generated_policy["target_probability"]) - 0.25) > 1e-9:
         raise SystemExit("generated instruction sampling target changed unexpectedly")
+    if abs(float(capability_policy["target_probability"]) - 0.05) > 1e-9:
+        raise SystemExit("capability instruction sampling target changed unexpectedly")
 
     total_weight = sum(weights)
     if abs(total_weight - 1.0) > 1e-5:
@@ -133,6 +137,7 @@ def validate() -> dict[str, object]:
         "raw_sha256": hashes,
         "curated_examples": len(curated),
         "generated_examples": len(generated),
+        "capability_examples": len(load_examples(CAPABILITY_FILE)),
         "generated_corpus_characters": len(GENERATED_CORPUS.read_text(encoding="utf-8")),
         "instruction_sampling_policy": policy,
         "evaluation_cases": len(eval_cases),

@@ -63,6 +63,10 @@ def validate() -> dict[str, object]:
         raise SystemExit(f"generated instruction pool too small: {len(generated)}")
     if len(curated) < 100:
         raise SystemExit(f"curated instruction pool too small: {len(curated)}")
+    validation_path = CURATED_FILE.parent / "instructions_validation.jsonl"
+    validation_examples = load_examples(validation_path)
+    if len(validation_examples) < 20:
+        raise SystemExit(f"held-out instruction validation pool too small: {len(validation_examples)}")
     if len(GENERATED_CORPUS.read_text(encoding="utf-8")) < 1_000_000:
         raise SystemExit("generated multilingual readiness corpus is unexpectedly small")
 
@@ -79,9 +83,9 @@ def validate() -> dict[str, object]:
     capability_policy = policy.get(CAPABILITY_FILE.name)
     if not curated_policy or not generated_policy or not capability_policy:
         raise SystemExit("final instruction pool policy is incomplete")
-    if abs(float(curated_policy["target_probability"]) - 0.70) > 1e-9:
+    if abs(float(curated_policy["target_probability"]) - 0.90) > 1e-9:
         raise SystemExit("curated instruction sampling target changed unexpectedly")
-    if abs(float(generated_policy["target_probability"]) - 0.25) > 1e-9:
+    if abs(float(generated_policy["target_probability"]) - 0.05) > 1e-9:
         raise SystemExit("generated instruction sampling target changed unexpectedly")
     if abs(float(capability_policy["target_probability"]) - 0.05) > 1e-9:
         raise SystemExit("capability instruction sampling target changed unexpectedly")
@@ -122,7 +126,6 @@ def validate() -> dict[str, object]:
         for line in EVAL_FILE.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    validation_examples = load_examples(CURATED_FILE.parent / "instructions_validation.jsonl")
     trained_prompts = {
         example.instruction.strip().casefold()
         for example in curated

@@ -233,7 +233,12 @@ def build() -> dict[str, int]:
     generated = _make_rows()
 
     INSTRUCTION_PATH.parent.mkdir(parents=True, exist_ok=True)
+    MULTILINGUAL_PATH.parent.mkdir(parents=True, exist_ok=True)
     INSTRUCTION_PATH.write_text(
+        "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in generated),
+        encoding="utf-8",
+    )
+    MULTILINGUAL_PATH.write_text(
         "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in generated),
         encoding="utf-8",
     )
@@ -241,6 +246,7 @@ def build() -> dict[str, int]:
     corpus_seed = "\n".join(f"{row['instruction']} {row['response']}" for row in generated)
     repeats = max(1, (1_000_000 // max(1, len(corpus_seed))) + 1)
     corpus = (corpus_seed + "\n") * repeats
+    CORPUS_PATH.parent.mkdir(parents=True, exist_ok=True)
     CORPUS_PATH.write_text(
         corpus[:1_100_000],
         encoding="utf-8",

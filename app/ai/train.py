@@ -339,6 +339,53 @@ def evaluate_instruction_loss(
     return sum(losses) / len(losses)
 
 
+def _tokenizer_source_fingerprint(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _load_or_train_tokenizer(
+    tokenizer_text: str,
+    output_dir: Path,
+) -> BPETokenizer:
+    """Reuse a verified tokenizer cache to avoid repeating expensive CPU BPE training."""
+
+    tokenizer_path = output_dir / "tokenizer.json"
+    fingerprint_path = output_dir / "tokenizer_source.sha256"
+    source_fingerprint = _tokenizer_source_fingerprint(tokenizer_text)
+
+    if tokenizer_path.is_file() and fingerprint_path.is_file():
+        cached_fingerprint = fingerprint_path.read_text(encoding="utf-8").strip()
+        if cached_fingerprint == source_fingerprint:
+            print("tokenizer cache: valid; reusing existing tokenizer", flush=True)
+            return BPETokenizer.load(tokenizer_path)
+
+    # Support resuming an interrupted run from the tokenizer already written by
+    # the previous training process. A completed run has metadata/checkpoints,
+    # so this fallback only applies to the interrupted bootstrap case.
+    if (
+        tokenizer_path.is_file()
+        and not fingerprint_path.is_file()
+        and not (output_dir / "checkpoint.pt").is_file()
+        and not (output_dir / "metadata.json").is_file()
+    ):
+        print("tokenizer cache: interrupted-run bootstrap; reusing existing tokenizer", flush=True)
+        return BPETokenizer.load(tokenizer_path)
+
+    print("tokenizer cache: training BPE tokenizer (first run only)", flush=True)
+    started = time.monotonic()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tokenizer = BPETokenizer.train(
+        tokenizer_text,
+        vocab_size=DEFAULT_VOCAB_SIZE,
+        min_frequency=DEFAULT_MIN_FREQUENCY,
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    tokenizer.save(tokenizer_path)
+    fingerprint_path.write_text(source_fingerprint + "\n", encoding="utf-8")
+    print(f"tokenizer cache: trained in {time.monotonic() - started:.1f}s", flush=True)
+    return tokenizer
+
+
 def _snapshot_state(model: IndooneTransformer) -> dict[str, torch.Tensor]:
     """Clone model weights so a later optimizer step cannot mutate the snapshot."""
     return {
@@ -376,6 +423,9 @@ def train(
     random.seed(seed)
     torch.manual_seed(seed)
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    if device == "cuda":
+        torch.set_float32_matmul_precision("high")
+        print(f"CUDA training enabled on {torch.cuda.get_device_name(0)}", flush=True)
 
     train_text = corpus_path.read_text(encoding="utf-8")
     instruction_paths = [

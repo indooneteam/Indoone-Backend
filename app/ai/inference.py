@@ -55,6 +55,7 @@ class LocalModelRuntime:
         generated_ids: list[int],
         penalty: float,
     ) -> torch.Tensor:
+        """Penalize tokens already generated in the current completion only."""
         if penalty <= 1.0 or not generated_ids:
             return logits
         adjusted = logits.clone()
@@ -138,6 +139,7 @@ class LocalModelRuntime:
 
         prompt_ids = self._prompt_ids(prompt)
         generated_ids = list(prompt_ids)
+        completion_ids: list[int] = []
         eos_id = self.tokenizer.stoi["<eos>"]
 
         for _ in range(max_new_tokens):
@@ -147,7 +149,7 @@ class LocalModelRuntime:
             next_logits = logits[:, -1, :]
             next_logits = self._apply_repetition_penalty(
                 next_logits,
-                generated_ids,
+                completion_ids,
                 repetition_penalty,
             )
             next_logits = self._block_repeated_ngram(
@@ -158,6 +160,7 @@ class LocalModelRuntime:
             next_id = self._select_next_token(next_logits, temperature)
 
             generated_ids.append(next_id)
+            completion_ids.append(next_id)
             if next_id == eos_id:
                 break
 

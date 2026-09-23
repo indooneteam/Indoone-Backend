@@ -374,7 +374,11 @@ def _load_or_train_tokenizer(
     print("tokenizer cache: training BPE tokenizer (first run only)", flush=True)
     started = time.monotonic()
     output_dir.mkdir(parents=True, exist_ok=True)
-    tokenizer = _load_or_train_tokenizer(tokenizer_text, output_dir)
+    tokenizer = BPETokenizer.train(
+        tokenizer_text,
+        vocab_size=DEFAULT_VOCAB_SIZE,
+        min_frequency=DEFAULT_MIN_FREQUENCY,
+    )
     output_dir.mkdir(parents=True, exist_ok=True)
     tokenizer.save(tokenizer_path)
     fingerprint_path.write_text(source_fingerprint + "\n", encoding="utf-8")
@@ -456,11 +460,7 @@ def train(
             + "\n\n"
             + (output_dir / "instruction_corpus.txt").read_text(encoding="utf-8")
         )
-    tokenizer = BPETokenizer.train(
-        tokenizer_text,
-        vocab_size=DEFAULT_VOCAB_SIZE,
-        min_frequency=DEFAULT_MIN_FREQUENCY,
-    )
+    tokenizer = _load_or_train_tokenizer(tokenizer_text, output_dir)
     train_encoded = torch.tensor(
         tokenizer.encode(train_text, add_special_tokens=True),
         dtype=torch.long,

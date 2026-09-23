@@ -460,11 +460,7 @@ def train(
             + "\n\n"
             + (output_dir / "instruction_corpus.txt").read_text(encoding="utf-8")
         )
-    tokenizer = BPETokenizer.train(
-        tokenizer_text,
-        vocab_size=DEFAULT_VOCAB_SIZE,
-        min_frequency=DEFAULT_MIN_FREQUENCY,
-    )
+    tokenizer = _load_or_train_tokenizer(tokenizer_text, output_dir)
     train_encoded = torch.tensor(
         tokenizer.encode(train_text, add_special_tokens=True),
         dtype=torch.long,

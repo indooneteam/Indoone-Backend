@@ -4,6 +4,7 @@ import json
 import torch
 
 from app.ai.tokenizer import BPETokenizer
+import app.ai.train as train_module
 from app.ai.train import _instruction_batchify, _prepare_instruction_examples, train
 
 
@@ -79,6 +80,47 @@ def test_tokenizer_cache_reuses_matching_source_and_interrupted_run(tmp_path: Pa
     fourth = _load_or_train_tokenizer(source, interrupted_dir)
     assert fourth.vocab_size == third.vocab_size
 
+
+
+def test_train_reuses_tokenizer_cache_on_same_training_source(tmp_path: Path, monkeypatch) -> None:
+    corpus = (
+        "Indoone trains a local model with curated data.\n\n"
+        "The assistant should be clear and honest.\n\n"
+        "Training data is validated before model training.\n\n"
+    )
+    corpus_path = tmp_path / "train.txt"
+    output_dir = tmp_path / "model"
+    corpus_path.write_text(corpus, encoding="utf-8")
+
+    original_train = train_module.BPETokenizer.train
+    calls = 0
+
+    def counted_train(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_train(*args, **kwargs)
+
+    monkeypatch.setattr(train_module.BPETokenizer, "train", counted_train)
+
+    train(
+        corpus_path=corpus_path,
+        output_dir=output_dir,
+        steps=1,
+        seed=42,
+        batch_size=1,
+        checkpoint_interval=1,
+    )
+    assert calls == 1
+
+    train(
+        corpus_path=corpus_path,
+        output_dir=output_dir,
+        steps=1,
+        seed=42,
+        batch_size=1,
+        checkpoint_interval=1,
+    )
+    assert calls == 1
 
 def test_train_writes_checkpoint_and_history(tmp_path: Path) -> None:
     corpus = (

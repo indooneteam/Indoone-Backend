@@ -38,17 +38,17 @@ def test_prepared_instruction_batches_match_on_demand_tokenization() -> None:
     uncached = _instruction_batchify(
         examples,
         tokenizer,
-        block_size=32,
+        block_size=128,
         batch_size=2,
         device="cpu",
         generator=torch.Generator().manual_seed(7),
         example_indices=[0, 1],
     )
-    prepared = _prepare_instruction_examples(examples, tokenizer, block_size=32)
+    prepared = _prepare_instruction_examples(examples, tokenizer, block_size=128)
     cached = _instruction_batchify(
         examples,
         tokenizer,
-        block_size=32,
+        block_size=128,
         batch_size=2,
         device="cpu",
         generator=torch.Generator().manual_seed(7),

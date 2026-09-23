@@ -116,8 +116,6 @@ def main() -> None:
             "data/raw/core_instruction_seed.jsonl",
             "--source",
             "data/raw/indoone_multilingual_examples.jsonl",
-            "--source",
-            "data/raw/indoone_phone_contacts_examples.jsonl",
             "--output",
             str(curated_instructions),
             "--validation-output",
@@ -136,9 +134,12 @@ def main() -> None:
             str(validation_instructions),
             "--source",
             str(generated_instructions),
+            "--source",
+            "data/raw/indoone_phone_contacts_examples.jsonl",
         ]
     )
     run([python, "scripts/validate_training_manifest.py"])
+    run([python, "scripts/validate_final_training_recipe.py"])
 
     run(
         [
@@ -153,6 +154,8 @@ def main() -> None:
             str(curated_instructions),
             "--multilingual-instructions",
             str(generated_instructions),
+            "--capability-instructions",
+            "data/raw/indoone_phone_contacts_examples.jsonl",
             "--output",
             "models/indoone-small",
             "--steps",

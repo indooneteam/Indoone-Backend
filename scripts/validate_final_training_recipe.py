@@ -11,7 +11,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.ai.tokenizer import BPETokenizer
-from app.ai.train import _instruction_batchify, _merge_instruction_sets_weighted
+from app.ai.train import (
+    CAPABILITY_INSTRUCTION_WEIGHT,
+    CURATED_INSTRUCTION_WEIGHT,
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_CHECKPOINT_INTERVAL,
+    DEFAULT_INSTRUCTION_MIX_RATIO,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_TRAINING_STEPS,
+    DEFAULT_WEIGHT_DECAY,
+    GENERATED_INSTRUCTION_WEIGHT,
+    _instruction_batchify,
+    _merge_instruction_sets_weighted,
+)
 from app.ai.training_data import load_examples
 import torch
 
@@ -52,6 +64,28 @@ def _git_clean_raw_files() -> None:
 def validate() -> dict[str, object]:
     _git_clean_raw_files()
 
+    manifest = json.loads(Path("training_manifest.json").read_text(encoding="utf-8"))
+    defaults = manifest.get("training_defaults", {})
+    expected_defaults = {
+        "steps": DEFAULT_TRAINING_STEPS,
+        "batch_size": DEFAULT_BATCH_SIZE,
+        "checkpoint_interval": DEFAULT_CHECKPOINT_INTERVAL,
+        "learning_rate": DEFAULT_LEARNING_RATE,
+        "weight_decay": DEFAULT_WEIGHT_DECAY,
+        "seed": 42,
+        "instruction_mix_ratio": DEFAULT_INSTRUCTION_MIX_RATIO,
+    }
+    if {key: defaults.get(key) for key in expected_defaults} != expected_defaults:
+        raise SystemExit("training_manifest.json defaults do not match the executable training recipe")
+    sampling_manifest = defaults.get("instruction_sampling", {})
+    expected_sampling = {
+        "curated": CURATED_INSTRUCTION_WEIGHT,
+        "generated_multilingual": GENERATED_INSTRUCTION_WEIGHT,
+        "capability": CAPABILITY_INSTRUCTION_WEIGHT,
+    }
+    if sampling_manifest != expected_sampling:
+        raise SystemExit("training_manifest.json sampling weights do not match the executable training recipe")
+
     required = [GENERATED_FILE, GENERATED_CORPUS, CURATED_FILE, EVAL_FILE]
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
@@ -83,11 +117,11 @@ def validate() -> dict[str, object]:
     capability_policy = policy.get(CAPABILITY_FILE.name)
     if not curated_policy or not generated_policy or not capability_policy:
         raise SystemExit("final instruction pool policy is incomplete")
-    if abs(float(curated_policy["target_probability"]) - 0.90) > 1e-9:
+    if abs(float(curated_policy["target_probability"]) - CURATED_INSTRUCTION_WEIGHT) > 1e-9:
         raise SystemExit("curated instruction sampling target changed unexpectedly")
-    if abs(float(generated_policy["target_probability"]) - 0.05) > 1e-9:
+    if abs(float(generated_policy["target_probability"]) - GENERATED_INSTRUCTION_WEIGHT) > 1e-9:
         raise SystemExit("generated instruction sampling target changed unexpectedly")
-    if abs(float(capability_policy["target_probability"]) - 0.05) > 1e-9:
+    if abs(float(capability_policy["target_probability"]) - CAPABILITY_INSTRUCTION_WEIGHT) > 1e-9:
         raise SystemExit("capability instruction sampling target changed unexpectedly")
 
     total_weight = sum(weights)

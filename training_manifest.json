@@ -12,7 +12,12 @@
   },
   "feature_contract": {
     "description": "Every user-facing AI capability should have a training/evaluation example before it can become a learned model behaviour.",
-    "required_fields": ["feature_id", "category", "training_examples", "evaluation_cases"],
+    "required_fields": [
+      "feature_id",
+      "category",
+      "training_examples",
+      "evaluation_cases"
+    ],
     "categories": [
       "instruction_following",
       "honesty",
@@ -27,10 +32,16 @@
     ]
   },
   "training_defaults": {
-    "steps": 2000,
+    "steps": 8000,
     "batch_size": 16,
     "checkpoint_interval": 500,
     "learning_rate": 0.0003,
-    "seed": 42
+    "seed": 42,
+    "instruction_mix_ratio": 0.9,
+    "instruction_sampling": {
+      "curated": 0.7,
+      "generated_multilingual": 0.25,
+      "capability": 0.05
+    }
   }
 }

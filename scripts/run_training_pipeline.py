@@ -7,6 +7,16 @@ import subprocess
 import sys
 from pathlib import Path
 
+from app.ai.train import (
+    DEFAULT_BATCH_SIZE,
+    DEFAULT_CHECKPOINT_INTERVAL,
+    DEFAULT_INSTRUCTION_MIX_RATIO,
+    DEFAULT_LEARNING_RATE,
+    DEFAULT_SEED,
+    DEFAULT_TRAINING_STEPS,
+)
+
+
 def run(command: list[str]) -> None:
     print("$", " ".join(command), flush=True)
     subprocess.run(command, check=True)
@@ -16,12 +26,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Prepare, validate, train, evaluate, and optionally publish an Indoone model."
     )
-    parser.add_argument("--steps", type=int, default=8000)
-    parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--checkpoint-interval", type=int, default=500)
-    parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--instruction-mix-ratio", type=float, default=0.9)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--steps", type=int, default=DEFAULT_TRAINING_STEPS)
+    parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    parser.add_argument("--checkpoint-interval", type=int, default=DEFAULT_CHECKPOINT_INTERVAL)
+    parser.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)
+    parser.add_argument("--instruction-mix-ratio", type=float, default=DEFAULT_INSTRUCTION_MIX_RATIO)
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--skip-upload", action="store_true")
     parser.add_argument("--skip-eval", action="store_true")
     args = parser.parse_args()
@@ -107,6 +117,8 @@ def main() -> None:
             str(curated_instructions),
             "--validation-output",
             str(validation_instructions),
+            "--validation-ratio",
+            "0.2",
             "--seed",
             str(args.seed),
         ]

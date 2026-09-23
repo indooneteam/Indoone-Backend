@@ -88,33 +88,14 @@ jobs:
       - name: Build balanced Indian-language training pack
         run: python scripts/build_multilingual_training_pack.py
 
-      - name: Report training runtime and select safe runtime budget
-        env:
-          INDOONE_ALLOW_CPU_TRAINING: "true"
+      - name: Report training runtime
         run: |
           python - <<'PY'
           import torch
           print(f"torch={torch.__version__}")
           print(f"cuda_available={torch.cuda.is_available()}")
-          if torch.cuda.is_available():
-              print("Using full GPU training budget.")
-          else:
-              print("Using bounded CPU training budget; Colab GPU remains the preferred path.")
+          print("Colab GPU remains the preferred path for the final training run.")
           PY
-
-          if python -c 'import torch,sys; sys.exit(0 if torch.cuda.is_available() else 1)'; then
-            {
-              echo 'INDOONE_TRAIN_STEPS=2000'
-              echo 'INDOONE_TRAIN_BATCH_SIZE=16'
-              echo 'INDOONE_TRAIN_CHECKPOINT_INTERVAL=500'
-            } >> "$GITHUB_ENV"
-          else
-            {
-              echo 'INDOONE_TRAIN_STEPS=300'
-              echo 'INDOONE_TRAIN_BATCH_SIZE=2'
-              echo 'INDOONE_TRAIN_CHECKPOINT_INTERVAL=100'
-            } >> "$GITHUB_ENV"
-          fi
 
       - name: Train candidate and run base evaluation
         env:
@@ -123,10 +104,11 @@ jobs:
           INDOONE_ALLOW_CPU_TRAINING: "true"
         run: |
           python scripts/run_training_pipeline.py \
-            --steps "$INDOONE_TRAIN_STEPS" \
-            --batch-size "$INDOONE_TRAIN_BATCH_SIZE" \
-            --checkpoint-interval "$INDOONE_TRAIN_CHECKPOINT_INTERVAL" \
-            --learning-rate 3e-4 \
+            --steps 8000 \
+            --batch-size 16 \
+            --checkpoint-interval 500 \
+            --learning-rate 1e-4 \
+            --instruction-mix-ratio 0.8 \
             --seed 42 \
             --skip-upload
 

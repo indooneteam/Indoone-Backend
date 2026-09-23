@@ -1,4 +1,5 @@
 import base64
+from pathlib import Path
 
 import pytest
 from cryptography.fernet import Fernet
@@ -70,7 +71,7 @@ def test_production_research_url_rejects_embedded_credentials(monkeypatch) -> No
 
 
 def test_env_files_are_ignored_except_example() -> None:
-    lines = open(".gitignore", encoding="utf-8").read().splitlines()
+    lines = Path(".gitignore").read_text(encoding="utf-8").splitlines()
 
     assert ".env" in lines
     assert ".env.*" in lines

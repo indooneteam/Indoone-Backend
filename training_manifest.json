@@ -35,12 +35,12 @@
     "steps": 8000,
     "batch_size": 16,
     "checkpoint_interval": 500,
-    "learning_rate": 0.0003,
+    "learning_rate": 0.0001,
     "seed": 42,
-    "instruction_mix_ratio": 0.9,
+    "instruction_mix_ratio": 0.8,
     "instruction_sampling": {
-      "curated": 0.7,
-      "generated_multilingual": 0.25,
+      "curated": 0.9,
+      "generated_multilingual": 0.05,
       "capability": 0.05
     }
   }

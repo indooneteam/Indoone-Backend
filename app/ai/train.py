@@ -62,9 +62,9 @@ def _merge_instruction_sets_weighted(
     much larger generated pool.
     """
     pool_targets = {
-        "generated_multilingual_examples.jsonl": 0.25,
+        "generated_multilingual_examples.jsonl": 0.05,
     }
-    default_target = 0.70
+    default_target = 0.90
 
     merged: list[TrainingExample] = []
     sampling_weights: list[float] = []
@@ -305,12 +305,12 @@ def train(
     validation_path: Path | None = None,
     batch_size: int = 8,
     checkpoint_interval: int = 500,
-    learning_rate: float = 3e-4,
+    learning_rate: float = 1e-4,
     instruction_path: Path | None = None,
     multilingual_instruction_path: Path | None = None,
     capability_instruction_path: Path | None = None,
     instruction_validation_path: Path | None = None,
-    instruction_mix_ratio: float = 0.9,
+    instruction_mix_ratio: float = 0.8,
 ) -> float:
     if steps <= 0:
         raise ValueError("steps must be greater than zero")
@@ -402,7 +402,7 @@ def train(
 
     config = {**DEFAULT_MODEL_CONFIG, "block_size": block_size}
     model = IndooneTransformer(vocab_size=tokenizer.vocab_size, **config).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.1)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=0.01)
 
     output_dir.mkdir(parents=True, exist_ok=True)
     tokenizer.save(output_dir / "tokenizer.json")
@@ -581,8 +581,8 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--checkpoint-interval", type=int, default=500)
-    parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--instruction-mix-ratio", type=float, default=0.9)
+    parser.add_argument("--learning-rate", type=float, default=1e-4)
+    parser.add_argument("--instruction-mix-ratio", type=float, default=0.8)
     args = parser.parse_args()
     loss = train(
         args.corpus,

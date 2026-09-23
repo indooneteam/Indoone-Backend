@@ -264,7 +264,7 @@ def train(
     instruction_path: Path | None = None,
     multilingual_instruction_path: Path | None = None,
     capability_instruction_path: Path | None = None,
-    instruction_mix_ratio: float = 0.7,
+    instruction_mix_ratio: float = 0.9,
 ) -> float:
     if steps <= 0:
         raise ValueError("steps must be greater than zero")

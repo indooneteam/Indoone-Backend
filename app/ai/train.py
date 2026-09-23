@@ -272,15 +272,12 @@ def evaluate_instruction_loss(
     with torch.inference_mode():
         for offset in range(0, len(examples), batch_size):
             batch_indices = list(range(offset, min(offset + batch_size, len(examples))))
-            if len(batch_indices) < batch_size:
-                # Pad the final evaluation batch by repeating its final example;
-                # repeated rows are weighted equally in the deterministic loss check.
-                batch_indices.extend([batch_indices[-1]] * (batch_size - len(batch_indices)))
+            current_batch_size = len(batch_indices)
             x, y = _instruction_batchify(
                 examples,
                 tokenizer,
                 block_size,
-                batch_size,
+                current_batch_size,
                 device,
                 torch.Generator().manual_seed(0),
                 example_indices=batch_indices,

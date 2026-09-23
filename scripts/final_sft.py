@@ -17,7 +17,11 @@ from torch import nn
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 from app.ai.train import (
+    CAPABILITY_INSTRUCTION_WEIGHT,
+    CURATED_INSTRUCTION_WEIGHT,
+    GENERATED_INSTRUCTION_WEIGHT,
     _instruction_batchify,
+    _merge_instruction_sets_weighted,
     _prepare_instruction_examples,
     evaluate_instruction_loss,
 )
@@ -26,11 +30,12 @@ from app.ai.training_data import load_examples
 
 DEFAULT_MODEL_DIR = Path("models/indoone-small")
 DEFAULT_TRAIN_INSTRUCTIONS = Path("data/processed/curated_instructions.jsonl")
+DEFAULT_GENERATED_INSTRUCTIONS = Path("data/processed/generated_multilingual_examples.jsonl")
 DEFAULT_VALIDATION_INSTRUCTIONS = Path("data/processed/instructions_validation.jsonl")
 DEFAULT_CAPABILITY_INSTRUCTIONS = Path("data/raw/indoone_phone_contacts_examples.jsonl")
-DEFAULT_STEPS = 5000
+DEFAULT_STEPS = 8000
 DEFAULT_BATCH_SIZE = 16
-DEFAULT_LEARNING_RATE = 5e-5
+DEFAULT_LEARNING_RATE = 3e-5
 DEFAULT_EVAL_INTERVAL = 100
 DEFAULT_SEED = 4242
 DEFAULT_WEIGHT_DECAY = 0.01
@@ -39,6 +44,7 @@ DEFAULT_WEIGHT_DECAY = 0.01
 def run_sft(
     model_dir: Path,
     train_instructions: Path,
+    generated_instructions: Path,
     validation_instructions: Path,
     capability_instructions: Path,
     steps: int,
@@ -88,13 +94,28 @@ def run_sft(
         best_state = None
 
     tokenizer = BPETokenizer.load(tokenizer_path)
-    train_examples = load_examples(train_instructions)
+    curated_examples = load_examples(train_instructions)
+    generated_examples = (
+        load_examples(generated_instructions)
+        if generated_instructions.is_file()
+        else []
+    )
     capability_examples = (
         load_examples(capability_instructions)
         if capability_instructions.is_file()
         else []
     )
-    train_examples = train_examples + capability_examples
+    source_examples = [curated_examples, generated_examples, capability_examples]
+    source_weights = [
+        CURATED_INSTRUCTION_WEIGHT,
+        GENERATED_INSTRUCTION_WEIGHT,
+        CAPABILITY_INSTRUCTION_WEIGHT,
+    ]
+    train_examples, _fingerprints, sampling_weights, sampling_policy = _merge_instruction_sets_weighted(
+        [train_instructions, generated_instructions, capability_instructions]
+    )
+    if not train_examples:
+        raise ValueError("SFT training pool is empty")
     validation_examples = load_examples(validation_instructions)
     if not train_examples or not validation_examples:
         raise ValueError("SFT train/validation sets must both be non-empty")
@@ -144,6 +165,7 @@ def run_sft(
             batch_size,
             device,
             generator,
+            sampling_weights=sampling_weights,
             prepared_examples=prepared,
         )
         _, loss = model(x, y)
@@ -218,6 +240,8 @@ def run_sft(
         "learning_rate": learning_rate,
         "seed": seed,
         "validation_examples": len(validation_examples),
+        "training_examples": len(train_examples),
+        "training_sampling_policy": sampling_policy,
         "best_validation_loss": best_loss if best_state is not None else None,
     }
     metadata_path.write_text(
@@ -238,6 +262,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run curated instruction SFT after base training.")
     parser.add_argument("--model-dir", type=Path, default=DEFAULT_MODEL_DIR)
     parser.add_argument("--train-instructions", type=Path, default=DEFAULT_TRAIN_INSTRUCTIONS)
+    parser.add_argument("--generated-instructions", type=Path, default=DEFAULT_GENERATED_INSTRUCTIONS)
     parser.add_argument("--validation-instructions", type=Path, default=DEFAULT_VALIDATION_INSTRUCTIONS)
     parser.add_argument("--capability-instructions", type=Path, default=DEFAULT_CAPABILITY_INSTRUCTIONS)
     parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
@@ -252,6 +277,7 @@ def main() -> None:
             run_sft(
                 model_dir=args.model_dir,
                 train_instructions=args.train_instructions,
+                generated_instructions=args.generated_instructions,
                 validation_instructions=args.validation_instructions,
                 capability_instructions=args.capability_instructions,
                 steps=args.steps,

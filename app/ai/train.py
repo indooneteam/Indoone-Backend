@@ -31,6 +31,7 @@ DEFAULT_CHECKPOINT_INTERVAL = 500
 DEFAULT_LEARNING_RATE = 1e-4
 DEFAULT_INSTRUCTION_MIX_RATIO = 0.8
 DEFAULT_WEIGHT_DECAY = 0.01
+DEFAULT_SEED = 42
 CURATED_INSTRUCTION_WEIGHT = 0.90
 GENERATED_INSTRUCTION_WEIGHT = 0.05
 CAPABILITY_INSTRUCTION_WEIGHT = 0.05
@@ -98,12 +99,10 @@ def _merge_instruction_sets_weighted(
         if not pool:
             continue
 
-        if "generated_multilingual_examples.jsonl" in path.name:
-            target = GENERATED_INSTRUCTION_WEIGHT
-        elif "phone_contacts_examples.jsonl" in path.name:
-            target = CAPABILITY_INSTRUCTION_WEIGHT
-        else:
-            target = default_target
+        target = next(
+            (weight for filename, weight in pool_targets.items() if filename in path.name),
+            default_target,
+        )
         per_example_weight = target / len(pool)
         start = len(merged)
         merged.extend(pool)
@@ -589,7 +588,7 @@ def main() -> None:
     parser.add_argument("--instruction-validation", type=Path, default=Path("data/processed/instructions_validation.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
     parser.add_argument("--steps", type=int, default=DEFAULT_TRAINING_STEPS)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--checkpoint-interval", type=int, default=DEFAULT_CHECKPOINT_INTERVAL)
     parser.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)

@@ -59,6 +59,27 @@ def test_prepared_instruction_batches_match_on_demand_tokenization() -> None:
     assert torch.equal(uncached[1], cached[1])
 
 
+
+def test_tokenizer_cache_reuses_matching_source_and_interrupted_run(tmp_path: Path, capsys) -> None:
+    from app.ai.train import _load_or_train_tokenizer
+
+    output_dir = tmp_path / "model"
+    source = "Hello Kannada ನಮಸ್ಕಾರ Hindi नमस्ते"
+    first = _load_or_train_tokenizer(source, output_dir)
+    assert (output_dir / "tokenizer.json").exists()
+    assert (output_dir / "tokenizer_source.sha256").exists()
+
+    second = _load_or_train_tokenizer(source, output_dir)
+    assert second.vocab_size == first.vocab_size
+    assert "valid; reusing existing tokenizer" in capsys.readouterr().out
+
+    interrupted_dir = tmp_path / "interrupted"
+    third = _load_or_train_tokenizer(source, interrupted_dir)
+    (interrupted_dir / "tokenizer_source.sha256").unlink()
+    fourth = _load_or_train_tokenizer(source, interrupted_dir)
+    assert fourth.vocab_size == third.vocab_size
+
+
 def test_train_writes_checkpoint_and_history(tmp_path: Path) -> None:
     corpus = (
         "Indoone builds local AI for useful assistance.\n\n"

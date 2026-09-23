@@ -8,20 +8,37 @@ import sys
 from pathlib import Path
 
 
+RAW_TRAINING_FILES = (
+    Path("data/raw/indoone_corpus.txt"),
+    Path("data/raw/indoone_instructions.jsonl"),
+    Path("data/raw/indoone_multilingual_examples.jsonl"),
+)
+
+
 def run(command: list[str]) -> None:
     print("$", " ".join(command), flush=True)
     subprocess.run(command, check=True)
 
 
+def restore_curated_raw_sources() -> None:
+    """Undo readiness-only synthetic augmentation before the actual training run."""
+    run(["git", "checkout", "--", *(str(path) for path in RAW_TRAINING_FILES)])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Prepare, validate, assemble, train, publish, and evaluate an Indoone model in one command."
+        description="Prepare, validate, train, evaluate, and optionally publish an Indoone model."
     )
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--checkpoint-interval", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--instruction-mix-ratio", type=float, default=0.7)
+    parser.add_argument(
+        "--instruction-mix-ratio",
+        type=float,
+        default=0.9,
+        help="Fraction of training steps sampled from curated instruction data.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--skip-upload", action="store_true")
     parser.add_argument("--skip-eval", action="store_true")
@@ -43,7 +60,11 @@ def main() -> None:
         "on",
     }
 
+    # Synthetic multilingual augmentation is a readiness check, not the general-language
+    # corpus for the final small-model run. Restore the curated raw sources before training.
     run([python, "scripts/build_multilingual_training_pack.py"])
+    run([python, "scripts/audit_dataset.py", "--json"])
+    restore_curated_raw_sources()
 
     if shutil.which("nvidia-smi") is None:
         if not allow_cpu_training:
@@ -72,6 +93,14 @@ def main() -> None:
             python,
             "-m",
             "scripts.assemble_training_dataset",
+            "--source",
+            "data/raw/indoone_instructions.jsonl",
+            "--source",
+            "data/raw/core_instruction_seed.jsonl",
+            "--source",
+            "data/raw/indoone_multilingual_examples.jsonl",
+            "--source",
+            "data/raw/indoone_phone_contacts_examples.jsonl",
             "--output",
             str(assembled_instructions),
             "--validation-output",
@@ -90,6 +119,7 @@ def main() -> None:
             str(assembled_validation),
         ]
     )
+    run([python, "scripts/validate_training_manifest.py"])
     run(
         [
             python,
@@ -101,8 +131,6 @@ def main() -> None:
             "data/processed/validation.txt",
             "--instructions",
             str(assembled_instructions),
-            "--multilingual-instructions",
-            "data/raw/indoone_multilingual_examples.jsonl",
             "--output",
             "models/indoone-small",
             "--steps",

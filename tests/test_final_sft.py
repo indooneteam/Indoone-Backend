@@ -4,9 +4,9 @@ import scripts.final_sft as sft
 
 
 def test_final_sft_defaults_are_careful() -> None:
-    assert sft.DEFAULT_STEPS == 1500
+    assert sft.DEFAULT_STEPS == 5000
     assert sft.DEFAULT_BATCH_SIZE == 16
-    assert sft.DEFAULT_LEARNING_RATE == 2e-5
+    assert sft.DEFAULT_LEARNING_RATE == 5e-5
     assert sft.DEFAULT_EVAL_INTERVAL == 100
     assert sft.DEFAULT_WEIGHT_DECAY == 0.01
 

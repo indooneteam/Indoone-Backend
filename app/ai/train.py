@@ -52,6 +52,60 @@ def _merge_instruction_sets(paths: list[Path]) -> tuple[list[TrainingExample], l
     return merged, fingerprints
 
 
+def _merge_instruction_sets_weighted(
+    paths: list[Path],
+) -> tuple[list[TrainingExample], list[str], list[float], dict[str, dict[str, int | float]]]:
+    """Merge instruction pools with explicit sampling priority.
+
+    Curated behavior examples are deliberately oversampled relative to synthetic
+    augmentation so the evaluation-driving examples are not drowned out by a
+    much larger generated pool.
+    """
+    pool_targets = {
+        "generated_multilingual_examples.jsonl": 0.25,
+        "phone_contacts_examples.jsonl": 0.05,
+    }
+    default_target = 0.70
+
+    merged: list[TrainingExample] = []
+    sampling_weights: list[float] = []
+    seen: set[tuple[str, str]] = set()
+    fingerprints: list[str] = []
+    policy: dict[str, dict[str, int | float]] = {}
+
+    for path in paths:
+        if not path.exists():
+            continue
+        fingerprints.append(_file_fingerprint(path))
+        pool: list[TrainingExample] = []
+        for example in load_examples(path):
+            key = (example.instruction.casefold(), example.response.casefold())
+            if key in seen:
+                continue
+            seen.add(key)
+            pool.append(example)
+
+        if not pool:
+            continue
+
+        target = pool_targets.get(path.name, default_target)
+        per_example_weight = target / len(pool)
+        start = len(merged)
+        merged.extend(pool)
+        sampling_weights.extend([per_example_weight] * len(pool))
+        policy[path.name] = {
+            "examples": len(pool),
+            "target_probability": target,
+            "start_index": start,
+        }
+
+    total_weight = sum(sampling_weights)
+    if total_weight <= 0:
+        raise ValueError("instruction dataset is empty")
+    sampling_weights = [weight / total_weight for weight in sampling_weights]
+    return merged, fingerprints, sampling_weights, policy
+
+
 def batchify(
     data: torch.Tensor,
     block_size: int,
@@ -79,6 +133,7 @@ def _instruction_batchify(
     batch_size: int,
     device: str,
     generator: torch.Generator,
+    sampling_weights: list[float] | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Build supervised instruction batches with loss only on response tokens."""
 
@@ -97,12 +152,25 @@ def _instruction_batchify(
     batch_targets: list[list[int]] = []
     max_length = 0
 
-    sample_indices = torch.randint(
-        0,
-        len(examples),
-        (batch_size,),
-        generator=generator,
-    )
+    if sampling_weights is None:
+        sample_indices = torch.randint(
+            0,
+            len(examples),
+            (batch_size,),
+            generator=generator,
+        )
+    else:
+        if len(sampling_weights) != len(examples):
+            raise ValueError("sampling_weights must match the instruction example count")
+        weights = torch.tensor(sampling_weights, dtype=torch.float32)
+        if torch.any(weights < 0) or float(weights.sum()) <= 0:
+            raise ValueError("instruction sampling weights must be non-negative and non-zero")
+        sample_indices = torch.multinomial(
+            weights,
+            num_samples=batch_size,
+            replacement=True,
+            generator=generator,
+        )
     for index in sample_indices.tolist():
         example = examples[index]
         prefix = (
@@ -223,8 +291,15 @@ def train(
     instruction_fingerprints: list[str] = []
     instruction_example_count = 0
     instruction_examples: list[TrainingExample] = []
+    instruction_sampling_weights: list[float] | None = None
+    instruction_sampling_policy: dict[str, dict[str, int | float]] = {}
     if instruction_enabled:
-        instruction_examples, instruction_fingerprints = _merge_instruction_sets(instruction_paths)
+        (
+            instruction_examples,
+            instruction_fingerprints,
+            instruction_sampling_weights,
+            instruction_sampling_policy,
+        ) = _merge_instruction_sets_weighted(instruction_paths)
         output_dir.mkdir(parents=True, exist_ok=True)
         instruction_corpus = output_dir / "instruction_corpus.txt"
         write_corpus(instruction_examples, instruction_corpus)
@@ -305,6 +380,7 @@ def train(
                 batch_size,
                 device,
                 instruction_generator,
+                instruction_sampling_weights,
             )
         else:
             x, y = batchify(train_encoded, block_size, batch_size, device, train_generator)
@@ -401,6 +477,7 @@ def train(
                 "instruction_mix_ratio": instruction_mix_ratio,
                 "instruction_token_count": instruction_token_count,
                 "instruction_fingerprints": instruction_fingerprints,
+                "instruction_sampling_policy": instruction_sampling_policy,
                 "source_fingerprint": _file_fingerprint(corpus_path),
                 "validation_fingerprint": validation_fingerprint,
                 "training_text_characters": len(train_text),
@@ -426,7 +503,7 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--checkpoint-interval", type=int, default=500)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
-    parser.add_argument("--instruction-mix-ratio", type=float, default=0.7)
+    parser.add_argument("--instruction-mix-ratio", type=float, default=0.9)
     args = parser.parse_args()
     loss = train(
         args.corpus,

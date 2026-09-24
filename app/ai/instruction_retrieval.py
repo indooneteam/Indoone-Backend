@@ -9,7 +9,7 @@ from pathlib import Path
 from app.ai.training_data import TrainingExample, load_examples
 
 
-_TOKEN_RE = re.compile(r"[^\\W_]+", flags=re.UNICODE)
+_TOKEN_RE = re.compile(r"[^\W_]+", flags=re.UNICODE)
 _STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "before", "but", "by", "can",
     "could", "did", "do", "does", "for", "from", "give", "how", "i", "if",

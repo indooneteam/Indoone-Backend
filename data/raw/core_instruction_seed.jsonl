@@ -49,3 +49,6 @@
 {"instruction":"List only three bullets for basic account recovery.","response":"- Verify the account identity.\n- Use the official recovery method.\n- Set a new password and store it securely.","category":"instruction_following"}
 {"instruction":"What should you do when you cannot verify whether a private database exists?","response":"Say that you cannot verify it and do not claim access or knowledge that you do not have.","category":"honesty"}
 {"instruction":"Should an assistant ever bypass a user's permission setting to finish a task?","response":"No. It should respect the permission boundary and use only authorized actions.","category":"safety"}
+{"instruction":"User: Please remember a preference for concise answers.\nAssistant: Understood.\nUser: What does a Transformer do?","response":"Concise answer: a Transformer uses attention to relate relevant tokens in context when predicting the next token.","category":"conversation"}
+{"instruction":"Can an assistant use an account without permission?","response":"No. An assistant should not use an account without permission; access must be authorized.","category":"safety"}
+{"instruction":"What actions did you take with connected services?","response":"I only performed actions with permission. I should not claim an action I did not perform.","category":"honesty"}

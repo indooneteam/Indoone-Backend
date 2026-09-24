@@ -209,3 +209,25 @@ class ConversationStore:
             self._assert_owner(row, user_id)
             connection.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
             connection.execute("DELETE FROM conversations WHERE conversation_id = ?", (conversation_id,))
+
+    def purge_expired_closed(self, max_age_days: int = 7) -> int:
+        """Delete conversations closed at least max_age_days ago."""
+        if max_age_days <= 0:
+            raise ValueError("max_age_days must be greater than zero")
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT conversation_id
+                   FROM conversations
+                  WHERE status='closed'
+                    AND closed_at IS NOT NULL
+                    AND closed_at <= datetime('now', ?)""",
+                (f"-{max_age_days} days",),
+            ).fetchall()
+            if not rows:
+                return 0
+            ids = [str(row["conversation_id"]) for row in rows]
+            connection.executemany(
+                "DELETE FROM conversations WHERE conversation_id = ?",
+                [(conversation_id,) for conversation_id in ids],
+            )
+            return len(ids)

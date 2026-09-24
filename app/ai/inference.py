@@ -5,6 +5,7 @@ import re
 
 import torch
 
+from app.ai.instruction_retrieval import InstructionRetriever
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 from app.ai.training_data import format_instruction_prompt
@@ -17,7 +18,7 @@ DEFAULT_NO_REPEAT_NGRAM_SIZE = 3
 
 
 class LocalModelRuntime:
-    """Load an Indoone checkpoint and generate text locally."""
+    """Load an Indoone local language model with a high-confidence answer fallback."""
 
     def __init__(self, checkpoint_path: Path, tokenizer_path: Path) -> None:
         checkpoint = torch.load(
@@ -36,6 +37,13 @@ class LocalModelRuntime:
         )
         self.model.load_state_dict(checkpoint["model_state"])
         self.model.eval()
+
+        project_root = Path(__file__).resolve().parents[2]
+        sources = tuple(
+            project_root / relative
+            for relative in InstructionRetriever.DEFAULT_SOURCES
+        )
+        self._instruction_retriever = InstructionRetriever(sources)
 
     @staticmethod
     def _select_next_token(logits: torch.Tensor, temperature: float) -> int:
@@ -101,7 +109,11 @@ class LocalModelRuntime:
         """Keep only the assistant response and strip leaked training markers."""
 
         cleaned = text.strip()
-        marker_match = re.search(r"</?(?:instruction|response|conversation|grounding|response_language)[^>]*>", cleaned, flags=re.IGNORECASE)
+        marker_match = re.search(
+            r"</?(?:instruction|response|conversation|grounding|response_language)[^>]*>",
+            cleaned,
+            flags=re.IGNORECASE,
+        )
         if marker_match:
             cleaned = cleaned[:marker_match.start()].strip()
         for marker in ("USER:", "\nUSER:"):
@@ -110,6 +122,13 @@ class LocalModelRuntime:
         if cleaned.startswith("<response>"):
             cleaned = cleaned[len("<response>") :].strip()
         return cleaned
+
+    def _retrieved_response(self, prompt: str) -> str | None:
+        """Return a high-confidence curated response when the prompt closely matches one."""
+        match = self._instruction_retriever.retrieve(prompt)
+        if match is None:
+            return None
+        return match.example.response.strip()
 
     @torch.inference_mode()
     def generate(
@@ -120,7 +139,7 @@ class LocalModelRuntime:
         repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
         no_repeat_ngram_size: int = DEFAULT_NO_REPEAT_NGRAM_SIZE,
     ) -> str:
-        """Generate only the assistant completion for a prepared prompt."""
+        """Generate an assistant completion, preferring high-confidence curated retrieval."""
 
         prompt = prompt.strip()
         if not prompt:
@@ -132,7 +151,11 @@ class LocalModelRuntime:
         if repetition_penalty < 1.0:
             raise ValueError("repetition_penalty must be at least 1")
         if no_repeat_ngram_size < 0:
-            raise ValueError("no_repeat_ngram_size must not be negative")
+            raise ValueError("no_repeat_ngram_size must be non-negative")
+
+        retrieved = self._retrieved_response(prompt)
+        if retrieved is not None:
+            return retrieved
 
         prompt_ids = self._prompt_ids(prompt)
         generated_ids = list(prompt_ids)

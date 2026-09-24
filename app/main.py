@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+import asyncio
 import logging
 import os
 import time
@@ -108,6 +109,18 @@ def _log_request(request: Request, request_id: str, started: float, status_code:
     )
 
 
+async def _conversation_cleanup_loop() -> None:
+    store = __import__("app.api.conversations", fromlist=["_store"])._store
+    while True:
+        try:
+            deleted = store.purge_expired_closed(max_age_days=7)
+            if deleted:
+                logger.info("expired conversations deleted", extra={"deleted_count": deleted})
+        except Exception:
+            logger.exception("expired conversation cleanup failed")
+        await asyncio.sleep(3600)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     validate_production_security_config()
@@ -115,7 +128,15 @@ async def lifespan(_: FastAPI):
     validate_environment_security_config()
     configure_sqlite_runtime()
     initialize_capability_store()
-    yield
+    cleanup_task = asyncio.create_task(_conversation_cleanup_loop())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Indoone Backend", version="0.3.0", lifespan=lifespan)

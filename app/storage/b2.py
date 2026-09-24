@@ -203,36 +203,43 @@ class B2Storage:
             return True
         except HTTPError as exc:
             temp_path.unlink(missing_ok=True)
-            if exc.code == 404:
-                return False
-            raise B2StorageError(f"B2 model download failed: HTTP {exc.code}") from exc
+            if exc.code not in (403, 404):
+                raise B2StorageError(f"B2 model download failed: HTTP {exc.code}") from exc
+            native_error = f"HTTP {exc.code}"
         except B2StorageError:
             temp_path.unlink(missing_ok=True)
             raise
         except (URLError, TimeoutError, OSError) as exc:
             temp_path.unlink(missing_ok=True)
-            try:
-                response = self._client.get_object(Bucket=self.bucket_name, Key=object_key)
-                with response["Body"] as body, local_path.open("wb") as handle:
-                    downloaded = 0
-                    while True:
-                        chunk = body.read(1024 * 1024)
-                        if not chunk:
-                            break
-                        downloaded += len(chunk)
-                        if downloaded > max_bytes:
-                            raise B2StorageError("B2 download exceeds configured size limit")
-                        handle.write(chunk)
-                return True
-            except B2StorageError:
-                local_path.unlink(missing_ok=True)
-                raise
-            except (BotoCoreError, ClientError, OSError) as fallback_exc:
-                local_path.unlink(missing_ok=True)
-                error_code = getattr(fallback_exc, "response", {}).get("Error", {}).get("Code", type(fallback_exc).__name__)
-                raise B2StorageError(
-                    f"B2 model download failed: native={type(exc).__name__}, s3={error_code}"
-                ) from fallback_exc
+            native_error = type(exc).__name__
+        else:
+            return True
+
+        # Some B2 application keys are usable through the S3-compatible API
+        # while the native file-download URL rejects the same object. Try S3
+        # before reporting the model as unavailable.
+        try:
+            response = self._client.get_object(Bucket=self.bucket_name, Key=object_key)
+            with response["Body"] as body, local_path.open("wb") as handle:
+                downloaded = 0
+                while True:
+                    chunk = body.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    downloaded += len(chunk)
+                    if downloaded > max_bytes:
+                        raise B2StorageError("B2 download exceeds configured size limit")
+                    handle.write(chunk)
+            return True
+        except B2StorageError:
+            local_path.unlink(missing_ok=True)
+            raise
+        except (BotoCoreError, ClientError, OSError) as fallback_exc:
+            local_path.unlink(missing_ok=True)
+            error_code = getattr(fallback_exc, "response", {}).get("Error", {}).get("Code", type(fallback_exc).__name__)
+            raise B2StorageError(
+                f"B2 model download failed: native={native_error}, s3={error_code}"
+            ) from fallback_exc
 
     def check_access(self) -> bool:
         self._authorize_native()

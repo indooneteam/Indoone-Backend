@@ -25,7 +25,7 @@ class B2Storage:
     AUTH_URL = "https://api.backblazeb2.com/b2api/v4/b2_authorize_account"
     MAX_OBJECT_KEY_LENGTH = 1024
     DEFAULT_MAX_UPLOAD_BYTES = 128 * 1024 * 1024
-    DEFAULT_MAX_DOWNLOAD_BYTES = 128 * 1024 * 1024
+    DEFAULT_MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024
     MAX_CONFIGURED_STORAGE_BYTES = 1024 * 1024 * 1024
 
     def __init__(self) -> None:
@@ -205,13 +205,13 @@ class B2Storage:
             temp_path.unlink(missing_ok=True)
             if exc.code == 404:
                 return False
-            raise B2StorageError("B2 model download failed") from exc
+            raise B2StorageError(f"B2 model download failed: HTTP {exc.code}") from exc
         except B2StorageError:
             temp_path.unlink(missing_ok=True)
             raise
         except (URLError, TimeoutError, OSError) as exc:
             temp_path.unlink(missing_ok=True)
-            raise B2StorageError("B2 model download failed") from exc
+            raise B2StorageError(f"B2 model download failed: {type(exc).__name__}") from exc
 
     def check_access(self) -> bool:
         self._authorize_native()

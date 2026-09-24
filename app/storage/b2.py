@@ -211,7 +211,28 @@ class B2Storage:
             raise
         except (URLError, TimeoutError, OSError) as exc:
             temp_path.unlink(missing_ok=True)
-            raise B2StorageError(f"B2 model download failed: {type(exc).__name__}") from exc
+            try:
+                response = self._client.get_object(Bucket=self.bucket_name, Key=object_key)
+                with response["Body"] as body, local_path.open("wb") as handle:
+                    downloaded = 0
+                    while True:
+                        chunk = body.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        downloaded += len(chunk)
+                        if downloaded > max_bytes:
+                            raise B2StorageError("B2 download exceeds configured size limit")
+                        handle.write(chunk)
+                return True
+            except B2StorageError:
+                local_path.unlink(missing_ok=True)
+                raise
+            except (BotoCoreError, ClientError, OSError) as fallback_exc:
+                local_path.unlink(missing_ok=True)
+                error_code = getattr(fallback_exc, "response", {}).get("Error", {}).get("Code", type(fallback_exc).__name__)
+                raise B2StorageError(
+                    f"B2 model download failed: native={type(exc).__name__}, s3={error_code}"
+                ) from fallback_exc
 
     def check_access(self) -> bool:
         self._authorize_native()

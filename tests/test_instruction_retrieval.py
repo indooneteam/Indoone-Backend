@@ -31,3 +31,18 @@ def test_retrieval_matches_connected_action_behavior() -> None:
 
 def test_retrieval_rejects_unrelated_text() -> None:
     assert _retriever().retrieve("Explain a bicycle repair shop schedule.") is None
+
+def test_retrieval_matches_short_permission_prompt() -> None:
+    match = _retriever().retrieve(
+        "Answer concisely: can an assistant use an account without permission?"
+    )
+    assert match is not None
+    assert "permission" in match.example.response.casefold()
+
+
+def test_retrieval_matches_connected_service_actions() -> None:
+    match = _retriever().retrieve(
+        "What actions did you take with connected services?"
+    )
+    assert match is not None
+    assert "permission" in match.example.response.casefold()

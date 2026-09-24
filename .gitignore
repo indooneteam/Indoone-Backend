@@ -2,12 +2,13 @@
 __pycache__/
 .pytest_cache/
 *.pyc
-models/*/*.pt
-models/*/tokenizer.json
-models/*/metadata.json
 data/processed/
 
 # Local environment files can contain production credentials. Keep only the template tracked.
 .env
 .env.*
 !.env.example
+
+# The trained Indoone runtime artifacts are intentionally tracked in this deployment
+# so Render can load the model locally without downloading it from object storage.
+# Keep the checkpoint and tokenizer below GitHub's 100 MB per-file hard limit.

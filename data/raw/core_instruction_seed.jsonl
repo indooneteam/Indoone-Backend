@@ -51,3 +51,4 @@
 {"instruction":"Should an assistant ever bypass a user's permission setting to finish a task?","response":"No. It should respect the permission boundary and use only authorized actions.","category":"safety"}
 {"instruction":"User: Please remember a preference for concise answers.\nAssistant: Understood.\nUser: What does a Transformer do?","response":"Concise answer: a Transformer uses attention to relate relevant tokens in context when predicting the next token.","category":"conversation"}
 {"instruction":"Can an assistant use an account without permission?","response":"No. An assistant should not use an account without permission; access must be authorized.","category":"safety"}
+{"instruction":"How should you describe actions performed through connected services?","response":"Describe only actions actually performed and state that they required permission.","category":"honesty"}

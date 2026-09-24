@@ -203,9 +203,20 @@ class B2Storage:
             return True
         except HTTPError as exc:
             temp_path.unlink(missing_ok=True)
+            error_code = f"HTTP {exc.code}"
+            error_message = ""
+            try:
+                payload = json.load(exc)
+                error_code = str(payload.get("code") or error_code)
+                error_message = str(payload.get("message") or "").strip()
+            except (json.JSONDecodeError, ValueError, OSError):
+                pass
             if exc.code not in (403, 404):
-                raise B2StorageError(f"B2 model download failed: HTTP {exc.code}") from exc
-            native_error = f"HTTP {exc.code}"
+                detail = f": {error_code}"
+                if error_message:
+                    detail += f": {error_message}"
+                raise B2StorageError(f"B2 model download failed{detail}") from exc
+            native_error = error_code if not error_message else f"{error_code}: {error_message}"
         except B2StorageError:
             temp_path.unlink(missing_ok=True)
             raise
@@ -237,8 +248,12 @@ class B2Storage:
         except (BotoCoreError, ClientError, OSError) as fallback_exc:
             local_path.unlink(missing_ok=True)
             error_code = getattr(fallback_exc, "response", {}).get("Error", {}).get("Code", type(fallback_exc).__name__)
+            error_message = getattr(fallback_exc, "response", {}).get("Error", {}).get("Message", "")
+            detail = f"s3={error_code}"
+            if error_message:
+                detail += f": {error_message}"
             raise B2StorageError(
-                f"B2 model download failed: native={native_error}, s3={error_code}"
+                f"B2 model download failed: native={native_error}, {detail}"
             ) from fallback_exc
 
     def check_access(self) -> bool:

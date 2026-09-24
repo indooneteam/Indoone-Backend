@@ -8,6 +8,7 @@ the chat API available.
 from pathlib import Path
 import logging
 import re
+import time
 from urllib.parse import urlparse
 
 import httpx
@@ -41,28 +42,50 @@ _fallback_engine = LocalAIEngine()
 _runtime: LocalModelRuntime | None = None
 _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
+_NEXT_MODEL_LOAD_ATTEMPT = 0.0
+_MODEL_LOAD_RETRY_SECONDS = 60.0
 
 
-try:
-    ensure_model_artifacts(MODEL_DIR)
-    logger.info("Indoone model artifact check completed")
-except B2StorageError as exc:
-    logger.error("Indoone model artifact check failed: %s", exc)
+def _load_local_model_runtime() -> LocalModelRuntime | None:
+    """Load the trained checkpoint, retrying transient artifact failures safely."""
+    global _runtime, _NEXT_MODEL_LOAD_ATTEMPT
 
+    if _runtime is not None:
+        return _runtime
 
-if _checkpoint.exists() and _tokenizer.exists():
+    now = time.monotonic()
+    if now < _NEXT_MODEL_LOAD_ATTEMPT:
+        return None
+
+    try:
+        ensure_model_artifacts(MODEL_DIR)
+        logger.info("Indoone model artifact check completed")
+    except B2StorageError as exc:
+        _NEXT_MODEL_LOAD_ATTEMPT = now + _MODEL_LOAD_RETRY_SECONDS
+        logger.error("Indoone model artifact check failed: %s", exc)
+        return None
+
+    if not (_checkpoint.exists() and _tokenizer.exists()):
+        _NEXT_MODEL_LOAD_ATTEMPT = now + _MODEL_LOAD_RETRY_SECONDS
+        logger.error(
+            "Indoone local model artifacts are missing: checkpoint=%s tokenizer=%s",
+            _checkpoint.exists(),
+            _tokenizer.exists(),
+        )
+        return None
+
     try:
         _runtime = LocalModelRuntime(_checkpoint, _tokenizer)
+        _NEXT_MODEL_LOAD_ATTEMPT = 0.0
         logger.info("Indoone local model runtime loaded successfully")
     except Exception as exc:
+        _NEXT_MODEL_LOAD_ATTEMPT = now + _MODEL_LOAD_RETRY_SECONDS
         logger.error("Indoone local model runtime failed to load: %s", exc)
         _runtime = None
-else:
-    logger.error(
-        "Indoone local model artifacts are missing: checkpoint=%s tokenizer=%s",
-        _checkpoint.exists(),
-        _tokenizer.exists(),
-    )
+    return _runtime
+
+
+_load_local_model_runtime()
 
 
 if KNOWLEDGE_DIR.exists() and list(KNOWLEDGE_DIR.glob("*.txt")):
@@ -292,9 +315,10 @@ class LocalAIService:
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
 
-        if _runtime is not None:
+        runtime = _load_local_model_runtime()
+        if runtime is not None:
             try:
-                answer = _clean_model_reply(_runtime.generate(context))
+                answer = _clean_model_reply(runtime.generate(context))
                 if not _has_expected_script(answer, language):
                     logger.warning("Discarding malformed or wrong-language model output for %s", language)
                     answer = _generation_error_reply(language)

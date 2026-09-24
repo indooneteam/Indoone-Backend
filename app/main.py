@@ -9,6 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.ai import service as ai_service
+from app.ai.conversation_store import ConversationStore
 from app.ai.language_detection import detect_response_language
 from app.api.agent_async import router as agent_async_router
 from app.api.approvals import router as approvals_router
@@ -55,6 +56,7 @@ _DEFAULT_MAX_REQUEST_BYTES = 50 * 1024 * 1024
 _PROCESS_STARTED = time.monotonic()
 _REQUEST_COUNT = 0
 _STATUS_COUNTS: dict[str, int] = {}
+_CONVERSATION_CLEANUP_STORE = ConversationStore()
 
 
 class RequestBodyTooLarge(Exception):
@@ -110,7 +112,7 @@ def _log_request(request: Request, request_id: str, started: float, status_code:
 
 
 async def _conversation_cleanup_loop() -> None:
-    store = __import__("app.api.conversations", fromlist=["_store"])._store
+    store = _CONVERSATION_CLEANUP_STORE
     while True:
         try:
             deleted = store.purge_expired_closed(max_age_days=7)

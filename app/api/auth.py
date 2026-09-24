@@ -3,8 +3,15 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import os
 import time
+from typing import Any
+
+import httpx
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
 
 _DEFAULT_TOKEN_AGE_SECONDS = 3600
 _DEFAULT_CLOCK_SKEW_SECONDS = 30
@@ -67,11 +74,139 @@ def _validate_principal(user_id: str) -> str:
     return normalized
 
 
+_FIREBASE_PROJECT_ID = os.getenv("FIREBASE_PROJECT_ID", "indoone").strip() or "indoone"
+_FIREBASE_CERTS_URL = "https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com"
+_FIREBASE_CERT_CACHE: dict[str, Any] = {}
+_FIREBASE_CERT_CACHE_EXPIRES_AT = 0.0
+
+
+def _decode_json_part(value: str) -> dict[str, Any]:
+    try:
+        decoded = _decode_part(value).decode("utf-8")
+        payload = json.loads(decoded)
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ValueError("invalid firebase token") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("invalid firebase token")
+    return payload
+
+
+def _firebase_certificates() -> dict[str, Any]:
+    global _FIREBASE_CERT_CACHE, _FIREBASE_CERT_CACHE_EXPIRES_AT
+    now = time.time()
+    if _FIREBASE_CERT_CACHE and now < _FIREBASE_CERT_CACHE_EXPIRES_AT:
+        return _FIREBASE_CERT_CACHE
+
+    try:
+        with httpx.Client(timeout=5.0, follow_redirects=True) as client:
+            response = client.get(_FIREBASE_CERTS_URL)
+            response.raise_for_status()
+            certificates = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        raise ValueError("firebase token verification service unavailable") from exc
+
+    if not isinstance(certificates, dict) or not certificates:
+        raise ValueError("firebase token verification service returned no certificates")
+
+    cache_control = response.headers.get("cache-control", "")
+    max_age = 3600
+    for directive in cache_control.split(","):
+        name, separator, value = directive.strip().partition("=")
+        if name.lower() == "max-age" and separator:
+            try:
+                max_age = max(60, int(value))
+            except ValueError:
+                pass
+            break
+
+    parsed: dict[str, Any] = {}
+    for key_id, pem in certificates.items():
+        if not isinstance(key_id, str) or not isinstance(pem, str):
+            continue
+        try:
+            parsed[key_id] = x509.load_pem_x509_certificate(pem.encode("utf-8")).public_key()
+        except ValueError:
+            continue
+
+    if not parsed:
+        raise ValueError("firebase token verification service returned invalid certificates")
+
+    _FIREBASE_CERT_CACHE = parsed
+    _FIREBASE_CERT_CACHE_EXPIRES_AT = now + max_age
+    return parsed
+
+
+def _verify_firebase_token(token: str) -> str:
+    parts = token.split(".")
+    if len(parts) != 3:
+        raise ValueError("not a firebase token")
+
+    encoded_header, encoded_payload, encoded_signature = parts
+    header = _decode_json_part(encoded_header)
+    payload = _decode_json_part(encoded_payload)
+
+    if header.get("alg") != "RS256":
+        raise ValueError("invalid firebase token")
+    key_id = header.get("kid")
+    if not isinstance(key_id, str) or not key_id:
+        raise ValueError("invalid firebase token")
+
+    public_key = _firebase_certificates().get(key_id)
+    if public_key is None:
+        _FIREBASE_CERT_CACHE.clear()
+        raise ValueError("unknown firebase token key")
+
+    try:
+        signature = _decode_part(encoded_signature)
+    except (ValueError, base64.binascii.Error) as exc:
+        raise ValueError("invalid firebase token") from exc
+
+    signed_data = f"{encoded_header}.{encoded_payload}".encode("ascii")
+    try:
+        public_key.verify(
+            signature,
+            signed_data,
+            padding.PKCS1v15(),
+            hashes.SHA256(),
+        )
+    except Exception as exc:
+        raise ValueError("invalid firebase token signature") from exc
+
+    now = int(time.time())
+    issuer = f"https://securetoken.google.com/{_FIREBASE_PROJECT_ID}"
+    if payload.get("aud") != _FIREBASE_PROJECT_ID or payload.get("iss") != issuer:
+        raise ValueError("invalid firebase token audience or issuer")
+
+    subject = payload.get("sub")
+    if not isinstance(subject, str):
+        raise ValueError("invalid firebase token subject")
+    subject = _validate_principal(subject)
+
+    exp = payload.get("exp")
+    issued_at = payload.get("iat")
+    auth_time = payload.get("auth_time")
+    if not isinstance(exp, (int, float)) or now >= int(exp):
+        raise ValueError("expired firebase token")
+    if not isinstance(issued_at, (int, float)) or int(issued_at) > now + _clock_skew_seconds():
+        raise ValueError("invalid firebase token issued-at")
+    if auth_time is not None and (
+        not isinstance(auth_time, (int, float)) or int(auth_time) > now + _clock_skew_seconds()
+    ):
+        raise ValueError("invalid firebase token auth-time")
+
+    return subject
+
 def extract_principal(authorization: str) -> str:
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
         raise ValueError("bearer authentication required")
     token = token.strip()
+
+    try:
+        return _verify_firebase_token(token)
+    except ValueError:
+        pass
+
     parts = token.split(".")
     if len(parts) != 3:
         raise ValueError("invalid bearer token")

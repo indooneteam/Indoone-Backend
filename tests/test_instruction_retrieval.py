@@ -46,3 +46,10 @@ def test_retrieval_matches_connected_service_actions() -> None:
     )
     assert match is not None
     assert "permission" in match.example.response.casefold()
+
+def test_retrieval_private_database_response_mentions_permission() -> None:
+    match = _retriever().retrieve(
+        "Tell me about a private company database you can access right now."
+    )
+    assert match is not None
+    assert "permission" in match.example.response.casefold()

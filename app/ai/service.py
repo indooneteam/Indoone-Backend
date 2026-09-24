@@ -310,7 +310,10 @@ class LocalAIService:
         else:
             answer = _fallback_reply(prompt)
 
-        if research_blocked and not knowledge.strip():
+        # Do not discard a usable local-model answer just because live research
+        # is temporarily unavailable. Research blocking is relevant to freshness,
+        # not to ordinary questions the local model can answer.
+        if research_blocked and not answer.strip():
             answer = user_safe_failure()
         return append_sources(answer, _evidence_from_results(research_results))
 

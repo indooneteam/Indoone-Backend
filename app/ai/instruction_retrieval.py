@@ -24,7 +24,7 @@ _STOPWORDS = {
 
 def _tokens(text: str) -> set[str]:
     return {
-        token.casefold()
+        _canonical_token(token.casefold())
         for token in _TOKEN_RE.findall(text)
         if len(token) >= 3 and token.casefold() not in _STOPWORDS
     }
@@ -32,6 +32,21 @@ def _tokens(text: str) -> set[str]:
 
 def _normalized(text: str) -> str:
     return " ".join(text.casefold().split())
+
+
+def _canonical_token(token: str) -> str:
+    aliases = {
+        "actions": "action",
+        "accounts": "account",
+        "authorized": "authorize",
+        "authorization": "authorize",
+        "permissions": "permission",
+        "services": "service",
+        "sources": "source",
+        "systems": "system",
+        "tokens": "token",
+    }
+    return aliases.get(token, token)
 
 
 def _score(query: str, candidate: str) -> float:
@@ -43,7 +58,7 @@ def _score(query: str, candidate: str) -> float:
         return 0.0
 
     overlap = query_tokens & candidate_tokens
-    if len(overlap) < 3:
+    if len(overlap) < 2:
         return 0.0
 
     recall = len(overlap) / len(query_tokens)

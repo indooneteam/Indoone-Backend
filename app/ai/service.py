@@ -69,8 +69,7 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
         _NEXT_MODEL_LOAD_ATTEMPT = now + _MODEL_LOAD_RETRY_SECONDS
         logger.error(
             "Indoone local model artifacts are missing: checkpoint=%s tokenizer=%s",
-            _checkpoint.exists(),
-            _tokenizer.exists(),
+            _checkpoint.exists(), _tokenizer.exists(),
         )
         return None
 
@@ -86,7 +85,6 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
 
 
 _load_local_model_runtime()
-
 
 if KNOWLEDGE_DIR.exists() and list(KNOWLEDGE_DIR.glob("*.txt")):
     _knowledge_base = LocalKnowledgeBase.from_directory(KNOWLEDGE_DIR)
@@ -105,7 +103,6 @@ _SCRIPT_RANGES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("Urdu", re.compile(r"[\u0600-\u06FF]")),
 )
 
-
 _LANGUAGE_NAMES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Kannada", ("kannada", "ಕನ್ನಡ", "ಕನ್ನಡದ")),
     ("Hindi", ("hindi", "हिंदी", "हिन्दी")),
@@ -120,7 +117,6 @@ _LANGUAGE_NAMES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Odia", ("odia", "oriya", "ଓଡ଼ିଆ", "ଓଡିଆ")),
     ("Urdu", ("urdu", "اردو")),
 )
-
 
 _ROMANIZED_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Kannada", ("bagge", "helu", "heLi", "maadu", "maadi", "madbeku", "madbekagutte", "enidu", "enu", "yenu", "yenide", "ivaga", "matte", "nanage", "nimage", "nanna", "namma", "ide", "illa", "agide", "beku")),
@@ -137,8 +133,10 @@ _ROMANIZED_HINTS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Urdu", ("kya", "hai", "mujhe", "aap", "batao", "bataiye", "kaise", "kyun", "nahi")),
 )
 
-
-_RESPONSE_TAG_RE = re.compile(r"</?(?:instruction|response|conversation|grounding|response_language)>|<response_language>.*?</response_language>", flags=re.IGNORECASE | re.DOTALL)
+_RESPONSE_TAG_RE = re.compile(
+    r"</?(?:instruction|response|conversation|grounding|response_language)>|<response_language>.*?</response_language>",
+    flags=re.IGNORECASE | re.DOTALL,
+)
 
 
 def _detect_response_language(message: str) -> str:
@@ -153,7 +151,11 @@ def _detect_response_language(message: str) -> str:
             return language
     scores: dict[str, int] = {}
     for language, hints in _ROMANIZED_HINTS:
-        score = sum(1 for hint in hints if re.search(rf"(?<!\w){re.escape(hint.casefold())}(?!\w)", normalized))
+        score = sum(
+            1
+            for hint in hints
+            if re.search(rf"(?<!\w){re.escape(hint.casefold())}(?!\w)", normalized)
+        )
         if score:
             scores[language] = score
     if scores:
@@ -208,7 +210,7 @@ def _clean_model_reply(answer: str) -> str:
         text = text[instruction_end.end():]
     response_end = re.search(r"</response>", text, flags=re.IGNORECASE)
     if response_end:
-        text = text[: response_end.start()]
+        text = text[:response_end.start()]
     text = _RESPONSE_TAG_RE.sub("", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
@@ -233,7 +235,7 @@ def _generation_error_reply(language: str) -> str:
         "Bengali": "দুঃখিত, এই প্রশ্নের সঠিক উত্তর এখন দিতে পারিনি। অনুগ্রহ করে আবার জিজ্ঞাসা করুন।",
         "Gujarati": "માફ કરશો, હું હાલમાં આ પ્રશ્નનો યોગ્ય જવાબ આપી શક્યો નથી. કૃપા કરીને ફરી પૂછો.",
         "Punjabi": "ਮਾਫ਼ ਕਰਨਾ, ਮੈਂ ਇਸ ਸਵਾਲ ਦਾ ਸਹੀ ਜਵਾਬ ਹੁਣ ਨਹੀਂ ਦੇ ਸਕਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਪੁੱਛੋ।",
-        "Odia": "ଦୁଃଖିତ, ମୁଁ ଏହି ପ୍ରଶ୍ନର ସଠିକ ଉତ୍ତର ଏବେ ଦେଇପାରିଲି ନାହିଁ। ଦୟାକରି ପୁଣି ପଚାରନ୍ତୁ।",
+        "Odia": "ଦୁଃଖିତ, ମୁଁ ଏହି ପ୍ରଶ୍ନର ସଠିକ ଉତ୍ତର ଏବେ ଦେଇପାରିଲି ନାହିଁ। ଦୟାକରି ପୁଣି ପଚାରନ୍ତୁ.",
         "Urdu": "معذرت، میں ابھی اس سوال کا درست جواب نہیں دے سکا۔ براہِ کرم دوبارہ پوچھیں۔",
     }
     return messages.get(language, "Sorry, I could not generate a reliable answer right now.")
@@ -261,7 +263,7 @@ def _fallback_reply(message: str) -> str:
     if language == "Punjabi":
         return "ਸਤ ਸ੍ਰੀ ਅਕਾਲ 👋 ਮੈਂ Indoone AI ਹਾਂ। trained local model ਹਾਲੇ load ਨਹੀਂ ਹੋਇਆ।"
     if language == "Odia":
-        return "ନମସ୍କାର 👋 ମୁଁ Indoone AI। trained local model ଏଯାବତ୍ load ହୋଇନାହିଁ।"
+        return "ନମସ୍କାର 👋 ମୁଁ Indoone AI। trained local model ଏଯାବତ୍ load ହୋଇନାହିଁ."
     if language == "Urdu":
         return "السلام علیکم 👋 میں Indoone AI ہوں۔ ابھی trained local model load نہیں ہوا۔"
     if normalized in {"hi", "hello", "hey"}:
@@ -312,6 +314,12 @@ class LocalAIService:
                     research_blocked = True
                     logger.warning("Research provider failed for query: %s", prompt)
 
+        # Fresh/current questions must not receive a normal model answer without
+        # the required research evidence. This prevents unsupported "latest/current"
+        # claims when the research provider is unavailable or cannot be cross-checked.
+        if research_blocked and intent.needs_research:
+            return user_safe_failure()
+
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
 
@@ -334,11 +342,6 @@ class LocalAIService:
         else:
             answer = _fallback_reply(prompt)
 
-        # Do not discard a usable local-model answer just because live research
-        # is temporarily unavailable. Research blocking is relevant to freshness,
-        # not to ordinary questions the local model can answer.
-        if research_blocked and not answer.strip():
-            answer = user_safe_failure()
         return append_sources(answer, _evidence_from_results(research_results))
 
 

@@ -99,3 +99,35 @@ def test_service_survives_research_failure(monkeypatch) -> None:
 
     assert reply == user_safe_failure()
     assert "<research>" not in captured[0]
+
+
+def test_model_artifacts_are_checked_only_once_per_process(monkeypatch, tmp_path) -> None:
+    calls = 0
+
+    class FakeRuntime:
+        def __init__(self, checkpoint, tokenizer):
+            assert checkpoint.exists()
+            assert tokenizer.exists()
+
+    checkpoint = tmp_path / "indoone-small.pt"
+    tokenizer = tmp_path / "tokenizer.json"
+
+    def fake_ensure_model_artifacts(model_dir):
+        nonlocal calls
+        calls += 1
+        checkpoint.write_bytes(b"checkpoint")
+        tokenizer.write_text("tokenizer", encoding="utf-8")
+
+    monkeypatch.setattr(service, "_checkpoint", checkpoint)
+    monkeypatch.setattr(service, "_tokenizer", tokenizer)
+    monkeypatch.setattr(service, "ensure_model_artifacts", fake_ensure_model_artifacts)
+    monkeypatch.setattr(service, "LocalModelRuntime", FakeRuntime)
+    monkeypatch.setattr(service, "_runtime", None)
+    monkeypatch.setattr(service, "_ARTIFACT_CHECK_COMPLETED", False)
+    monkeypatch.setattr(service, "_NEXT_MODEL_LOAD_ATTEMPT", 0.0)
+
+    first = service._load_local_model_runtime()
+    second = service._load_local_model_runtime()
+
+    assert first is second
+    assert calls == 1

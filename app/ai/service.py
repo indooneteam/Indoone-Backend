@@ -8,6 +8,7 @@ the chat API available.
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import logging
+import threading
 import re
 import time
 from urllib.parse import urlparse
@@ -48,6 +49,10 @@ _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0
 _MODEL_LOAD_RETRY_SECONDS = 60.0
+# Serialize the artifact check/runtime load so concurrent chat requests cannot
+# trigger duplicate B2 downloads or duplicate model loads.
+_MODEL_LOAD_LOCK = threading.Lock()
+_ARTIFACT_CHECK_COMPLETED = False
 
 
 def _next_utc_midnight_timestamp() -> float:
@@ -59,41 +64,52 @@ def _next_utc_midnight_timestamp() -> float:
 
 
 def _load_local_model_runtime() -> LocalModelRuntime | None:
-    """Load the trained checkpoint, retrying transient artifact failures safely."""
-    global _runtime, _NEXT_MODEL_LOAD_ATTEMPT
+    """Load the trained checkpoint with a single-flight artifact download/load."""
+    global _runtime, _NEXT_MODEL_LOAD_ATTEMPT, _ARTIFACT_CHECK_COMPLETED
 
     if _runtime is not None:
         return _runtime
 
-    now = time.time()
-    if now < _NEXT_MODEL_LOAD_ATTEMPT:
-        return None
+    with _MODEL_LOAD_LOCK:
+        # A concurrent request may have completed the model load while this
+        # request was waiting for the lock.
+        if _runtime is not None:
+            return _runtime
 
-    try:
-        ensure_model_artifacts(MODEL_DIR)
-        logger.info("Indoone model artifact check completed")
-    except B2StorageError as exc:
-        _NEXT_MODEL_LOAD_ATTEMPT = _next_utc_midnight_timestamp()
-        logger.error("Indoone model artifact check failed: %s", exc)
-        return None
+        now = time.time()
+        if now < _NEXT_MODEL_LOAD_ATTEMPT:
+            return None
 
-    if not (_checkpoint.exists() and _tokenizer.exists()):
-        _NEXT_MODEL_LOAD_ATTEMPT = _next_utc_midnight_timestamp()
-        logger.error(
-            "Indoone local model artifacts are missing: checkpoint=%s tokenizer=%s",
-            _checkpoint.exists(), _tokenizer.exists(),
-        )
-        return None
+        if not _ARTIFACT_CHECK_COMPLETED:
+            try:
+                ensure_model_artifacts(MODEL_DIR)
+                logger.info("Indoone model artifact check completed")
+            except B2StorageError as exc:
+                _NEXT_MODEL_LOAD_ATTEMPT = _next_utc_midnight_timestamp()
+                logger.error("Indoone model artifact check failed: %s", exc)
+                return None
 
-    try:
-        _runtime = LocalModelRuntime(_checkpoint, _tokenizer)
-        _NEXT_MODEL_LOAD_ATTEMPT = 0.0
-        logger.info("Indoone local model runtime loaded successfully")
-    except Exception as exc:
-        _NEXT_MODEL_LOAD_ATTEMPT = now + _MODEL_LOAD_RETRY_SECONDS
-        logger.error("Indoone local model runtime failed to load: %s", exc)
-        _runtime = None
-    return _runtime
+            if not (_checkpoint.exists() and _tokenizer.exists()):
+                _NEXT_MODEL_LOAD_ATTEMPT = _next_utc_midnight_timestamp()
+                logger.error(
+                    "Indoone local model artifacts are missing: checkpoint=%s tokenizer=%s",
+                    _checkpoint.exists(), _tokenizer.exists(),
+                )
+                return None
+
+            # From this point on, every request in this process uses the local
+            # artifacts and never re-checks/downloads them from B2.
+            _ARTIFACT_CHECK_COMPLETED = True
+
+        try:
+            _runtime = LocalModelRuntime(_checkpoint, _tokenizer)
+            _NEXT_MODEL_LOAD_ATTEMPT = 0.0
+            logger.info("Indoone local model runtime loaded successfully")
+        except Exception as exc:
+            _NEXT_MODEL_LOAD_ATTEMPT = now + _MODEL_LOAD_RETRY_SECONDS
+            logger.error("Indoone local model runtime failed to load: %s", exc)
+            _runtime = None
+        return _runtime
 
 
 # Model loading is lazy: deployments and health checks must not consume B2 bandwidth.

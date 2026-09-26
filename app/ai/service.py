@@ -5,6 +5,7 @@ checkpoint is used when available; otherwise the small local fallback keeps
 the chat API available.
 """
 
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import logging
 import re
@@ -49,6 +50,14 @@ _NEXT_MODEL_LOAD_ATTEMPT = 0.0
 _MODEL_LOAD_RETRY_SECONDS = 60.0
 
 
+def _next_utc_midnight_timestamp() -> float:
+    """Back off failed artifact downloads until the next B2 daily-cap reset."""
+    now = datetime.now(timezone.utc)
+    tomorrow = (now + timedelta(days=1)).date()
+    midnight = datetime.combine(tomorrow, datetime.min.time(), tzinfo=timezone.utc)
+    return midnight.timestamp()
+
+
 def _load_local_model_runtime() -> LocalModelRuntime | None:
     """Load the trained checkpoint, retrying transient artifact failures safely."""
     global _runtime, _NEXT_MODEL_LOAD_ATTEMPT
@@ -56,7 +65,7 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
     if _runtime is not None:
         return _runtime
 
-    now = time.monotonic()
+    now = time.time()
     if now < _NEXT_MODEL_LOAD_ATTEMPT:
         return None
 
@@ -64,12 +73,12 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
         ensure_model_artifacts(MODEL_DIR)
         logger.info("Indoone model artifact check completed")
     except B2StorageError as exc:
-        _NEXT_MODEL_LOAD_ATTEMPT = now + _MODEL_LOAD_RETRY_SECONDS
+        _NEXT_MODEL_LOAD_ATTEMPT = _next_utc_midnight_timestamp()
         logger.error("Indoone model artifact check failed: %s", exc)
         return None
 
     if not (_checkpoint.exists() and _tokenizer.exists()):
-        _NEXT_MODEL_LOAD_ATTEMPT = now + _MODEL_LOAD_RETRY_SECONDS
+        _NEXT_MODEL_LOAD_ATTEMPT = _next_utc_midnight_timestamp()
         logger.error(
             "Indoone local model artifacts are missing: checkpoint=%s tokenizer=%s",
             _checkpoint.exists(), _tokenizer.exists(),
@@ -87,8 +96,7 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
     return _runtime
 
 
-_load_local_model_runtime()
-
+# Model loading is lazy: deployments and health checks must not consume B2 bandwidth.
 if KNOWLEDGE_DIR.exists() and list(KNOWLEDGE_DIR.glob("*.txt")):
     _knowledge_base = LocalKnowledgeBase.from_directory(KNOWLEDGE_DIR)
 

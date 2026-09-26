@@ -27,8 +27,6 @@ _FRESH_TERMS = (
     "search",
     "look up",
     "research",
-    "price",
-    "cost",
     "stock",
     "weather",
     "forecast",

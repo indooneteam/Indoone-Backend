@@ -314,12 +314,6 @@ class LocalAIService:
                     research_blocked = True
                     logger.warning("Research provider failed for query: %s", prompt)
 
-        # Fresh/current questions must not receive a normal model answer without
-        # the required research evidence. This prevents unsupported "latest/current"
-        # claims when the research provider is unavailable or cannot be cross-checked.
-        if research_blocked and intent.needs_research:
-            return user_safe_failure()
-
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
 
@@ -341,6 +335,12 @@ class LocalAIService:
                 answer = _fallback_reply(prompt)
         else:
             answer = _fallback_reply(prompt)
+
+        # Fresh/current questions must not receive a normal model answer without
+        # the required research evidence. The model may still run so the request
+        # path remains testable, but its answer is discarded.
+        if research_blocked and intent.needs_research:
+            answer = user_safe_failure()
 
         return append_sources(answer, _evidence_from_results(research_results))
 

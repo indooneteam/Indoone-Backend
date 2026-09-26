@@ -39,7 +39,10 @@ KNOWLEDGE_DIR = Path("data/knowledge")
 _checkpoint = MODEL_DIR / "indoone-small.pt"
 _tokenizer = MODEL_DIR / "tokenizer.json"
 _fallback_engine = LocalAIEngine()
-_runtime: LocalModelRuntime | None = None
+# Reuse the runtime already loaded by LocalAIEngine instead of loading a second
+# copy during module initialization. This keeps Render memory usage within the
+# free 512 MiB instance limit.
+_runtime: LocalModelRuntime | None = getattr(_fallback_engine, "_runtime", None)
 _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0

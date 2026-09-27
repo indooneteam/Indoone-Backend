@@ -21,6 +21,7 @@ from app.api.connector_security import enforce_connector_user_scope
 from app.api.contacts import router as contacts_router
 from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
+from app.api.files import router as files_router
 from app.api.errors import error_response
 from app.api.facebook import router as facebook_router
 from app.api.google_photos import router as google_photos_router
@@ -244,6 +245,7 @@ app.include_router(agent_async_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
+app.include_router(files_router, prefix="/api")
 app.include_router(voice_session_router, prefix="/api")
 app.include_router(contacts_router, prefix="/api")
 app.include_router(phone_router, prefix="/api")

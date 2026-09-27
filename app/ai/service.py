@@ -32,6 +32,7 @@ from app.ai.research import (
     format_results,
 )
 from app.storage.b2 import B2StorageError, ensure_model_artifacts
+from app.storage.github_release import GitHubReleaseStorageError, get_github_release_storage
 
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,23 @@ _MODEL_LOAD_RETRY_SECONDS = 60.0
 # trigger duplicate B2 downloads or duplicate model loads.
 _MODEL_LOAD_LOCK = threading.Lock()
 _ARTIFACT_CHECK_COMPLETED = False
+
+
+def _ensure_model_artifacts(model_dir: Path) -> None:
+    """Load model artifacts from the configured private GitHub Release, else B2."""
+    github_storage = get_github_release_storage()
+    if github_storage is None:
+        ensure_model_artifacts(model_dir)
+        return
+
+    artifacts = {
+        "indoone-small.pt": model_dir / "indoone-small.pt",
+        "tokenizer.json": model_dir / "tokenizer.json",
+    }
+    for filename, local_path in artifacts.items():
+        if local_path.exists():
+            continue
+        github_storage.download_file(filename, local_path)
 
 
 def _next_utc_midnight_timestamp() -> float:
@@ -82,9 +100,12 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
 
         if not _ARTIFACT_CHECK_COMPLETED:
             try:
-                ensure_model_artifacts(MODEL_DIR)
-                logger.info("Indoone model artifact check completed")
-            except B2StorageError as exc:
+                _ensure_model_artifacts(MODEL_DIR)
+                if get_github_release_storage() is not None:
+                    logger.info("Indoone model artifacts checked from private GitHub Release")
+                else:
+                    logger.info("Indoone model artifact check completed from B2")
+            except (B2StorageError, GitHubReleaseStorageError) as exc:
                 _NEXT_MODEL_LOAD_ATTEMPT = _next_utc_midnight_timestamp()
                 logger.error("Indoone model artifact check failed: %s", exc)
                 return None
@@ -98,7 +119,7 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
                 return None
 
             # From this point on, every request in this process uses the local
-            # artifacts and never re-checks/downloads them from B2.
+            # artifacts and never re-checks/downloads them from remote storage.
             _ARTIFACT_CHECK_COMPLETED = True
 
         try:
@@ -112,7 +133,7 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
         return _runtime
 
 
-# Model loading is lazy: deployments and health checks must not consume B2 bandwidth.
+# Model loading is lazy: deployments and health checks must not consume remote model-storage bandwidth.
 if KNOWLEDGE_DIR.exists() and list(KNOWLEDGE_DIR.glob("*.txt")):
     _knowledge_base = LocalKnowledgeBase.from_directory(KNOWLEDGE_DIR)
 

@@ -74,7 +74,7 @@ def _ensure_model_artifacts(model_dir: Path) -> None:
 
 
 def _next_utc_midnight_timestamp() -> float:
-    """Back off failed artifact downloads until the next B2 daily-cap reset."""
+    """Back off failed remote model-artifact downloads until the next UTC day."""
     now = datetime.now(timezone.utc)
     tomorrow = (now + timedelta(days=1)).date()
     midnight = datetime.combine(tomorrow, datetime.min.time(), tzinfo=timezone.utc)

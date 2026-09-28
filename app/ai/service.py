@@ -24,7 +24,6 @@ from app.ai.grounding import (
 from app.ai.inference import LocalModelRuntime
 from app.ai.intent import classify_intent
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
-from app.ai.local_engine import LocalAIEngine
 from app.ai.research import (
     ResearchProvider,
     ResearchResult,
@@ -41,11 +40,10 @@ MODEL_DIR = Path("models/indoone-small")
 KNOWLEDGE_DIR = Path("data/knowledge")
 _checkpoint = MODEL_DIR / "indoone-small.pt"
 _tokenizer = MODEL_DIR / "tokenizer.json"
-_fallback_engine = LocalAIEngine()
-# Reuse the runtime already loaded by LocalAIEngine instead of loading a second
-# copy during module initialization. This keeps Render memory usage within the
-# free 512 MiB instance limit.
-_runtime: LocalModelRuntime | None = getattr(_fallback_engine, "_runtime", None)
+# Keep model loading entirely request-driven. Constructing LocalAIEngine at import
+# time can eagerly load the full PyTorch checkpoint during Render startup, which
+# increases memory pressure and can cause the web process to restart before chat.
+_runtime: LocalModelRuntime | None = None
 _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0
@@ -366,23 +364,17 @@ class LocalAIService:
         language = _detect_response_language(prompt)
 
         runtime = _load_local_model_runtime()
-        if runtime is not None:
+        if runtime is None:
+            answer = _fallback_reply(prompt)
+        else:
             try:
                 answer = _clean_model_reply(runtime.generate(context))
                 if not _has_expected_script(answer, language):
                     logger.warning("Discarding malformed or wrong-language model output for %s", language)
                     answer = _generation_error_reply(language)
-            except RuntimeError:
+            except Exception:
+                logger.exception("Indoone local model generation failed")
                 answer = _fallback_reply(prompt)
-        elif getattr(_fallback_engine, "ready", True):
-            try:
-                answer = _clean_model_reply(await _fallback_engine.generate(context))
-                if not _has_expected_script(answer, language):
-                    answer = _generation_error_reply(language)
-            except RuntimeError:
-                answer = _fallback_reply(prompt)
-        else:
-            answer = _fallback_reply(prompt)
 
         # Fresh/current questions must not receive a normal model answer without
         # the required research evidence. The model may still run so the request

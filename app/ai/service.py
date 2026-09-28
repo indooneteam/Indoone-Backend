@@ -6,9 +6,11 @@ the chat API available.
 """
 
 from datetime import datetime, timedelta, timezone
+import asyncio
 from pathlib import Path
 import logging
 import threading
+from typing import TYPE_CHECKING
 import re
 import time
 from urllib.parse import urlparse
@@ -21,7 +23,6 @@ from app.ai.grounding import (
     append_sources,
     build_grounded_prompt_instruction,
 )
-from app.ai.inference import LocalModelRuntime
 from app.ai.intent import classify_intent
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
 from app.ai.research import (
@@ -35,6 +36,9 @@ from app.storage.github_release import GitHubReleaseStorageError, get_github_rel
 
 
 logger = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from app.ai.inference import LocalModelRuntime
 
 MODEL_DIR = Path("models/indoone-small")
 KNOWLEDGE_DIR = Path("data/knowledge")
@@ -86,7 +90,11 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
     if _runtime is not None:
         return _runtime
 
-    with _MODEL_LOAD_LOCK:
+    if not _MODEL_LOAD_LOCK.acquire(blocking=False):
+        logger.info("Indoone model load already in progress; using fallback for this request")
+        return None
+
+    try:
         # A concurrent request may have completed the model load while this
         # request was waiting for the lock.
         if _runtime is not None:
@@ -121,6 +129,10 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
             _ARTIFACT_CHECK_COMPLETED = True
 
         try:
+            # Import PyTorch/model code only when a chat request actually needs
+            # trained-model inference. This keeps Render startup memory low.
+            from app.ai.inference import LocalModelRuntime
+
             _runtime = LocalModelRuntime(_checkpoint, _tokenizer)
             _NEXT_MODEL_LOAD_ATTEMPT = 0.0
             logger.info("Indoone local model runtime loaded successfully")
@@ -129,6 +141,8 @@ def _load_local_model_runtime() -> LocalModelRuntime | None:
             logger.error("Indoone local model runtime failed to load: %s", exc)
             _runtime = None
         return _runtime
+    finally:
+        _MODEL_LOAD_LOCK.release()
 
 
 # Model loading is lazy: deployments and health checks must not consume remote model-storage bandwidth.
@@ -363,12 +377,28 @@ class LocalAIService:
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
 
-        runtime = _load_local_model_runtime()
+        try:
+            # Model loading and CPU inference are blocking operations. Keep them
+            # off FastAPI's event loop so a slow first load cannot stall the
+            # service/proxy and turn an otherwise recoverable request into 502.
+            runtime = await asyncio.wait_for(
+                asyncio.to_thread(_load_local_model_runtime),
+                timeout=10.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Indoone model load timed out; returning safe fallback")
+            runtime = None
+        except Exception:
+            logger.exception("Indoone model preparation failed")
+            runtime = None
+
         if runtime is None:
             answer = _fallback_reply(prompt)
         else:
             try:
-                answer = _clean_model_reply(runtime.generate(context))
+                answer = _clean_model_reply(
+                    await asyncio.to_thread(runtime.generate, context)
+                )
                 if not _has_expected_script(answer, language):
                     logger.warning("Discarding malformed or wrong-language model output for %s", language)
                     answer = _generation_error_reply(language)

@@ -1,6 +1,7 @@
 from app.ai.grounding import (
     GroundedEvidence,
     append_sources,
+    extract_sources,
     assess_grounding,
     build_grounded_prompt_instruction,
 )
@@ -75,3 +76,16 @@ def test_grounding_rejects_unknown_source_url() -> None:
     result = assess_grounding("Indoone Pro costs 499 rupees per month. https://attacker.example", evidence)
     assert result.passed is False
     assert result.reason == "unsupported_source_url"
+
+
+def test_extract_sources_parses_deterministic_source_list() -> None:
+    reply = (
+        "One coherent answer.\n\nSources:\n"
+        "1. First source — https://example.com/one\n"
+        "2. Second source — https://example.org/two"
+    )
+
+    assert extract_sources(reply) == [
+        GroundedEvidence("First source", "https://example.com/one"),
+        GroundedEvidence("Second source", "https://example.org/two"),
+    ]

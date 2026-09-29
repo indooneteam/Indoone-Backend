@@ -24,6 +24,8 @@ from app.ai.general_knowledge import (
         "What causes day and night?",
         "What is the difference between mass and weight?",
         "ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?",
+        "ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?",
+        "ಗ್ರಾವಿಟಿ ಎಂದರೇನು",
     ],
 )
 def test_general_knowledge_questions_are_detected(question: str) -> None:

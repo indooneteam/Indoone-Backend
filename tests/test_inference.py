@@ -45,6 +45,22 @@ def test_preformatted_prompt_is_not_wrapped_twice(tmp_path) -> None:
     assert tokenizer.decode(prompt_ids).count("<instruction>") == 1
 
 
+def test_preformatted_prompt_with_trailing_newline_is_not_wrapped_twice(tmp_path) -> None:
+    tokenizer = BPETokenizer.train(
+        "<instruction>\nSay hello\n</instruction>\n<response>\nHello\n</response>\n",
+        vocab_size=64,
+        min_frequency=1,
+    )
+    runtime = object.__new__(LocalModelRuntime)
+    runtime.tokenizer = tokenizer
+    prompt_ids = runtime._prompt_ids(
+        "<instruction>\nSay hello\n</instruction>\n<response>\n"
+    )
+    decoded = tokenizer.decode(prompt_ids)
+    assert decoded.count("<instruction>") == 1
+    assert decoded.count("<response>") == 1
+
+
 def test_extract_user_request_uses_final_user_turn() -> None:
     prompt = (
         "<instruction>\n"

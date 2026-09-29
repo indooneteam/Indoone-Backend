@@ -6,6 +6,7 @@ import pytest
 
 from app.ai.research import (
     CrossrefResearchProvider,
+    TavilyResearchProvider,
     GoogleNewsRssResearchProvider,
     HttpResearchProvider,
     MultiSourceResearchProvider,
@@ -119,6 +120,95 @@ def test_provider_parses_json_results(monkeypatch) -> None:
     assert results == [ResearchResult("Indoone", "https://indoone.ai", "local AI")]
     assert "q=Indoone+AI" in captured["url"]
     assert captured["auth"] == "Bearer secret"
+
+def test_tavily_provider_parses_ranked_results(monkeypatch) -> None:
+    payload = {
+        "results": [
+            {
+                "title": "What is gravity?",
+                "url": "https://example.com/gravity",
+                "content": "Gravity is the force that attracts masses.",
+                "score": 0.97,
+            },
+            {
+                "title": "Gravity overview",
+                "url": "https://example.org/gravity",
+                "content": "Objects with mass attract one another.",
+            },
+        ]
+    }
+
+    class FakeResponse:
+        content = json.dumps(payload).encode("utf-8")
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return payload
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            assert kwargs["follow_redirects"] is False
+            assert kwargs["headers"]["Accept"] == "application/json"
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, json):
+            assert url == "https://api.tavily.com/search"
+            assert json["api_key"] == "test-key"
+            assert json["query"] == "What is gravity?"
+            assert json["search_depth"] == "basic"
+            assert json["topic"] == "general"
+            assert json["max_results"] == 2
+            assert json["include_answer"] is False
+            assert json["include_raw_content"] is False
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    results = asyncio.run(
+        TavilyResearchProvider("test-key").search("What is gravity?", limit=2)
+    )
+
+    assert results == [
+        ResearchResult(
+            "What is gravity?",
+            "https://example.com/gravity",
+            "Gravity is the force that attracts masses.",
+        ),
+        ResearchResult(
+            "Gravity overview",
+            "https://example.org/gravity",
+            "Objects with mass attract one another.",
+        ),
+    ]
+
+
+def test_tavily_provider_validates_inputs() -> None:
+    with pytest.raises(ValueError, match="api_key"):
+        TavilyResearchProvider("   ")
+
+    provider = TavilyResearchProvider("test-key")
+    with pytest.raises(ValueError, match="query"):
+        asyncio.run(provider.search("   "))
+    with pytest.raises(ValueError, match="limit"):
+        asyncio.run(provider.search("gravity", limit=21))
+
+
+def test_build_research_provider_uses_tavily_when_configured(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_TAVILY_API_KEY", "test-key")
+    monkeypatch.delenv("INDOONE_RESEARCH_URL", raising=False)
+
+    provider = __import__("app.ai.research", fromlist=["build_research_provider"]).build_research_provider()
+
+    assert isinstance(provider, MultiSourceResearchProvider)
+    assert [type(item) for item in provider.providers] == [TavilyResearchProvider]
+
 
 def test_google_news_rss_provider_parses_sources(monkeypatch) -> None:
     rss = b"""<?xml version="1.0" encoding="UTF-8"?>

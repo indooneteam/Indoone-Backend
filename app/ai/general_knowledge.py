@@ -90,11 +90,11 @@ class WikipediaKnowledgeProvider:
     if topic_normalized in title_normalized or title_normalized in topic_normalized:
         return 50
     topic_terms = {
-        token for token in re.findall(r"[\\w\\u0080-\\uffff]+", topic_normalized, flags=re.UNICODE)
+        token for token in re.findall(r"[\w\u0080-\uffff]+", topic_normalized, flags=re.UNICODE)
         if len(token) > 1
     }
     title_terms = {
-        token for token in re.findall(r"[\\w\\u0080-\\uffff]+", title_normalized, flags=re.UNICODE)
+        token for token in re.findall(r"[\w\u0080-\uffff]+", title_normalized, flags=re.UNICODE)
         if len(token) > 1
     }
     return len(topic_terms & title_terms)

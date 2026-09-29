@@ -117,15 +117,17 @@ async def _model_warmup_loop() -> None:
     await asyncio.sleep(1.0)
     for attempt in range(3):
         if ai_service._runtime is not None:
-            logger.info("Indoone local model already warm")
+            logger.info("Indoone local model warmup already complete")
             return
+        logger.info("Indoone local model warmup attempt %d/3", attempt + 1)
         try:
             runtime = await asyncio.to_thread(ai_service._load_local_model_runtime)
             if runtime is not None:
                 logger.info("Indoone local model warmup completed")
                 return
+            logger.warning("Indoone local model warmup attempt %d did not load the runtime", attempt + 1)
         except Exception:
-            logger.exception("Indoone local model warmup failed")
+            logger.exception("Indoone local model warmup attempt %d failed", attempt + 1)
         if attempt < 2:
             await asyncio.sleep(15.0)
 
@@ -314,4 +316,8 @@ async def health_details() -> dict[str, object]:
         "requests_total": _REQUEST_COUNT,
         "responses_by_status": dict(sorted(_STATUS_COUNTS.items())),
         "sqlite": sqlite_runtime_status(),
+        "ai": {
+            "model_artifacts_checked": ai_service._ARTIFACT_CHECK_COMPLETED,
+            "model_runtime_ready": ai_service._runtime is not None,
+        },
     }

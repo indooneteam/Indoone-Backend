@@ -191,14 +191,22 @@ def _latin_topic_terms(text: str) -> str:
 
 def _needs_research(normalized: str) -> bool:
     lower = normalized.casefold()
-    # Match freshness markers as whole words/phrases. Substring matching breaks
-    # Kannada words such as "ಎಂದರೇನು" because "ದರ" is itself a freshness marker.
-    return any(
-        re.search(rf"(?<!\\w){re.escape(marker.casefold())}(?!\\w)", lower)
-        for marker in _FRESH_MARKERS
-    )
-
-
+    for marker in _FRESH_MARKERS:
+        normalized_marker = marker.casefold()
+        if normalized_marker == "ದರ":
+            # Kannada vowel signs/combining marks are not all matched by Python \\w.
+            if re.search(
+                r"(?<![\w\u0C80-\u0CFF])ದರ(?![\w\u0C80-\u0CFF])",
+                lower,
+            ):
+                return True
+            continue
+        if re.search(
+            rf"(?<!\w){re.escape(normalized_marker)}(?!\w)",
+            lower,
+        ):
+            return True
+    return False
 def _needs_cross_check(normalized: str) -> bool:
     lower = normalized.casefold()
     return any(marker in lower for marker in _CROSS_CHECK_MARKERS)

@@ -191,7 +191,12 @@ def _latin_topic_terms(text: str) -> str:
 
 def _needs_research(normalized: str) -> bool:
     lower = normalized.casefold()
-    return any(marker in lower for marker in _FRESH_MARKERS)
+    # Match freshness markers as whole words/phrases. Substring matching breaks
+    # Kannada words such as "ಎಂದರೇನು" because "ದರ" is itself a freshness marker.
+    return any(
+        re.search(rf"(?<!\\w){re.escape(marker.casefold())}(?!\\w)", lower)
+        for marker in _FRESH_MARKERS
+    )
 
 
 def _needs_cross_check(normalized: str) -> bool:

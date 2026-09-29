@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+
 import os
+import re
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote_plus, urlparse
@@ -78,16 +80,86 @@ class HttpResearchProvider(ResearchProvider):
             raise RuntimeError("research response must contain a results list")
         return [result for item in raw_results[:limit] if (result := _sanitize_result(item)) is not None]
 
+class GoogleNewsRssResearchProvider(ResearchProvider):
+    """Keyless live research provider backed by the public Google News RSS feed."""
+
+    _BASE_URL = "https://news.google.com/rss/search"
+
+    def __init__(self, timeout: float = 10.0, max_response_bytes: int = 1_000_000) -> None:
+        if timeout <= 0 or timeout > MAX_RESEARCH_TIMEOUT_SECONDS:
+            raise ValueError("timeout must not exceed 60 seconds and must be greater than zero")
+        if max_response_bytes <= 0:
+            raise ValueError("max_response_bytes must be greater than zero")
+        self.timeout = timeout
+        self.max_response_bytes = max_response_bytes
+
+    async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
+        from html import unescape
+        from xml.etree import ElementTree
+
+        query = query.strip()
+        if not query:
+            raise ValueError("query cannot be empty")
+        if limit < 1 or limit > 20:
+            raise ValueError("limit must be between 1 and 20")
+
+        url = (
+            f"{self._BASE_URL}?q={quote_plus(query)}"
+            "&hl=en-IN&gl=IN&ceid=IN:en"
+        )
+        headers = {
+            "Accept": "application/rss+xml, application/xml;q=0.9, */*;q=0.8",
+            "User-Agent": "Indoone-Research/1.0",
+        }
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=False) as client:
+            response = await client.get(url, headers=headers)
+            response.raise_for_status()
+            if len(response.content) > self.max_response_bytes:
+                raise RuntimeError("research response is too large")
+            content = response.content
+
+        try:
+            root = ElementTree.fromstring(content)
+        except ElementTree.ParseError as exc:
+            raise RuntimeError("research response is not valid RSS/XML") from exc
+
+        results: list[ResearchResult] = []
+        seen_urls: set[str] = set()
+        for item in root.findall("./channel/item"):
+            title = unescape((item.findtext("title") or "").strip())
+            source_url = _safe_source_url((item.findtext("link") or "").strip())
+            description = unescape((item.findtext("description") or "").strip())
+            description = re.sub(r"<[^>]+>", " ", description)
+            description = " ".join(description.split())[:MAX_SNIPPET_LENGTH]
+            if not title or not source_url or source_url in seen_urls:
+                continue
+            seen_urls.add(source_url)
+            results.append(
+                ResearchResult(
+                    title=title[:MAX_TITLE_LENGTH],
+                    url=source_url,
+                    snippet=description,
+                )
+            )
+            if len(results) >= limit:
+                break
+        return results
+
 def build_research_provider() -> ResearchProvider | None:
-    url = os.getenv("INDOONE_RESEARCH_URL", "").strip()
-    if not url:
-        return None
     try:
         timeout = float(os.getenv("INDOONE_RESEARCH_TIMEOUT", "10"))
     except ValueError as exc:
         raise ValueError("INDOONE_RESEARCH_TIMEOUT must be numeric") from exc
-    return HttpResearchProvider(url, bearer_token=os.getenv("INDOONE_RESEARCH_TOKEN"), timeout=timeout)
 
+    url = os.getenv("INDOONE_RESEARCH_URL", "").strip()
+    if url:
+        return HttpResearchProvider(
+            url,
+            bearer_token=os.getenv("INDOONE_RESEARCH_TOKEN"),
+            timeout=timeout,
+        )
+
+    return GoogleNewsRssResearchProvider(timeout=timeout)
 def build_deep_research_queries(query: str, count: int = 3) -> list[str]:
     normalized = " ".join(query.split())
     if not normalized:

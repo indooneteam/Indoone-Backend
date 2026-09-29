@@ -71,8 +71,9 @@ class WikipediaKnowledgeProvider:
         if not page_url:
             page_url = f"{api_base}/wiki/{encoded_title}"
 
+        canonical_title = str(summary_payload.get("title", "")).strip() or normalized_title
         return WikipediaAnswer(
-            title=normalized_title,
+            title=canonical_title,
             url=page_url,
             extract=extract[:MAX_SUMMARY_CHARS],
         )

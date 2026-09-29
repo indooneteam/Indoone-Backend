@@ -4,6 +4,9 @@ The capital city of India is New Delhi.
 ಭಾರತದ ರಾಜಧಾನಿ ನವದೆಹಲಿ.
 India's capital city is New Delhi, also known as New Delhi.
 
+India has 28 states and 8 Union Territories.
+ಭಾರತದಲ್ಲಿ 28 ರಾಜ್ಯಗಳು ಮತ್ತು 8 ಕೇಂದ್ರಾಡಳಿತ ಪ್ರದೇಶಗಳಿವೆ.
+
 The sky looks blue because molecules in Earth's atmosphere scatter shorter wavelengths of sunlight, including blue light, more strongly than longer wavelengths.
 Water changes between ice, liquid water, and water vapor through freezing, melting, evaporation, condensation, and precipitation.
 Day and night happen because Earth rotates on its axis.

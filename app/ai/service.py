@@ -275,6 +275,32 @@ def _is_fast_fallback_message(message: str) -> bool:
     return normalized in {"hi", "hello", "hey", "namaskara", "namaste"}
 
 
+def _is_identity_request(message: str) -> bool:
+    normalized = " ".join(message.casefold().split()).strip(" ?!.")
+    return normalized in {
+        "who are you",
+        "what is your name",
+        "whats your name",
+        "what's your name",
+        "ನೀನು ಯಾರು",
+        "ನೀವು ಯಾರು",
+        "ನಿನ್ನ ಹೆಸರು ಏನು",
+        "ನಿಮ್ಮ ಹೆಸರು ಏನು",
+    }
+
+
+def _identity_fallback_reply(language: str) -> str:
+    if language == "Kannada":
+        return "ನಾನು Indoone AI. ನಿಮ್ಮ ಪ್ರಶ್ನೆಗಳಿಗೆ ಉತ್ತರಿಸಲು ಮತ್ತು ಮಾಹಿತಿಯನ್ನು ಹುಡುಕಿಕೊಡಲು ನಾನು ಇಲ್ಲಿದ್ದೇನೆ."
+    if language == "Hindi":
+        return "मैं Indoone AI हूँ। मैं आपके सवालों के जवाब देने और जानकारी खोजने में मदद करता हूँ।"
+    if language == "Telugu":
+        return "నేను Indoone AI. మీ ప్రశ్నలకు సమాధానం ఇవ్వడానికి మరియు సమాచారాన్ని వెతికేందుకు నేను ఇక్కడ ఉన్నాను."
+    if language == "Tamil":
+        return "நான் Indoone AI. உங்கள் கேள்விகளுக்கு பதிலளிக்கவும் தகவலைத் தேடவும் நான் இங்கே இருக்கிறேன்."
+    return "I’m Indoone AI. I’m here to answer questions and help you find information."
+
+
 def _is_learning_request(message: str) -> bool:
     normalized = " ".join(message.casefold().split())
     return (
@@ -594,6 +620,9 @@ class LocalAIService:
             f"{_language_instruction(language)}\nUser request: {prompt}"
         )
 
+        if _is_identity_request(prompt):
+            return _identity_fallback_reply(language)
+
         # Open-ended learning requests should still receive a useful answer when
         # the tiny local model is unavailable or produces unusable output.
         if _is_learning_request(prompt):
@@ -629,12 +658,16 @@ class LocalAIService:
         # one broader evidence-backed pass before the tiny local model is allowed.
         # This prevents wrong/hallucinated answers from the CPU model being used
         # for ordinary questions and gives a deterministic safe failure instead.
-        broad_question = is_question_like(prompt) and intent.name not in {
+        broad_question = (
+            is_question_like(prompt)
+            and not _is_creative_request(prompt)
+            and intent.name not in {
             "coding",
             "translation",
             "summarization",
             "file_qa",
-        }
+            }
+        )
         if broad_question and not (research_blocked and intent.needs_research):
             if _research_provider is not None:
                 try:

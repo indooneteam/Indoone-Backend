@@ -21,11 +21,25 @@ class LocalModelRuntime:
     """Load an Indoone local language model with a high-confidence answer fallback."""
 
     def __init__(self, checkpoint_path: Path, tokenizer_path: Path) -> None:
-        checkpoint = torch.load(
-            checkpoint_path,
-            map_location="cpu",
-            weights_only=False,
-        )
+        # Load the checkpoint with memory mapping where supported. The previous
+        # load path materialized the full checkpoint and then copied its tensors
+        # into a second model instance, creating a large transient memory spike
+        # on Render Free. The checkpoint contains only tensors and primitive
+        # configuration, so the safe weights-only loader is sufficient.
+        try:
+            checkpoint = torch.load(
+                checkpoint_path,
+                map_location="cpu",
+                weights_only=True,
+                mmap=True,
+            )
+        except (TypeError, RuntimeError, ValueError):
+            checkpoint = torch.load(
+                checkpoint_path,
+                map_location="cpu",
+                weights_only=True,
+            )
+
         self.tokenizer = BPETokenizer.load(tokenizer_path)
 
         config = dict(checkpoint["config"])
@@ -35,7 +49,12 @@ class LocalModelRuntime:
             vocab_size=self.tokenizer.vocab_size,
             **config,
         )
-        self.model.load_state_dict(checkpoint["model_state"])
+        self.model.load_state_dict(checkpoint["model_state"], assign=True)
+
+        # Re-establish the tied embedding/output weights after assign-based
+        # loading so the model keeps its original parameter sharing.
+        self.model.lm_head.weight = self.model.token_embedding.weight
+        del checkpoint
         self.model.eval()
 
         project_root = Path(__file__).resolve().parents[2]

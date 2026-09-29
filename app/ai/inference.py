@@ -109,7 +109,7 @@ class LocalModelRuntime:
     def _extract_user_request(prompt: str) -> str:
         """Recover the final user message from a prepared inference context."""
         marker = re.findall(
-            r"(?:^|\n)user:\s*(.+?)(?=\n</instruction>|\Z)",
+            r"(?:^|\n)user:\s*(.+?)(?=\n(?:user|assistant):|\n</instruction>|\Z)",
             prompt,
             flags=re.IGNORECASE | re.DOTALL,
         )

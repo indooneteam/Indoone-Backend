@@ -135,7 +135,11 @@ class LocalModelRuntime:
         if stripped_prompt.startswith("<instruction>") and stripped_prompt.endswith("<response>"):
             formatted_prompt = stripped_prompt
         else:
-            formatted_prompt = format_instruction_prompt(stripped_prompt)
+            trailing_response = re.fullmatch(
+                r"(?s)(<instruction>.*</instruction>\\s*<response>)",
+                stripped_prompt,
+            )
+            formatted_prompt = trailing_response.group(1) if trailing_response else format_instruction_prompt(stripped_prompt)
         token_ids = self.tokenizer.encode(formatted_prompt, add_special_tokens=False)
         return [self.tokenizer.stoi["<bos>"]] + token_ids
 

@@ -80,25 +80,27 @@ class WikipediaKnowledgeProvider:
             extract=extract[:MAX_SUMMARY_CHARS],
         )
 
-def _title_relevance_score(topic: str, title: str) -> int:
-    topic_normalized = " ".join(topic.casefold().split()).strip()
-    title_normalized = " ".join(title.casefold().split()).strip()
-    if not topic_normalized or not title_normalized:
-        return 0
-    if topic_normalized == title_normalized:
-        return 100
-    if topic_normalized in title_normalized or title_normalized in topic_normalized:
-        return 50
-    topic_terms = {
-        token for token in re.findall(r"[\w\u0080-\uffff]+", topic_normalized, flags=re.UNICODE)
-        if len(token) > 1
-    }
-    title_terms = {
-        token for token in re.findall(r"[\w\u0080-\uffff]+", title_normalized, flags=re.UNICODE)
-        if len(token) > 1
-    }
-    return len(topic_terms & title_terms)
-
+    @staticmethod
+    def _title_relevance_score(topic: str, title: str) -> int:
+        topic_normalized = " ".join(topic.casefold().split()).strip()
+        title_normalized = " ".join(title.casefold().split()).strip()
+        if not topic_normalized or not title_normalized:
+            return 0
+        if topic_normalized == title_normalized:
+            return 100
+        if topic_normalized in title_normalized or title_normalized in topic_normalized:
+            return 50
+        topic_terms = {
+            token
+            for token in re.findall(r"[\w\u0080-\uffff]+", topic_normalized, flags=re.UNICODE)
+            if len(token) > 1
+        }
+        title_terms = {
+            token
+            for token in re.findall(r"[\w\u0080-\uffff]+", title_normalized, flags=re.UNICODE)
+            if len(token) > 1
+        }
+        return len(topic_terms & title_terms)
 
     async def _summary_candidates(
         self,
@@ -106,30 +108,30 @@ def _title_relevance_score(topic: str, title: str) -> int:
         api_base: str,
         topic: str,
     ) -> WikipediaAnswer | None:
-            normalized = " ".join(topic.strip().split())
-            candidates = [normalized]
-            variants = (
-                re.sub(r"\s+are\s+there\s+", " ", normalized, flags=re.IGNORECASE),
-                re.sub(r"\s+are\s+", " ", normalized, flags=re.IGNORECASE),
-                re.sub(r"\s+is\s+", " ", normalized, flags=re.IGNORECASE),
-            )
-            for variant in variants:
-                variant = " ".join(variant.split()).strip(" ?!.")
-                if variant and variant.casefold() not in {item.casefold() for item in candidates}:
-                    candidates.append(variant)
-            if normalized.casefold().startswith(("states ", "list ", "number of ")):
-                list_variant = f"List of {normalized}"
-                if list_variant.casefold() not in {item.casefold() for item in candidates}:
-                    candidates.append(list_variant)
+        normalized = " ".join(topic.strip().split())
+        candidates = [normalized]
+        variants = (
+            re.sub(r"\s+are\s+there\s+", " ", normalized, flags=re.IGNORECASE),
+            re.sub(r"\s+are\s+", " ", normalized, flags=re.IGNORECASE),
+            re.sub(r"\s+is\s+", " ", normalized, flags=re.IGNORECASE),
+        )
+        for variant in variants:
+            variant = " ".join(variant.split()).strip(" ?!.")
+            if variant and variant.casefold() not in {item.casefold() for item in candidates}:
+                candidates.append(variant)
+        if normalized.casefold().startswith(("states ", "list ", "number of ")):
+            list_variant = f"List of {normalized}"
+            if list_variant.casefold() not in {item.casefold() for item in candidates}:
+                candidates.append(list_variant)
 
-            for candidate in candidates:
-                try:
-                    result = await self._summary(client, api_base, candidate)
-                except httpx.HTTPStatusError:
-                    continue
-                if result is not None:
-                    return result
-            return None
+        for candidate in candidates:
+            try:
+                result = await self._summary(client, api_base, candidate)
+            except httpx.HTTPStatusError:
+                continue
+            if result is not None:
+                return result
+        return None
 
     async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
         query = " ".join(query.strip().split())
@@ -426,4 +428,17 @@ def is_general_knowledge_question(message: str) -> bool:
     if _NATIVE_FACTUAL_QUESTION_RE.search(message) and "ನೀವು" not in message and "ನಾನು" not in message:
         return True
 
+    return bool(_ROMAN_KANNADA_QUESTION_RE.search(normalized))
+
+
+def is_question_like(message: str) -> bool:
+    normalized = " ".join(message.strip().casefold().split())
+    if not normalized:
+        return False
+    if normalized.endswith("?"):
+        return True
+    if any(normalized.startswith(prefix) for prefix in _ENGLISH_PREFIXES):
+        return True
+    if _NATIVE_FACTUAL_QUESTION_RE.search(message):
+        return True
     return bool(_ROMAN_KANNADA_QUESTION_RE.search(normalized))

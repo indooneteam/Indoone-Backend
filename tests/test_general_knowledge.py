@@ -17,6 +17,7 @@ from app.ai.general_knowledge import (
     [
         "What is photosynthesis?",
         "Who is Ada Lovelace?",
+        "Tell me about Alan Turing.",
         "Explain gravity in simple words.",
         "What causes day and night?",
         "What is the difference between mass and weight?",
@@ -33,6 +34,7 @@ def test_general_knowledge_questions_are_detected(question: str) -> None:
         "Write a Python function.",
         "Give me a project plan.",
         "What is the latest news?",
+        "Who is the president of India?",
         "Calculate 12 + 7.",
     ],
 )

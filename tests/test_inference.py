@@ -75,12 +75,31 @@ def test_cached_forward_matches_full_forward() -> None:
     tokens = torch.randint(0, 48, (1, 6))
 
     full_logits, _ = model(tokens)
-    cached_first, cache = model.forward_cached(tokens[:,:3])
-    cached_second, _ = model.forward_cached(tokens[:,3:], cache)
-    cached_logits = torch.cat((cached_first, cached_second), dim=1)
+    cached_outputs = []
+    cached_logits, cache = model.forward_cached(tokens[:, :3])
+    cached_outputs.append(cached_logits)
+    for index in range(3, tokens.size(1)):
+        cached_logits, cache = model.forward_cached(tokens[:, index:index + 1], cache)
+        cached_outputs.append(cached_logits)
+    combined_cached_logits = torch.cat(cached_outputs, dim=1)
 
-    assert cached_logits.shape == full_logits.shape
-    assert torch.allclose(cached_logits, full_logits, atol=1e-5, rtol=1e-4)
+    assert combined_cached_logits.shape == full_logits.shape
+    assert torch.allclose(combined_cached_logits, full_logits, atol=1e-5, rtol=1e-4)
+
+
+def test_cached_forward_rejects_multi_token_decode_steps() -> None:
+    model = IndooneTransformer(
+        vocab_size=16,
+        block_size=8,
+        n_embd=16,
+        n_head=2,
+        n_layer=1,
+        dropout=0.0,
+    ).eval()
+    _, cache = model.forward_cached(torch.tensor([[1, 2, 3]]))
+
+    with pytest.raises(ValueError, match="one generated token"):
+        model.forward_cached(torch.tensor([[4, 5]]), cache)
 
 
 def test_cached_forward_respects_block_size() -> None:

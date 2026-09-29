@@ -18,6 +18,20 @@ _CONCEPT_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("summary", ("summary", "summarize", "summarized", "main supported points")),
     ("sources", ("sources", "source attribution", "source list")),
     ("concise", ("concise", "briefly", "short researched summary")),
+    ("current_research", (
+        "current technology",
+        "current research request",
+        "technology topic",
+    )),
+    ("verification_gap", (
+        "cannot be verified",
+        "cannot verify",
+        "could not be verified",
+        "unable to verify",
+        "cannot be confirmed",
+        "unverified",
+        "verification",
+    )),
 )
 _CONCEPT_PATTERNS_UNUSED_GUARD = _CONCEPT_PATTERNS
 
@@ -198,6 +212,28 @@ class InstructionRetriever:
                 and "current_research" in example_concepts
             ):
                 candidate_score += 0.50
+
+            if (
+                "verification_gap" in prompt_concepts
+                and "verification_gap" in example_concepts
+            ):
+                candidate_score += 0.25
+
+            query_text = _normalized(prompt)
+            candidate_text = _normalized(
+                f"{example.instruction} {example.response}"
+            )
+
+            shared_verification_phrase = any(
+                phrase in query_text and phrase in candidate_text
+                for phrase in (
+                    "cannot be verified",
+                    "could not be verified",
+                    "cannot verify",
+                )
+            )
+            if shared_verification_phrase:
+                candidate_score += 0.75
             if {"disagree", "conflict"} & prompt_tokens and {"disagree", "conflict"} & example_tokens:
                 candidate_score += 0.20
             if "followup" in prompt_tokens and "followup" in example_tokens:
@@ -212,9 +248,50 @@ class InstructionRetriever:
                     RetrievedInstruction(example, min(candidate_score, 1.0))
                 )
 
-        ranked.sort(
-            key=lambda item: (-item.score, item.example.instruction.casefold())
-        )
+        query_concepts = _concepts(prompt)
+
+        def _rank_key(item: RetrievedInstruction) -> tuple[float, int, int, str]:
+            query_text = _normalized(prompt)
+            candidate_text = _normalized(
+                f"{item.example.instruction} {item.example.response}"
+            )
+            candidate_concepts = _concepts(
+                f"{item.example.instruction} {item.example.response}"
+            )
+            current_priority = int(
+                "current_research" in query_concepts
+                and "current_research" in candidate_concepts
+            )
+
+            verification_priority = 0
+            if "verification_gap" in query_concepts:
+                query_verification_phrases = (
+                    "cannot be verified",
+                    "could not be verified",
+                    "cannot verify",
+                )
+                candidate_verification_phrases = (
+                    "cannot be verified",
+                    "could not be verified",
+                    "cannot verify",
+                )
+                if any(
+                    phrase in query_text
+                    for phrase in query_verification_phrases
+                ) and any(
+                    phrase in candidate_text
+                    for phrase in candidate_verification_phrases
+                ):
+                    verification_priority = 1
+
+            return (
+                -item.score,
+                -verification_priority,
+                -current_priority,
+                item.example.instruction.casefold(),
+            )
+
+        ranked.sort(key=_rank_key)
         return ranked[:limit]
 
     def retrieve(self, prompt: str, *, minimum_score: float = 0.42) -> RetrievedInstruction | None:

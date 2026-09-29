@@ -214,7 +214,7 @@ class WikipediaKnowledgeProvider:
 
             title = max(
                 enumerate(ranked_titles),
-                key=lambda pair: (_title_relevance_score(search_query, pair[1]), -pair[0]),
+                key=lambda pair: (self._title_relevance_score(search_query, pair[1]), -pair[0]),
             )[1]
             return await self._summary(client, api_base, title)
 

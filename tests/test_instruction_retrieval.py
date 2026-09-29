@@ -53,3 +53,23 @@ def test_retrieval_private_database_answer_includes_permission() -> None:
     )
     assert match is not None
     assert "permission" in match.example.response.casefold()
+
+def test_retrieval_matches_research_conflict_paraphrase() -> None:
+    match = _retriever().retrieve(
+        "Two research sources disagree about a figure. How should Indoone explain the result?",
+        minimum_score=0.30,
+    )
+    assert match is not None
+    assert match.example.category == "research"
+    assert "disagreement" in match.example.response.casefold() or "disagree" in match.example.response.casefold()
+
+
+def test_retrieval_matches_concise_transformer_paraphrase() -> None:
+    match = _retriever().retrieve(
+        "Now explain what a Transformer does, using the concise style I requested.",
+        minimum_score=0.30,
+    )
+    assert match is not None
+    assert match.example.category == "conversation"
+    assert "attention" in match.example.response.casefold()
+    assert "tokens" in match.example.response.casefold()

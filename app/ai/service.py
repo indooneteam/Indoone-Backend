@@ -750,7 +750,7 @@ class LocalAIService:
                 else:
                     generation_failed = True
 
-        elif generation_failed and intent.needs_research:
+        if generation_failed and intent.needs_research:
             # Do not attach research links to a failed synthesis; sources must
             # support a user-visible answer rather than accompany an error message.
             research_results = []

@@ -230,7 +230,7 @@ async def test_research_generation_failure_does_not_attach_sources(
 
     assert "Sources:" not in reply
     assert "research.example" not in reply
-    assert "reliable information" in reply.lower()
+    assert "ದಯವಿಟ್ಟು ಮತ್ತೆ ಕೇಳಿ" in reply
 
 
 def test_research_requires_independent_sources() -> None:

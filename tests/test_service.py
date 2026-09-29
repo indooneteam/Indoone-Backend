@@ -71,3 +71,31 @@ async def test_general_knowledge_answer_bypasses_local_model(monkeypatch: pytest
     assert reply.startswith("Photosynthesis is the process")
     assert "Sources:" in reply
     assert "https://en.wikipedia.org/wiki/Photosynthesis" in reply
+
+
+@pytest.mark.asyncio
+async def test_local_model_uses_training_prompt_contract_and_language_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    class FakeRuntime:
+        def generate(self, prompt: str, *, max_new_tokens: int, temperature: float, language: str) -> str:
+            calls.append((prompt, language))
+            if len(calls) == 1:
+                return "ನೃತ್ಯ ಕಲಿಯುವ ರೋಬೋಟ್‌ನ ಕಥೆ."
+            return "The robot practiced dancing every evening and finally performed a funny dance for its friends."
+
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_research_provider", None)
+    monkeypatch.setattr(service, "_general_knowledge_provider", None)
+    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
+
+    reply = await service.generate_reply("Write a short funny story about a robot learning to dance.")
+
+    assert reply.startswith("The robot practiced dancing")
+    assert len(calls) == 1
+    prompt, language = calls[0]
+    assert prompt.startswith("<instruction>\n")
+    assert prompt.endswith("</instruction>\n<response>\n")
+    assert "Write a short funny story about a robot learning to dance." in prompt
+    assert language == "English"
+

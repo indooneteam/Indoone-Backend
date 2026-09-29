@@ -189,7 +189,7 @@ def test_build_research_query_variants_extracts_latin_terms() -> None:
     )
 
     assert variants[0].startswith("ಈಗಿನ AI technology")
-    assert variants[1] == "AI technology research simple sources"
+    assert variants[1] == "AI technology"
 
 
 def test_wikipedia_research_provider_adapts_knowledge_answer(monkeypatch) -> None:
@@ -353,6 +353,51 @@ def test_crossref_provider_parses_works(monkeypatch) -> None:
         "https://doi.org/10.5555/example",
         "Fresh AI evidence.",
     )
+
+
+def test_multi_source_provider_filters_unrelated_broad_word_matches() -> None:
+    class FakeProvider:
+        async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
+            return [
+                ResearchResult(
+                    "AI technology advances in multimodal systems",
+                    "https://relevant.example/ai",
+                    "Recent AI technology research covers multimodal systems.",
+                ),
+                ResearchResult(
+                    "What Is Perplexing AI?",
+                    "https://unrelated.example/ai",
+                    "An unrelated article that only happens to mention AI.",
+                ),
+                ResearchResult(
+                    "Environmental costs threaten water and climate",
+                    "https://another.example/environment",
+                    "This result does not discuss AI technology.",
+                ),
+            ]
+
+    provider = MultiSourceResearchProvider([FakeProvider()], max_query_variants=2)
+    results = asyncio.run(
+        provider.search(
+            "ಈಗಿನ AI technology ಬಗ್ಗೆ research ಮಾಡಿ simple ಆಗಿ explain ಮಾಡು ಮತ್ತು sources ಕೊಡು.",
+            limit=8,
+        )
+    )
+
+    assert [item.url for item in results] == ["https://relevant.example/ai"]
+
+
+def test_score_research_result_ignores_generic_instruction_words() -> None:
+    result = ResearchResult(
+        "AI technology advances",
+        "https://example.com/ai",
+        "Research sources explain recent AI technology work.",
+    )
+
+    assert score_research_result(
+        ["ಈಗಿನ AI technology ಬಗ್ಗೆ research ಮಾಡಿ simple ಆಗಿ sources ಕೊಡು"],
+        result,
+    ) >= 4.0
 
 
 def test_multi_source_provider_merges_sources_and_queries() -> None:

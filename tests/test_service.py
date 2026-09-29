@@ -191,6 +191,48 @@ async def test_research_generation_uses_full_evidence_context_for_one_answer(
     assert reply.count("https://news.example/ai") == 1
 
 
+@pytest.mark.asyncio
+async def test_research_generation_failure_does_not_attach_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeResearchProvider:
+        async def search(self, query: str, limit: int = 5):
+            return [
+                service.ResearchResult(
+                    "Relevant AI source",
+                    "https://research.example/ai",
+                    "AI technology evidence.",
+                ),
+                service.ResearchResult(
+                    "Second AI source",
+                    "https://second.example/ai",
+                    "Additional AI technology evidence.",
+                ),
+            ]
+
+    class FakeRuntime:
+        def generate(
+            self,
+            prompt: str,
+            *,
+            max_new_tokens: int,
+            temperature: float,
+            language: str,
+        ) -> str:
+            return "This is not Kannada."
+
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_general_knowledge_provider", None)
+    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
+    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
+
+    reply = await service.generate_reply("ಈಗಿನ AI technology ಬಗ್ಗೆ research ಮಾಡಿ")
+
+    assert "Sources:" not in reply
+    assert "research.example" not in reply
+    assert "reliable information" in reply.lower()
+
+
 def test_research_requires_independent_sources() -> None:
     results = [
         service.ResearchResult("One", "https://example.com/one", "source"),

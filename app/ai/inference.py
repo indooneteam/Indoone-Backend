@@ -17,6 +17,8 @@ DEFAULT_MAX_NEW_TOKENS = 192
 DEFAULT_TEMPERATURE = 0.0
 DEFAULT_REPETITION_PENALTY = 1.08
 DEFAULT_NO_REPEAT_NGRAM_SIZE = 3
+DEFAULT_TOP_K = 64
+MIN_GENERATED_TOKENS_BEFORE_EOS = 4
 
 
 class LocalModelRuntime:
@@ -71,16 +73,28 @@ class LocalModelRuntime:
         self._language_token_ids: dict[str, frozenset[int]] = {}
 
     @staticmethod
-    def _select_next_token(logits: torch.Tensor, temperature: float) -> int:
-        """Select the next token, using greedy decoding at temperature 0."""
+    def _select_next_token(
+        logits: torch.Tensor,
+        temperature: float,
+        top_k: int = DEFAULT_TOP_K,
+    ) -> int:
+        """Select the next token with greedy or bounded sampling."""
         if temperature < 0:
             raise ValueError("temperature must be non-negative")
+        if top_k < 0:
+            raise ValueError("top_k must be non-negative")
 
         if temperature == 0:
             return int(torch.argmax(logits, dim=-1).item())
 
-        probabilities = torch.softmax(logits / temperature, dim=-1)
-        return int(torch.multinomial(probabilities, num_samples=1).item())
+        if logits.ndim != 2 or logits.size(0) != 1:
+            raise ValueError("logits must have shape (1, vocab_size)")
+
+        limit = min(top_k, logits.size(-1)) if top_k else logits.size(-1)
+        top_values, top_indices = torch.topk(logits, k=limit, dim=-1)
+        probabilities = torch.softmax(top_values / temperature, dim=-1)
+        choice = torch.multinomial(probabilities, num_samples=1)
+        return int(top_indices.gather(1, choice).item())
 
     @staticmethod
     def _apply_repetition_penalty(
@@ -285,6 +299,13 @@ class LocalModelRuntime:
                 completion_ids,
                 no_repeat_ngram_size,
             )
+
+            if len(completion_ids) < MIN_GENERATED_TOKENS_BEFORE_EOS:
+                eos_blocked = next_logits.clone()
+                eos_blocked[0, eos_id] = float("-inf")
+                if torch.isfinite(eos_blocked).any():
+                    next_logits = eos_blocked
+
             next_id = self._select_next_token(next_logits, temperature)
 
             generated_ids.append(next_id)

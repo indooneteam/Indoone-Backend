@@ -52,9 +52,6 @@ async def test_general_knowledge_answer_bypasses_local_model(monkeypatch: pytest
         async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
             assert query == "What is photosynthesis?"
             assert language == "English"
-    assert temperature == 0.7
-    assert max_new_tokens == 160
-    assert calls[1][2] == 0.2
             return WikipediaAnswer(
                 title="Photosynthesis",
                 url="https://en.wikipedia.org/wiki/Photosynthesis",
@@ -101,6 +98,9 @@ async def test_local_model_uses_training_prompt_contract_and_language_retry(monk
     assert prompt.endswith("</instruction>\n<response>\n")
     assert "Write a short funny story about a robot learning to dance." in prompt
     assert language == "English"
+    assert temperature == 0.7
+    assert max_new_tokens == 160
+    assert calls[1][2] == 0.2
 
 
 

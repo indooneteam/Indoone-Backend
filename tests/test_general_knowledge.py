@@ -175,3 +175,11 @@ async def test_wikipedia_provider_uses_direct_summary_when_search_is_forbidden(
         url="https://en.wikipedia.org/wiki/Photosynthesis",
         extract="Photosynthesis is the process by which green plants convert light energy into chemical energy.",
     )
+
+
+def test_question_like_detection_catches_unlisted_question_forms() -> None:
+    from app.ai.general_knowledge import is_question_like
+
+    assert is_question_like("ನೀನು ಯಾರು?")
+    assert is_question_like("How can solar panels work?")
+    assert is_question_like("gravity andre enu?")

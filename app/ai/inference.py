@@ -203,6 +203,11 @@ class LocalModelRuntime:
         if evidence_response is not None:
             return evidence_response
 
+        # A real research context must reach the model generation path. Do not
+        # let curated behavior retrieval replace evidence-backed synthesis.
+        if re.search(r"fresh research evidence:|<research>", prompt, flags=re.IGNORECASE):
+            return None
+
         retrieval_query = prompt if re.search(r"(?:^|\n)(?:user|assistant):\s*", prompt, flags=re.IGNORECASE) else user_request
         match = self._instruction_retriever.retrieve(retrieval_query)
         if match is not None:

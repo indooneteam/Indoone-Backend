@@ -38,7 +38,8 @@ def build_grounded_prompt_instruction() -> str:
         "Synthesize all relevant evidence into one coherent answer; do not give "
         "separate source-by-source answers. Do not invent facts, sources, URLs, "
         "or details that are not supported by the conversation or supplied evidence. "
-        "When evidence is missing or conflicting, say so clearly.\n"
+        "When evidence is missing or conflicting, state the disagreement clearly "
+        "instead of silently choosing one source.\n"
         "</grounding>"
     )
 

@@ -554,6 +554,7 @@ class LocalAIService:
         if _is_fast_fallback_message(prompt):
             return _fallback_reply(prompt)
 
+        generation_failed = False
         try:
             # Model loading and CPU inference are blocking operations. Keep them
             # off FastAPI's event loop so a slow first load cannot stall the
@@ -650,12 +651,19 @@ class LocalAIService:
                 knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
                 if knowledge_answer is not None:
                     answer = knowledge_answer
+                else:
+                    generation_failed = True
 
         # Fresh/current questions must not receive a normal model answer without
         # the required research evidence. The model may still run so the request
         # path remains testable, but its answer is discarded.
         if research_blocked and intent.needs_research:
             answer = user_safe_failure()
+            research_results = []
+        elif generation_failed and intent.needs_research:
+            # Do not attach research links to a failed synthesis; sources must
+            # support a user-visible answer rather than accompany an error message.
+            research_results = []
 
         return append_sources(answer, _evidence_from_results(research_results))
 

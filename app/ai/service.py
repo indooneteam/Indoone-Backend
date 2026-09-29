@@ -25,6 +25,7 @@ from app.ai.grounding import (
     build_grounded_prompt_instruction,
 )
 from app.ai.intent import classify_intent
+from app.ai.question_understanding import understand_question
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
 from app.ai.training_data import format_instruction_prompt
 from app.ai.research import (
@@ -420,13 +421,49 @@ def _clean_model_reply(answer: str) -> str:
     return text.strip()
 
 
-def _has_expected_script(text: str, language: str) -> bool:
+def _is_romanized_request(message: str, language: str) -> bool:
+    if language == "English":
+        return False
+    if any(pattern.search(message) for _, pattern in _SCRIPT_RANGES):
+        return False
+    normalized = " ".join(message.casefold().split())
+    hints = dict(_ROMANIZED_HINTS).get(language, ())
+    return any(
+        re.search(rf"(?<!\w){re.escape(hint.casefold())}(?!\w)", normalized)
+        for hint in hints
+    )
+
+
+def _has_expected_script(
+    text: str,
+    language: str,
+    *,
+    allow_romanized: bool = False,
+) -> bool:
     if not text:
         return False
     if language == "English":
         return bool(re.search(r"[A-Za-z]", text))
     pattern = dict(_SCRIPT_RANGES).get(language)
-    return pattern is not None and bool(pattern.search(text))
+    if pattern is not None and pattern.search(text):
+        return True
+    if allow_romanized:
+        return bool(re.search(r"[A-Za-z]", text))
+    return False
+
+
+def _research_extract_fallback(results: list[ResearchResult]) -> str | None:
+    """Return concise source evidence when synthesis is unavailable."""
+    snippets: list[str] = []
+    for result in results:
+        snippet = " ".join(result.snippet.split()).strip()
+        if snippet and snippet not in snippets:
+            snippets.append(snippet[:1200])
+        if len(snippets) >= 2:
+            break
+    if not snippets:
+        return None
+    return " ".join(snippets)
 
 
 def _generation_error_reply(language: str) -> str:
@@ -486,11 +523,13 @@ class LocalAIService:
         if not prompt:
             raise ValueError("message cannot be empty")
 
+        understanding = understand_question(prompt)
         intent = classify_intent(prompt)
+        knowledge_query = understanding.research_query or prompt
         knowledge = ""
         knowledge_hits = []
         if _knowledge_base is not None:
-            knowledge_hits = _knowledge_base.search(prompt, limit=3)
+            knowledge_hits = _knowledge_base.search(knowledge_query, limit=3)
             knowledge = format_hits(knowledge_hits)
         if document_context.strip():
             knowledge = (knowledge + "\n\n" if knowledge else "") + "User-provided document:\n" + document_context.strip()[:100_000]
@@ -521,7 +560,8 @@ class LocalAIService:
                     logger.warning("Research provider failed for query: %s", prompt)
 
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
-        language = _detect_response_language(prompt)
+        language = understanding.language
+        allow_romanized = _is_romanized_request(prompt, language)
         minimal_context = format_instruction_prompt(
             f"{_language_instruction(language)}\nUser request: {prompt}"
         )
@@ -540,7 +580,10 @@ class LocalAIService:
             and is_general_knowledge_question(prompt)
         ):
             try:
-                web_answer = await _general_knowledge_provider.answer(prompt, language=language)
+                web_answer = await _general_knowledge_provider.answer(
+                    knowledge_query,
+                    language=language,
+                )
                 if web_answer is not None:
                     return append_sources(
                         web_answer.extract,
@@ -576,9 +619,13 @@ class LocalAIService:
             except Exception:
                 logger.exception("Indoone lightweight fallback engine failed")
                 answer = _fallback_reply(prompt)
-            knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
+            knowledge_answer = _knowledge_fallback_sentence(knowledge_query, knowledge_hits)
             if knowledge_answer is not None:
                 answer = knowledge_answer
+            elif intent.needs_research:
+                evidence_answer = _research_extract_fallback(research_results)
+                if evidence_answer is not None:
+                    answer = evidence_answer
         else:
             answer = ""
             if intent.needs_research:
@@ -613,7 +660,11 @@ class LocalAIService:
                                 timeout=remaining,
                             )
                         )
-                        if not _has_expected_script(candidate, language):
+                        if not _has_expected_script(
+                            candidate,
+                            language,
+                            allow_romanized=allow_romanized,
+                        ):
                             logger.warning(
                                 "Discarding malformed or wrong-language model output for %s on local generation attempt %d",
                                 language,
@@ -648,11 +699,15 @@ class LocalAIService:
 
             if not answer:
                 answer = _generation_error_reply(language)
-                knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
+                knowledge_answer = _knowledge_fallback_sentence(knowledge_query, knowledge_hits)
                 if knowledge_answer is not None:
                     answer = knowledge_answer
                 else:
-                    generation_failed = True
+                    evidence_answer = _research_extract_fallback(research_results)
+                    if evidence_answer is not None and intent.needs_research:
+                        answer = evidence_answer
+                    else:
+                        generation_failed = True
 
         # Fresh/current questions must not receive a normal model answer without
         # the required research evidence. The model may still run so the request

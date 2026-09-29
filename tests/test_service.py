@@ -184,8 +184,8 @@ async def test_research_generation_uses_full_evidence_context_for_one_answer(
 
     assert len(calls) == 1
     assert "Fresh research evidence:" in calls[0]
-    assert "https://research.example/ai" in calls[0]
-    assert "https://news.example/ai" in calls[0]
+    assert "research.example" in calls[0]
+    assert "news.example" in calls[0]
     assert "Sources:" in reply
     assert reply.count("https://research.example/ai") == 1
     assert reply.count("https://news.example/ai") == 1

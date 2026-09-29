@@ -10,6 +10,17 @@ from app.ai.training_data import TrainingExample, load_examples
 
 
 _TOKEN_RE = re.compile(r"[^\W_]+", flags=re.UNICODE)
+_CONCEPT_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("conflict", ("disagree", "disagreement", "conflicting", "conflict", "different figures")),
+    ("followup", ("follow-up", "follow up", "earlier context", "already researched", "previous research")),
+    ("friendly", ("friendly", "normal user", "easy-to-read", "natural")),
+    ("unsupported", ("unsupported facts", "without adding unsupported", "not supported")),
+    ("summary", ("summary", "summarize", "summarized", "main supported points")),
+    ("sources", ("sources", "source attribution", "source list")),
+    ("concise", ("concise", "briefly", "short researched summary")),
+)
+_CONCEPT_PATTERNS_UNUSED_GUARD = _CONCEPT_PATTERNS
+
 _STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "before", "but", "by", "can",
     "could", "did", "do", "does", "for", "from", "give", "how", "i", "if",
@@ -20,6 +31,15 @@ _STOPWORDS = {
     "explain", "only", "just", "now", "very", "well", "while", "someone",
     "another", "through", "without", "into", "after", "earlier",
 }
+
+
+def _concepts(text: str) -> set[str]:
+    normalized = _normalized(text)
+    return {
+        concept
+        for concept, patterns in _CONCEPT_PATTERNS
+        if any(pattern in normalized for pattern in patterns)
+    }
 
 
 def _tokens(text: str) -> set[str]:
@@ -167,6 +187,11 @@ class InstructionRetriever:
 
             prompt_tokens = set(_tokens(prompt))
             example_tokens = set(_tokens(example.instruction))
+            prompt_concepts = _concepts(prompt)
+            example_concepts = _concepts(
+                f"{example.instruction} {example.response}"
+            )
+            candidate_score += 0.22 * len(prompt_concepts & example_concepts)
             if {"disagree", "conflict"} & prompt_tokens and {"disagree", "conflict"} & example_tokens:
                 candidate_score += 0.20
             if "followup" in prompt_tokens and "followup" in example_tokens:

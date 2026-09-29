@@ -24,6 +24,7 @@ from app.ai.grounding import (
     build_grounded_prompt_instruction,
 )
 from app.ai.intent import classify_intent
+from app.ai.instruction_retrieval import InstructionRetriever
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
 from app.ai.research import (
     ResearchProvider,
@@ -68,6 +69,7 @@ _tokenizer = MODEL_DIR / "tokenizer.json"
 # increases memory pressure and can cause the web process to restart before chat.
 _runtime: "LocalModelRuntime | None" = None
 _knowledge_base: LocalKnowledgeBase | None = None
+_instruction_retriever = InstructionRetriever()
 _research_provider: ResearchProvider | None = build_research_provider()
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0
 _MODEL_LOAD_RETRY_SECONDS = 60.0
@@ -462,6 +464,15 @@ class LocalAIService:
 
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
+
+        # A high-confidence curated instruction can answer immediately without
+        # paying the CPU cost of model loading/generation.
+        instruction_match = _instruction_retriever.retrieve(prompt, minimum_score=0.72)
+        if instruction_match is not None and not (research_blocked and intent.needs_research):
+            return append_sources(
+                instruction_match.example.response.strip(),
+                _evidence_from_results(research_results),
+            )
 
         # A strongly matched approved local fact can answer immediately without
         # paying the CPU cost of model loading/generation.

@@ -188,7 +188,9 @@ class InstructionRetriever:
             prompt_tokens = set(_tokens(prompt))
             example_tokens = set(_tokens(example.instruction))
             prompt_concepts = _concepts(prompt)
-            example_concepts = _concepts(example.instruction)
+            example_concepts = _concepts(
+                f"{example.instruction} {example.response}"
+            )
             candidate_score += 0.22 * len(prompt_concepts & example_concepts)
             if {"disagree", "conflict"} & prompt_tokens and {"disagree", "conflict"} & example_tokens:
                 candidate_score += 0.20

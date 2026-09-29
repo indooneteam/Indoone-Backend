@@ -315,6 +315,29 @@ class CrossrefResearchProvider(ResearchProvider):
         return results
 
 
+def _research_terms(text: str) -> set[str]:
+    return {
+        token.casefold()
+        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", text)
+        if len(token) >= 2
+    }
+
+
+def score_research_result(query_variants: list[str], result: ResearchResult) -> float:
+    """Score title/snippet overlap without removing source diversity."""
+    query_terms: set[str] = set()
+    for query in query_variants:
+        query_terms.update(_research_terms(query))
+    if not query_terms:
+        return 0.0
+
+    title_terms = _research_terms(result.title)
+    snippet_terms = _research_terms(result.snippet)
+    title_overlap = len(query_terms & title_terms)
+    snippet_overlap = len(query_terms & snippet_terms)
+    return float(title_overlap * 3 + snippet_overlap)
+
+
 class MultiSourceResearchProvider(ResearchProvider):
     """Fan out across independent research sources and return one merged set."""
 
@@ -369,6 +392,10 @@ class MultiSourceResearchProvider(ResearchProvider):
                     if key and key not in per_provider_seen:
                         per_provider_seen.add(key)
                         provider_results[provider_index].append(item)
+
+            provider_results[provider_index].sort(
+                key=lambda item: (-score_research_result(variants, item), item.url.casefold())
+            )
 
         merged: list[ResearchResult] = []
         seen: set[str] = set()

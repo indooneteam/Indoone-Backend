@@ -310,3 +310,57 @@ def test_research_requires_independent_sources() -> None:
     assert service._research_has_enough_sources(results, cross_check=False) is True
     assert service._research_has_enough_sources(results, cross_check=True) is False
 
+
+
+
+@pytest.mark.asyncio
+async def test_broad_question_does_not_fall_through_to_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResearchProvider:
+        async def search(self, query: str, limit: int = 5):
+            assert query == "ನೀನು ಯಾರು?"
+            assert limit == 8
+            return [
+                service.ResearchResult(
+                    "No matching source",
+                    "https://example.com/no-match",
+                    "",
+                )
+            ]
+
+    async def fail_model(*args, **kwargs):
+        raise AssertionError("local model must not run for explicit question")
+
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_general_knowledge_provider", None)
+    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
+    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
+
+    reply = await service.generate_reply("ನೀನು ಯಾರು?")
+
+    assert reply == service.user_safe_failure()
+
+
+@pytest.mark.asyncio
+async def test_broad_question_uses_evidence_before_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResearchProvider:
+        async def search(self, query: str, limit: int = 5):
+            return [
+                service.ResearchResult(
+                    "Solar panels",
+                    "https://example.com/solar",
+                    "Solar panels convert sunlight into electrical energy.",
+                )
+            ]
+
+    async def fail_model(*args, **kwargs):
+        raise AssertionError("local model must not run when broad research has evidence")
+
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_general_knowledge_provider", None)
+    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
+    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
+
+    reply = await service.generate_reply("How can solar panels work?")
+
+    assert "Solar panels convert sunlight" in reply
+    assert "https://example.com/solar" in reply

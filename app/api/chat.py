@@ -59,7 +59,14 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             conversation_id = str(uuid4())
             history = []
         else:
-            history = _store.recent(conversation_id, user_id=user_id)
+            # Render Free instances have an ephemeral filesystem, so the backend's
+            # local SQLite history can disappear after a restart while Android still
+            # has the durable Firestore conversation id. A missing local record must
+            # not turn an otherwise valid chat request into HTTP 404.
+            try:
+                history = _store.recent(conversation_id, user_id=user_id)
+            except ValueError:
+                history = []
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:

@@ -20,6 +20,7 @@ CATEGORIES = (
     "safety",
     "grounding",
     "conversation",
+    "research",
 )
 
 

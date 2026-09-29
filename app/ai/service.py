@@ -44,10 +44,20 @@ if TYPE_CHECKING:
 # imported only inside _load_local_model_runtime() so Render startup stays light.
 LocalModelRuntime = None
 
-# Legacy fallback-engine injection point. Production uses _fallback_reply() when
-# no runtime is available; tests and future lightweight fallback adapters may
-# provide an async generate() implementation here.
-_fallback_engine = None
+class _LightweightFallbackEngine:
+    """Async fallback adapter that never loads the trained model."""
+    async def generate(self, message: str) -> str:
+        # The production caller passes a full context. Recover the final user
+        # message when possible so the greeting fallback remains natural.
+        prompt = message.strip()
+        marker = re.search(r"\nuser:\s*(.+?)\s*</instruction>\s*\z", prompt, flags=re.IGNORECASE | re.DOTALL)
+        if marker:
+            prompt = marker.group(1).strip()
+        return _fallback_reply(prompt)
+
+
+# Compatibility injection point for tests and lightweight fallback adapters.
+_fallback_engine = _LightweightFallbackEngine()
 
 MODEL_DIR = Path("models/indoone-small")
 KNOWLEDGE_DIR = Path("data/knowledge")
@@ -405,13 +415,10 @@ class LocalAIService:
             runtime = None
 
         if runtime is None:
-            if _fallback_engine is not None:
-                try:
-                    answer = _clean_model_reply(await _fallback_engine.generate(context))
-                except Exception:
-                    logger.exception("Indoone lightweight fallback engine failed")
-                    answer = _fallback_reply(prompt)
-            else:
+            try:
+                answer = _clean_model_reply(await _fallback_engine.generate(context))
+            except Exception:
+                logger.exception("Indoone lightweight fallback engine failed")
                 answer = _fallback_reply(prompt)
         else:
             try:

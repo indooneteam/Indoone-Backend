@@ -267,6 +267,53 @@ def _language_instruction(language: str) -> str:
     return f"Respond only in {language}. Preserve the user's language and script. Do not switch languages unless the user explicitly requests it. Keep the answer natural, clear, and concise."
 
 
+def _knowledge_fallback_sentence(
+    message: str,
+    hits: list[object],
+    *,
+    minimum_score: float = 0.80,
+) -> str | None:
+    """Return one strongly matched local-knowledge sentence as a safe fallback."""
+    if not hits:
+        return None
+
+    top_hit = hits[0]
+    score = float(getattr(top_hit, "score", 0.0))
+    content = str(getattr(top_hit, "content", "")).strip()
+    if score < minimum_score or not content:
+        return None
+
+    query_terms = {
+        token.casefold()
+        for token in re.findall(r"[\w'-]+", message, flags=re.UNICODE)
+        if len(token) > 1
+    }
+    if not query_terms:
+        return None
+
+    candidates = [
+        sentence.strip()
+        for sentence in re.split(r"(?<=[.!?])\s+|\n+", content)
+        if sentence.strip()
+    ]
+    best_sentence = ""
+    best_overlap = 0
+    for sentence in candidates:
+        sentence_terms = {
+            token.casefold()
+            for token in re.findall(r"[\w'-]+", sentence, flags=re.UNICODE)
+            if len(token) > 1
+        }
+        overlap = len(query_terms & sentence_terms)
+        if overlap > best_overlap:
+            best_sentence = sentence
+            best_overlap = overlap
+
+    if best_overlap < 2:
+        return None
+    return best_sentence
+
+
 def _build_context(message: str, history: list[tuple[str, str]], knowledge: str = "", research: str = "") -> str:
     response_language = _detect_response_language(message)
     grounding_instruction = build_grounded_prompt_instruction().replace("<grounding>", "").replace("</grounding>", "").strip()
@@ -381,8 +428,10 @@ class LocalAIService:
 
         intent = classify_intent(prompt)
         knowledge = ""
+        knowledge_hits = []
         if _knowledge_base is not None:
-            knowledge = format_hits(_knowledge_base.search(prompt, limit=3))
+            knowledge_hits = _knowledge_base.search(prompt, limit=3)
+            knowledge = format_hits(knowledge_hits)
         if document_context.strip():
             knowledge = (knowledge + "\n\n" if knowledge else "") + "User-provided document:\n" + document_context.strip()[:100_000]
 
@@ -414,6 +463,12 @@ class LocalAIService:
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
 
+        # A strongly matched approved local fact can answer immediately without
+        # paying the CPU cost of model loading/generation.
+        knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
+        if knowledge_answer is not None and not (research_blocked and intent.needs_research):
+            return append_sources(knowledge_answer, _evidence_from_results(research_results))
+
         # Simple greetings should never pay the cost of loading/running the
         # trained local model. They are served immediately by the safe fallback.
         if _is_fast_fallback_message(prompt):
@@ -440,6 +495,9 @@ class LocalAIService:
             except Exception:
                 logger.exception("Indoone lightweight fallback engine failed")
                 answer = _fallback_reply(prompt)
+            knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
+            if knowledge_answer is not None:
+                answer = knowledge_answer
         else:
             try:
                 answer = _clean_model_reply(
@@ -457,9 +515,15 @@ class LocalAIService:
                     _MODEL_GENERATION_TIMEOUT_SECONDS,
                 )
                 answer = _fallback_reply(prompt)
+                knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
+                if knowledge_answer is not None:
+                    answer = knowledge_answer
             except Exception:
                 logger.exception("Indoone local model generation failed")
                 answer = _fallback_reply(prompt)
+                knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
+                if knowledge_answer is not None:
+                    answer = knowledge_answer
 
         # Fresh/current questions must not receive a normal model answer without
         # the required research evidence. The model may still run so the request

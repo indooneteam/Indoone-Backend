@@ -21,11 +21,6 @@ class LocalModelRuntime:
     """Load an Indoone local language model with a high-confidence answer fallback."""
 
     def __init__(self, checkpoint_path: Path, tokenizer_path: Path) -> None:
-        # Load the checkpoint with memory mapping where supported. The previous
-        # load path materialized the full checkpoint and then copied its tensors
-        # into a second model instance, creating a large transient memory spike
-        # on Render Free. The checkpoint contains only tensors and primitive
-        # configuration, so the safe weights-only loader is sufficient.
         try:
             checkpoint = torch.load(
                 checkpoint_path,
@@ -51,8 +46,7 @@ class LocalModelRuntime:
         )
         self.model.load_state_dict(checkpoint["model_state"], assign=True)
 
-        # Re-establish the tied embedding/output weights after assign-based
-        # loading so the model keeps its original parameter sharing.
+        # Re-establish the tied embedding/output weights after assign-based loading.
         self.model.lm_head.weight = self.model.token_embedding.weight
         del checkpoint
         self.model.eval()
@@ -67,7 +61,6 @@ class LocalModelRuntime:
     @staticmethod
     def _select_next_token(logits: torch.Tensor, temperature: float) -> int:
         """Select the next token, using greedy decoding at temperature 0."""
-
         if temperature < 0:
             raise ValueError("temperature must be non-negative")
 
@@ -98,7 +91,7 @@ class LocalModelRuntime:
         generated_ids: list[int],
         ngram_size: int,
     ) -> torch.Tensor:
-        """Block repeated n-grams from the assistant completion, not the prompt."""
+        """Block repeated n-grams from the assistant completion."""
         if ngram_size < 2 or len(generated_ids) < ngram_size - 1:
             return logits
         prefix = tuple(generated_ids[-(ngram_size - 1):])
@@ -112,9 +105,20 @@ class LocalModelRuntime:
             logits[0, list(blocked)] = float("-inf")
         return logits
 
+    @staticmethod
+    def _extract_user_request(prompt: str) -> str:
+        """Recover the final user message from a prepared inference context."""
+        marker = re.findall(
+            r"(?:^|\n)user:\s*(.+?)(?=\n(?:user|assistant):|\n</instruction>|\Z)",
+            prompt,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if marker:
+            return marker[-1].strip()
+        return prompt.strip()
+
     def _prompt_ids(self, prompt: str) -> list[int]:
         """Render a user request in the same instruction format used for training."""
-
         stripped_prompt = prompt.strip()
         if stripped_prompt.startswith("<instruction>") and stripped_prompt.endswith("<response>"):
             formatted_prompt = stripped_prompt
@@ -126,7 +130,6 @@ class LocalModelRuntime:
     @staticmethod
     def _clean_completion(text: str) -> str:
         """Keep only the assistant response and strip leaked training markers."""
-
         cleaned = text.strip()
         marker_match = re.search(
             r"</?(?:instruction|response|conversation|grounding|response_language)[^>]*>",
@@ -143,8 +146,9 @@ class LocalModelRuntime:
         return cleaned
 
     def _retrieved_response(self, prompt: str) -> str | None:
-        """Return a high-confidence curated response when the prompt closely matches one."""
-        match = self._instruction_retriever.retrieve(prompt)
+        """Return a curated answer when the final user request closely matches one."""
+        user_request = self._extract_user_request(prompt)
+        match = self._instruction_retriever.retrieve(user_request)
         if match is None:
             return None
         return match.example.response.strip()
@@ -158,8 +162,7 @@ class LocalModelRuntime:
         repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
         no_repeat_ngram_size: int = DEFAULT_NO_REPEAT_NGRAM_SIZE,
     ) -> str:
-        """Generate an assistant completion, preferring high-confidence curated retrieval."""
-
+        """Generate an assistant completion, using KV-cached decoding."""
         prompt = prompt.strip()
         if not prompt:
             raise ValueError("prompt cannot be empty")
@@ -177,15 +180,21 @@ class LocalModelRuntime:
             return retrieved
 
         prompt_ids = self._prompt_ids(prompt)
+        if len(prompt_ids) > self.model.block_size:
+            prompt_ids = prompt_ids[-self.model.block_size :]
+
         generated_ids = list(prompt_ids)
         completion_ids: list[int] = []
         eos_id = self.tokenizer.stoi["<eos>"]
 
-        for _ in range(max_new_tokens):
-            context_ids = generated_ids[-self.model.block_size :]
-            context = torch.tensor([context_ids], dtype=torch.long)
-            logits, _ = self.model(context)
-            next_logits = logits[:, -1, :]
+        context = torch.tensor([prompt_ids], dtype=torch.long)
+        logits, past_key_values = self.model.forward_cached(context)
+        next_logits = logits[:, -1, :]
+
+        available_tokens = max(0, self.model.block_size - len(prompt_ids))
+        generation_limit = min(max_new_tokens, available_tokens)
+
+        for _ in range(generation_limit):
             next_logits = self._apply_repetition_penalty(
                 next_logits,
                 completion_ids,
@@ -202,6 +211,14 @@ class LocalModelRuntime:
             completion_ids.append(next_id)
             if next_id == eos_id:
                 break
+            if len(generated_ids) >= self.model.block_size:
+                break
 
-        completion_ids = generated_ids[len(prompt_ids) :]
+            next_token = torch.tensor([[next_id]], dtype=torch.long)
+            logits, past_key_values = self.model.forward_cached(
+                next_token,
+                past_key_values,
+            )
+            next_logits = logits[:, -1, :]
+
         return self._clean_completion(self.tokenizer.decode(completion_ids))

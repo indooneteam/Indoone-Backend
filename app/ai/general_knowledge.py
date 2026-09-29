@@ -137,7 +137,7 @@ class WikipediaKnowledgeProvider:
         # Use English Wikipedia as the factual source when the query is Latin-only.
         has_native_script = any(
             pattern.search(query)
-            for _, pattern in _SCRIPT_RANGES
+            for _, pattern in SCRIPT_RANGES
         )
         if language != "English" and re.search(r"[A-Za-z]", query) and not has_native_script:
             code = "en"

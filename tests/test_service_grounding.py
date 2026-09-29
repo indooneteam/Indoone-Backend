@@ -15,7 +15,7 @@ def test_service_appends_research_sources(monkeypatch) -> None:
     class FakeProvider:
         async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
             assert query == "latest Indoone news"
-            assert limit == 5
+            assert limit == 8
             return [
                 ResearchResult(
                     "Indoone source 1",

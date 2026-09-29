@@ -16,6 +16,7 @@ from app.ai.research import (
     build_research_query_variants,
     format_research_context,
     format_results,
+    score_research_result,
 )
 
 
@@ -415,3 +416,20 @@ def test_format_research_context_is_compact_and_preserves_source_identity() -> N
         assert f"Source {index}" in formatted
     assert "x" * 500 not in formatted
     assert len(formatted) < 3_000
+
+
+def test_score_research_result_prioritizes_title_matches() -> None:
+    relevant = ResearchResult(
+        "AI technology research",
+        "https://relevant.example/item",
+        "Unrelated background",
+    )
+    weak = ResearchResult(
+        "History of computing",
+        "https://weak.example/item",
+        "Older computing history",
+    )
+
+    assert score_research_result(["AI technology research"], relevant) > score_research_result(
+        ["AI technology research"], weak
+    )

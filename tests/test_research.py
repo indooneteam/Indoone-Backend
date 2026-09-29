@@ -158,11 +158,27 @@ def test_google_news_rss_provider_parses_sources(monkeypatch) -> None:
     assert results[1] == ResearchResult("Second source", "https://example.org/b", "Another source.")
 
 
-def test_build_research_provider_uses_keyless_live_fallback(monkeypatch) -> None:
+def test_build_research_provider_uses_multi_source_defaults(monkeypatch) -> None:
     monkeypatch.delenv("INDOONE_RESEARCH_URL", raising=False)
-    from app.ai.research import GoogleNewsRssResearchProvider, build_research_provider
+    from app.ai.research import (
+        CrossrefResearchProvider,
+        GoogleNewsRssResearchProvider,
+        MultiSourceResearchProvider,
+        OpenAlexResearchProvider,
+        WikidataResearchProvider,
+        WikipediaResearchProvider,
+        build_research_provider,
+    )
 
-    assert isinstance(build_research_provider(), GoogleNewsRssResearchProvider)
+    provider = build_research_provider()
+    assert isinstance(provider, MultiSourceResearchProvider)
+    assert {type(item) for item in provider.providers} == {
+        WikipediaResearchProvider,
+        WikidataResearchProvider,
+        GoogleNewsRssResearchProvider,
+        OpenAlexResearchProvider,
+        CrossrefResearchProvider,
+    }
 
 
 def test_build_research_query_variants_extracts_latin_terms() -> None:
@@ -376,19 +392,4 @@ def test_multi_source_provider_merges_sources_and_queries() -> None:
     assert {item.url for item in results} == {
         "https://wikipedia.example/result",
         "https://news.example/result",
-    }
-
-
-def test_build_research_provider_defaults_to_multi_source(monkeypatch) -> None:
-    monkeypatch.delenv("INDOONE_RESEARCH_URL", raising=False)
-    from app.ai.research import MultiSourceResearchProvider, build_research_provider
-
-    provider = build_research_provider()
-    assert isinstance(provider, MultiSourceResearchProvider)
-    assert {type(item) for item in provider.providers} == {
-        WikipediaResearchProvider,
-        WikidataResearchProvider,
-        GoogleNewsRssResearchProvider,
-        OpenAlexResearchProvider,
-        CrossrefResearchProvider,
     }

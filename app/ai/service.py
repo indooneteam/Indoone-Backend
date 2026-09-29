@@ -31,6 +31,7 @@ from app.ai.research import (
     ResearchProvider,
     ResearchResult,
     build_research_provider,
+    format_research_context,
     format_results,
 )
 from app.storage.b2 import B2StorageError, ensure_model_artifacts
@@ -506,7 +507,7 @@ class LocalAIService:
                     candidate_results = await _research_provider.search(prompt, limit=8)
                     if _research_has_enough_sources(candidate_results, intent.needs_cross_check):
                         research_results = candidate_results
-                        research = format_results(candidate_results)
+                        research = format_research_context(candidate_results)
                     else:
                         research_blocked = True
                         if candidate_results:

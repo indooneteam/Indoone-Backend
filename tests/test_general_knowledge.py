@@ -106,7 +106,7 @@ async def test_wikipedia_provider_returns_summary(monkeypatch: pytest.MonkeyPatc
 def test_question_to_topic_removes_common_english_prefixes() -> None:
     assert _question_to_topic("What is photosynthesis?") == "photosynthesis"
     assert _question_to_topic("Who was Alan Turing?") == "Alan Turing"
-    assert _question_to_topic("Explain gravity in simple words.") == "gravity in simple words"
+    assert _question_to_topic("Explain gravity in simple words.") == "gravity"
 
 
 @pytest.mark.asyncio

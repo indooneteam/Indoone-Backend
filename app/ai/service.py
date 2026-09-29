@@ -322,7 +322,7 @@ def _knowledge_fallback_sentence(
     message: str,
     hits: list[object],
     *,
-    minimum_score: float = 0.80,
+    minimum_score: float = 0.20,
 ) -> str | None:
     """Return one strongly matched local-knowledge sentence as a safe fallback."""
     if not hits:

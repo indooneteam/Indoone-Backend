@@ -625,6 +625,18 @@ class LocalAIService:
             except (httpx.HTTPError, RuntimeError, ValueError) as exc:
                 logger.warning("General knowledge lookup failed: %s", exc)
 
+        # A fresh-information request must never fall through to the tiny
+        # local model when research coverage is incomplete. Use the available
+        # evidence directly, or fail safely if no evidence exists.
+        if research_blocked and intent.needs_research:
+            research_answer = _research_extract_fallback(research_candidates)
+            if research_answer is not None:
+                return append_sources(
+                    research_answer,
+                    _evidence_from_results(research_candidates),
+                )
+            return user_safe_failure()
+
         # Simple greetings should never pay the cost of loading/running the
         # trained local model. They are served immediately by the safe fallback.
         if _is_fast_fallback_message(prompt):
@@ -738,18 +750,6 @@ class LocalAIService:
                 else:
                     generation_failed = True
 
-        # Fresh/current questions must not fall through to the tiny local model
-        # merely because source diversity is below the ideal threshold. When
-        # usable evidence exists, surface that evidence directly with its sources
-        # instead of returning the generic generation failure.
-        if research_blocked and intent.needs_research:
-            research_answer = _research_extract_fallback(research_candidates)
-            if research_answer is not None:
-                answer = research_answer
-                research_results = research_candidates
-            else:
-                answer = user_safe_failure()
-                research_results = []
         elif generation_failed and intent.needs_research:
             # Do not attach research links to a failed synthesis; sources must
             # support a user-visible answer rather than accompany an error message.

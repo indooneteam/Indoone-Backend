@@ -217,6 +217,12 @@ _ENGLISH_PREFIXES = (
     "tell me about ",
 )
 
+_NATIVE_FACTUAL_QUESTION_RE = re.compile(
+    r"(?:ಏನು|ಏನಿದು|ಎಂದರೇನು|ಯಾರು|ಎಲ್ಲಿ|ಯಾವಾಗ|ಏಕೆ|ಹೇಗೆ|ಯಾವುದು|ಯಾವ|ಎಷ್ಟು|ಎಷ್ಟಿದೆ|"
+    r"ಏಕೆಂದರೆ|ಬಗ್ಗೆ|ವಿವರಿಸಿ|ಅರ್ಥವೇನು|ಅರ್ಥ ಏನು)",
+    flags=re.IGNORECASE,
+)
+
 _SCRIPT_PREFIXES = (
     "ಏನು",
     "ಯಾರು",
@@ -341,6 +347,9 @@ def is_general_knowledge_question(message: str) -> bool:
         return True
 
     if any(marker in message.strip() for marker in _SCRIPT_PREFIXES):
+        return True
+
+    if _NATIVE_FACTUAL_QUESTION_RE.search(message) and "ನೀವು" not in message and "ನಾನು" not in message:
         return True
 
     return bool(_ROMAN_KANNADA_QUESTION_RE.search(normalized))

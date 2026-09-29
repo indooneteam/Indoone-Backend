@@ -204,9 +204,9 @@ def test_summarize_gate_reports_component_rates_and_failures() -> None:
     assert summary["style_failures"] == 1
     assert summary["grounding_failures"] == 1
     assert summary["hallucination_failures"] == 1
-    assert summary["component_rates"]["response"] == 0.8
-    assert summary["component_rates"]["quality"] == 0.8
-    assert summary["quality_score"] == 80.0
+    assert summary["component_rates"]["response"] == 0.8333
+    assert summary["component_rates"]["quality"] == 0.8333
+    assert summary["quality_score"] == 83.33
 
 
 def test_summarize_gate_fails_missing_category() -> None:

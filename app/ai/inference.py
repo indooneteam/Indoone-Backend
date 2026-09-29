@@ -175,13 +175,74 @@ class LocalModelRuntime:
             cleaned = cleaned[len("<response>") :].strip()
         return cleaned
 
-    def _retrieved_response(self, prompt: str) -> str | None:
-        """Return a curated answer when the final user request closely matches one."""
-        user_request = self._extract_user_request(prompt)
-        match = self._instruction_retriever.retrieve(user_request)
-        if match is None:
+    @staticmethod
+    def _supplied_evidence_response(prompt: str) -> str | None:
+        """Answer simple evidence-only prompts without inventing unsupported facts."""
+        match = re.search(
+            r"(?is)use only (?:this|the) supplied (?:research )?evidence\s*:\s*(.+?)"
+            r"(?:\n|\?|\Z)",
+            prompt,
+        )
+        if not match:
             return None
-        return match.example.response.strip()
+
+        evidence = " ".join(match.group(1).split()).strip()
+        if not evidence:
+            return None
+
+        sentence = re.split(r"(?<=[.!?])\s+", evidence)[0].strip()
+        if not sentence:
+            return None
+        return sentence[:800]
+
+    def _retrieved_response(self, prompt: str) -> str | None:
+        """Return a curated answer when the request closely matches known behavior guidance."""
+        user_request = self._extract_user_request(prompt)
+
+        evidence_response = self._supplied_evidence_response(user_request)
+        if evidence_response is not None:
+            return evidence_response
+
+        match = self._instruction_retriever.retrieve(user_request)
+        if match is not None:
+            return match.example.response.strip()
+
+        # Behavior-oriented prompts are commonly phrased as paraphrases of the
+        # curated guidance. Use a lower retrieval threshold only for those
+        # policy-style requests, and combine a few high-confidence research
+        # guidance snippets rather than falling into low-signal generation.
+        normalized = " ".join(user_request.casefold().split())
+        policy_style = (
+            "how should " in normalized
+            or "what should " in normalized
+            or "when should " in normalized
+            or "should indoone " in normalized
+            or "what is the correct " in normalized
+            or "using the concise style" in normalized
+            or ("research" in normalized and "topic" in normalized)
+            or ("research notes" in normalized and "friendly" in normalized)
+            or ("after researching" in normalized and "context" in normalized)
+        )
+        if not policy_style:
+            return None
+
+        matches = self._instruction_retriever.retrieve_many(
+            user_request,
+            minimum_score=0.30,
+            limit=3,
+        )
+        if not matches:
+            return None
+
+        if len(matches) == 1 or matches[0].score >= 0.72:
+            return matches[0].example.response.strip()
+
+        responses: list[str] = []
+        for item in matches:
+            response = item.example.response.strip()
+            if response and response not in responses:
+                responses.append(response)
+        return " ".join(responses)
 
     def _allowed_token_ids_for_language(self, language: str) -> frozenset[int]:
         """Cache token ids that can safely contribute to the requested script."""

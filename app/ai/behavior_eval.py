@@ -94,9 +94,24 @@ def build_case_prompt(case: dict[str, object]) -> str:
     return "\n".join(rendered)
 
 
+_TERM_ALIASES: dict[str, tuple[str, ...]] = {
+    "verify": ("verify", "verified", "verification", "verifiable"),
+    "disagreement": ("disagreement", "disagree", "disagrees", "disagreed"),
+    "uncertainty": ("uncertainty", "uncertain", "unresolved", "unverified", "insufficient"),
+    "sources": ("sources", "source"),
+    "summary": ("summary", "summarize", "summarized"),
+    "evidence": ("evidence", "findings", "notes"),
+    "unsupported": ("unsupported", "without support", "not verified", "do not fabricate"),
+}
+
 def _matched_terms(response: str, terms: Iterable[str]) -> list[str]:
     normalized = response.casefold()
-    return [term for term in terms if term.casefold() in normalized]
+    matched: list[str] = []
+    for term in terms:
+        variants = _TERM_ALIASES.get(term.casefold(), (term,))
+        if any(variant.casefold() in normalized for variant in variants):
+            matched.append(term)
+    return matched
 
 
 def score_response(

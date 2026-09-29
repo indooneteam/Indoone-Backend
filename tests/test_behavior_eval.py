@@ -63,3 +63,18 @@ def test_score_case_accepts_common_research_term_variants() -> None:
     assert score["response_passed"] is True
     assert score["quality_passed"] is True
     assert score["passed"] is True
+
+def test_meta_research_guidance_does_not_require_live_sources() -> None:
+    case = {
+        "id": "meta_research",
+        "category": "research",
+        "prompt": "What should Indoone say when a current fact cannot be verified?",
+        "expected_topics": ["verify", "uncertainty"],
+    }
+    score = score_case(
+        case,
+        "State that the current information could not be verified and explain what remains unresolved.",
+    )
+    assert score["quality_passed"] is True
+    assert score["response_passed"] is True
+    assert score["passed"] is True

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import torch
 from torch import nn
+from torch.nn import functional as F
 
 
 MODEL_VERSION = "indoone-gpt-v2"
@@ -39,6 +40,80 @@ class DecoderBlock(nn.Module):
         )
         x = x + attention
         return x + self.mlp(self.ln_2(x))
+
+    @torch.no_grad()
+    def forward_cached(
+        self,
+        x: torch.Tensor,
+        past_key_value: tuple[torch.Tensor, torch.Tensor] | None = None,
+    ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
+        """Run this block while reusing cached attention keys and values."""
+        if x.ndim != 3:
+            raise ValueError("cached block input must have shape (batch, sequence, embedding)")
+
+        normalized = self.ln_1(x)
+        batch_size, sequence_length, embedding_size = normalized.shape
+        expected_size = self.attn.embed_dim
+        if embedding_size != expected_size:
+            raise ValueError("cached block input embedding size does not match attention")
+
+        qkv = F.linear(
+            normalized,
+            self.attn.in_proj_weight,
+            self.attn.in_proj_bias,
+        )
+        query, key, value = qkv.chunk(3, dim=-1)
+
+        head_dim = self.attn.head_dim
+        num_heads = self.attn.num_heads
+
+        def reshape_heads(tensor: torch.Tensor) -> torch.Tensor:
+            return tensor.view(
+                batch_size,
+                sequence_length,
+                num_heads,
+                head_dim,
+            ).transpose(1, 2)
+
+        query = reshape_heads(query)
+        key = reshape_heads(key)
+        value = reshape_heads(value)
+
+        if past_key_value is not None:
+            past_key, past_value = past_key_value
+            if past_key.ndim != 4 or past_value.ndim != 4:
+                raise ValueError("cached attention state must contain 4D key/value tensors")
+            if past_key.shape[0] != batch_size or past_value.shape[0] != batch_size:
+                raise ValueError("cached attention state batch size does not match input")
+            if past_key.shape[1] != num_heads or past_value.shape[1] != num_heads:
+                raise ValueError("cached attention state head count does not match model")
+            if past_key.shape[-1] != head_dim or past_value.shape[-1] != head_dim:
+                raise ValueError("cached attention state head size does not match model")
+
+            key = torch.cat((past_key, key), dim=2)
+            value = torch.cat((past_value, value), dim=2)
+            causal = False
+        else:
+            causal = True
+
+        attention = F.scaled_dot_product_attention(
+            query,
+            key,
+            value,
+            attn_mask=None,
+            dropout_p=0.0,
+            is_causal=causal,
+        )
+        attention = attention.transpose(1, 2).contiguous().view(
+            batch_size,
+            sequence_length,
+            expected_size,
+        )
+        attention = self.attn.out_proj(attention)
+
+        x = x + attention
+        x = x + self.mlp(self.ln_2(x))
+        return x, (key, value)
 
 
 class IndooneTransformer(nn.Module):
@@ -134,3 +209,47 @@ class IndooneTransformer(nn.Module):
                 targets.reshape(-1),
             )
         return logits, loss
+
+    @torch.inference_mode()
+    def forward_cached(
+        self,
+        idx: torch.Tensor,
+        past_key_values: tuple[tuple[torch.Tensor, torch.Tensor], ...] | None = None,
+    ) -> tuple[torch.Tensor, tuple[tuple[torch.Tensor, torch.Tensor], ...]]:
+        """Run one prompt segment or generated tokens using KV caching."""
+        if idx.ndim != 2:
+            raise ValueError("cached input tensor must have shape (batch, sequence)")
+        batch_size, length = idx.shape
+        if length <= 0:
+            raise ValueError("cached input sequence must not be empty")
+
+        if past_key_values is None:
+            past_length = 0
+            normalized_cache = tuple(None for _ in self.blocks)
+        else:
+            if len(past_key_values) != len(self.blocks):
+                raise ValueError("cached layer count does not match model")
+            if not past_key_values:
+                raise ValueError("cached layer state cannot be empty")
+            first_key = past_key_values[0][0]
+            past_length = int(first_key.size(2))
+            normalized_cache = tuple(past_key_values)
+
+        if past_length + length > self.block_size:
+            raise ValueError("cached input sequence exceeds model block size")
+
+        positions = torch.arange(
+            past_length,
+            past_length + length,
+            device=idx.device,
+        ).unsqueeze(0)
+        x = self.token_embedding(idx) + self.position_embedding(positions)
+        x = self.drop(x)
+
+        new_cache: list[tuple[torch.Tensor, torch.Tensor]] = []
+        for block, layer_cache in zip(self.blocks, normalized_cache):
+            x, layer_cache = block.forward_cached(x, layer_cache)
+            new_cache.append(layer_cache)
+
+        logits = self.lm_head(self.ln_f(x))
+        return logits, tuple(new_cache)

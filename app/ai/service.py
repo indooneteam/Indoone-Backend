@@ -71,9 +71,12 @@ _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0
 _MODEL_LOAD_RETRY_SECONDS = 60.0
+_MODEL_GENERATION_TIMEOUT_SECONDS = 20.0
+_MODEL_MAX_NEW_TOKENS = 96
 # Serialize the artifact check/runtime load so concurrent chat requests cannot
 # trigger duplicate B2 downloads or duplicate model loads.
 _MODEL_LOAD_LOCK = threading.Lock()
+_MODEL_INFERENCE_LOCK = threading.Lock()
 _ARTIFACT_CHECK_COMPLETED = False
 
 
@@ -248,6 +251,18 @@ def _detect_response_language(message: str) -> str:
     return "English"
 
 
+def _is_fast_fallback_message(message: str) -> bool:
+    normalized = " ".join(message.casefold().split())
+    return normalized in {"hi", "hello", "hey", "namaskara", "namaste"}
+
+
+def _generate_with_local_model(runtime: "LocalModelRuntime", context: str) -> str:
+    # Render Free provides a very small CPU budget. Serialize local inference so
+    # concurrent requests cannot multiply the model's CPU/memory pressure.
+    with _MODEL_INFERENCE_LOCK:
+        return runtime.generate(context, max_new_tokens=_MODEL_MAX_NEW_TOKENS)
+
+
 def _language_instruction(language: str) -> str:
     return f"Respond only in {language}. Preserve the user's language and script. Do not switch languages unless the user explicitly requests it. Keep the answer natural, clear, and concise."
 
@@ -399,6 +414,11 @@ class LocalAIService:
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
 
+        # Simple greetings should never pay the cost of loading/running the
+        # trained local model. They are served immediately by the safe fallback.
+        if _is_fast_fallback_message(prompt):
+            return _fallback_reply(prompt)
+
         try:
             # Model loading and CPU inference are blocking operations. Keep them
             # off FastAPI's event loop so a slow first load cannot stall the
@@ -423,11 +443,20 @@ class LocalAIService:
         else:
             try:
                 answer = _clean_model_reply(
-                    await asyncio.to_thread(runtime.generate, context)
+                    await asyncio.wait_for(
+                        asyncio.to_thread(_generate_with_local_model, runtime, context),
+                        timeout=_MODEL_GENERATION_TIMEOUT_SECONDS,
+                    )
                 )
                 if not _has_expected_script(answer, language):
                     logger.warning("Discarding malformed or wrong-language model output for %s", language)
                     answer = _generation_error_reply(language)
+            except asyncio.TimeoutError:
+                logger.warning(
+                    "Indoone local model generation timed out after %.1fs; returning safe fallback",
+                    _MODEL_GENERATION_TIMEOUT_SECONDS,
+                )
+                answer = _fallback_reply(prompt)
             except Exception:
                 logger.exception("Indoone local model generation failed")
                 answer = _fallback_reply(prompt)

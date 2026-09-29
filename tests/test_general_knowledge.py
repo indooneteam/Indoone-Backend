@@ -183,3 +183,71 @@ def test_question_like_detection_catches_unlisted_question_forms() -> None:
     assert is_question_like("ನೀನು ಯಾರು?")
     assert is_question_like("How can solar panels work?")
     assert is_question_like("gravity andre enu?")
+
+
+
+@pytest.mark.asyncio
+async def test_wikipedia_provider_prefers_relevant_search_title(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResponse:
+        def __init__(self, payload, status_code: int = 200, url: str = "https://example.test"):
+            self._payload = payload
+            self.status_code = status_code
+            self.request = httpx.Request("GET", url)
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise httpx.HTTPStatusError(
+                    f"HTTP {self.status_code}",
+                    request=self.request,
+                    response=httpx.Response(self.status_code, request=self.request),
+                )
+
+        def json(self):
+            return self._payload
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            self.headers = kwargs["headers"]
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, **kwargs):
+            if "/w/api.php" in url:
+                return FakeResponse(
+                    {
+                        "query": {
+                            "search": [
+                                {"title": "Earth science"},
+                                {"title": "Earth"},
+                            ]
+                        }
+                    }
+                )
+            assert "/api/rest_v1/page/summary/Earth" in url
+            return FakeResponse(
+                {
+                    "title": "Earth",
+                    "extract": "Earth is the third planet from the Sun.",
+                    "content_urls": {
+                        "desktop": {"page": "https://en.wikipedia.org/wiki/Earth"}
+                    },
+                },
+                url=url,
+            )
+
+    monkeypatch.setattr(
+        "app.ai.general_knowledge.httpx.AsyncClient",
+        lambda **kwargs: FakeClient(**kwargs),
+    )
+
+    result = await WikipediaKnowledgeProvider().answer("What is Earth?")
+
+    assert result == WikipediaAnswer(
+        title="Earth",
+        url="https://en.wikipedia.org/wiki/Earth",
+        extract="Earth is the third planet from the Sun.",
+    )

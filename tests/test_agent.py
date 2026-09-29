@@ -382,3 +382,9 @@ def test_agent_endpoint_returns_empty_plan_for_general_message() -> None:
     assert body["results"] == []
     assert body["blocked_steps"] == []
     assert body["retry_counts"] == []
+
+def test_agent_does_not_route_research_as_contact_lookup() -> None:
+    steps = build_agent_steps(
+        "Research a current technology topic and turn the findings into a clear user-friendly summary with sources."
+    )
+    assert steps == ()

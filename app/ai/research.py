@@ -200,9 +200,11 @@ class WikipediaResearchProvider(ResearchProvider):
 
     async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
         from app.ai.general_knowledge import WikipediaKnowledgeProvider
+        from app.ai.question_understanding import understand_question
 
         provider = WikipediaKnowledgeProvider(timeout=self.timeout)
-        answer = await provider.answer(query)
+        language = understand_question(query).language
+        answer = await provider.answer(query, language=language)
         if answer is None:
             return []
         return [ResearchResult(answer.title, answer.url, answer.extract)]

@@ -111,7 +111,7 @@ def test_cached_forward_respects_block_size() -> None:
         n_layer=1,
         dropout=0.0,
     ).eval()
-    _, cache = model.forward_cached(torch.tensor([[1, 2, 3]]))
+    _, cache = model.forward_cached(torch.tensor([[1, 2, 3, 4]]))
 
     with pytest.raises(ValueError, match="exceeds model block size"):
-        model.forward_cached(torch.tensor([[4, 5]]), cache)
+        model.forward_cached(torch.tensor([[5]]), cache)

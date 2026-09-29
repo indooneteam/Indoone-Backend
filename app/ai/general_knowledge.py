@@ -171,7 +171,28 @@ def is_general_knowledge_question(message: str) -> bool:
     if not normalized:
         return False
 
+    freshness_markers = (
+        "latest",
+        "today",
+        "current",
+        "currently",
+        "recent",
+        "news",
+        "right now",
+        "this week",
+        "this month",
+        "price",
+        "cost",
+        "stock",
+        "weather",
+        "forecast",
+        "score",
+        "schedule",
+    )
+    if any(marker in normalized for marker in freshness_markers):
+        return False
+
     if any(normalized.startswith(prefix) for prefix in _ENGLISH_PREFIXES):
         return True
 
-    return any(message.strip().startswith(prefix) for prefix in _SCRIPT_PREFIXES)
+    return any(marker in message.strip() for marker in _SCRIPT_PREFIXES)

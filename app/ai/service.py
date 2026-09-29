@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.ai.answer_quality import user_safe_failure
+from app.ai.general_knowledge import WikipediaKnowledgeProvider, is_general_knowledge_question
 from app.ai.grounding import (
     GroundedEvidence,
     append_sources,
@@ -36,6 +37,8 @@ from app.storage.github_release import GitHubReleaseStorageError, get_github_rel
 
 
 logger = logging.getLogger(__name__)
+
+_general_knowledge_provider = WikipediaKnowledgeProvider()
 
 if TYPE_CHECKING:
     from app.ai.inference import LocalModelRuntime
@@ -468,6 +471,23 @@ class LocalAIService:
         knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
         if knowledge_answer is not None and not (research_blocked and intent.needs_research):
             return append_sources(knowledge_answer, _evidence_from_results(research_results))
+
+        # Use a bounded public-knowledge lookup for ordinary factual questions.
+        # This avoids spending the tiny Render CPU budget on a full model run
+        # when a deterministic source can answer the question directly.
+        if (
+            not (research_blocked and intent.needs_research)
+            and is_general_knowledge_question(prompt)
+        ):
+            try:
+                web_answer = await _general_knowledge_provider.answer(prompt, language=language)
+                if web_answer is not None:
+                    return append_sources(
+                        web_answer.extract,
+                        [GroundedEvidence(web_answer.title, web_answer.url, web_answer.extract)],
+                    )
+            except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+                logger.warning("General knowledge lookup failed: %s", exc)
 
         # Simple greetings should never pay the cost of loading/running the
         # trained local model. They are served immediately by the safe fallback.

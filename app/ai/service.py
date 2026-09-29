@@ -83,7 +83,7 @@ def _next_utc_midnight_timestamp() -> float:
     return midnight.timestamp()
 
 
-def _load_local_model_runtime() -> LocalModelRuntime | None:
+def _load_local_model_runtime() -> "LocalModelRuntime | None":
     """Load the trained checkpoint with a single-flight artifact download/load."""
     global _runtime, _NEXT_MODEL_LOAD_ATTEMPT, _ARTIFACT_CHECK_COMPLETED
 

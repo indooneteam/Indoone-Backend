@@ -45,6 +45,18 @@ def _canonical_token(token: str) -> str:
         "sources": "source",
         "systems": "system",
         "tokens": "token",
+        "disagreement": "disagree",
+        "disagreements": "disagree",
+        "disagrees": "disagree",
+        "disagreed": "disagree",
+        "conflicting": "conflict",
+        "conflicts": "conflict",
+        "researched": "research",
+        "researching": "research",
+        "summarize": "summary",
+        "summarized": "summary",
+        "summarization": "summary",
+        "followup": "followup",
     }
     return aliases.get(token, token)
 
@@ -109,13 +121,63 @@ class InstructionRetriever:
     def available(self) -> bool:
         return bool(self.examples)
 
-    def retrieve(self, prompt: str, *, minimum_score: float = 0.42) -> RetrievedInstruction | None:
-        best: RetrievedInstruction | None = None
+    @staticmethod
+    def _category_hint(prompt: str) -> str | None:
+        normalized = _normalized(prompt)
+        research_markers = (
+            "research",
+            "source",
+            "evidence",
+            "current",
+            "recent",
+            "verified",
+            "follow-up",
+            "followup",
+        )
+        if any(marker in normalized for marker in research_markers):
+            return "research"
+
+        conversation_markers = (
+            "concise",
+            "remember a preference",
+            "previous turn",
+            "earlier context",
+            "conversation",
+        )
+        if any(marker in normalized for marker in conversation_markers):
+            return "conversation"
+        return None
+
+    def retrieve_many(
+        self,
+        prompt: str,
+        *,
+        minimum_score: float = 0.30,
+        limit: int = 3,
+    ) -> list[RetrievedInstruction]:
+        if limit <= 0:
+            raise ValueError("limit must be greater than zero")
+
+        category_hint = self._category_hint(prompt)
+        ranked: list[RetrievedInstruction] = []
         for example in self.examples:
             candidate_score = _score(prompt, example.instruction)
-            if best is None or candidate_score > best.score:
-                best = RetrievedInstruction(example, candidate_score)
+            if category_hint and example.category == category_hint:
+                candidate_score += 0.18
+            if candidate_score >= minimum_score:
+                ranked.append(
+                    RetrievedInstruction(example, min(candidate_score, 1.0))
+                )
 
-        if best is None or best.score < minimum_score:
-            return None
-        return best
+        ranked.sort(
+            key=lambda item: (-item.score, item.example.instruction.casefold())
+        )
+        return ranked[:limit]
+
+    def retrieve(self, prompt: str, *, minimum_score: float = 0.42) -> RetrievedInstruction | None:
+        matches = self.retrieve_many(
+            prompt,
+            minimum_score=minimum_score,
+            limit=1,
+        )
+        return matches[0] if matches else None

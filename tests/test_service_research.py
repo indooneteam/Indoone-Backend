@@ -76,9 +76,10 @@ def test_single_source_is_not_treated_as_cross_checked(monkeypatch) -> None:
 
     reply = asyncio.run(service.generate_reply("latest Indoone news"))
 
-    assert reply == user_safe_failure()
-    assert "<research>" not in captured[0]
-    assert "Sources:" not in reply
+    assert "unverified" in reply
+    assert "Sources:" in reply
+    assert "https://example.com/indoone" in reply
+    assert captured == []
 
 
 def test_service_survives_research_failure(monkeypatch) -> None:
@@ -101,7 +102,7 @@ def test_service_survives_research_failure(monkeypatch) -> None:
     reply = asyncio.run(service.generate_reply("latest Indoone news"))
 
     assert reply == user_safe_failure()
-    assert "<research>" not in captured[0]
+    assert captured == []
 
 
 def test_model_artifacts_are_checked_only_once_per_process(monkeypatch, tmp_path) -> None:

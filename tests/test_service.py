@@ -76,7 +76,7 @@ async def test_romanized_kannada_factual_question_bypasses_local_model(monkeypat
 async def test_general_knowledge_answer_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeProvider:
         async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
-            assert query == "What is photosynthesis?"
+            assert query == "photosynthesis"
             assert language == "English"
             return WikipediaAnswer(
                 title="Photosynthesis",

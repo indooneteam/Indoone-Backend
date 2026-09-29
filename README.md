@@ -16,9 +16,11 @@ When configured, fresh-information requests can also use the optional research l
 
 Research is separate from model inference. It returns source title, URL, and optional snippet so provenance is retained in the model context.
 
-## Optional live research
+## Live research
 
-Set these variables to connect a search endpoint that returns JSON in the form `{ "results": [{ "title": "...", "url": "...", "snippet": "..." }] }`:
+Fresh-information requests use live research before local model synthesis. When `INDOONE_RESEARCH_URL` is configured, Indoone uses that custom search endpoint. When it is empty, Indoone uses a built-in Google News RSS provider that requires no API key.
+
+A custom provider must accept `?q=<query>&limit=<n>` and return JSON in the form `{ "results": [{ "title": "...", "url": "...", "snippet": "..." }] }`:
 
 ```text
 INDOONE_RESEARCH_URL=https://your-search-service.example/search
@@ -26,7 +28,7 @@ INDOONE_RESEARCH_TOKEN=
 INDOONE_RESEARCH_TIMEOUT=10
 ```
 
-The backend only invokes the provider for messages that explicitly indicate a freshness or research request, such as "latest", "current", "today", "news", or "research". If the provider is unavailable, chat falls back to local knowledge/model context instead of failing the request.
+The backend invokes research for messages that indicate freshness or research needs, such as "latest", "current", "today", "news", or "research". Returned source titles, URLs, and snippets are passed into local model context for grounded synthesis.
 
 ## Dataset pipeline
 

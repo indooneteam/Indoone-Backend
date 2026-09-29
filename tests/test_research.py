@@ -106,3 +106,49 @@ def test_provider_parses_json_results(monkeypatch) -> None:
     assert results == [ResearchResult("Indoone", "https://indoone.ai", "local AI")]
     assert "q=Indoone+AI" in captured["url"]
     assert captured["auth"] == "Bearer secret"
+
+def test_google_news_rss_provider_parses_sources(monkeypatch) -> None:
+    rss = b"""<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0"><channel>
+      <item>
+        <title>AI update</title>
+        <link>https://example.com/a</link>
+        <description><![CDATA[<p>Fresh <b>AI</b> evidence.</p>]]></description>
+      </item>
+      <item>
+        <title>Second source</title>
+        <link>https://example.org/b</link>
+        <description>Another source.</description>
+      </item>
+    </channel></rss>"""
+
+    class FakeResponse:
+        content = rss
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeClient:
+        async def __aenter__(self):
+            return self
+        async def __aexit__(self, *args):
+            return None
+        async def get(self, url, headers):
+            assert "news.google.com/rss/search" in url
+            assert "q=Indoone+AI" in url
+            assert headers["Accept"].startswith("application/rss+xml")
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", lambda *args, **kwargs: FakeClient())
+
+    from app.ai.research import GoogleNewsRssResearchProvider
+    results = asyncio.run(GoogleNewsRssResearchProvider().search("Indoone AI", limit=2))
+
+    assert results[0] == ResearchResult("AI update", "https://example.com/a", "Fresh AI evidence.")
+    assert results[1] == ResearchResult("Second source", "https://example.org/b", "Another source.")
+
+
+def test_build_research_provider_uses_keyless_live_fallback(monkeypatch) -> None:
+    monkeypatch.delenv("INDOONE_RESEARCH_URL", raising=False)
+    from app.ai.research import GoogleNewsRssResearchProvider, build_research_provider
+
+    assert isinstance(build_research_provider(), GoogleNewsRssResearchProvider)

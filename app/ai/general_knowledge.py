@@ -161,10 +161,15 @@ _ENGLISH_PREFIXES = (
     "why are ",
     "why does ",
     "why do ",
+    "how is ",
+    "how does ",
+    "how do ",
     "what causes ",
     "explain ",
     "define ",
+    "meaning of ",
     "difference between ",
+    "tell me about ",
 )
 
 _SCRIPT_PREFIXES = (
@@ -204,18 +209,31 @@ _SCRIPT_PREFIXES = (
 
 _QUESTION_PREFIX_RE = re.compile(
     r"^(?:what\s+(?:is|are|was|were)|who\s+(?:is|was)|where\s+(?:is|was)|"
-    r"when\s+(?:was|did)|why\s+(?:is|are|does|do)|what\s+causes|"
-    r"explain|define|difference\s+between)\s+",
+    r"when\s+(?:was|did)|why\s+(?:is|are|does|do)|how\s+(?:is|does|do)|"
+    r"what\s+causes|explain|define|meaning\s+of|difference\s+between|"
+    r"tell\s+me\s+about)\s+",
     flags=re.IGNORECASE,
 )
 
 
 def _question_to_topic(message: str) -> str:
     """Reduce natural-language factual questions to a useful article query."""
-    normalized = " ".join(message.strip().split()).strip(" ?!")
+    normalized = " ".join(message.strip().split()).strip(" ?!.")
     if not normalized:
         return ""
-    topic = _QUESTION_PREFIX_RE.sub("", normalized, count=1).strip()
+    topic = _QUESTION_PREFIX_RE.sub("", normalized, count=1).strip(" ?!.")
+    trailing_phrases = (
+        " in simple words",
+        " in simple terms",
+        " in simple language",
+        " briefly",
+        " in short",
+    )
+    lowered = topic.casefold()
+    for phrase in trailing_phrases:
+        if lowered.endswith(phrase):
+            topic = topic[: -len(phrase)].rstrip(" ?!.")
+            break
     return topic or normalized
 
 
@@ -234,6 +252,7 @@ def is_general_knowledge_question(message: str) -> bool:
         "right now",
         "this week",
         "this month",
+        "this year",
         "price",
         "cost",
         "stock",
@@ -241,6 +260,21 @@ def is_general_knowledge_question(message: str) -> bool:
         "forecast",
         "score",
         "schedule",
+        "now",
+        "search",
+        "look up",
+        "research",
+        "election",
+        "president",
+        "prime minister",
+        "minister",
+        "law",
+        "regulation",
+        "policy",
+        "deadline",
+        "release date",
+        "version",
+        "update",
     )
     if any(marker in normalized for marker in freshness_markers):
         return False

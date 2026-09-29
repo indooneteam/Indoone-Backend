@@ -78,6 +78,37 @@ class WikipediaKnowledgeProvider:
             extract=extract[:MAX_SUMMARY_CHARS],
         )
 
+    async def _summary_candidates(
+        self,
+        client: httpx.AsyncClient,
+        api_base: str,
+        topic: str,
+    ) -> WikipediaAnswer | None:
+        normalized = " ".join(topic.strip().split())
+        candidates = [normalized]
+        variants = (
+            re.sub(r"\s+are\s+there\s+", " ", normalized, flags=re.IGNORECASE),
+            re.sub(r"\s+are\s+", " ", normalized, flags=re.IGNORECASE),
+            re.sub(r"\s+is\s+", " ", normalized, flags=re.IGNORECASE),
+        )
+        for variant in variants:
+            variant = " ".join(variant.split()).strip(" ?!.")
+            if variant and variant.casefold() not in {item.casefold() for item in candidates}:
+                candidates.append(variant)
+        if normalized.casefold().startswith(("states ", "list ", "number of ")):
+            list_variant = f"List of {normalized}"
+            if list_variant.casefold() not in {item.casefold() for item in candidates}:
+                candidates.append(list_variant)
+
+        for candidate in candidates:
+            try:
+                result = await self._summary(client, api_base, candidate)
+            except httpx.HTTPStatusError:
+                continue
+            if result is not None:
+                return result
+        return None
+
     async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
         query = " ".join(query.strip().split())
         if not query:
@@ -109,7 +140,7 @@ class WikipediaKnowledgeProvider:
 
         async with httpx.AsyncClient(
             timeout=self.timeout,
-            follow_redirects=False,
+            follow_redirects=True,
             headers=headers,
         ) as client:
             try:
@@ -133,16 +164,16 @@ class WikipediaKnowledgeProvider:
                 # inference on the Render Free CPU budget.
                 if exc.response.status_code != 403:
                     raise
-                return await self._summary(client, api_base, search_query)
+                return await self._summary_candidates(client, api_base, search_query)
 
             search_payload = search_response.json()
             search_items = search_payload.get("query", {}).get("search", [])
             if not isinstance(search_items, list) or not search_items:
-                return await self._summary(client, api_base, search_query)
+                return await self._summary_candidates(client, api_base, search_query)
 
             title = str(search_items[0].get("title", "")).strip()
             if not title:
-                return await self._summary(client, api_base, search_query)
+                return await self._summary_candidates(client, api_base, search_query)
 
             return await self._summary(client, api_base, title)
 

@@ -43,6 +43,19 @@ _CURRENT_MARKERS = (
 )
 
 _SOURCE_URL_RE = re.compile(r"https?://[^\s)]+", flags=re.IGNORECASE)
+_META_RESEARCH_MARKERS = (
+    "research a ",
+    "research the ",
+    "research this ",
+    "research request",
+    "research topic",
+    "research notes",
+    "how should indoone",
+    "what should indoone",
+    "when should indoone",
+    "how should an assistant",
+    "what should an assistant",
+)
 _SENTENCE_RE = re.compile(r"(?<=[.!?।!?])\s+")
 
 
@@ -81,9 +94,12 @@ def assess_answer(question: str, answer: str) -> AnswerQuality:
         if repeated >= 2:
             return AnswerQuality(False, "repeated_output")
 
-    if any(marker in question_text for marker in _CURRENT_MARKERS):
-        # Freshness is only considered reliable when the response includes the
-        # service's explicit source section plus at least one real URL.
+    is_meta_research = any(marker in question_text for marker in _META_RESEARCH_MARKERS)
+    if any(marker in question_text for marker in _CURRENT_MARKERS) and not is_meta_research:
+        # Freshness is only considered reliable for an actual current-information
+        # request when the response includes the service's explicit source section
+        # plus at least one real URL. Meta questions about how research should work
+        # are guidance requests, not claims about current facts.
         if "sources:" not in answer_text:
             return AnswerQuality(False, "freshness_not_supported")
         if not _SOURCE_URL_RE.search(answer):

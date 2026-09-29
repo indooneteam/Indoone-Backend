@@ -18,15 +18,16 @@ Research is separate from model inference. It returns source title, URL, and opt
 
 ## Live research
 
-Fresh-information requests use live research before local model synthesis. When `INDOONE_RESEARCH_URL` is configured, Indoone uses that custom search endpoint. When it is empty, Indoone uses a built-in Google News RSS provider that requires no API key.
-
-A custom provider must accept `?q=<query>&limit=<n>` and return JSON in the form `{ "results": [{ "title": "...", "url": "...", "snippet": "..." }] }`:
+Fresh-information requests use live research before local model synthesis. When `INDOONE_RESEARCH_URL` is configured, Indoone uses that custom search endpoint. When `INDOONE_TAVILY_API_KEY` is configured, Tavily becomes the primary general web-search provider and returns ranked web results for grounded synthesis. If neither is configured, Indoone falls back to the built-in multi-source research providers.
 
 ```text
+INDOONE_TAVILY_API_KEY=
 INDOONE_RESEARCH_URL=https://your-search-service.example/search
 INDOONE_RESEARCH_TOKEN=
 INDOONE_RESEARCH_TIMEOUT=10
 ```
+
+The Tavily integration uses basic search by default to keep API-credit usage predictable. Tavily's current free plan provides 1,000 API credits per month and does not require a credit card. Basic search costs 1 credit per search; advanced search costs 2 credits. citeturn992854search0turn992854search6
 
 The backend invokes research for messages that indicate freshness or research needs, such as "latest", "current", "today", "news", or "research". Returned source titles, URLs, and snippets are passed into local model context for grounded synthesis.
 

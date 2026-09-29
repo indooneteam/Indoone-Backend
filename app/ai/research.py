@@ -519,6 +519,37 @@ def merge_research_results(results_by_query: dict[str, list[ResearchResult]], li
                     existing["snippet"] = item.snippet
     return sorted(merged.values(), key=lambda item: (-len(item["queries"]), item["url"]))[:limit]
 
+def format_research_context(
+    results: list[ResearchResult],
+    *,
+    max_results: int = DEFAULT_MULTI_SOURCE_LIMIT,
+    max_title_chars: int = 80,
+    max_snippet_chars: int = 180,
+) -> str:
+    """Create a compact evidence block that fits the local model context window.
+
+    Full URLs remain available for the final user-facing Sources section. The
+    model only needs source identity plus a short evidence snippet for synthesis.
+    """
+    if max_results < 1 or max_results > 20:
+        raise ValueError("max_results must be between 1 and 20")
+    if max_title_chars < 1 or max_snippet_chars < 1:
+        raise ValueError("context limits must be greater than zero")
+
+    lines = ["<research>"]
+    for result in results[:max_results]:
+        title = " ".join(result.title.split())[:max_title_chars]
+        domain = urlparse(result.url).netloc.casefold()
+        snippet = " ".join(result.snippet.split())[:max_snippet_chars]
+        if not title or not domain:
+            continue
+        lines.append(f"source: {domain}")
+        lines.append(f"title: {title}")
+        if snippet:
+            lines.append(f"snippet: {snippet}")
+    lines.append("</research>")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
 def format_results(results: list[ResearchResult | dict[str, Any]]) -> str:
     if not results:
         return ""

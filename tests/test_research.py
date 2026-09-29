@@ -4,7 +4,18 @@ import json
 import httpx
 import pytest
 
-from app.ai.research import (\n    CrossrefResearchProvider,\n    GoogleNewsRssResearchProvider,\n    HttpResearchProvider,\n    MultiSourceResearchProvider,\n    OpenAlexResearchProvider,\n    ResearchResult,\n    WikidataResearchProvider,\n    WikipediaResearchProvider,\n    build_research_query_variants,\n    format_results,\n)
+from app.ai.research import (
+    CrossrefResearchProvider,
+    GoogleNewsRssResearchProvider,
+    HttpResearchProvider,
+    MultiSourceResearchProvider,
+    OpenAlexResearchProvider,
+    ResearchResult,
+    WikidataResearchProvider,
+    WikipediaResearchProvider,
+    build_research_query_variants,
+    format_results,
+)
 
 
 def test_format_results_preserves_provenance() -> None:

@@ -40,6 +40,15 @@ logger = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from app.ai.inference import LocalModelRuntime
 
+# Kept as a lazy injection point for tests and compatibility. The real class is
+# imported only inside _load_local_model_runtime() so Render startup stays light.
+LocalModelRuntime = None
+
+# Legacy fallback-engine injection point. Production uses _fallback_reply() when
+# no runtime is available; tests and future lightweight fallback adapters may
+# provide an async generate() implementation here.
+_fallback_engine = None
+
 MODEL_DIR = Path("models/indoone-small")
 KNOWLEDGE_DIR = Path("data/knowledge")
 _checkpoint = MODEL_DIR / "indoone-small.pt"
@@ -130,10 +139,13 @@ def _load_local_model_runtime() -> "LocalModelRuntime | None":
 
         try:
             # Import PyTorch/model code only when a chat request actually needs
-            # trained-model inference. This keeps Render startup memory low.
-            from app.ai.inference import LocalModelRuntime
+            # trained-model inference. This keeps Render startup memory low while
+            # retaining a testable lazy injection point.
+            runtime_factory = LocalModelRuntime
+            if runtime_factory is None:
+                from app.ai.inference import LocalModelRuntime as runtime_factory
 
-            _runtime = LocalModelRuntime(_checkpoint, _tokenizer)
+            _runtime = runtime_factory(_checkpoint, _tokenizer)
             _NEXT_MODEL_LOAD_ATTEMPT = 0.0
             logger.info("Indoone local model runtime loaded successfully")
         except Exception as exc:
@@ -393,7 +405,14 @@ class LocalAIService:
             runtime = None
 
         if runtime is None:
-            answer = _fallback_reply(prompt)
+            if _fallback_engine is not None:
+                try:
+                    answer = _clean_model_reply(await _fallback_engine.generate(context))
+                except Exception:
+                    logger.exception("Indoone lightweight fallback engine failed")
+                    answer = _fallback_reply(prompt)
+            else:
+                answer = _fallback_reply(prompt)
         else:
             try:
                 answer = _clean_model_reply(

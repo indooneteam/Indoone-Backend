@@ -98,10 +98,19 @@ _TERM_ALIASES: dict[str, tuple[str, ...]] = {
     "verify": ("verify", "verified", "verification", "verifiable"),
     "disagreement": ("disagreement", "disagree", "disagrees", "disagreed"),
     "uncertainty": ("uncertainty", "uncertain", "unresolved", "unverified", "insufficient"),
-    "sources": ("sources", "source"),
-    "summary": ("summary", "summarize", "summarized"),
-    "evidence": ("evidence", "findings", "notes"),
-    "unsupported": ("unsupported", "without support", "not verified", "do not fabricate"),
+    "sources": ("sources", "source", "source attribution", "source list", "evidence"),
+    "summary": ("summary", "summarize", "summarized", "briefly", "concise summary"),
+    "evidence": ("evidence", "findings", "notes", "supported"),
+    "unsupported": (
+        "unsupported",
+        "without support",
+        "not supported",
+        "not verified",
+        "do not fabricate",
+        "avoid inventing",
+    ),
+    "friendly": ("friendly", "natural", "easy-to-read"),
+    "context": ("context", "earlier", "previous", "relevant research"),
 }
 
 def _matched_terms(response: str, terms: Iterable[str]) -> list[str]:

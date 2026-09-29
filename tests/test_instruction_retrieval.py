@@ -73,3 +73,12 @@ def test_retrieval_matches_concise_transformer_paraphrase() -> None:
     assert match.example.category == "conversation"
     assert "attention" in match.example.response.casefold()
     assert "tokens" in match.example.response.casefold()
+
+def test_retrieval_matches_current_research_summary_request() -> None:
+    match = _retriever().retrieve(
+        "Research a current technology topic and turn the findings into a clear user-friendly summary with sources.",
+    )
+    assert match is not None
+    assert match.example.category == "research"
+    assert "live research" in match.example.response.casefold()
+    assert "source attribution" in match.example.response.casefold()

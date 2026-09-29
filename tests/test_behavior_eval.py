@@ -51,7 +51,7 @@ def test_score_case_accepts_common_research_term_variants() -> None:
     case = {
         "id": "research_variant",
         "category": "research",
-        "prompt": "What should Indoone say when a current fact cannot be verified?",
+        "prompt": "What should an assistant say when a fact cannot be verified?",
         "expected_topics": ["verify", "uncertainty", "sources"],
         "must_include": ["verify"],
     }

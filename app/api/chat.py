@@ -8,6 +8,7 @@ from app.ai.answer_quality import assess_answer, user_safe_failure
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
 from app.ai.final_answer import synthesize_tool_answer
+from app.ai.grounding import extract_sources
 from app.ai.intent import classify_intent
 from app.ai.memory_service import MemoryService
 from app.ai.service import generate_reply
@@ -24,9 +25,15 @@ class ChatRequest(BaseModel):
     file_id: str | None = Field(default=None, min_length=1, max_length=128)
 
 
+class ChatSource(BaseModel):
+    title: str
+    url: str
+
+
 class ChatResponse(BaseModel):
     conversation_id: str
     reply: str
+    sources: list[ChatSource] = Field(default_factory=list)
 
 
 def _principal(request: Request) -> str:
@@ -120,4 +127,9 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    return ChatResponse(conversation_id=conversation_id, reply=reply)
+    source_items = extract_sources(reply)
+    return ChatResponse(
+        conversation_id=conversation_id,
+        reply=reply,
+        sources=[ChatSource(title=item.title, url=item.url) for item in source_items],
+    )

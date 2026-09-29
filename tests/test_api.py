@@ -131,6 +131,7 @@ def test_chat_returns_ai_reply(monkeypatch) -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["reply"] == "test reply: Hello Indoone"
+    assert payload["sources"] == []
     assert payload["conversation_id"]
     assert response.headers["X-Request-ID"]
 
@@ -169,3 +170,28 @@ def test_principal_context_can_be_cleared() -> None:
     assert require_principal_id() == "user-one"
     clear_principal_id()
     assert get_principal_id() == ""
+
+
+def test_chat_returns_structured_research_sources(monkeypatch) -> None:
+    async def fake_reply(message: str, history=None, document_context="") -> str:
+        return (
+            "AI technology is developing across several research areas.\n\n"
+            "Sources:\n"
+            "1. Research source — https://research.example/ai\n"
+            "2. News source — https://news.example/ai"
+        )
+
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
+    monkeypatch.setattr("app.api.chat.generate_reply", fake_reply)
+
+    response = client.post(
+        "/api/chat",
+        json={"message": "Research AI technology"},
+        headers=_auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["sources"] == [
+        {"title": "Research source", "url": "https://research.example/ai"},
+        {"title": "News source", "url": "https://news.example/ai"},
+    ]

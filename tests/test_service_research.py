@@ -30,7 +30,7 @@ def test_service_includes_research_results(monkeypatch) -> None:
     class FakeResearch:
         async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
             assert query == "latest Indoone news"
-            assert limit == 5
+            assert limit == 8
             return [
                 ResearchResult("Indoone result 1", "https://example.com/indoone", "fresh source 1"),
                 ResearchResult("Indoone result 2", "https://example.org/indoone", "fresh source 2"),

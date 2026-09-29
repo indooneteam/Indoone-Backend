@@ -47,6 +47,32 @@ def test_knowledge_fallback_preserves_matching_script(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_romanized_kannada_factual_question_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeProvider:
+        async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
+            assert query == "gravity"
+            assert language == "Kannada"
+            return WikipediaAnswer(
+                title="Gravity",
+                url="https://en.wikipedia.org/wiki/Gravity",
+                extract="Gravity is a force of attraction between masses.",
+            )
+
+    async def fail_model(*args, **kwargs):
+        raise AssertionError("local model must not run for a known factual question")
+
+    monkeypatch.setattr(service, "_general_knowledge_provider", FakeProvider())
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_research_provider", None)
+    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
+
+    reply = await service.generate_reply("gravity andre enu?")
+
+    assert reply.startswith("Gravity is a force")
+    assert "https://en.wikipedia.org/wiki/Gravity" in reply
+
+
+@pytest.mark.asyncio
 async def test_general_knowledge_answer_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeProvider:
         async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:

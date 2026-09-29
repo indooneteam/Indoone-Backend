@@ -26,6 +26,7 @@ from app.ai.grounding import (
 )
 from app.ai.intent import classify_intent
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
+from app.ai.training_data import format_instruction_prompt
 from app.ai.research import (
     ResearchProvider,
     ResearchResult,
@@ -259,11 +260,20 @@ def _is_fast_fallback_message(message: str) -> bool:
     return normalized in {"hi", "hello", "hey", "namaskara", "namaste"}
 
 
-def _generate_with_local_model(runtime: "LocalModelRuntime", context: str) -> str:
+def _generate_with_local_model(
+    runtime: "LocalModelRuntime",
+    context: str,
+    language: str,
+) -> str:
     # Render Free provides a very small CPU budget. Serialize local inference so
     # concurrent requests cannot multiply the model's CPU/memory pressure.
     with _MODEL_INFERENCE_LOCK:
-        return runtime.generate(context, max_new_tokens=_MODEL_MAX_NEW_TOKENS)
+        return runtime.generate(
+            context,
+            max_new_tokens=_MODEL_MAX_NEW_TOKENS,
+            temperature=0.0,
+            language=language,
+        )
 
 
 def _language_instruction(language: str) -> str:
@@ -320,7 +330,7 @@ def _knowledge_fallback_sentence(
 def _build_context(message: str, history: list[tuple[str, str]], knowledge: str = "", research: str = "") -> str:
     response_language = _detect_response_language(message)
     grounding_instruction = build_grounded_prompt_instruction().replace("<grounding>", "").replace("</grounding>", "").strip()
-    prompt_parts = ["<instruction>", grounding_instruction, _language_instruction(response_language)]
+    prompt_parts = [grounding_instruction, _language_instruction(response_language)]
     if history:
         prompt_parts.append("Conversation context:")
         for role, content in history:
@@ -332,8 +342,7 @@ def _build_context(message: str, history: list[tuple[str, str]], knowledge: str 
         prompt_parts.append("Fresh research evidence:")
         prompt_parts.append(research)
     prompt_parts.append(f"user: {message.strip()}")
-    prompt_parts.extend(("</instruction>", "<response>"))
-    return "\n".join(prompt_parts)
+    return format_instruction_prompt("\n".join(part for part in prompt_parts if part.strip()))
 
 
 def _evidence_from_results(results: list[ResearchResult]) -> list[GroundedEvidence]:
@@ -465,6 +474,9 @@ class LocalAIService:
 
         context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
         language = _detect_response_language(prompt)
+        minimal_context = format_instruction_prompt(
+            f"{_language_instruction(language)}\nUser request: {prompt}"
+        )
 
         # A strongly matched approved local fact can answer immediately without
         # paying the CPU cost of model loading/generation.
@@ -519,28 +531,48 @@ class LocalAIService:
             if knowledge_answer is not None:
                 answer = knowledge_answer
         else:
-            try:
-                answer = _clean_model_reply(
-                    await asyncio.wait_for(
-                        asyncio.to_thread(_generate_with_local_model, runtime, context),
-                        timeout=_MODEL_GENERATION_TIMEOUT_SECONDS,
+            answer = ""
+            generation_contexts = [minimal_context]
+            if context != minimal_context:
+                generation_contexts.append(context)
+
+            for attempt, generation_context in enumerate(generation_contexts, start=1):
+                try:
+                    candidate = _clean_model_reply(
+                        await asyncio.wait_for(
+                            asyncio.to_thread(
+                                _generate_with_local_model,
+                                runtime,
+                                generation_context,
+                                language,
+                            ),
+                            timeout=_MODEL_GENERATION_TIMEOUT_SECONDS,
+                        )
                     )
-                )
-                if not _has_expected_script(answer, language):
-                    logger.warning("Discarding malformed or wrong-language model output for %s", language)
-                    answer = _generation_error_reply(language)
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "Indoone local model generation timed out after %.1fs; returning safe fallback",
-                    _MODEL_GENERATION_TIMEOUT_SECONDS,
-                )
-                answer = _fallback_reply(prompt)
-                knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
-                if knowledge_answer is not None:
-                    answer = knowledge_answer
-            except Exception:
-                logger.exception("Indoone local model generation failed")
-                answer = _fallback_reply(prompt)
+                    if _has_expected_script(candidate, language):
+                        answer = candidate
+                        break
+                    logger.warning(
+                        "Discarding malformed or wrong-language model output for %s on local generation attempt %d",
+                        language,
+                        attempt,
+                    )
+                except asyncio.TimeoutError:
+                    logger.warning(
+                        "Indoone local model generation timed out after %.1fs on attempt %d",
+                        _MODEL_GENERATION_TIMEOUT_SECONDS,
+                        attempt,
+                    )
+                    break
+                except Exception:
+                    logger.exception(
+                        "Indoone local model generation failed on attempt %d",
+                        attempt,
+                    )
+                    break
+
+            if not answer:
+                answer = _generation_error_reply(language)
                 knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
                 if knowledge_answer is not None:
                     answer = knowledge_answer

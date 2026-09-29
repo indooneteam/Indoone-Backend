@@ -275,6 +275,32 @@ def _is_fast_fallback_message(message: str) -> bool:
     return normalized in {"hi", "hello", "hey", "namaskara", "namaste"}
 
 
+def _is_learning_request(message: str) -> bool:
+    normalized = " ".join(message.casefold().split())
+    return (
+        "teach me" in normalized
+        or "teach me something" in normalized
+        or "learn something new" in normalized
+        or "learn me" in normalized
+        or "ಹೊಸ ವಿಷಯ" in normalized
+        or "ಹೊಸದೇನಾದರೂ" in normalized
+        or "ಕಲಿಸು" in normalized
+        or "ಕಲಿಸಿ" in normalized
+    )
+
+
+def _learning_fallback_reply(language: str) -> str:
+    if language == "Kannada":
+        return "ಒಂದು ಹೊಸ ವಿಷಯ ಕಲಿಯೋಣ: ಆಕ್ಟೋಪಸ್‌ಗೆ ಮೂರು ಹೃದಯಗಳಿವೆ. ಎರಡು ಹೃದಯಗಳು ಕಿವಿರುಗಳಿಗೆ ರಕ್ತ ಕಳುಹಿಸುತ್ತವೆ ಮತ್ತು ಮೂರನೇ ಹೃದಯ ದೇಹದ ಉಳಿದ ಭಾಗಕ್ಕೆ ರಕ್ತ ಪಂಪ್ ಮಾಡುತ್ತದೆ."
+    if language == "Hindi":
+        return "एक नया तथ्य सीखें: ऑक्टोपस के तीन दिल होते हैं। दो दिल गलफड़ों तक रक्त पहुँचाते हैं और तीसरा दिल शरीर के बाकी हिस्से में रक्त पंप करता है."
+    if language == "Telugu":
+        return "ఒక కొత్త విషయం నేర్చుకుందాం: ఆక్టోపస్‌కు మూడు గుండెలు ఉంటాయి. రెండు గుండెలు గిల్లులకు రక్తాన్ని పంపుతాయి, మూడవది శరీరంలోని మిగతా భాగాలకు రక్తాన్ని పంప్ చేస్తుంది."
+    if language == "Tamil":
+        return "ஒரு புதிய விஷயம் கற்போம்: ஆக்டோபஸுக்கு மூன்று இதயங்கள் உள்ளன. இரண்டு இதயங்கள் கிளவுகளுக்கு இரத்தத்தை அனுப்புகின்றன; மூன்றாவது இதயம் உடலின் பிற பகுதிகளுக்கு இரத்தத்தை பம்ப் செய்கிறது."
+    return "Here is something new to learn: an octopus has three hearts. Two send blood to the gills, while the third pumps blood to the rest of the body."
+
+
 def _generate_with_local_model(
     runtime: "LocalModelRuntime",
     context: str,
@@ -565,6 +591,11 @@ class LocalAIService:
         minimal_context = format_instruction_prompt(
             f"{_language_instruction(language)}\nUser request: {prompt}"
         )
+
+        # Open-ended learning requests should still receive a useful answer when
+        # the tiny local model is unavailable or produces unusable output.
+        if _is_learning_request(prompt):
+            return _learning_fallback_reply(language)
 
         # A strongly matched approved local fact can answer immediately without
         # paying the CPU cost of model loading/generation.

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
+import re
 from urllib.parse import quote
 
 import httpx
@@ -8,6 +10,7 @@ import httpx
 
 DEFAULT_TIMEOUT_SECONDS = 6.0
 MAX_SUMMARY_CHARS = 2_500
+DEFAULT_USER_AGENT = "Indoone/1.0 (https://github.com/indooneteam/Indoone-Backend)"
 
 
 @dataclass(frozen=True)
@@ -25,10 +28,54 @@ class WikipediaKnowledgeProvider:
     into a generic failure response.
     """
 
-    def __init__(self, timeout: float = DEFAULT_TIMEOUT_SECONDS) -> None:
+    def __init__(
+        self,
+        timeout: float = DEFAULT_TIMEOUT_SECONDS,
+        user_agent: str | None = None,
+    ) -> None:
         if timeout <= 0:
             raise ValueError("timeout must be greater than zero")
+        configured_user_agent = (
+            user_agent
+            if user_agent is not None
+            else os.getenv("INDOONE_WIKIMEDIA_USER_AGENT", "")
+        ).strip()
         self.timeout = timeout
+        self.user_agent = configured_user_agent or DEFAULT_USER_AGENT
+
+    async def _summary(self, client: httpx.AsyncClient, api_base: str, title: str) -> WikipediaAnswer | None:
+        normalized_title = " ".join(title.strip().split())
+        if not normalized_title:
+            return None
+
+        encoded_title = quote(normalized_title.replace(" ", "_"), safe="")
+        summary_response = await client.get(
+            f"{api_base}/api/rest_v1/page/summary/{encoded_title}",
+        )
+        if summary_response.status_code == 404:
+            return None
+        summary_response.raise_for_status()
+        summary_payload = summary_response.json()
+
+        extract = str(summary_payload.get("extract", "")).strip()
+        if not extract:
+            return None
+
+        page_url = (
+            str(
+                summary_payload.get("content_urls", {})
+                .get("desktop", {})
+                .get("page", "")
+            ).strip()
+        )
+        if not page_url:
+            page_url = f"{api_base}/wiki/{encoded_title}"
+
+        return WikipediaAnswer(
+            title=normalized_title,
+            url=page_url,
+            extract=extract[:MAX_SUMMARY_CHARS],
+        )
 
     async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
         query = " ".join(query.strip().split())
@@ -52,61 +99,51 @@ class WikipediaKnowledgeProvider:
         }
         code = language_codes.get(language, "en")
         api_base = f"https://{code}.wikipedia.org"
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": self.user_agent,
+            "Api-User-Agent": self.user_agent,
+        }
+        search_query = _question_to_topic(query)
 
         async with httpx.AsyncClient(
             timeout=self.timeout,
             follow_redirects=False,
-            headers={"Accept": "application/json"},
+            headers=headers,
         ) as client:
-            search_response = await client.get(
-                f"{api_base}/w/api.php",
-                params={
-                    "action": "query",
-                    "list": "search",
-                    "srsearch": query,
-                    "srnamespace": "0",
-                    "srlimit": "1",
-                    "format": "json",
-                    "formatversion": "2",
-                },
-            )
-            search_response.raise_for_status()
-            search_payload = search_response.json()
+            try:
+                search_response = await client.get(
+                    f"{api_base}/w/api.php",
+                    params={
+                        "action": "query",
+                        "list": "search",
+                        "srsearch": search_query,
+                        "srnamespace": "0",
+                        "srlimit": "1",
+                        "format": "json",
+                        "formatversion": "2",
+                    },
+                )
+                search_response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                # Wikimedia may reject search traffic independently of the
+                # page-summary endpoint. Try the normalized topic directly so
+                # a temporary/search-specific 403 does not force local-model
+                # inference on the Render Free CPU budget.
+                if exc.response.status_code != 403:
+                    raise
+                return await self._summary(client, api_base, search_query)
 
+            search_payload = search_response.json()
             search_items = search_payload.get("query", {}).get("search", [])
             if not isinstance(search_items, list) or not search_items:
-                return None
+                return await self._summary(client, api_base, search_query)
 
             title = str(search_items[0].get("title", "")).strip()
             if not title:
-                return None
+                return await self._summary(client, api_base, search_query)
 
-            encoded_title = quote(title.replace(" ", "_"), safe="")
-            summary_response = await client.get(
-                f"{api_base}/api/rest_v1/page/summary/{encoded_title}",
-            )
-            summary_response.raise_for_status()
-            summary_payload = summary_response.json()
-
-        extract = str(summary_payload.get("extract", "")).strip()
-        if not extract:
-            return None
-
-        page_url = (
-            str(
-                summary_payload.get("content_urls", {})
-                .get("desktop", {})
-                .get("page", "")
-            ).strip()
-        )
-        if not page_url:
-            page_url = f"{api_base}/wiki/{encoded_title}"
-
-        return WikipediaAnswer(
-            title=title,
-            url=page_url,
-            extract=extract[:MAX_SUMMARY_CHARS],
-        )
+            return await self._summary(client, api_base, title)
 
 
 _ENGLISH_PREFIXES = (
@@ -164,6 +201,22 @@ _SCRIPT_PREFIXES = (
     "എപ്പോൾ",
     "എന്തുകൊണ്ട്",
 )
+
+_QUESTION_PREFIX_RE = re.compile(
+    r"^(?:whats+(?:is|are|was|were)|whos+(?:is|was)|wheres+(?:is|was)|"
+    r"whens+(?:was|did)|whys+(?:is|are|does|do)|whats+causes|"
+    r"explain|define|differences+between)s+",
+    flags=re.IGNORECASE,
+)
+
+
+def _question_to_topic(message: str) -> str:
+    """Reduce natural-language factual questions to a useful article query."""
+    normalized = " ".join(message.strip().split()).strip(" ?!")
+    if not normalized:
+        return ""
+    topic = _QUESTION_PREFIX_RE.sub("", normalized, count=1).strip()
+    return topic or normalized
 
 
 def is_general_knowledge_question(message: str) -> bool:

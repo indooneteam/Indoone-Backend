@@ -47,7 +47,7 @@ _tokenizer = MODEL_DIR / "tokenizer.json"
 # Keep model loading entirely request-driven. Constructing LocalAIEngine at import
 # time can eagerly load the full PyTorch checkpoint during Render startup, which
 # increases memory pressure and can cause the web process to restart before chat.
-_runtime: LocalModelRuntime | None = None
+_runtime: "LocalModelRuntime | None" = None
 _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0

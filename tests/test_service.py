@@ -173,7 +173,7 @@ async def test_research_generation_uses_full_evidence_context_for_one_answer(
             language: str,
         ) -> str:
             calls.append(prompt)
-            return "AI technology is developing across several research areas."
+            return "AI technology ಹಲವು research areasನಲ್ಲಿ ಅಭಿವೃದ್ಧಿಯಾಗುತ್ತಿದೆ."
 
     monkeypatch.setattr(service, "_knowledge_base", None)
     monkeypatch.setattr(service, "_general_knowledge_provider", None)

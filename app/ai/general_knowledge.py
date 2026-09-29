@@ -332,13 +332,6 @@ def _question_to_topic(message: str) -> str:
         topic = re.sub(rf"(?<!\S){re.escape(marker)}(?!\S)", " ", topic)
     topic = " ".join(topic.split()).strip(" ?!.")
 
-    # Native Kannada questions often contain the interrogative in the middle
-    # ("ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?") or at the end ("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?").
-    # Remove those question words before sending the query to Wikipedia so its
-    # search index sees the actual topic instead of the full sentence.
-    for marker in _NATIVE_KANNADA_QUESTION_TOKENS:
-        topic = re.sub(rf"(?<!\S){re.escape(marker)}(?!\S)", " ", topic)
-    topic = " ".join(topic.split()).strip(" ?!.")
     trailing_phrases = (
         " in simple words",
         " in simple terms",

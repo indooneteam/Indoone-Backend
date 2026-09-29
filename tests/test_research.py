@@ -289,8 +289,9 @@ def test_wikipedia_research_provider_adapts_knowledge_answer(monkeypatch) -> Non
         def __init__(self, *args, **kwargs) -> None:
             pass
 
-        async def answer(self, query):
+        async def answer(self, query, language="English"):
             assert query == "Artificial intelligence"
+            assert language == "English"
             return WikipediaAnswer(
                 "Artificial intelligence",
                 "https://en.wikipedia.org/wiki/Artificial_intelligence",

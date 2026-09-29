@@ -50,7 +50,7 @@ class _LightweightFallbackEngine:
         # The production caller passes a full context. Recover the final user
         # message when possible so the greeting fallback remains natural.
         prompt = message.strip()
-        marker = re.search(r"\nuser:\s*(.+?)\s*</instruction>\s*\z", prompt, flags=re.IGNORECASE | re.DOTALL)
+        marker = re.search(r"\nuser:\s*(.+?)\s*</instruction>\s*\Z", prompt, flags=re.IGNORECASE | re.DOTALL)
         if marker:
             prompt = marker.group(1).strip()
         return _fallback_reply(prompt)

@@ -12,6 +12,7 @@ from app.ai.training_data import TrainingExample, load_examples
 _TOKEN_RE = re.compile(r"[^\W_]+", flags=re.UNICODE)
 _CONCEPT_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("conflict", ("disagree", "disagreement", "conflicting", "conflict", "different figures")),
+    ("current_research", ("research a current", "current research", "current technology", "current information", "live research")),
     ("followup", ("follow-up", "follow up", "earlier context", "already researched", "previous research")),
     ("friendly", ("friendly", "normal user", "easy-to-read", "natural")),
     ("unsupported", ("unsupported facts", "without adding unsupported", "not supported")),

@@ -1,1 +1,0 @@
-The dataset quality gate is intentionally conservative so poor or placeholder examples do not silently become training behavior.

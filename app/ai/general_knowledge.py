@@ -80,7 +80,27 @@ class WikipediaKnowledgeProvider:
             extract=extract[:MAX_SUMMARY_CHARS],
         )
 
-    async def _summary_candidates(
+    def _title_relevance_score(topic: str, title: str) -> int:
+    topic_normalized = " ".join(topic.casefold().split()).strip()
+    title_normalized = " ".join(title.casefold().split()).strip()
+    if not topic_normalized or not title_normalized:
+        return 0
+    if topic_normalized == title_normalized:
+        return 100
+    if topic_normalized in title_normalized or title_normalized in topic_normalized:
+        return 50
+    topic_terms = {
+        token for token in re.findall(r"[\\w\\u0080-\\uffff]+", topic_normalized, flags=re.UNICODE)
+        if len(token) > 1
+    }
+    title_terms = {
+        token for token in re.findall(r"[\\w\\u0080-\\uffff]+", title_normalized, flags=re.UNICODE)
+        if len(token) > 1
+    }
+    return len(topic_terms & title_terms)
+
+
+async def _summary_candidates(
         self,
         client: httpx.AsyncClient,
         api_base: str,
@@ -162,7 +182,7 @@ class WikipediaKnowledgeProvider:
                         "list": "search",
                         "srsearch": search_query,
                         "srnamespace": "0",
-                        "srlimit": "1",
+                        "srlimit": "5",
                         "format": "json",
                         "formatversion": "2",
                     },
@@ -182,10 +202,18 @@ class WikipediaKnowledgeProvider:
             if not isinstance(search_items, list) or not search_items:
                 return await self._summary_candidates(client, api_base, search_query)
 
-            title = str(search_items[0].get("title", "")).strip()
-            if not title:
+            ranked_titles = [
+                str(item.get("title", "")).strip()
+                for item in search_items[:5]
+                if str(item.get("title", "")).strip()
+            ]
+            if not ranked_titles:
                 return await self._summary_candidates(client, api_base, search_query)
 
+            title = max(
+                enumerate(ranked_titles),
+                key=lambda pair: (_title_relevance_score(search_query, pair[1]), -pair[0]),
+            )[1]
             return await self._summary(client, api_base, title)
 
 

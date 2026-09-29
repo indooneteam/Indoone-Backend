@@ -1,0 +1,18 @@
+Stable local facts for basic offline answers.
+
+The capital city of India is New Delhi.
+ಭಾರತದ ರಾಜಧಾನಿ ನವದೆಹಲಿ.
+India's capital city is New Delhi, also known as New Delhi.
+
+The sky looks blue because molecules in Earth's atmosphere scatter shorter wavelengths of sunlight, including blue light, more strongly than longer wavelengths.
+Water changes between ice, liquid water, and water vapor through freezing, melting, evaporation, condensation, and precipitation.
+Day and night happen because Earth rotates on its axis.
+Photosynthesis lets green plants use light energy to convert carbon dioxide and water into chemical energy stored in sugars, releasing oxygen.
+Mass measures the amount of matter in an object, while weight is the force of gravity acting on that mass.
+An API is an interface that lets software systems communicate through defined requests and responses.
+In a Transformer, attention helps the model weigh which tokens in the current context are most relevant when predicting the next token.
+A unit test checks a small piece of code in isolation.
+Division by zero is undefined because no number multiplied by zero can produce a nonzero result.
+12 times 7 equals 84.
+18 plus 27 equals 45.
+144 divided by 12 equals 12.

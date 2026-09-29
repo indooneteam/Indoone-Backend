@@ -249,6 +249,11 @@ _QUESTION_PREFIX_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+_ROMAN_KANNADA_QUESTION_RE = re.compile(
+    r"(?:\bandre\s+(?:enu|yenu)\b|\b(?:enu|yenu|yaaru|yaake|hege)\b)",
+    flags=re.IGNORECASE,
+)
+
 
 def _question_to_topic(message: str) -> str:
     """Reduce natural-language factual questions to a useful article query."""
@@ -256,6 +261,14 @@ def _question_to_topic(message: str) -> str:
     if not normalized:
         return ""
     topic = _QUESTION_PREFIX_RE.sub("", normalized, count=1).strip(" ?!.")
+    romanized_tails = (
+        " andre enu", " andre yenu", " enu", " yenu", " yaaru", " yaake", " hege",
+    )
+    lowered_topic = topic.casefold()
+    for tail in romanized_tails:
+        if lowered_topic.endswith(tail) and len(topic) > len(tail):
+            topic = topic[: -len(tail)].rstrip(" ?!.")
+            break
     trailing_phrases = (
         " in simple words",
         " in simple terms",
@@ -316,4 +329,7 @@ def is_general_knowledge_question(message: str) -> bool:
     if any(normalized.startswith(prefix) for prefix in _ENGLISH_PREFIXES):
         return True
 
-    return any(marker in message.strip() for marker in _SCRIPT_PREFIXES)
+    if any(marker in message.strip() for marker in _SCRIPT_PREFIXES):
+        return True
+
+    return bool(_ROMAN_KANNADA_QUESTION_RE.search(normalized))

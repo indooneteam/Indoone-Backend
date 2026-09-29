@@ -203,9 +203,9 @@ _SCRIPT_PREFIXES = (
 )
 
 _QUESTION_PREFIX_RE = re.compile(
-    r"^(?:what\\s+(?:is|are|was|were)|who\\s+(?:is|was)|where\\s+(?:is|was)|"
-    r"when\\s+(?:was|did)|why\\s+(?:is|are|does|do)|what\\s+causes|"
-    r"explain|define|difference\\s+between)\\s+",
+    r"^(?:what\s+(?:is|are|was|were)|who\s+(?:is|was)|where\s+(?:is|was)|"
+    r"when\s+(?:was|did)|why\s+(?:is|are|does|do)|what\s+causes|"
+    r"explain|define|difference\s+between)\s+",
     flags=re.IGNORECASE,
 )
 

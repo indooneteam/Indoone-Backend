@@ -311,11 +311,18 @@ def _language_instruction(language: str) -> str:
     return f"Respond only in {language}. Preserve the user's language and script. Do not switch languages unless the user explicitly requests it. Keep the answer natural, clear, and concise."
 
 
+_KNOWLEDGE_QUERY_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "did", "do", "does",
+    "for", "from", "how", "in", "is", "it", "many", "much", "of", "on",
+    "the", "there", "to", "was", "were", "what", "when", "where", "who", "why",
+}
+
+
 def _knowledge_fallback_sentence(
     message: str,
     hits: list[object],
     *,
-    minimum_score: float = 0.80,
+    minimum_score: float = 0.70,
 ) -> str | None:
     """Return one strongly matched local-knowledge sentence as a safe fallback."""
     if not hits:
@@ -330,7 +337,7 @@ def _knowledge_fallback_sentence(
     query_terms = {
         token.casefold()
         for token in re.findall(r"[\w'-]+", message, flags=re.UNICODE)
-        if len(token) > 1
+        if len(token) > 1 and token.casefold() not in _KNOWLEDGE_QUERY_STOPWORDS
     }
     if not query_terms:
         return None

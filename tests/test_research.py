@@ -14,6 +14,7 @@ from app.ai.research import (
     WikidataResearchProvider,
     WikipediaResearchProvider,
     build_research_query_variants,
+    format_research_context,
     format_results,
 )
 
@@ -393,3 +394,24 @@ def test_multi_source_provider_merges_sources_and_queries() -> None:
         "https://wikipedia.example/result",
         "https://news.example/result",
     }
+
+
+def test_format_research_context_is_compact_and_preserves_source_identity() -> None:
+    results = [
+        ResearchResult(
+            f"Source {index}",
+            f"https://source{index}.example/result",
+            "Evidence " + ("x" * 500),
+        )
+        for index in range(1, 9)
+    ]
+
+    formatted = format_research_context(results)
+
+    assert formatted.startswith("<research>")
+    assert formatted.endswith("</research>")
+    for index in range(1, 9):
+        assert f"source{index}.example" in formatted
+        assert f"Source {index}" in formatted
+    assert "x" * 500 not in formatted
+    assert len(formatted) < 3_000

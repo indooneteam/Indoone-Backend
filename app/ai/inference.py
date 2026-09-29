@@ -136,7 +136,7 @@ class LocalModelRuntime:
             formatted_prompt = stripped_prompt
         else:
             trailing_response = re.fullmatch(
-                r"(?s)(<instruction>.*</instruction>\\s*<response>)",
+                r"(?s)(<instruction>.*</instruction>\s*<response>)",
                 stripped_prompt,
             )
             formatted_prompt = trailing_response.group(1) if trailing_response else format_instruction_prompt(stripped_prompt)

@@ -46,3 +46,20 @@ def test_score_case_applies_answer_quality_gate() -> None:
     assert score["quality_passed"] is False
     assert score["quality_reason"] == "repeated_output"
     assert score["passed"] is False
+
+def test_score_case_accepts_common_research_term_variants() -> None:
+    case = {
+        "id": "research_variant",
+        "category": "research",
+        "prompt": "What should Indoone say when a current fact cannot be verified?",
+        "expected_topics": ["verify", "uncertainty", "sources"],
+        "must_include": ["verify"],
+    }
+    score = score_case(
+        case,
+        "The information is currently unverified, so the source is insufficient and the result remains unresolved.",
+    )
+    assert score["matched_topics"] == ["verify", "uncertainty", "sources"]
+    assert score["response_passed"] is True
+    assert score["quality_passed"] is True
+    assert score["passed"] is True

@@ -83,14 +83,23 @@ def _extract_gmail_request(message: str, user_id: str) -> tuple[str, dict[str, A
 
 def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tuple[str, dict[str, Any]] | None:
     text = message.strip()
-    patterns = (("phone_call_contact", r"(?:call|phone|dial|ಕರೆ|ಫೋನ್|ಕರೆಮಾಡು)\s+(?:to\s+|ge\s+|ಗೆ\s+|maadu\s+|ಮಾಡು\s+)?(.+)$"),("contact_resolve", r"(?:find\s+contact|search\s+contact|lookup\s+contact|resolve\s+contact|contact|find|search|lookup|resolve|ಹುಡುಕು|ಕಾಂಟ್ಯಾಕ್ಟ್)\s+(.+)$"))
+    patterns = (
+        (
+            "phone_call_contact",
+            r"^(?:call|phone|dial|ಕರೆ|ಫೋನ್|ಕರೆಮಾಡು)\s+(?:to\s+|ge\s+|ಗೆ\s+|maadu\s+|ಮಾಡು\s+)?(.+)$",
+        ),
+        (
+            "contact_resolve",
+            r"^(?:find\s+contact|search\s+contact|lookup\s+contact|resolve\s+contact|contact|find|search|lookup|resolve|ಹುಡುಕು|ಕಾಂಟ್ಯಾಕ್ಟ್)\s+(.+)$",
+        ),
+    )
     for tool, pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             query = match.group(1).strip(" .?!")
-            if query: return tool, {"contacts": contacts, "query": query}
+            if query:
+                return tool, {"contacts": contacts, "query": query}
     return None
-
 def build_agent_steps(message: str, user_id: str = "", contacts: list[dict[str, Any]] | None = None) -> tuple[AgentStep, ...]:
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH: return ()

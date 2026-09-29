@@ -17,7 +17,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.ai.answer_quality import user_safe_failure
+from app.ai.answer_quality import assess_answer, user_safe_failure
 from app.ai.general_knowledge import WikipediaKnowledgeProvider, is_general_knowledge_question
 from app.ai.grounding import (
     GroundedEvidence,
@@ -76,7 +76,20 @@ _research_provider: ResearchProvider | None = build_research_provider()
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0
 _MODEL_LOAD_RETRY_SECONDS = 60.0
 _MODEL_GENERATION_TIMEOUT_SECONDS = 20.0
-_MODEL_MAX_NEW_TOKENS = 96
+_MODEL_MAX_NEW_TOKENS = 128
+
+_CREATIVE_MARKERS = (
+    "write a ",
+    "write an ",
+    "story",
+    "poem",
+    "joke",
+    "funny",
+    "creative",
+    "dialogue",
+    "roleplay",
+    "brainstorm",
+)
 # Serialize the artifact check/runtime load so concurrent chat requests cannot
 # trigger duplicate B2 downloads or duplicate model loads.
 _MODEL_LOAD_LOCK = threading.Lock()
@@ -264,27 +277,52 @@ def _generate_with_local_model(
     runtime: "LocalModelRuntime",
     context: str,
     language: str,
+    temperature: float,
+    max_new_tokens: int,
 ) -> str:
     # Render Free provides a very small CPU budget. Serialize local inference so
     # concurrent requests cannot multiply the model's CPU/memory pressure.
     with _MODEL_INFERENCE_LOCK:
         return runtime.generate(
             context,
-            max_new_tokens=_MODEL_MAX_NEW_TOKENS,
-            temperature=0.0,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
             language=language,
         )
+
+
+def _is_creative_request(message: str) -> bool:
+    normalized = " ".join(message.casefold().split())
+    return any(
+        normalized.startswith(marker) or f" {marker}" in normalized
+        for marker in _CREATIVE_MARKERS
+    )
+
+
+def _generation_profile(message: str, intent_name: str) -> tuple[tuple[float, ...], int]:
+    if _is_creative_request(message):
+        return (0.7, 0.2), 160
+    if intent_name in {"coding", "translation", "summarization", "file_qa"}:
+        return (0.0, 0.15), _MODEL_MAX_NEW_TOKENS
+    return (0.0, 0.2), _MODEL_MAX_NEW_TOKENS
 
 
 def _language_instruction(language: str) -> str:
     return f"Respond only in {language}. Preserve the user's language and script. Do not switch languages unless the user explicitly requests it. Keep the answer natural, clear, and concise."
 
 
+_KNOWLEDGE_QUERY_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "did", "do", "does",
+    "for", "from", "how", "in", "is", "it", "many", "much", "of", "on",
+    "the", "there", "to", "was", "were", "what", "when", "where", "who", "why",
+}
+
+
 def _knowledge_fallback_sentence(
     message: str,
     hits: list[object],
     *,
-    minimum_score: float = 0.80,
+    minimum_score: float = 0.20,
 ) -> str | None:
     """Return one strongly matched local-knowledge sentence as a safe fallback."""
     if not hits:
@@ -299,7 +337,7 @@ def _knowledge_fallback_sentence(
     query_terms = {
         token.casefold()
         for token in re.findall(r"[\w'-]+", message, flags=re.UNICODE)
-        if len(token) > 1
+        if len(token) > 1 and token.casefold() not in _KNOWLEDGE_QUERY_STOPWORDS
     }
     if not query_terms:
         return None
@@ -322,8 +360,13 @@ def _knowledge_fallback_sentence(
             best_sentence = sentence
             best_overlap = overlap
 
-    if best_overlap < 2:
+    if best_overlap < 2 or len(query_terms) < 2:
         return None
+
+    effective_coverage = best_overlap / len(query_terms)
+    if effective_coverage < 0.80:
+        return None
+
     return best_sentence
 
 
@@ -535,40 +578,61 @@ class LocalAIService:
             generation_contexts = [minimal_context]
             if context != minimal_context:
                 generation_contexts.append(context)
+            temperatures, max_new_tokens = _generation_profile(prompt, intent.name)
+            generation_deadline = time.monotonic() + _MODEL_GENERATION_TIMEOUT_SECONDS
+            attempt = 0
 
-            for attempt, generation_context in enumerate(generation_contexts, start=1):
-                try:
-                    candidate = _clean_model_reply(
-                        await asyncio.wait_for(
-                            asyncio.to_thread(
-                                _generate_with_local_model,
-                                runtime,
-                                generation_context,
-                                language,
-                            ),
-                            timeout=_MODEL_GENERATION_TIMEOUT_SECONDS,
+            for generation_context in generation_contexts:
+                for temperature in temperatures:
+                    attempt += 1
+                    remaining = generation_deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    try:
+                        candidate = _clean_model_reply(
+                            await asyncio.wait_for(
+                                asyncio.to_thread(
+                                    _generate_with_local_model,
+                                    runtime,
+                                    generation_context,
+                                    language,
+                                    temperature,
+                                    max_new_tokens,
+                                ),
+                                timeout=remaining,
+                            )
                         )
-                    )
-                    if _has_expected_script(candidate, language):
+                        if not _has_expected_script(candidate, language):
+                            logger.warning(
+                                "Discarding malformed or wrong-language model output for %s on local generation attempt %d",
+                                language,
+                                attempt,
+                            )
+                            continue
+                        quality = assess_answer(prompt, candidate)
+                        if not quality.passed:
+                            logger.warning(
+                                "Discarding low-quality local model output on attempt %d: %s",
+                                attempt,
+                                quality.reason,
+                            )
+                            continue
                         answer = candidate
                         break
-                    logger.warning(
-                        "Discarding malformed or wrong-language model output for %s on local generation attempt %d",
-                        language,
-                        attempt,
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning(
-                        "Indoone local model generation timed out after %.1fs on attempt %d",
-                        _MODEL_GENERATION_TIMEOUT_SECONDS,
-                        attempt,
-                    )
-                    break
-                except Exception:
-                    logger.exception(
-                        "Indoone local model generation failed on attempt %d",
-                        attempt,
-                    )
+                    except asyncio.TimeoutError:
+                        logger.warning(
+                            "Indoone local model generation timed out after %.1fs on attempt %d",
+                            _MODEL_GENERATION_TIMEOUT_SECONDS,
+                            attempt,
+                        )
+                        break
+                    except Exception:
+                        logger.exception(
+                            "Indoone local model generation failed on attempt %d",
+                            attempt,
+                        )
+                        continue
+                if answer or generation_deadline - time.monotonic() <= 0:
                     break
 
             if not answer:

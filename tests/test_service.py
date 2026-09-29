@@ -75,11 +75,11 @@ async def test_general_knowledge_answer_bypasses_local_model(monkeypatch: pytest
 
 @pytest.mark.asyncio
 async def test_local_model_uses_training_prompt_contract_and_language_retry(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[tuple[str, str]] = []
+    calls: list[tuple[str, str, float, int]] = []
 
     class FakeRuntime:
         def generate(self, prompt: str, *, max_new_tokens: int, temperature: float, language: str) -> str:
-            calls.append((prompt, language))
+            calls.append((prompt, language, temperature, max_new_tokens))
             if len(calls) == 1:
                 return "ನೃತ್ಯ ಕಲಿಯುವ ರೋಬೋಟ್‌ನ ಕಥೆ."
             return "The robot practiced dancing every evening and finally performed a funny dance for its friends."
@@ -93,9 +93,48 @@ async def test_local_model_uses_training_prompt_contract_and_language_retry(monk
 
     assert reply.startswith("The robot practiced dancing")
     assert len(calls) == 2
-    prompt, language = calls[0]
+    prompt, language, temperature, max_new_tokens = calls[0]
     assert prompt.startswith("<instruction>\n")
     assert prompt.endswith("</instruction>\n<response>\n")
     assert "Write a short funny story about a robot learning to dance." in prompt
     assert language == "English"
+    assert temperature == 0.7
+    assert max_new_tokens == 160
+    assert calls[1][2] == 0.2
 
+
+
+@pytest.mark.asyncio
+async def test_local_model_retries_after_internal_quality_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[float] = []
+
+    class FakeRuntime:
+        def generate(self, prompt: str, *, max_new_tokens: int, temperature: float, language: str) -> str:
+            calls.append(temperature)
+            if len(calls) == 1:
+                return "traceback: internal server error"
+            return "The robot learned a silly dance and made everyone laugh."
+
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_research_provider", None)
+    monkeypatch.setattr(service, "_general_knowledge_provider", None)
+    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
+
+    reply = await service.generate_reply("Write a funny story about a robot.")
+
+    assert reply == "The robot learned a silly dance and made everyone laugh."
+    assert calls == [0.7, 0.2]
+
+
+def test_local_knowledge_contains_resilient_india_states_fact() -> None:
+    from pathlib import Path
+
+    knowledge_base = LocalKnowledgeBase.from_directory(Path("data/knowledge"))
+    hits = knowledge_base.search("How many states are there in India?", limit=3)
+
+    answer = _knowledge_fallback_sentence(
+        "How many states are there in India?",
+        hits,
+    )
+
+    assert answer == "India has 28 states and 8 Union Territories."

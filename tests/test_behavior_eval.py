@@ -57,7 +57,7 @@ def test_score_case_accepts_common_research_term_variants() -> None:
     }
     score = score_case(
         case,
-        "The information is currently unverified, so the source is insufficient and the result remains unresolved.",
+        "The information is currently unverified, so the supporting source is insufficient and the result remains unresolved."
     )
     assert score["matched_topics"] == ["verify", "uncertainty", "sources"]
     assert score["response_passed"] is True

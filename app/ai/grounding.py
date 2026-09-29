@@ -78,6 +78,29 @@ def assess_grounding(answer: str, evidence: list[GroundedEvidence]) -> Grounding
     return GroundingQuality(True)
 
 
+
+def extract_sources(answer: str) -> list[GroundedEvidence]:
+    """Extract the deterministic source list for clients that render source cards."""
+    cleaned = answer.strip()
+    if not cleaned:
+        return []
+
+    parts = re.split(r"\n\s*sources:\s*\n", cleaned, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) != 2:
+        return []
+
+    sources: list[GroundedEvidence] = []
+    for line in parts[1].splitlines():
+        match = re.match(r"^\s*\d+\.\s+(.+?)\s+—\s+(https?://\S+)\s*$", line.strip(), flags=re.IGNORECASE)
+        if not match:
+            continue
+        title = match.group(1).strip()
+        url = match.group(2).rstrip(".,;:")
+        if title and url:
+            sources.append(GroundedEvidence(title, url))
+    return sources
+
+
 def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
     """Quality-gate user-facing output and append deterministic source attribution."""
 

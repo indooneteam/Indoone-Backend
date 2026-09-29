@@ -57,3 +57,11 @@
 {"prompt":"Summarize the plan in three concise steps after a long discussion."}
 {"prompt":"Give an answer that separates facts from assumptions."}
 {"prompt":"A user asks for today's news but no live data tool is available. Respond honestly."}
+{"prompt":"Research a current software topic and summarize the important findings with sources."}
+{"prompt":"Explain what to do when two research sources disagree."}
+{"prompt":"Use supplied research evidence and answer only what it supports."}
+{"prompt":"Research a topic and explain the findings in Kannada."}
+{"prompt":"Research a topic and then answer a follow-up using the same evidence."}
+{"prompt":"What should you say when a current fact cannot be verified with a live source?"}
+{"prompt":"Turn these research notes into a friendly answer without adding unsupported claims."}
+{"prompt":"Research a topic using multiple focused queries and synthesize the results."}

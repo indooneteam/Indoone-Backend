@@ -30,7 +30,7 @@ _RESEARCH_TERM_ALIASES = {
     "ml": {"ml", "machine", "learning"},
     "llm": {"llm", "large", "language", "model", "models"},
 }
-MIN_RESEARCH_RELEVANCE_SCORE = 4.0
+MIN_RESEARCH_RELEVANCE_SCORE = 2.0
 
 @dataclass(frozen=True)
 class ResearchResult:

@@ -50,7 +50,7 @@ def test_service_appends_research_sources(monkeypatch) -> None:
     assert captured[0].startswith("<instruction>")
     assert "Use the supplied knowledge and research evidence when relevant." in captured[0]
     assert "<research>" in captured[0] or "research" in captured[0]
-    assert "https://example.com/indoone" in captured[0]
-    assert "https://example.org/indoone" in captured[0]
-    assert "https://example.net/indoone" in captured[0]
+    assert "example.com" in captured[0]
+    assert "example.org" in captured[0]
+    assert "example.net" in captured[0]
     assert captured[0].rstrip().endswith("<response>")

@@ -69,3 +69,11 @@ def test_private_access_question_does_not_require_freshness_sources() -> None:
         "No. I do not have access to a private company database without authorized access.",
     )
     assert result.passed is True
+
+def test_internal_tool_failure_text_is_rejected() -> None:
+    result = assess_answer(
+        "Who was Alan Turing?",
+        "an authorized tool call fails, Indoone should not be presented as a small example improves understanding it.",
+    )
+    assert result.passed is False
+    assert result.reason == "internal_detail_leak"

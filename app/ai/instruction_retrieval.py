@@ -164,6 +164,18 @@ class InstructionRetriever:
             candidate_score = _score(prompt, example.instruction)
             if category_hint and example.category == category_hint:
                 candidate_score += 0.18
+
+            prompt_tokens = set(_tokens(prompt))
+            example_tokens = set(_tokens(example.instruction))
+            if {"disagree", "conflict"} & prompt_tokens and {"disagree", "conflict"} & example_tokens:
+                candidate_score += 0.20
+            if "followup" in prompt_tokens and "followup" in example_tokens:
+                candidate_score += 0.20
+            if "summary" in prompt_tokens and "summary" in example_tokens:
+                candidate_score += 0.12
+            if "friendly" in prompt_tokens and "friendly" in example_tokens:
+                candidate_score += 0.12
+
             if candidate_score >= minimum_score:
                 ranked.append(
                     RetrievedInstruction(example, min(candidate_score, 1.0))

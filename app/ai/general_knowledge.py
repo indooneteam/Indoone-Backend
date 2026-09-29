@@ -215,6 +215,7 @@ _ENGLISH_PREFIXES = (
     "meaning of ",
     "difference between ",
     "tell me about ",
+    "teach me about ",
 )
 
 _NATIVE_FACTUAL_QUESTION_RE = re.compile(
@@ -262,13 +263,31 @@ _QUESTION_PREFIX_RE = re.compile(
     r"^(?:what\s+(?:is|are|was|were)|who\s+(?:is|was)|where\s+(?:is|was)|"
     r"when\s+(?:was|did)|why\s+(?:is|are|does|do)|how\s+(?:is|many|much|does|do)|"
     r"what\s+causes|explain|define|meaning\s+of|difference\s+between|"
-    r"tell\s+me\s+about)\s+",
+    r"tell\s+me\s+about|teach\s+me\s+about)\s+",
     flags=re.IGNORECASE,
 )
 
 _ROMAN_KANNADA_QUESTION_RE = re.compile(
     r"(?:\bandre\s+(?:enu|yenu)\b|\b(?:enu|yenu|yaaru|yaake|hege)\b)",
     flags=re.IGNORECASE,
+)
+
+_NATIVE_KANNADA_QUESTION_TOKENS = (
+    "ಎಂದರೇನು",
+    "ಅರ್ಥವೇನು",
+    "ಅರ್ಥ ಏನು",
+    "ಎಷ್ಟು",
+    "ಎಷ್ಟಿದೆ",
+    "ಯಾವುದು",
+    "ಯಾವಾಗ",
+    "ಯಾವ",
+    "ಯಾರು",
+    "ಎಲ್ಲಿ",
+    "ಏಕೆ",
+    "ಹೇಗೆ",
+    "ಏನು",
+    "ಬಗ್ಗೆ",
+    "ವಿವರಿಸಿ",
 )
 
 
@@ -286,6 +305,14 @@ def _question_to_topic(message: str) -> str:
         if lowered_topic.endswith(tail) and len(topic) > len(tail):
             topic = topic[: -len(tail)].rstrip(" ?!.")
             break
+
+    # Native Kannada questions often contain the interrogative in the middle
+    # ("ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?") or at the end ("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?").
+    # Remove those question words before sending the query to Wikipedia so its
+    # search index sees the actual topic instead of the full sentence.
+    for marker in _NATIVE_KANNADA_QUESTION_TOKENS:
+        topic = re.sub(rf"(?<!\S){re.escape(marker)}(?!\S)", " ", topic)
+    topic = " ".join(topic.split()).strip(" ?!.")
     trailing_phrases = (
         " in simple words",
         " in simple terms",

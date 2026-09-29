@@ -322,7 +322,7 @@ def _knowledge_fallback_sentence(
     message: str,
     hits: list[object],
     *,
-    minimum_score: float = 0.20,
+    minimum_score: float = 0.80,
 ) -> str | None:
     """Return one strongly matched local-knowledge sentence as a safe fallback."""
     if not hits:
@@ -360,8 +360,13 @@ def _knowledge_fallback_sentence(
             best_sentence = sentence
             best_overlap = overlap
 
-    if best_overlap < 2:
+    if best_overlap < 2 or len(query_terms) < 2:
         return None
+
+    effective_coverage = best_overlap / len(query_terms)
+    if effective_coverage < 0.80:
+        return None
+
     return best_sentence
 
 

@@ -191,7 +191,13 @@ class InstructionRetriever:
             example_concepts = _concepts(
                 f"{example.instruction} {example.response}"
             )
-            candidate_score += 0.22 * len(prompt_concepts & example_concepts)
+            shared_concepts = prompt_concepts & example_concepts
+            candidate_score += 0.22 * len(shared_concepts)
+            if (
+                "current_research" in prompt_concepts
+                and "current_research" in example_concepts
+            ):
+                candidate_score += 0.50
             if {"disagree", "conflict"} & prompt_tokens and {"disagree", "conflict"} & example_tokens:
                 candidate_score += 0.20
             if "followup" in prompt_tokens and "followup" in example_tokens:

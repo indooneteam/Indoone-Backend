@@ -92,7 +92,7 @@ async def test_local_model_uses_training_prompt_contract_and_language_retry(monk
     reply = await service.generate_reply("Write a short funny story about a robot learning to dance.")
 
     assert reply.startswith("The robot practiced dancing")
-    assert len(calls) == 1
+    assert len(calls) == 2
     prompt, language = calls[0]
     assert prompt.startswith("<instruction>\n")
     assert prompt.endswith("</instruction>\n<response>\n")

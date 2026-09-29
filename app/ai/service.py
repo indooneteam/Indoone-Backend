@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.ai.answer_quality import assess_answer, user_safe_failure
-from app.ai.general_knowledge import WikipediaKnowledgeProvider, is_general_knowledge_question
+from app.ai.general_knowledge import WikipediaKnowledgeProvider, is_general_knowledge_question, is_question_like
 from app.ai.grounding import (
     GroundedEvidence,
     append_sources,
@@ -624,6 +624,32 @@ class LocalAIService:
                     )
             except (httpx.HTTPError, RuntimeError, ValueError) as exc:
                 logger.warning("General knowledge lookup failed: %s", exc)
+
+        # Every explicit question that is not a dedicated workflow should get
+        # one broader evidence-backed pass before the tiny local model is allowed.
+        # This prevents wrong/hallucinated answers from the CPU model being used
+        # for ordinary questions and gives a deterministic safe failure instead.
+        broad_question = is_question_like(prompt) and intent.name not in {
+            "coding",
+            "translation",
+            "summarization",
+            "file_qa",
+        }
+        if broad_question and not (research_blocked and intent.needs_research):
+            if _research_provider is not None:
+                try:
+                    broad_results = await _research_provider.search(prompt, limit=8)
+                    if broad_results:
+                        broad_answer = _research_extract_fallback(broad_results)
+                        if broad_answer is not None:
+                            return append_sources(
+                                broad_answer,
+                                _evidence_from_results(broad_results),
+                            )
+                except (httpx.HTTPError, RuntimeError, ValueError):
+                    logger.warning("Broad question research failed for query: %s", prompt)
+
+            return user_safe_failure()
 
         # A fresh-information request must never fall through to the tiny
         # local model when research coverage is incomplete. Use the available

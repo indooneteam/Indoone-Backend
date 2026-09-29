@@ -15,7 +15,7 @@ def test_service_appends_research_sources(monkeypatch) -> None:
     class FakeProvider:
         async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
             assert query == "latest Indoone news"
-            assert limit == 5
+            assert limit == 8
             return [
                 ResearchResult(
                     "Indoone source 1",
@@ -26,6 +26,11 @@ def test_service_appends_research_sources(monkeypatch) -> None:
                     "Indoone source 2",
                     "https://example.org/indoone",
                     "source snippet 2",
+                ),
+                ResearchResult(
+                    "Indoone source 3",
+                    "https://example.net/indoone",
+                    "source snippet 3",
                 ),
             ]
 
@@ -39,11 +44,13 @@ def test_service_appends_research_sources(monkeypatch) -> None:
     assert reply == (
         "grounded answer\n\nSources:\n"
         "1. Indoone source 1 — https://example.com/indoone\n"
-        "2. Indoone source 2 — https://example.org/indoone"
+        "2. Indoone source 2 — https://example.org/indoone\n"
+        "3. Indoone source 3 — https://example.net/indoone"
     )
     assert captured[0].startswith("<instruction>")
     assert "Use the supplied knowledge and research evidence when relevant." in captured[0]
     assert "<research>" in captured[0] or "research" in captured[0]
     assert "https://example.com/indoone" in captured[0]
     assert "https://example.org/indoone" in captured[0]
+    assert "https://example.net/indoone" in captured[0]
     assert captured[0].rstrip().endswith("<response>")

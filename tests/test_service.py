@@ -138,3 +138,69 @@ def test_local_knowledge_contains_resilient_india_states_fact() -> None:
     )
 
     assert answer == "India has 28 states and 8 Union Territories."
+
+
+@pytest.mark.asyncio
+async def test_research_generation_uses_full_evidence_context_for_one_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeResearchProvider:
+        async def search(self, query: str, limit: int = 5):
+            assert query == "ಈಗಿನ AI technology ಬಗ್ಗೆ research ಮಾಡಿ"
+            assert limit == 8
+            return [
+                service.ResearchResult(
+                    "AI research source",
+                    "https://research.example/ai",
+                    "Generative AI is an active research area.",
+                ),
+                service.ResearchResult(
+                    "AI news source",
+                    "https://news.example/ai",
+                    "Recent AI developments include multimodal systems.",
+                ),
+            ]
+
+    calls: list[str] = []
+
+    class FakeRuntime:
+        def generate(
+            self,
+            prompt: str,
+            *,
+            max_new_tokens: int,
+            temperature: float,
+            language: str,
+        ) -> str:
+            calls.append(prompt)
+            return "AI technology ಹಲವು research areasನಲ್ಲಿ ಅಭಿವೃದ್ಧಿಯಾಗುತ್ತಿದೆ."
+
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_general_knowledge_provider", None)
+    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
+    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
+
+    reply = await service.generate_reply("ಈಗಿನ AI technology ಬಗ್ಗೆ research ಮಾಡಿ")
+
+    assert len(calls) == 1
+    assert "Fresh research evidence:" in calls[0]
+    assert "https://research.example/ai" in calls[0]
+    assert "https://news.example/ai" in calls[0]
+    assert "Sources:" in reply
+    assert reply.count("https://research.example/ai") == 1
+    assert reply.count("https://news.example/ai") == 1
+
+
+def test_research_requires_independent_sources() -> None:
+    results = [
+        service.ResearchResult("One", "https://example.com/one", "source"),
+        service.ResearchResult("Two", "https://example.com/two", "source"),
+    ]
+    assert service._research_has_enough_sources(results, cross_check=False) is False
+
+    results.append(
+        service.ResearchResult("Three", "https://second.example/three", "source")
+    )
+    assert service._research_has_enough_sources(results, cross_check=False) is True
+    assert service._research_has_enough_sources(results, cross_check=True) is False
+

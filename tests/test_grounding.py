@@ -12,6 +12,12 @@ def test_grounded_prompt_instruction_requires_evidence_discipline() -> None:
     assert "supplied evidence" in instruction
 
 
+def test_grounded_prompt_requires_one_synthesized_answer() -> None:
+    instruction = build_grounded_prompt_instruction()
+    assert "one coherent answer" in instruction
+    assert "separate source-by-source answers" in instruction
+
+
 def test_append_sources_is_deterministic_and_deduplicates_urls() -> None:
     evidence = [
         GroundedEvidence("Example", "https://example.com", "one"),

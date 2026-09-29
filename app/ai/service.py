@@ -393,8 +393,12 @@ def _evidence_from_results(results: list[ResearchResult]) -> list[GroundedEviden
 
 
 def _research_has_enough_sources(results: list[ResearchResult], cross_check: bool) -> bool:
-    unique_domains = {urlparse(result.url).netloc.casefold() for result in results if urlparse(result.url).netloc}
-    return len(unique_domains) >= (2 if cross_check else 1)
+    unique_domains = {
+        urlparse(result.url).netloc.casefold()
+        for result in results
+        if urlparse(result.url).netloc
+    }
+    return len(unique_domains) >= (3 if cross_check else 2)
 
 
 def _clean_model_reply(answer: str) -> str:
@@ -499,7 +503,7 @@ class LocalAIService:
                 logger.warning("Research provider unavailable for query: %s", prompt)
             else:
                 try:
-                    candidate_results = await _research_provider.search(prompt, limit=5)
+                    candidate_results = await _research_provider.search(prompt, limit=8)
                     if _research_has_enough_sources(candidate_results, intent.needs_cross_check):
                         research_results = candidate_results
                         research = format_results(candidate_results)
@@ -575,9 +579,14 @@ class LocalAIService:
                 answer = knowledge_answer
         else:
             answer = ""
-            generation_contexts = [minimal_context]
-            if context != minimal_context:
-                generation_contexts.append(context)
+            if intent.needs_research:
+                # Fresh research must be synthesized from the gathered evidence.
+                # Never try an evidence-free minimal prompt first.
+                generation_contexts = [context]
+            else:
+                generation_contexts = [minimal_context]
+                if context != minimal_context:
+                    generation_contexts.append(context)
             temperatures, max_new_tokens = _generation_profile(prompt, intent.name)
             generation_deadline = time.monotonic() + _MODEL_GENERATION_TIMEOUT_SECONDS
             attempt = 0

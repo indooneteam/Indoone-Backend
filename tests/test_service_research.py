@@ -30,10 +30,11 @@ def test_service_includes_research_results(monkeypatch) -> None:
     class FakeResearch:
         async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
             assert query == "latest Indoone news"
-            assert limit == 5
+            assert limit == 8
             return [
                 ResearchResult("Indoone result 1", "https://example.com/indoone", "fresh source 1"),
                 ResearchResult("Indoone result 2", "https://example.org/indoone", "fresh source 2"),
+                ResearchResult("Indoone result 3", "https://example.net/indoone", "fresh source 3"),
             ]
 
     monkeypatch.setattr(service, "_runtime", None)
@@ -47,11 +48,13 @@ def test_service_includes_research_results(monkeypatch) -> None:
     assert "Sources:" in reply
     assert "https://example.com/indoone" in reply
     assert "https://example.org/indoone" in reply
+    assert "https://example.net/indoone" in reply
     assert "<research>" in captured[0]
     assert "Indoone result 1" in captured[0]
     assert "Indoone result 2" in captured[0]
     assert "fresh source 1" in captured[0]
     assert "fresh source 2" in captured[0]
+    assert "fresh source 3" in captured[0]
 
 
 def test_single_source_is_not_treated_as_cross_checked(monkeypatch) -> None:

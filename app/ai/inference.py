@@ -21,6 +21,15 @@ class LocalModelRuntime:
     """Load an Indoone local language model with a high-confidence answer fallback."""
 
     def __init__(self, checkpoint_path: Path, tokenizer_path: Path) -> None:
+        # Render's free instance has a fractional CPU allocation. Limit Torch
+        # intra-op parallelism so the runtime does not oversubscribe its CPU slice.
+        try:
+            torch.set_num_threads(1)
+            torch.set_num_interop_threads(1)
+        except RuntimeError:
+            # Torch may already be initialized by another component.
+            pass
+
         try:
             checkpoint = torch.load(
                 checkpoint_path,

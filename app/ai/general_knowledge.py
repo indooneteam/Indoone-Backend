@@ -290,6 +290,24 @@ _NATIVE_KANNADA_QUESTION_TOKENS = (
     "ವಿವರಿಸಿ",
 )
 
+_NATIVE_KANNADA_QUESTION_TOKENS = (
+    "ಎಂದರೇನು",
+    "ಅರ್ಥವೇನು",
+    "ಅರ್ಥ ಏನು",
+    "ಎಷ್ಟು",
+    "ಎಷ್ಟಿದೆ",
+    "ಯಾವುದು",
+    "ಯಾವಾಗ",
+    "ಯಾವ",
+    "ಯಾರು",
+    "ಎಲ್ಲಿ",
+    "ಏಕೆ",
+    "ಹೇಗೆ",
+    "ಏನು",
+    "ಬಗ್ಗೆ",
+    "ವಿವರಿಸಿ",
+)
+
 
 def _question_to_topic(message: str) -> str:
     """Reduce natural-language factual questions to a useful article query."""
@@ -305,6 +323,14 @@ def _question_to_topic(message: str) -> str:
         if lowered_topic.endswith(tail) and len(topic) > len(tail):
             topic = topic[: -len(tail)].rstrip(" ?!.")
             break
+
+    # Native Kannada questions often contain the interrogative in the middle
+    # ("ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?") or at the end ("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?").
+    # Remove those question words before sending the query to Wikipedia so its
+    # search index sees the actual topic instead of the full sentence.
+    for marker in _NATIVE_KANNADA_QUESTION_TOKENS:
+        topic = re.sub(rf"(?<!\S){re.escape(marker)}(?!\S)", " ", topic)
+    topic = " ".join(topic.split()).strip(" ?!.")
 
     # Native Kannada questions often contain the interrogative in the middle
     # ("ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?") or at the end ("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?").

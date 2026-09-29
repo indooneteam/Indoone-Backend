@@ -30,6 +30,16 @@ def test_lightweight_understanding_handles_romanized_kannada() -> None:
     assert understood.research_query == "gravity"
 
 
+def test_kannada_definition_is_not_misclassified_as_research() -> None:
+    from app.ai.question_understanding import understand_question
+
+    understood = understand_question("ಗ್ರಾವಿಟಿ ಎಂದರೇನು")
+
+    assert understood.language == "Kannada"
+    assert understood.intent == "general"
+    assert understood.needs_research is False
+
+
 def test_lightweight_understanding_extracts_english_topic_from_question() -> None:
     from app.ai.question_understanding import understand_question
 

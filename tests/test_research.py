@@ -433,7 +433,7 @@ def test_multi_source_provider_merges_sources_and_queries() -> None:
     assert len(results) == 2
     assert wikipedia.queries == [
         "ಈಗಿನ AI technology ಬಗ್ಗೆ research ಮಾಡಿ",
-        "AI technology research",
+        "AI technology",
     ]
     assert news.queries == wikipedia.queries
     assert {item.url for item in results} == {

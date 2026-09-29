@@ -46,4 +46,4 @@ def test_service_appends_research_sources(monkeypatch) -> None:
     assert "<research>" in captured[0] or "research" in captured[0]
     assert "https://example.com/indoone" in captured[0]
     assert "https://example.org/indoone" in captured[0]
-    assert captured[0].endswith("<response>")
+    assert captured[0].rstrip().endswith("<response>")

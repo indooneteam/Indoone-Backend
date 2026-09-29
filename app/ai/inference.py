@@ -5,6 +5,8 @@ import re
 
 import torch
 
+from app.ai.language_detection import SCRIPT_RANGES
+
 from app.ai.instruction_retrieval import InstructionRetriever
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
@@ -66,6 +68,7 @@ class LocalModelRuntime:
             for relative in InstructionRetriever.DEFAULT_SOURCES
         )
         self._instruction_retriever = InstructionRetriever(sources)
+        self._language_token_ids: dict[str, frozenset[int]] = {}
 
     @staticmethod
     def _select_next_token(logits: torch.Tensor, temperature: float) -> int:
@@ -132,7 +135,11 @@ class LocalModelRuntime:
         if stripped_prompt.startswith("<instruction>") and stripped_prompt.endswith("<response>"):
             formatted_prompt = stripped_prompt
         else:
-            formatted_prompt = format_instruction_prompt(stripped_prompt)
+            trailing_response = re.fullmatch(
+                r"(?s)(<instruction>.*</instruction>\s*<response>)",
+                stripped_prompt,
+            )
+            formatted_prompt = trailing_response.group(1) if trailing_response else format_instruction_prompt(stripped_prompt)
         token_ids = self.tokenizer.encode(formatted_prompt, add_special_tokens=False)
         return [self.tokenizer.stoi["<bos>"]] + token_ids
 
@@ -162,6 +169,68 @@ class LocalModelRuntime:
             return None
         return match.example.response.strip()
 
+    def _allowed_token_ids_for_language(self, language: str) -> frozenset[int]:
+        """Cache token ids that can safely contribute to the requested script."""
+        normalized = language.strip().casefold() or "english"
+        cached = self._language_token_ids.get(normalized)
+        if cached is not None:
+            return cached
+
+        script_pattern = None if normalized == "english" else dict(SCRIPT_RANGES).get(language)
+        allowed: set[int] = set()
+        special_ids = {
+            self.tokenizer.stoi[token]
+            for token in self.tokenizer.SPECIAL_TOKENS
+            if token in self.tokenizer.stoi
+        }
+        for token_id in range(self.tokenizer.vocab_size):
+            if token_id in special_ids:
+                allowed.add(token_id)
+                continue
+            try:
+                decoded = self.tokenizer.decode([token_id])
+            except Exception:
+                continue
+            if not decoded:
+                continue
+
+            if normalized == "english":
+                if re.search(r"[A-Za-z0-9]", decoded) or all(ord(char) < 128 for char in decoded):
+                    allowed.add(token_id)
+                continue
+
+            if re.search(r"[A-Za-z0-9]", decoded):
+                allowed.add(token_id)
+                continue
+            if script_pattern is not None and script_pattern.search(decoded):
+                allowed.add(token_id)
+                continue
+            if all(ord(char) < 128 for char in decoded):
+                allowed.add(token_id)
+
+        result = frozenset(allowed)
+        self._language_token_ids[normalized] = result
+        return result
+
+    def _apply_language_constraint(
+        self,
+        logits: torch.Tensor,
+        language: str,
+    ) -> torch.Tensor:
+        """Prevent decoding from drifting into an unrelated writing script."""
+        if not language.strip() or logits.ndim != 2 or logits.size(0) != 1:
+            return logits
+        allowed = self._allowed_token_ids_for_language(language)
+        if not allowed:
+            return logits
+        constrained = logits.clone()
+        blocked = [index for index in range(logits.size(-1)) if index not in allowed]
+        if blocked and len(blocked) < logits.size(-1):
+            constrained[0, blocked] = float("-inf")
+            if not torch.isfinite(constrained).any():
+                return logits
+        return constrained
+
     @torch.inference_mode()
     def generate(
         self,
@@ -170,6 +239,7 @@ class LocalModelRuntime:
         temperature: float = DEFAULT_TEMPERATURE,
         repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
         no_repeat_ngram_size: int = DEFAULT_NO_REPEAT_NGRAM_SIZE,
+        language: str = "English",
     ) -> str:
         """Generate an assistant completion, using KV-cached decoding."""
         prompt = prompt.strip()
@@ -209,6 +279,7 @@ class LocalModelRuntime:
                 completion_ids,
                 repetition_penalty,
             )
+            next_logits = self._apply_language_constraint(next_logits, language)
             next_logits = self._block_repeated_ngram(
                 next_logits,
                 completion_ids,

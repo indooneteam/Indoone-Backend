@@ -163,6 +163,8 @@ _ENGLISH_PREFIXES = (
     "why does ",
     "why do ",
     "how is ",
+    "how many ",
+    "how much ",
     "how does ",
     "how do ",
     "what causes ",
@@ -210,7 +212,7 @@ _SCRIPT_PREFIXES = (
 
 _QUESTION_PREFIX_RE = re.compile(
     r"^(?:what\s+(?:is|are|was|were)|who\s+(?:is|was)|where\s+(?:is|was)|"
-    r"when\s+(?:was|did)|why\s+(?:is|are|does|do)|how\s+(?:is|does|do)|"
+    r"when\s+(?:was|did)|why\s+(?:is|are|does|do)|how\s+(?:is|many|much|does|do)|"
     r"what\s+causes|explain|define|meaning\s+of|difference\s+between|"
     r"tell\s+me\s+about)\s+",
     flags=re.IGNORECASE,

@@ -19,6 +19,8 @@ from app.ai.general_knowledge import (
         "Who is Ada Lovelace?",
         "Tell me about Alan Turing.",
         "Explain gravity in simple words.",
+        "How many states are in India?",
+        "How much water is on Earth?",
         "What causes day and night?",
         "What is the difference between mass and weight?",
         "ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?",
@@ -107,6 +109,8 @@ def test_question_to_topic_removes_common_english_prefixes() -> None:
     assert _question_to_topic("What is photosynthesis?") == "photosynthesis"
     assert _question_to_topic("Who was Alan Turing?") == "Alan Turing"
     assert _question_to_topic("Explain gravity in simple words.") == "gravity"
+    assert _question_to_topic("How many states are in India?") == "states are in India"
+    assert _question_to_topic("How much water is on Earth?") == "water is on Earth"
 
 
 @pytest.mark.asyncio

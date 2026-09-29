@@ -45,6 +45,22 @@ def test_preformatted_prompt_is_not_wrapped_twice(tmp_path) -> None:
     assert tokenizer.decode(prompt_ids).count("<instruction>") == 1
 
 
+def test_preformatted_prompt_with_trailing_newline_is_not_wrapped_twice(tmp_path) -> None:
+    tokenizer = BPETokenizer.train(
+        "<instruction>\nSay hello\n</instruction>\n<response>\nHello\n</response>\n",
+        vocab_size=64,
+        min_frequency=1,
+    )
+    runtime = object.__new__(LocalModelRuntime)
+    runtime.tokenizer = tokenizer
+    prompt_ids = runtime._prompt_ids(
+        "<instruction>\nSay hello\n</instruction>\n<response>\n"
+    )
+    decoded = tokenizer.decode(prompt_ids)
+    assert decoded.count("<instruction>") == 1
+    assert decoded.count("<response>") == 1
+
+
 def test_extract_user_request_uses_final_user_turn() -> None:
     prompt = (
         "<instruction>\n"
@@ -115,3 +131,20 @@ def test_cached_forward_respects_block_size() -> None:
 
     with pytest.raises(ValueError, match="exceeds model block size"):
         model.forward_cached(torch.tensor([[5]]), cache)
+
+
+def test_language_constraint_keeps_english_tokens(tmp_path) -> None:
+    tokenizer = BPETokenizer.train(
+        "Hello world. ಕನ್ನಡ ನಮಸ್ಕಾರ.",
+        vocab_size=128,
+        min_frequency=1,
+    )
+    runtime = object.__new__(LocalModelRuntime)
+    runtime.tokenizer = tokenizer
+    runtime._language_token_ids = {}
+
+    logits = torch.zeros((1, tokenizer.vocab_size))
+    constrained = runtime._apply_language_constraint(logits, "English")
+
+    assert torch.isfinite(constrained).any()
+    assert torch.all(constrained <= 0)

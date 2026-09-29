@@ -622,7 +622,7 @@ class LocalAIService:
             knowledge_answer = _knowledge_fallback_sentence(knowledge_query, knowledge_hits)
             if knowledge_answer is not None:
                 answer = knowledge_answer
-            elif intent.needs_research:
+            elif intent.needs_research and answer == _fallback_reply(prompt):
                 evidence_answer = _research_extract_fallback(research_results)
                 if evidence_answer is not None:
                     answer = evidence_answer
@@ -703,11 +703,7 @@ class LocalAIService:
                 if knowledge_answer is not None:
                     answer = knowledge_answer
                 else:
-                    evidence_answer = _research_extract_fallback(research_results)
-                    if evidence_answer is not None and intent.needs_research:
-                        answer = evidence_answer
-                    else:
-                        generation_failed = True
+                    generation_failed = True
 
         # Fresh/current questions must not receive a normal model answer without
         # the required research evidence. The model may still run so the request

@@ -231,6 +231,8 @@ class IndooneTransformer(nn.Module):
                 raise ValueError("cached layer count does not match model")
             if not past_key_values:
                 raise ValueError("cached layer state cannot be empty")
+            if length != 1:
+                raise ValueError("cached decoding accepts one generated token at a time")
             first_key = past_key_values[0][0]
             past_length = int(first_key.size(2))
             normalized_cache = tuple(past_key_values)

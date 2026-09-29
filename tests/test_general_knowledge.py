@@ -113,6 +113,9 @@ def test_question_to_topic_removes_common_english_prefixes() -> None:
     assert _question_to_topic("Explain gravity in simple words.") == "gravity"
     assert _question_to_topic("How many states are in India?") == "states are in India"
     assert _question_to_topic("How much water is on Earth?") == "water is on Earth"
+    assert _question_to_topic("ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?") == "ಭೂಮಿ ತಿರುಗುತ್ತದೆ"
+    assert _question_to_topic("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?") == "ಭಾರತದ ರಾಜಧಾನಿ"
+    assert _question_to_topic("ಗ್ರಾವಿಟಿ ಎಂದರೇನು") == "ಗ್ರಾವಿಟಿ"
 
 
 @pytest.mark.asyncio

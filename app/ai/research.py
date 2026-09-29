@@ -353,19 +353,41 @@ class MultiSourceResearchProvider(ResearchProvider):
         ]
         outcomes = await asyncio.gather(*tasks, return_exceptions=True)
 
+        # Keep a small result pool for each provider so one source cannot fill the
+        # whole answer before the other independent sources contribute evidence.
+        provider_results: list[list[ResearchResult]] = [[] for _ in self.providers]
+        outcome_index = 0
+        for provider_index in range(len(self.providers)):
+            per_provider_seen: set[str] = set()
+            for _ in variants:
+                outcome = outcomes[outcome_index]
+                outcome_index += 1
+                if isinstance(outcome, Exception):
+                    continue
+                for item in outcome:
+                    key = item.url.strip().rstrip("/").casefold()
+                    if key and key not in per_provider_seen:
+                        per_provider_seen.add(key)
+                        provider_results[provider_index].append(item)
+
         merged: list[ResearchResult] = []
         seen: set[str] = set()
-        for outcome in outcomes:
-            if isinstance(outcome, Exception):
-                continue
-            for item in outcome:
+        while len(merged) < limit and any(provider_results):
+            progressed = False
+            for results in provider_results:
+                if not results:
+                    continue
+                item = results.pop(0)
                 key = item.url.strip().rstrip("/").casefold()
                 if not key or key in seen:
                     continue
                 seen.add(key)
                 merged.append(item)
+                progressed = True
                 if len(merged) >= limit:
-                    return merged
+                    break
+            if not progressed:
+                break
         return merged
 
 

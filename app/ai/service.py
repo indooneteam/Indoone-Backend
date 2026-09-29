@@ -562,6 +562,7 @@ class LocalAIService:
 
         research = ""
         research_results: list[ResearchResult] = []
+        research_candidates: list[ResearchResult] = []
         research_blocked = False
         if intent.needs_research:
             if _research_provider is None:
@@ -570,6 +571,7 @@ class LocalAIService:
             else:
                 try:
                     candidate_results = await _research_provider.search(prompt, limit=8)
+                    research_candidates = candidate_results
                     if _research_has_enough_sources(candidate_results, intent.needs_cross_check):
                         research_results = candidate_results
                         research = format_research_context(candidate_results)
@@ -736,12 +738,18 @@ class LocalAIService:
                 else:
                     generation_failed = True
 
-        # Fresh/current questions must not receive a normal model answer without
-        # the required research evidence. The model may still run so the request
-        # path remains testable, but its answer is discarded.
+        # Fresh/current questions must not fall through to the tiny local model
+        # merely because source diversity is below the ideal threshold. When
+        # usable evidence exists, surface that evidence directly with its sources
+        # instead of returning the generic generation failure.
         if research_blocked and intent.needs_research:
-            answer = user_safe_failure()
-            research_results = []
+            research_answer = _research_extract_fallback(research_candidates)
+            if research_answer is not None:
+                answer = research_answer
+                research_results = research_candidates
+            else:
+                answer = user_safe_failure()
+                research_results = []
         elif generation_failed and intent.needs_research:
             # Do not attach research links to a failed synthesis; sources must
             # support a user-visible answer rather than accompany an error message.

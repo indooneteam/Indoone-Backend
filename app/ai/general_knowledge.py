@@ -7,6 +7,8 @@ from urllib.parse import quote
 
 import httpx
 
+from app.ai.language_detection import SCRIPT_RANGES
+
 
 DEFAULT_TIMEOUT_SECONDS = 6.0
 MAX_SUMMARY_CHARS = 2_500
@@ -130,6 +132,15 @@ class WikipediaKnowledgeProvider:
             "Urdu": "ur",
         }
         code = language_codes.get(language, "en")
+        # Romanized questions (for example, "gravity andre enu?") do not
+        # reliably search localized Wikipedia editions by their Latin spelling.
+        # Use English Wikipedia as the factual source when the query is Latin-only.
+        has_native_script = any(
+            pattern.search(query)
+            for _, pattern in _SCRIPT_RANGES
+        )
+        if language != "English" and re.search(r"[A-Za-z]", query) and not has_native_script:
+            code = "en"
         api_base = f"https://{code}.wikipedia.org"
         headers = {
             "Accept": "application/json",

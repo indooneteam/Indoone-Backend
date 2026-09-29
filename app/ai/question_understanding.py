@@ -102,6 +102,11 @@ _QUESTION_PREFIXES: tuple[tuple[str, str], ...] = (
     ("compare ", "comparison"),
     ("tell me about ", "about"),
     ("list ", "list"),
+    ("andre enu", "definition"),
+    ("enu", "definition"),
+    ("yaaru", "who"),
+    ("yaake", "why"),
+    ("hege", "how"),
 )
 
 _QUESTION_PREFIX_RE = re.compile(
@@ -160,6 +165,12 @@ def _question_type(normalized: str) -> str:
 
 def _topic_for_search(normalized: str) -> str:
     topic = _QUESTION_PREFIX_RE.sub("", normalized, count=1).strip(" ?!.")
+    romanized_tails = (" andre enu", " andre yen u", " enu", " yenu", " yaake", " hege", " yaaru")
+    lower = topic.casefold()
+    for tail in romanized_tails:
+        if lower.endswith(tail) and len(topic) > len(tail):
+            topic = topic[: -len(tail)].rstrip(" ?!.")
+            break
     trailing = (
         " in simple words", " in simple terms", " in simple language",
         " briefly", " in short",

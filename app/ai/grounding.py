@@ -35,9 +35,10 @@ def build_grounded_prompt_instruction() -> str:
     return (
         "<grounding>\n"
         "Use the supplied knowledge and research evidence when relevant. "
-        "Do not invent facts, sources, URLs, or details that are not supported "
-        "by the conversation or supplied evidence. When evidence is missing or "
-        "conflicting, say so clearly.\n"
+        "Synthesize all relevant evidence into one coherent answer; do not give "
+        "separate source-by-source answers. Do not invent facts, sources, URLs, "
+        "or details that are not supported by the conversation or supplied evidence. "
+        "When evidence is missing or conflicting, say so clearly.\n"
         "</grounding>"
     )
 

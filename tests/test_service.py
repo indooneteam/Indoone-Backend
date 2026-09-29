@@ -73,6 +73,21 @@ async def test_romanized_kannada_factual_question_bypasses_local_model(monkeypat
 
 
 @pytest.mark.asyncio
+async def test_open_ended_kannada_learning_request_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fail_model(*args, **kwargs):
+        raise AssertionError("local model must not run for an open-ended learning request")
+
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_research_provider", None)
+    monkeypatch.setattr(service, "_general_knowledge_provider", None)
+    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
+
+    reply = await service.generate_reply("ನನಗೆ ಒಂದು ಹೊಸ ವಿಷಯ ಕಲಿಸು")
+
+    assert reply.startswith("ಒಂದು ಹೊಸ ವಿಷಯ ಕಲಿಯೋಣ:")
+
+
+@pytest.mark.asyncio
 async def test_general_knowledge_answer_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeProvider:
         async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:

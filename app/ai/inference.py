@@ -203,7 +203,8 @@ class LocalModelRuntime:
         if evidence_response is not None:
             return evidence_response
 
-        match = self._instruction_retriever.retrieve(user_request)
+        retrieval_query = prompt if re.search(r"(?:^|\n)(?:user|assistant):\s*", prompt, flags=re.IGNORECASE) else user_request
+        match = self._instruction_retriever.retrieve(retrieval_query)
         if match is not None:
             return match.example.response.strip()
 

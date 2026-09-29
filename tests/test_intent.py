@@ -30,6 +30,14 @@ def test_lightweight_understanding_handles_romanized_kannada() -> None:
     assert understood.research_query == "gravity"
 
 
+def test_standalone_kannada_price_marker_still_triggers_research() -> None:
+    from app.ai.question_understanding import understand_question
+
+    understood = understand_question("ದರ ಎಷ್ಟು?")
+
+    assert understood.needs_research is True
+
+
 def test_kannada_definition_is_not_misclassified_as_research() -> None:
     from app.ai.question_understanding import understand_question
 

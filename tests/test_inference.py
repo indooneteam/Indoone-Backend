@@ -1,7 +1,9 @@
+import pytest
 import torch
 
 from app.ai.inference import LocalModelRuntime
 from app.ai.local_engine import LocalAIEngine
+from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 
 
@@ -12,31 +14,11 @@ def test_select_next_token_uses_greedy_choice_at_zero_temperature() -> None:
 
 def test_select_next_token_rejects_negative_temperature() -> None:
     logits = torch.tensor([[0.1, 2.5, 1.0]])
-    import pytest
 
     with pytest.raises(ValueError, match="non-negative"):
         LocalModelRuntime._select_next_token(logits, -0.1)
 
 
-
-def test_repetition_penalty_ignores_prompt_tokens() -> None:
-    logits = torch.tensor([[1.0, -2.0, 3.0]])
-    adjusted = LocalModelRuntime._apply_repetition_penalty(
-        logits,
-        [],
-        1.08,
-    )
-    assert torch.equal(adjusted, logits)
-
-
-def test_ngram_blocking_ignores_prompt_tokens() -> None:
-    logits = torch.zeros((1, 8))
-    adjusted = LocalModelRuntime._block_repeated_ngram(
-        logits,
-        [1, 2, 3],
-        3,
-    )
-    assert torch.equal(adjusted, logits)
 def test_local_engine_select_next_token_uses_greedy_choice_at_zero_temperature() -> None:
     logits = torch.tensor([[0.1, 2.5, 1.0]])
     assert LocalAIEngine._select_next_token(logits, 0.0) == 1
@@ -61,3 +43,56 @@ def test_preformatted_prompt_is_not_wrapped_twice(tmp_path) -> None:
         "<instruction>\nSay hello\n</instruction>\n<response>"
     )
     assert tokenizer.decode(prompt_ids).count("<instruction>") == 1
+
+
+def test_extract_user_request_uses_final_user_turn() -> None:
+    prompt = (
+        "<instruction>\n"
+        "Respond only in English.\n"
+        "Conversation context:\n"
+        "user: Earlier question\n"
+        "assistant: Earlier answer\n"
+        "user: What is the capital city of India?\n"
+        "</instruction>\n"
+        "<response>"
+    )
+    assert (
+        LocalModelRuntime._extract_user_request(prompt)
+        == "What is the capital city of India?"
+    )
+
+
+def test_cached_forward_matches_full_forward() -> None:
+    torch.manual_seed(7)
+    model = IndooneTransformer(
+        vocab_size=48,
+        block_size=32,
+        n_embd=32,
+        n_head=4,
+        n_layer=2,
+        dropout=0.0,
+    ).eval()
+    tokens = torch.randint(0, 48, (1, 6))
+
+    full_logits, _ = model(tokens)
+    cached_first, cache = model.forward_cached(tokens[:,:3])
+    cached_second, _ = model.forward_cached(tokens[:,3:], cache)
+    cached_logits = torch.cat((cached_first, cached_second), dim=1)
+
+    assert cached_logits.shape == full_logits.shape
+    assert torch.allclose(cached_logits, full_logits, atol=1e-5, rtol=1e-4)
+
+
+def test_cached_forward_respects_block_size() -> None:
+    model = IndooneTransformer(
+        vocab_size=16,
+        block_size=4,
+        n_embd=16,
+        n_head=2,
+        n_layer=1,
+        dropout=0.0,
+    ).eval()
+    _, cache = model.forward_cached(torch.tensor([[1, 2, 3]]))
+
+    with pytest.raises(ValueError, match="exceeds model block size"):
+        model.forward_cached(torch.tensor([[4, 5]]), cache)

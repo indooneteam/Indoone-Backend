@@ -61,7 +61,7 @@ def test_retrieval_matches_research_conflict_paraphrase() -> None:
     )
     assert match is not None
     assert match.example.category == "research"
-    assert "conflicting" in match.example.instruction.casefold() or "conflict" in match.example.instruction.casefold()
+    assert "disagree" in match.example.instruction.casefold() or "conflict" in match.example.instruction.casefold()
 
 
 def test_retrieval_matches_concise_transformer_paraphrase() -> None:

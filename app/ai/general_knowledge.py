@@ -80,7 +80,7 @@ class WikipediaKnowledgeProvider:
             extract=extract[:MAX_SUMMARY_CHARS],
         )
 
-    def _title_relevance_score(topic: str, title: str) -> int:
+def _title_relevance_score(topic: str, title: str) -> int:
     topic_normalized = " ".join(topic.casefold().split()).strip()
     title_normalized = " ".join(title.casefold().split()).strip()
     if not topic_normalized or not title_normalized:
@@ -101,11 +101,11 @@ class WikipediaKnowledgeProvider:
 
 
 async def _summary_candidates(
-        self,
-        client: httpx.AsyncClient,
-        api_base: str,
-        topic: str,
-    ) -> WikipediaAnswer | None:
+    self,
+    client: httpx.AsyncClient,
+    api_base: str,
+    topic: str,
+) -> WikipediaAnswer | None:
         normalized = " ".join(topic.strip().split())
         candidates = [normalized]
         variants = (

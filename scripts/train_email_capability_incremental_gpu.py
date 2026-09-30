@@ -27,15 +27,15 @@ from scripts.generate_email_training_expansion import build
 
 
 TRAIN_BUDGET_SECONDS = 55 * 60
-BATCH_SIZE = 8
-LEARNING_RATE = 1e-3
+BATCH_SIZE = 16
+LEARNING_RATE = 5e-4
 WEIGHT_DECAY = 1e-4
-MAX_STEPS = 6000
+MAX_STEPS = 4000
 EVAL_INTERVAL = 50
-EARLY_STOP_PATIENCE = 10
+EARLY_STOP_PATIENCE = 20
 
-EMAIL_ADAPTER_DIM = 192
-EMAIL_ADAPTER_LAYERS = 6
+EMAIL_ADAPTER_DIM = 384
+EMAIL_ADAPTER_LAYERS = 10
 
 MIN_EMAIL_ACCURACY = 0.75
 MIN_EMAIL_ACCURACY_GAIN = 0.10
@@ -436,8 +436,8 @@ def main() -> int:
         raise RuntimeError("Email-only training pool is empty.")
 
     sampling_weights = (
-        [0.90 / len(safety)] * len(safety)
-        + [0.10 / len(actions)] * len(actions)
+        [0.95 / len(safety)] * len(safety)
+        + [0.05 / len(actions)] * len(actions)
     )
     total = sum(sampling_weights)
     sampling_weights = [
@@ -794,6 +794,8 @@ def main() -> int:
         raise RuntimeError(
             "Existing behavior evaluation cases are missing."
         )
+
+    behavior_pass = behavior_preserved
 
     # General evaluation must remain exactly the same when the Email adapter is
     # disabled. The adapter is activated only by the email router.

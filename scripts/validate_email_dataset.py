@@ -9,7 +9,16 @@ ALLOWED_LABELS = {"legitimate", "spam", "phishing"}
 MAX_EMAIL_WORDS = 240
 MAX_RESPONSE_WORDS = 140
 FORBIDDEN_SECRET_PATTERNS = (
-    re.compile(r"\b\d{4,8}\b"),  # avoid training on OTP/PIN-like numeric secrets
+    re.compile(
+        r"\b(?:otp|one[- ]time|verification|security|pin|passcode|code)\s*"
+        r"[:=-]?\s*\d{4,8}\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:card|credit|debit)\s*(?:number|no\.?)?\s*[:=-]?\s*"
+        r"(?:\d[ -]?){12,19}\b",
+        re.IGNORECASE,
+    ),
     re.compile(r"\b(?:sk|pk)_[A-Za-z0-9_-]{16,}\b", re.IGNORECASE),
 )
 LIVE_URL_HINT = re.compile(r"https?://(?![^\s/]*example\.com\b)[^\s]+", re.IGNORECASE)

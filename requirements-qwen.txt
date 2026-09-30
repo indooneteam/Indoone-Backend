@@ -1,0 +1,4 @@
+# Candidate-only dependencies for the Qwen3-0.6B local runtime.
+# Keep the existing Indoone production requirements unchanged while this branch is evaluated.
+llama-cpp-python==0.3.35
+huggingface-hub>=0.34,<1.0

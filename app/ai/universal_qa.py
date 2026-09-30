@@ -215,7 +215,7 @@ class UniversalQuestionAnswerPipeline:
                     max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
                 )
             )
-        except (httpx.HTTPError, RuntimeError, ValueError):
+        except (httpx.HTTPError, RuntimeError, ValueError) as exc:
             raise RuntimeError("trained Indoone model generation failed") from exc
 
         grounded = append_sources(
@@ -240,7 +240,7 @@ class UniversalQuestionAnswerPipeline:
                     max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
                 )
             )
-        except (httpx.HTTPError, RuntimeError, ValueError):
+        except (httpx.HTTPError, RuntimeError, ValueError) as exc:
             raise RuntimeError("trained Indoone model retry generation failed") from exc
 
         retry_grounded = append_sources(

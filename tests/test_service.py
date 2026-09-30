@@ -53,6 +53,5 @@ async def test_service_fails_safely_without_universal_generation_provider(monkey
     monkeypatch.setattr(service, "_research_provider", None)
     monkeypatch.setattr(service, "_knowledge_base", None)
 
-    reply = await service.generate_reply("Answer an arbitrary question.")
-
-    assert reply.startswith("I’m sorry,")
+    with pytest.raises(RuntimeError, match="trained Indoone model provider is unavailable"):
+        await service.generate_reply("Answer an arbitrary question.")

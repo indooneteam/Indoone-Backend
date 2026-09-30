@@ -2,28 +2,28 @@ import pytest
 
 from app.ai import service
 from app.ai.knowledge import KnowledgeDocument, LocalKnowledgeBase
-from app.ai.local_engine import LocalAIEngine
 
 
 @pytest.mark.asyncio
-async def test_rag_context_is_injected_into_generation(monkeypatch) -> None:
-    knowledge = LocalKnowledgeBase([
-        KnowledgeDocument("pricing", "Pricing", "Indoone Pro costs 499 rupees per month.")
-    ])
-    captured: dict[str, str] = {}
+async def test_rag_context_is_supplied_to_universal_generation(monkeypatch: pytest.MonkeyPatch) -> None:
+    knowledge = LocalKnowledgeBase(
+        [KnowledgeDocument("pricing", "Pricing", "Reference price information.")]
+    )
+    captured: list[str] = []
 
-    async def fake_generate(context: str) -> str:
-        captured["context"] = context
-        return "The documented price is 499 rupees per month."
+    class FakeProvider:
+        async def generate(self, *, system_instruction: str, user_prompt: str, temperature: float, max_output_tokens: int) -> str:
+            captured.append(user_prompt)
+            return "A generated support reply based on the supplied context."
 
+    monkeypatch.setattr(service, "_universal_answer_provider", FakeProvider())
+    monkeypatch.setattr(service, "_research_provider", None)
     monkeypatch.setattr(service, "_knowledge_base", knowledge)
-    monkeypatch.setattr(service, "_runtime", None)
-    monkeypatch.setattr(service._fallback_engine, "generate", fake_generate)
-    monkeypatch.setattr(LocalAIEngine, "ready", property(lambda self: True))
 
-    result = await service.LocalAIService().generate("Write a short support reply about the Indoone Pro price.")
+    result = await service.LocalAIService().generate(
+        "Write a short support reply about the product price."
+    )
 
-    assert result == "The documented price is 499 rupees per month."
-    assert "Relevant knowledge:" in captured["context"]
-    assert "[pricing:1]" in captured["context"]
-    assert "499 rupees per month" in captured["context"]
+    assert result == "A generated support reply based on the supplied context."
+    assert "LOCAL KNOWLEDGE REFERENCE:" in captured[0]
+    assert "Reference price information." in captured[0]

@@ -19,6 +19,7 @@ from app.capabilities.integrations import (
     exchange_oauth_code,
     get_integration,
     list_integrations,
+    store_native_access_token,
 )
 from app.capabilities.media import save_media
 from app.capabilities.registry import list_capabilities
@@ -159,6 +160,12 @@ class IntegrationCallbackRequest(BaseModel):
     state: str = Field(min_length=16, max_length=512)
     code: str = Field(min_length=1, max_length=8_000)
 
+class NativeIntegrationTokenRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    access_token: str = Field(min_length=1, max_length=8_000)
+    scope: str = Field(default="", max_length=4_000)
+    expires_at: str | None = Field(default=None, max_length=128)
+
 
 @router.get("/capabilities")
 async def capabilities() -> dict[str, object]:
@@ -187,6 +194,24 @@ async def connect_integration(integration_id: str, request: IntegrationConnectRe
         return {**result, "state": state}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.post("/integrations/{integration_id}/native-token")
+async def integration_native_token(integration_id: str, request: NativeIntegrationTokenRequest) -> dict[str, object]:
+    try:
+        return await store_native_access_token(
+            request.user_id,
+            integration_id,
+            request.access_token,
+            request.scope,
+            request.expires_at,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="integration provider rejected the access token") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

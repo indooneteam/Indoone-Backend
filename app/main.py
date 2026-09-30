@@ -112,26 +112,6 @@ def _log_request(request: Request, request_id: str, started: float, status_code:
     )
 
 
-async def _model_warmup_loop() -> None:
-    """Warm the local model once after startup so first real chat is not a cold load."""
-    await asyncio.sleep(1.0)
-    for attempt in range(3):
-        if ai_service._runtime is not None:
-            logger.info("Indoone local model warmup already complete")
-            return
-        logger.info("Indoone local model warmup attempt %d/3", attempt + 1)
-        try:
-            runtime = await asyncio.to_thread(ai_service._load_local_model_runtime)
-            if runtime is not None:
-                logger.info("Indoone local model warmup completed")
-                return
-            logger.warning("Indoone local model warmup attempt %d did not load the runtime", attempt + 1)
-        except Exception:
-            logger.exception("Indoone local model warmup attempt %d failed", attempt + 1)
-        if attempt < 2:
-            await asyncio.sleep(15.0)
-
-
 async def _conversation_cleanup_loop() -> None:
     store = _CONVERSATION_CLEANUP_STORE
     while True:
@@ -152,13 +132,11 @@ async def lifespan(_: FastAPI):
     configure_sqlite_runtime()
     initialize_capability_store()
     cleanup_task = asyncio.create_task(_conversation_cleanup_loop())
-    warmup_task = asyncio.create_task(_model_warmup_loop())
     try:
         yield
     finally:
-        for task in (cleanup_task, warmup_task):
-            task.cancel()
-        for task in (cleanup_task, warmup_task):
+        cleanup_task.cancel()
+        for task in (cleanup_task,):
             try:
                 await task
             except asyncio.CancelledError:
@@ -319,5 +297,6 @@ async def health_details() -> dict[str, object]:
         "ai": {
             "model_artifacts_checked": ai_service._ARTIFACT_CHECK_COMPLETED,
             "model_runtime_ready": ai_service._runtime is not None,
+            "universal_qa_provider_ready": ai_service._universal_answer_provider is not None,
         },
     }

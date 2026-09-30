@@ -5,6 +5,8 @@ import hashlib
 import json
 import math
 import shutil
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -30,6 +32,9 @@ DEFAULT_MODEL_DIR = Path("models/indoone-small")
 DEFAULT_CANDIDATE_DIR = Path("models/indoone-email-capability-candidate")
 DEFAULT_SAFETY_TRAIN = Path("data/raw/indoone_email_safety_examples.jsonl")
 DEFAULT_ACTION_TRAIN = Path("data/raw/indoone_email_actions_examples.jsonl")
+DEFAULT_SAFETY_EXTRA = Path("data/raw/indoone_email_safety_additional_generated.jsonl")
+DEFAULT_ACTION_EXTRA = Path("data/raw/indoone_email_actions_additional_generated.jsonl")
+DEFAULT_EXPANSION_GENERATOR = Path("scripts/generate_email_training_expansion.py")
 DEFAULT_SAFETY_VALIDATION = Path("data/eval/email_safety_validation.jsonl")
 DEFAULT_SAFETY_TEST = Path("data/eval/email_safety_test.jsonl")
 DEFAULT_ANCHOR = Path("data/raw/core_instruction_seed.jsonl")
@@ -46,7 +51,7 @@ HARD_MAX_RUNTIME_SECONDS = 60 * 60
 SAFETY_WEIGHT = 0.80
 ACTION_WEIGHT = 0.10
 ANCHOR_WEIGHT = 0.10
-MAX_PLANNED_STEPS = 1200
+MAX_PLANNED_STEPS = 4000
 MIN_EMAIL_ACCURACY = 0.75
 MIN_EMAIL_ACCURACY_GAIN = 0.10
 
@@ -111,8 +116,10 @@ def _benchmark(
     model_dir: Path,
     pool: list[TrainingExample],
     sampling_weights: list[float],
+    device: str,
 ) -> float:
     model, tokenizer = _load_model(model_dir)
+    model = model.to(device)
     prepared = _prepare_instruction_examples(pool, tokenizer, model.block_size)
     optimizer = torch.optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
     generator = torch.Generator().manual_seed(4242)
@@ -296,7 +303,7 @@ def _write_initial_registry(path: Path, base_eval: dict[str, float | int | str])
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Auto-benchmark and incrementally train Indoone Email capability within a 55-minute CPU budget."
+        description="Auto-benchmark and incrementally train Indoone Email capability on the available device within a 55-minute training budget."
     )
     parser.add_argument("--model-dir", type=Path, default=DEFAULT_MODEL_DIR)
     parser.add_argument("--candidate-dir", type=Path, default=DEFAULT_CANDIDATE_DIR)
@@ -305,15 +312,29 @@ def main() -> int:
     parser.add_argument("--validation", type=Path, default=DEFAULT_SAFETY_VALIDATION)
     parser.add_argument("--test", type=Path, default=DEFAULT_SAFETY_TEST)
     parser.add_argument("--anchor", type=Path, default=DEFAULT_ANCHOR)
+    parser.add_argument("--safety-extra", type=Path, default=DEFAULT_SAFETY_EXTRA)
+    parser.add_argument("--action-extra", type=Path, default=DEFAULT_ACTION_EXTRA)
+    parser.add_argument("--no-generate-extra", action="store_true")
     parser.add_argument("--general-eval", type=Path, default=DEFAULT_GENERAL_EVAL)
     parser.add_argument("--registry", type=Path, default=DEFAULT_REGISTRY)
     args = parser.parse_args()
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"training_device: {device}", flush=True)
+    if device == "cuda":
+        print(f"gpu: {torch.cuda.get_device_name(0)}", flush=True)
+
+    if not args.no_generate_extra and (not args.safety_extra.is_file() or not args.action_extra.is_file()):
+        if not DEFAULT_EXPANSION_GENERATOR.is_file():
+            raise SystemExit(f"email training expansion generator is missing: {DEFAULT_EXPANSION_GENERATOR}")
+        subprocess.run([sys.executable, str(DEFAULT_EXPANSION_GENERATOR)], check=True)
 
     for required in (
         args.model_dir / "indoone-small.pt",
         args.model_dir / "tokenizer.json",
         args.safety_train,
         args.action_train,
+        args.safety_extra,
+        args.action_extra,
         args.validation,
         args.test,
         args.anchor,
@@ -322,8 +343,8 @@ def main() -> int:
         if not required.is_file():
             raise SystemExit(f"required training file is missing: {required}")
 
-    safety = load_examples(args.safety_train)
-    actions = load_examples(args.action_train)
+    safety = load_examples(args.safety_train) + load_examples(args.safety_extra)
+    actions = load_examples(args.action_train) + load_examples(args.action_extra)
     validation = load_examples(args.validation)
     test_cases = load_examples(args.test)
     anchors = load_examples(args.anchor)
@@ -347,7 +368,7 @@ def main() -> int:
         flush=True,
     )
 
-    speed = _benchmark(args.model_dir, pool, sampling_weights)
+    speed = _benchmark(args.model_dir, pool, sampling_weights, device)
     planned_steps = min(
         MAX_PLANNED_STEPS,
         max(1, int(speed * TRAIN_BUDGET_SECONDS * 0.95)),
@@ -364,7 +385,7 @@ def main() -> int:
     _write_initial_registry(args.registry, base_eval)
 
     model, tokenizer = _load_model(args.model_dir)
-    training = _train(model, tokenizer, pool, sampling_weights, validation, planned_steps)
+    training = _train(model, tokenizer, pool, sampling_weights, validation, planned_steps, device)
 
     args.candidate_dir.mkdir(parents=True, exist_ok=True)
     candidate_checkpoint = args.candidate_dir / "indoone-small.pt"

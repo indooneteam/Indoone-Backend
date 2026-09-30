@@ -264,7 +264,10 @@ class LocalAIService:
         history: list[tuple[str, str]] | None = None,
         document_context: str = "",
     ) -> str:
-        prompt_parts = [message.strip()]
+        cleaned_message = message.strip()
+        if not cleaned_message:
+            raise ValueError("message cannot be empty")
+        prompt_parts = [cleaned_message]
 
         if history:
             history_lines = []

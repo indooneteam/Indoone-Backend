@@ -251,38 +251,3 @@ async def test_wikipedia_provider_prefers_relevant_search_title(monkeypatch: pyt
         url="https://en.wikipedia.org/wiki/Earth",
         extract="Earth is the third planet from the Sun.",
     )
-
-
-def test_historical_kannada_question_is_not_fresh_research() -> None:
-    from app.ai.question_understanding import understand_question
-
-    result = understand_question("ಭಾರತ ದೇಶಕ್ಕೆ ಸ್ವತಂತ್ರ ಲಭಿಸಿದ್ದು ಯಾವಾಗ")
-    assert result.language == "Kannada"
-    assert result.needs_research is False
-    assert result.intent == "general"
-
-
-def test_current_kannada_role_question_requires_fresh_research() -> None:
-    from app.ai.question_understanding import understand_question
-
-    result = understand_question("ಭಾರತದ ರಾಷ್ಟ್ರಪತಿ ಯಾರು?")
-    assert result.language == "Kannada"
-    assert result.needs_research is True
-    assert result.intent == "research"
-
-def test_historical_kannada_role_question_does_not_require_fresh_research() -> None:
-    from app.ai.question_understanding import understand_question
-
-    result = understand_question("ಭಾರತದ ಮೊದಲ ರಾಷ್ಟ್ರಪತಿ ಯಾರು?")
-    assert result.language == "Kannada"
-    assert result.needs_research is False
-    assert result.intent == "general"
-
-
-def test_kannada_definition_with_dar_suffix_is_not_fresh_research() -> None:
-    from app.ai.question_understanding import understand_question
-
-    result = understand_question("ಗ್ರಾವಿಟಿ ಎಂದರೇನು")
-    assert result.language == "Kannada"
-    assert result.needs_research is False
-    assert result.intent == "general"

@@ -12,6 +12,8 @@ from urllib.parse import quote_plus, urlparse
 
 import httpx
 
+from app.ai.language_detection import detect_response_language
+
 MAX_TITLE_LENGTH = 500
 MAX_SNIPPET_LENGTH = 2_000
 MAX_RESEARCH_QUERIES = 6
@@ -214,10 +216,9 @@ class WikipediaResearchProvider(ResearchProvider):
 
     async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
         from app.ai.general_knowledge import WikipediaKnowledgeProvider
-        from app.ai.question_understanding import understand_question
 
         provider = WikipediaKnowledgeProvider(timeout=self.timeout)
-        language = understand_question(query).language
+        language = detect_response_language(query)
         answer = await provider.answer(query, language=language)
         if answer is None:
             return []

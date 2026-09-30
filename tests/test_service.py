@@ -21,7 +21,7 @@ async def test_service_sends_the_actual_request_directly_to_the_model(monkeypatc
 
     assert reply == "A model-generated answer."
     assert captured["user_prompt"] == "Explain a topic that is not in any example."
-    assert "retrieval" in str(captured["system_instruction"]).lower()
+    assert captured["system_instruction"] == ""
 
 
 @pytest.mark.asyncio

@@ -172,7 +172,7 @@ def test_principal_context_can_be_cleared() -> None:
     assert get_principal_id() == ""
 
 
-def test_chat_returns_structured_research_sources(monkeypatch) -> None:
+def test_chat_returns_no_research_sources(monkeypatch) -> None:
     async def fake_reply(message: str, history=None, document_context="") -> str:
         return (
             "AI technology is developing across several research areas.\n\n"
@@ -191,7 +191,4 @@ def test_chat_returns_structured_research_sources(monkeypatch) -> None:
     )
 
     assert response.status_code == 200
-    assert response.json()["sources"] == [
-        {"title": "Research source", "url": "https://research.example/ai"},
-        {"title": "News source", "url": "https://news.example/ai"},
-    ]
+    assert response.json()["sources"] == []

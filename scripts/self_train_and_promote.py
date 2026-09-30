@@ -146,7 +146,8 @@ def _behavior_gate(
     _run(
         [
             sys.executable,
-            "scripts/behavior_eval.py",
+            "-m",
+            "app.ai.behavior_eval",
             "--cases",
             str(behavior_cases),
             "--checkpoint",
@@ -382,9 +383,14 @@ def run_self_training(
         ):
             raise SystemExit("active model failed baseline behavioral gate")
 
+        checkpoint_digest = hashlib.sha256()
+        with (baseline_dir / "indoone-small.pt").open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                checkpoint_digest.update(chunk)
+        baseline_version = f"baseline-{checkpoint_digest.hexdigest()[:12]}"
         current = _initialize_registry(
             registry_path,
-            baseline_version=f"baseline-{hashlib.sha256((root.as_posix()).encode()).hexdigest()[:12]}",
+            baseline_version=baseline_version,
             baseline=baseline_eval,
         )
 

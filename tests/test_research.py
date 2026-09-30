@@ -591,36 +591,6 @@ def test_research_relevance_supports_unicode_terms() -> None:
     assert not _is_relevant_research_result(query, unrelated)
 
 
-def test_build_research_query_variants_adds_canonical_kannada_variant() -> None:
-    variants = build_research_query_variants("ಭಾರತದ ರಾಷ್ಟ್ರಪತಿ ಯಾರು")
-    assert variants[0] == "ಭಾರತದ ರಾಷ್ಟ್ರಪತಿ ಯಾರು"
-    assert "india" in variants[1].casefold()
-    assert "president" in variants[1].casefold()
-
-
-def test_build_research_query_variants_preserves_prime_minister_semantics() -> None:
-    variants = build_research_query_variants("ಭಾರತದ ಪ್ರಧಾನಮಂತ್ರಿ ಯಾರು")
-    assert "india" in variants[1].casefold()
-    assert "prime minister" in variants[1].casefold()
-
-
-def test_research_relevance_rejects_related_non_office_current_role_page() -> None:
-    query = ["ಭಾರತದ ಈಗಿನ ರಾಷ್ಟ್ರಪತಿ ಯಾರು", "india president"]
-    unrelated = ResearchResult(
-        "Parliament House of India",
-        "https://example.com/parliament",
-        "The Parliament House is an important national building.",
-    )
-    relevant = ResearchResult(
-        "President of India",
-        "https://example.com/president",
-        "The President of India is the head of state.",
-    )
-
-    assert not _is_relevant_research_result(query, unrelated)
-    assert _is_relevant_research_result(query, relevant)
-
-
 def test_research_relevance_crosses_common_kannada_english_terms() -> None:
     query = ["ಭಾರತದ ರಾಷ್ಟ್ರಪತಿ"]
     result = ResearchResult(

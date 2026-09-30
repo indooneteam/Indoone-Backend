@@ -337,7 +337,7 @@ async def test_broad_question_does_not_fall_through_to_local_model(monkeypatch: 
 
     reply = await service.generate_reply("ನೀನು ಯಾರು?")
 
-    assert reply == service.user_safe_failure()
+    assert reply.startswith("ನಾನು Indoone AI.")
 
 
 @pytest.mark.asyncio

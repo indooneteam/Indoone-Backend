@@ -123,17 +123,6 @@ class LocalModelRuntime:
         return logits
 
     @staticmethod
-    def _extract_user_request(prompt: str) -> str:
-        """Recover the final user message from a prepared inference context."""
-        marker = re.findall(
-            r"(?:^|\n)user:\s*(.+?)(?=\n(?:user|assistant):|\n</instruction>|\Z)",
-            prompt,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-        if marker:
-            return marker[-1].strip()
-        return prompt.strip()
-
     def _prompt_ids(self, prompt: str) -> list[int]:
         """Render a user request in the same instruction format used for training."""
         stripped_prompt = prompt.strip()
@@ -167,80 +156,6 @@ class LocalModelRuntime:
         return cleaned
 
     @staticmethod
-    def _supplied_evidence_response(prompt: str) -> str | None:
-        """Answer simple evidence-only prompts without inventing unsupported facts."""
-        match = re.search(
-            r"(?is)use only (?:this|the) supplied (?:research )?evidence\s*:\s*(.+?)"
-            r"(?:\n|\?|\Z)",
-            prompt,
-        )
-        if not match:
-            return None
-
-        evidence = " ".join(match.group(1).split()).strip()
-        if not evidence:
-            return None
-
-        sentence = re.split(r"(?<=[.!?])\s+", evidence)[0].strip()
-        if not sentence:
-            return None
-        return sentence[:800]
-
-    def _retrieved_response(self, prompt: str) -> str | None:
-        """Return a curated answer when the request closely matches known behavior guidance."""
-        user_request = self._extract_user_request(prompt)
-
-        evidence_response = self._supplied_evidence_response(user_request)
-        if evidence_response is not None:
-            return evidence_response
-
-        # A real research context must reach the model generation path. Do not
-        # let curated behavior retrieval replace evidence-backed synthesis.
-        if re.search(r"fresh research evidence:|<research>", prompt, flags=re.IGNORECASE):
-            return None
-
-        retrieval_query = prompt if re.search(r"(?:^|\n)(?:user|assistant):\s*", prompt, flags=re.IGNORECASE) else user_request
-        match = self._instruction_retriever.retrieve(retrieval_query)
-        if match is not None:
-            return match.example.response.strip()
-
-        # Behavior-oriented prompts are commonly phrased as paraphrases of the
-        # curated guidance. Use a lower retrieval threshold only for those
-        # policy-style requests, and combine a few high-confidence research
-        # guidance snippets rather than falling into low-signal generation.
-        normalized = " ".join(user_request.casefold().split())
-        policy_style = (
-            "how should " in normalized
-            or "what should " in normalized
-            or "when should " in normalized
-            or "should indoone " in normalized
-            or "what is the correct " in normalized
-            or "using the concise style" in normalized
-            or ("research" in normalized and "topic" in normalized)
-            or ("research notes" in normalized and "friendly" in normalized)
-            or ("after researching" in normalized and "context" in normalized)
-        )
-        if not policy_style:
-            return None
-
-        matches = self._instruction_retriever.retrieve_many(
-            user_request,
-            minimum_score=0.30,
-            limit=3,
-        )
-        if not matches:
-            return None
-
-        if len(matches) == 1 or matches[0].score >= 0.72:
-            return matches[0].example.response.strip()
-
-        responses: list[str] = []
-        for item in matches:
-            response = item.example.response.strip()
-            if response and response not in responses:
-                responses.append(response)
-        return " ".join(responses)
-
     def _allowed_token_ids_for_language(self, language: str) -> frozenset[int]:
         """Cache token ids that can safely contribute to the requested script."""
         normalized = language.strip().casefold() or "english"

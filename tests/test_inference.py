@@ -61,21 +61,10 @@ def test_preformatted_prompt_with_trailing_newline_is_not_wrapped_twice(tmp_path
     assert decoded.count("<response>") == 1
 
 
-def test_extract_user_request_uses_final_user_turn() -> None:
-    prompt = (
-        "<instruction>\n"
-        "Respond only in English.\n"
-        "Conversation context:\n"
-        "user: Earlier question\n"
-        "assistant: Earlier answer\n"
-        "user: What is the capital city of India?\n"
-        "</instruction>\n"
-        "<response>"
-    )
-    assert (
-        LocalModelRuntime._extract_user_request(prompt)
-        == "What is the capital city of India?"
-    )
+def test_runtime_has_no_question_specific_answer_retrieval() -> None:
+    assert not hasattr(LocalModelRuntime, "_retrieved_response")
+    assert not hasattr(LocalModelRuntime, "_supplied_evidence_response")
+    assert not hasattr(LocalModelRuntime, "_extract_user_request")
 
 
 def test_cached_forward_matches_full_forward() -> None:

@@ -431,25 +431,43 @@ def main() -> int:
     validation = load_examples(VALIDATION)
     test_cases = load_examples(TEST)
 
-    import re
-
     label_examples = []
+    supported_labels = ("legitimate", "spam", "phishing")
+
     for example in safety:
-        match = re.search(
-            r"Classification:\\s*(legitimate|spam|phishing)\\b",
-            example.response,
-            flags=re.IGNORECASE,
-        )
-        if match is None:
+        response_head = example.response.strip().casefold()
+        if not response_head.startswith("classification:"):
             raise RuntimeError(
-                "Email safety example is missing a supported classification label."
+                "Email safety example is missing the 'Classification:' prefix."
             )
+
+        label_text = response_head.split(":", 1)[1].strip()
+        label = next(
+            (
+                candidate
+                for candidate in supported_labels
+                if label_text.startswith(candidate)
+            ),
+            None,
+        )
+
+        if label is None:
+            raise RuntimeError(
+                "Email safety example has an unsupported classification label: "
+                f"{example.response[:120]!r}"
+            )
+
         label_examples.append(
             TrainingExample(
                 instruction=example.instruction,
-                response=f"Classification: {match.group(1).lower()}.",
+                response=f"Classification: {label}.",
                 category="email_safety_label",
             )
+        )
+
+    if len(label_examples) != len(safety):
+        raise RuntimeError(
+            "Email classification supervision count does not match safety data."
         )
 
     # Email-only pool: full safety explanations + compact label supervision

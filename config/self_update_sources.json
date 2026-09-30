@@ -1,0 +1,23 @@
+[
+  {
+    "name": "JPL News",
+    "url": "https://www.jpl.nasa.gov/feeds/news/",
+    "allowed_hosts": ["www.jpl.nasa.gov"],
+    "enabled": true,
+    "max_items": 12
+  },
+  {
+    "name": "WHO Africa Featured News",
+    "url": "https://afro.who.int/rss/featured-news.xml",
+    "allowed_hosts": ["afro.who.int"],
+    "enabled": true,
+    "max_items": 12
+  },
+  {
+    "name": "WHO Africa Emergencies",
+    "url": "https://afro.who.int/rss/emergencies.xml",
+    "allowed_hosts": ["afro.who.int"],
+    "enabled": true,
+    "max_items": 12
+  }
+]

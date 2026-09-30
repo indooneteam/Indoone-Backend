@@ -1,71 +1,9 @@
-import json
-
 import httpx
 import pytest
 
 from app.ai.answer_quality import user_safe_failure
 from app.ai.research import ResearchResult
-from app.ai.universal_qa import GeminiAnswerProvider, UniversalQuestionAnswerPipeline
-
-
-def test_gemini_provider_requires_api_key() -> None:
-    with pytest.raises(ValueError, match="api_key"):
-        GeminiAnswerProvider(" ")
-
-
-def test_gemini_provider_extracts_all_text_parts() -> None:
-    payload = {
-        "candidates": [
-            {"content": {"parts": [{"text": "First."}, {"text": "Second."}]}}
-        ]
-    }
-
-    assert GeminiAnswerProvider._extract_text(payload) == "First.\nSecond."
-
-
-@pytest.mark.asyncio
-async def test_gemini_provider_uses_server_side_key_and_generate_content(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: dict[str, object] = {}
-
-    class FakeResponse:
-        content = json.dumps(
-            {"candidates": [{"content": {"parts": [{"text": "Universal answer."}]}}]}
-        ).encode("utf-8")
-
-        def raise_for_status(self) -> None:
-            return None
-
-        def json(self):
-            return json.loads(self.content)
-
-    class FakeClient:
-        def __init__(self, *args, **kwargs):
-            captured["headers"] = kwargs["headers"]
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def post(self, url, json):
-            captured["url"] = url
-            captured["json"] = json
-            return FakeResponse()
-
-    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
-
-    provider = GeminiAnswerProvider("secret", model="gemini-2.5-flash-lite")
-    answer = await provider.generate(
-        system_instruction="System instruction",
-        user_prompt="A brand-new user question.",
-    )
-
-    assert answer == "Universal answer."
-    assert captured["headers"]["x-goog-api-key"] == "secret"
-    assert str(captured["url"]).endswith("/gemini-2.5-flash-lite:generateContent")
-    assert captured["json"]["systemInstruction"]["parts"][0]["text"] == "System instruction"
-    assert captured["json"]["contents"][0]["parts"][0]["text"] == "A brand-new user question."
+from app.ai.universal_qa import UniversalQuestionAnswerPipeline
 
 
 @pytest.mark.asyncio

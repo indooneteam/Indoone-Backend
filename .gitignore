@@ -9,9 +9,7 @@ data/processed/
 .env.*
 !.env.example
 
-# The trained Indoone runtime artifacts are intentionally tracked in this deployment
-# so Render can load the model locally without downloading it from object storage.
-# Keep the checkpoint and tokenizer below GitHub's 100 MB per-file hard limit.
+# Model/runtime artifacts are local deployment inputs and are intentionally excluded from Git.
 
 # Local runtime artifacts and generated state
 models/

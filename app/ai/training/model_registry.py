@@ -105,11 +105,16 @@ def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
         if candidate.revision == current.revision:
             raise ValueError("candidate revision must differ from the active revision")
 
+    # Keep the legacy strict improvement rule for version changes. A same-version
+    # capability update may declare a small metric tolerance because capability
+    # additions can trade a tiny amount of broad-language loss for the new skill.
+    if candidate.version != current.version:
+        return candidate.loss < current.loss and candidate.perplexity < current.perplexity
+
     tolerance = 1.0 + candidate.max_metric_regression
     return (
         candidate.loss <= current.loss * tolerance
         and candidate.perplexity <= current.perplexity * tolerance
-        and (candidate.loss < current.loss or candidate.perplexity < current.perplexity)
     )
 
 

@@ -16,4 +16,3 @@ def test_service_includes_retrieved_knowledge(monkeypatch) -> None:
     reply = asyncio.run(service.generate_reply("What model does Indoone use?"))
 
     assert reply == "Indoone uses a local Transformer model."
-    assert reply == "Indoone uses a local Transformer model."

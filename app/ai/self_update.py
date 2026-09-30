@@ -96,7 +96,10 @@ def _clean_text(value: str, maximum: int) -> str:
     text = html.unescape(value or "")
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", " ", text)
-    return " ".join(text.split()).strip()[:maximum]
+    text = " ".join(text.split()).strip()
+    for punctuation in (".", ",", "!", "?", ":", ";"):
+        text = text.replace(f" {punctuation}", punctuation)
+    return text[:maximum]
 
 
 def _host_allowed(url: str, allowed_hosts: tuple[str, ...]) -> bool:

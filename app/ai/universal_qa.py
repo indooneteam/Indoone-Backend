@@ -262,7 +262,7 @@ class UniversalQuestionAnswerPipeline:
             return []
         if self.research_provider is None:
             raise RuntimeError("live research is unavailable")
-        query = understanding.research_query.strip() or understanding.normalized
+        query = understanding.normalized
         try:
             return await self.research_provider.search(query, limit=MAX_RESEARCH_RESULTS)
         except (httpx.HTTPError, RuntimeError, ValueError) as exc:

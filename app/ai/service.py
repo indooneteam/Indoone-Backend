@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import asyncio
 from pathlib import Path
 import logging
+import os
 import threading
 from typing import TYPE_CHECKING
 import re
@@ -17,6 +18,9 @@ from app.storage.github_release import GitHubReleaseStorageError, get_github_rel
 
 
 logger = logging.getLogger(__name__)
+
+def _qwen_backend_enabled() -> bool:
+    return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "qwen"
 
 if TYPE_CHECKING:
     from app.ai.inference import LocalModelRuntime
@@ -280,6 +284,14 @@ class LocalAIService:
 
         if document_context.strip():
             prompt_parts.extend(["", "USER-PROVIDED DOCUMENT:", document_context.strip()[:100_000]])
+
+        if _qwen_backend_enabled():
+            from app.ai.qwen_service import generate_qwen_reply
+            return await generate_qwen_reply(
+                cleaned_message,
+                history=history,
+                document_context=document_context,
+            )
 
         if _model_answer_provider is None:
             raise RuntimeError("trained Indoone model provider is unavailable")

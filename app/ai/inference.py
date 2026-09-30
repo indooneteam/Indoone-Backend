@@ -7,7 +7,6 @@ import torch
 
 from app.ai.language_detection import SCRIPT_RANGES
 
-from app.ai.instruction_retrieval import InstructionRetriever
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 from app.ai.training.training_data import format_instruction_prompt
@@ -22,7 +21,7 @@ MIN_GENERATED_TOKENS_BEFORE_EOS = 4
 
 
 class LocalModelRuntime:
-    """Load an Indoone local language model with a high-confidence answer fallback."""
+    """Load the trained Indoone local language model and generate model output."""
 
     def __init__(self, checkpoint_path: Path, tokenizer_path: Path) -> None:
         # Render's free instance has a fractional CPU allocation. Limit Torch
@@ -64,12 +63,6 @@ class LocalModelRuntime:
         del checkpoint
         self.model.eval()
 
-        project_root = Path(__file__).resolve().parents[2]
-        sources = tuple(
-            project_root / relative
-            for relative in InstructionRetriever.DEFAULT_SOURCES
-        )
-        self._instruction_retriever = InstructionRetriever(sources)
         self._language_token_ids: dict[str, frozenset[int]] = {}
 
     @staticmethod
@@ -352,10 +345,6 @@ class LocalModelRuntime:
         if use_email_adapter is None:
             use_email_adapter = self._is_email_request(prompt)
 
-        if not use_email_adapter:
-            retrieved = self._retrieved_response(prompt)
-            if retrieved is not None:
-                return retrieved
 
         prompt_ids = self._prompt_ids(prompt)
         if len(prompt_ids) > self.model.block_size:

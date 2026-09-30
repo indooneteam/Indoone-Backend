@@ -107,8 +107,3 @@ def assess_answer(question: str, answer: str) -> AnswerQuality:
 
     return AnswerQuality(True)
 
-
-def user_safe_failure() -> str:
-    """Return a neutral message when the generated answer fails the gate."""
-
-    return "I’m sorry, I don’t have enough reliable information to give you a confident answer right now."

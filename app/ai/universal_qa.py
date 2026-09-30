@@ -12,7 +12,7 @@ from typing import Protocol
 
 import httpx
 
-from app.ai.answer_quality import assess_answer, user_safe_failure
+from app.ai.answer_quality import assess_answer
 from app.ai.grounding import GroundedEvidence, append_sources
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
 from app.ai.question_understanding import QuestionUnderstanding, understand_question
@@ -169,17 +169,17 @@ class UniversalQuestionAnswerPipeline:
         history = history or []
 
         if self.provider is None:
-            return user_safe_failure()
+            raise RuntimeError("trained Indoone model provider is unavailable")
 
         try:
             research_results = await self._collect_research(understanding)
         except RuntimeError:
             if understanding.needs_research:
-                return user_safe_failure()
+                raise RuntimeError("live research is unavailable") from exc
             research_results = []
 
         if understanding.needs_research and not research_results:
-            return user_safe_failure()
+            raise RuntimeError("live research returned no usable evidence")
 
         research_context = format_research_context(
             research_results,
@@ -216,7 +216,7 @@ class UniversalQuestionAnswerPipeline:
                 )
             )
         except (httpx.HTTPError, RuntimeError, ValueError):
-            return user_safe_failure()
+            raise RuntimeError("trained Indoone model generation failed") from exc
 
         grounded = append_sources(
             answer,
@@ -241,14 +241,14 @@ class UniversalQuestionAnswerPipeline:
                 )
             )
         except (httpx.HTTPError, RuntimeError, ValueError):
-            return user_safe_failure()
+            raise RuntimeError("trained Indoone model retry generation failed") from exc
 
         retry_grounded = append_sources(
             retry_answer,
             [GroundedEvidence(item.title, item.url, item.snippet) for item in research_results],
         )
         if not assess_answer(prompt, retry_grounded).passed:
-            return user_safe_failure()
+            raise RuntimeError("trained Indoone model output failed quality checks")
         return retry_grounded
 
 

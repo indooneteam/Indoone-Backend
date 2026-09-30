@@ -211,12 +211,12 @@ async def integration_callback_browser(
         await exchange_oauth_code(integration_id, state, code)
     except ValueError as exc:
         return HTMLResponse(
-            f"<html><body><h2>Indoone Gmail connection failed</h2><p>{str(exc)}</p><p>Return to Indoone and try again.</p></body></html>",
+            "<html><body><h2>Indoone connection failed</h2><p>The authorization could not be completed.</p><p>Return to Indoone and try again.</p></body></html>",
             status_code=400,
         )
     except (RuntimeError, httpx.HTTPError) as exc:
         return HTMLResponse(
-            f"<html><body><h2>Indoone connection failed</h2><p>{str(exc)}</p><p>Return to Indoone and try again.</p></body></html>",
+            "<html><body><h2>Indoone connection failed</h2><p>The authorization service could not complete the connection.</p><p>Return to Indoone and try again.</p></body></html>",
             status_code=502,
         )
     return HTMLResponse(

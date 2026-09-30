@@ -68,11 +68,11 @@ def _require_artifacts(model_dir: Path, behavior_cases: Path) -> None:
 
 def promote_model(
     version: str,
-    revision: str | None,
     model_dir: Path,
     behavior_cases: Path,
     registry_path: Path,
     evaluation_report_path: Path | None = None,
+    revision: str | None = None,
 ) -> ModelRecord:
     _require_artifacts(model_dir, behavior_cases)
     report_path = evaluation_report_path or (model_dir / "evaluation_report.json")

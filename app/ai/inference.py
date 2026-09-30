@@ -11,14 +11,12 @@ from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 from app.ai.training.training_data import format_instruction_prompt
 
-
 DEFAULT_MAX_NEW_TOKENS = 192
 DEFAULT_TEMPERATURE = 0.0
 DEFAULT_REPETITION_PENALTY = 1.08
 DEFAULT_NO_REPEAT_NGRAM_SIZE = 3
 DEFAULT_TOP_K = 64
 MIN_GENERATED_TOKENS_BEFORE_EOS = 4
-
 
 class LocalModelRuntime:
     """Load the trained Indoone local language model and generate model output."""
@@ -305,7 +303,6 @@ class LocalModelRuntime:
                 return logits
         return constrained
 
-
     @staticmethod
     def _is_email_request(prompt: str) -> bool:
         """Detect email-focused requests so the capability adapter is isolated."""
@@ -344,7 +341,6 @@ class LocalModelRuntime:
             raise ValueError("no_repeat_ngram_size must be non-negative")
         if use_email_adapter is None:
             use_email_adapter = self._is_email_request(prompt)
-
 
         prompt_ids = self._prompt_ids(prompt)
         if len(prompt_ids) > self.model.block_size:

@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.ai.agent_async import execute_agent_async
-from app.ai.answer_quality import assess_answer
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
 from app.ai.grounding import extract_sources
@@ -124,13 +123,6 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    quality = assess_answer(body.message, reply)
-    if not quality.passed:
-        raise HTTPException(
-            status_code=502,
-            detail=f"model_output_quality_gate_failed:{quality.reason}",
-        )
 
     try:
         _store.append(

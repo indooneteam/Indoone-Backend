@@ -252,10 +252,8 @@ class _LocalModelAnswerProvider:
         except (RuntimeError, ValueError) as exc:
             raise RuntimeError("trained Indoone local model generation failed") from exc
 
-from app.ai.universal_qa import UniversalQuestionAnswerPipeline
 
-
-_universal_answer_provider = _LocalModelAnswerProvider()
+_model_answer_provider = _LocalModelAnswerProvider()
 
 
 class LocalAIService:
@@ -288,9 +286,9 @@ class LocalAIService:
             "templates, or fallback responses. Think through the request before "
             "returning the answer. Use the user's language and writing style."
         )
-        if _universal_answer_provider is None:
+        if _model_answer_provider is None:
             raise RuntimeError("trained Indoone model provider is unavailable")
-        return await _universal_answer_provider.generate(
+        return await _model_answer_provider.generate(
             system_instruction=system_instruction,
             user_prompt="\n".join(prompt_parts),
             temperature=0.2,

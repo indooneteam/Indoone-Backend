@@ -14,24 +14,25 @@ The model must say when it cannot verify a claim from the email alone and should
 
 ## Dataset size and split
 
-Final curated target: **540 Email Safety examples**, split into 360 train, 90 validation, and 90 test. A separate small Email Actions pack teaches compose/reply/send confirmation behavior and is mixed into incremental training.
+Current controlled set: **1020 Email Safety examples**, split into 840 train, 90 validation, and 90 test. The 840 training examples consist of the original 360 plus a deterministic 480-example expansion. A separate small Email Actions pack teaches compose/reply/send confirmation behavior and is mixed into incremental training.
 
 | Split | Total | Legitimate | Spam | Phishing |
 |---|---:|---:|---:|---:|
-| Train | 360 | 120 | 120 | 120 |
+| Train | 840 | 280 | 280 | 280 |
 | Validation | 90 | 30 | 30 | 30 |
 | Test | 90 | 30 | 30 | 30 |
 
-Do not expand beyond this first controlled release until the 30-minute CPU training benchmark and evaluation results justify expansion.
+The expansion was added as a controlled incremental-training pool because Colab GPU is being used. Validation and test splits remain held out.
 
 The 540 examples are a quality-controlled first capability dataset, not the only data Indoone may ever need.
 
 ## Final files
 
-- `data/raw/indoone_email_safety_examples.jsonl` — 360 training examples.
+- `data/raw/indoone_email_safety_examples.jsonl` — 360 original training examples.
 - `data/eval/email_safety_validation.jsonl` — 90 held-out validation examples.
 - `data/eval/email_safety_test.jsonl` — 90 held-out test examples.
-- `data/raw/indoone_email_actions_examples.jsonl` — small action-behavior pack for compose, reply, and explicit-send confirmation.
+- `data/raw/indoone_email_actions_examples.jsonl` — 17 original action examples for compose, reply, and explicit-send confirmation.
+- `scripts/generate_email_training_expansion.py` — deterministic additional pack generator: 480 Email Safety + 90 Email Actions.
 
 ## Example format
 
@@ -145,9 +146,9 @@ Email Safety is an **incremental SFT capability** on top of the current Indoone 
 
 Do not retrain the base model from scratch for this capability.
 
-The incremental training pool must contain:
-- the curated Email Safety training examples;
-- the small Email Actions behavior pack;
+The incremental training pool contains:
+- the curated Email Safety training examples plus the deterministic 480-example expansion;
+- the Email Actions behavior pack plus the deterministic 90-example expansion;
 - a small, fixed set of existing general-behavior anchor examples to reduce regression.
 
 The final candidate must pass both:

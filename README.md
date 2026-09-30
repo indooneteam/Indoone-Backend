@@ -44,7 +44,7 @@ The processed dataset is a generated training artifact and should not be committ
 ## Project structure
 
 - `app/api/` — HTTP API routes
-- `app/ai/` — tokenizer, Transformer model, training, local inference, knowledge, and research
+- `app/ai/` — local AI runtime and domain modules; `app/ai/training/` contains model training and evaluation
 - `data/raw/` — source training documents
 - `data/knowledge/` — approved local knowledge sources
 - `data/processed/` — generated train/validation/test splits
@@ -57,7 +57,7 @@ The processed dataset is a generated training artifact and should not be committ
 ```bash
 python -m pip install -r requirements.txt
 python -m scripts.prepare_dataset --source data/raw/indoone_corpus.txt --output-dir data/processed
-python -m app.ai.train --corpus data/processed/train.txt --output models/indoone-small --steps 2000
+python -m app.ai.training.train --corpus data/processed/train.txt --output models/indoone-small --steps 2000
 ```
 
 Training writes a tokenizer, checkpoint, and metadata under `models/indoone-small/`.

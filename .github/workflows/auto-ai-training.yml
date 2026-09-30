@@ -12,7 +12,7 @@ on:
       - "data/eval/**"
       - "data/evaluation/**"
       - "scripts/**"
-      - "training_manifest.json"
+      - "config/training/training_manifest.json"
       - ".github/workflows/auto-ai-training.yml"
   workflow_dispatch:
     inputs:

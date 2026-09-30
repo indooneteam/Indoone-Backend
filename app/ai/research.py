@@ -24,6 +24,8 @@ _RESEARCH_QUERY_STOPWORDS = {
     "on", "please", "research", "simple", "source", "sources", "summary",
     "tell", "the", "this", "to", "today", "what", "when", "with", "explain",
     "latest", "current", "currently", "recent", "information", "find", "search",
+    "ಯಾರು", "ಯಾಕೆ", "ಏಕೆ", "ಏನಕ್ಕೆ", "ಯಾಕಾಗಿ", "ಏಕೆಗಾಗಿ", "ಯಾವ", "ಯಾವುದು",
+    "ಯಾವಾಗ", "ಎಲ್ಲಿ", "ಹೇಗೆ", "ಏನು", "ಎಷ್ಟು", "ಬಗ್ಗೆ", "ವಿವರಿಸಿ", "ಮತ್ತು",
 }
 _RESEARCH_TERM_ALIASES = {
     "ai": {"ai", "artificial", "intelligence"},
@@ -37,6 +39,8 @@ _RESEARCH_TERM_ALIASES = {
     "ರಾಜಧಾನಿ": {"ರಾಜಧಾನಿ", "capital"},
     "ಸ್ವಾತಂತ್ರ್ಯ": {"ಸ್ವಾತಂತ್ರ್ಯ", "independence", "independent"},
     "ಭೂಮಿ": {"ಭೂಮಿ", "earth"},
+    "ತಿರುಗುತ್ತದೆ": {"ತಿರುಗುತ್ತದೆ", "rotation", "rotates"},
+    "ತಿರುಗುವುದು": {"ತಿರುಗುವುದು", "rotation", "rotates"},
     "ಗುರುತ್ವ": {"ಗುರುತ್ವ", "gravity"},
     "ಹವಾಮಾನ": {"ಹವಾಮಾನ", "weather"},
     "ಬೆಲೆ": {"ಬೆಲೆ", "price", "cost"},
@@ -120,13 +124,27 @@ def build_research_query_variants(query: str, max_variants: int = MAX_QUERY_VARI
         raise ValueError(f"max_variants must be between 1 and {MAX_QUERY_VARIANTS}")
 
     variants = [normalized]
-    latin_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", normalized)
-    filtered_terms = [
-        term
-        for term in latin_terms
-        if term.casefold() not in _RESEARCH_QUERY_STOPWORDS
-    ]
-    english_variant = " ".join(filtered_terms).strip()
+
+    # Build a canonical English-ish variant for Indic-script questions so
+    # Wikidata/news/research providers can search more reliably than with a
+    # literal regional-language sentence. Preserve unknown terms rather than
+    # dropping them so the variant still carries the user's subject.
+    canonical_terms: list[str] = []
+    for token in _research_terms(normalized):
+        token_lower = token.casefold()
+        if token_lower in _RESEARCH_QUERY_STOPWORDS:
+            continue
+        aliases = _RESEARCH_TERM_ALIASES.get(token_lower)
+        if aliases:
+            english = next(
+                (item for item in aliases if re.fullmatch(r"[A-Za-z][A-Za-z-]*", item)),
+                token,
+            )
+            canonical_terms.append(english)
+        elif re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", token):
+            canonical_terms.append(token)
+
+    english_variant = " ".join(dict.fromkeys(canonical_terms)).strip()
     if english_variant and english_variant.casefold() != normalized.casefold():
         variants.append(english_variant)
     return variants[:max_variants]
@@ -479,6 +497,27 @@ def _is_relevant_research_result(query_variants: list[str], result: ResearchResu
 
     if len(query_terms) <= 1:
         return bool(matched_terms) and score >= 3.0
+
+    # Current-office questions need evidence that ties the office to its
+    # subject in the same title/snippet field. This rejects related pages such
+    # as buildings or institutions that merely mention the office holder.
+    role_pairs = (
+        ({"president", "ರಾಷ್ಟ್ರಪತಿ"}, {"india", "indian", "ಭಾರತ", "ಭಾರತದ"}),
+        ({"prime", "minister", "ಪ್ರಧಾನಮಂತ್ರಿ"}, {"india", "indian", "ಭಾರತ", "ಭಾರತದ"}),
+        ({"minister", "ಮಂತ್ರಿ"}, {"india", "indian", "ಭಾರತ", "ಭಾರತದ"}),
+    )
+    for role_terms, subject_terms in role_pairs:
+        role_hit = bool(role_terms & query_terms)
+        subject_hit = bool(subject_terms & query_terms)
+        if role_hit and subject_hit:
+            title_and_snippet = (title_terms, snippet_terms)
+            role_subject_same_field = any(
+                bool(role_terms & field_terms) and bool(subject_terms & field_terms)
+                for field_terms in title_and_snippet
+            )
+            if not role_subject_same_field:
+                return False
+            break
 
     return len(matched_terms) >= 2 and score >= MIN_RESEARCH_RELEVANCE_SCORE
 

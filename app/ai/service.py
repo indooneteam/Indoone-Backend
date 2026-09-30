@@ -278,19 +278,15 @@ class LocalAIService:
         if document_context.strip():
             prompt_parts.extend(["", "USER-PROVIDED DOCUMENT:", document_context.strip()[:100_000]])
 
-        system_instruction = (
-            "You are Indoone AI. Answer the user's actual request directly using "
-            "the knowledge learned by your trained Indoone model. Do not use or "
-            "invent external sources, tools, retrieval results, canned answers, "
-            "templates, or fallback responses. Think through the request before "
-            "returning the answer. Use the user's language and writing style."
-        )
         if _model_answer_provider is None:
             raise RuntimeError("trained Indoone model provider is unavailable")
+        # Keep inference on the same prompt distribution used during SFT:
+        # <instruction> contains the user's request directly, without injecting
+        # a long runtime policy/system prefix that was not part of training.
         return await _model_answer_provider.generate(
-            system_instruction=system_instruction,
+            system_instruction="",
             user_prompt="\n".join(prompt_parts),
-            temperature=0.2,
+            temperature=0.0,
             max_output_tokens=_MODEL_MAX_NEW_TOKENS,
         )
 

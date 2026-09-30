@@ -409,13 +409,11 @@ def test_agent_routes_email_compose_request() -> None:
     assert steps[0].requires_approval is False
 
 
-def test_agent_routes_approved_email_reply() -> None:
-    token = _approval_token("user-1", "gmail_reply")
-    execution = execute_agent(
+def test_agent_routes_email_reply() -> None:
+    steps = build_agent_steps(
         "reply to email m123: Thanks, I can attend.",
         user_id="user-1",
-        approval_tokens={token},
     )
-    assert len(execution.steps) == 1
-    assert execution.steps[0].tool == "gmail_reply"
-    assert execution.steps[0].requires_approval is True
+    assert len(steps) == 1
+    assert steps[0].tool == "gmail_reply"
+    assert steps[0].requires_approval is True

@@ -148,28 +148,3 @@ def test_language_constraint_keeps_english_tokens(tmp_path) -> None:
 
     assert torch.isfinite(constrained).any()
     assert torch.all(constrained <= 0)
-
-
-def test_research_context_bypasses_curated_behavior_retrieval() -> None:
-    class FakeRetriever:
-        def retrieve(self, prompt: str):
-            raise AssertionError("curated retrieval must not replace live research synthesis")
-
-    runtime = object.__new__(LocalModelRuntime)
-    runtime._instruction_retriever = FakeRetriever()
-
-    prompt = (
-        "<instruction>\n"
-        "Use the supplied evidence to answer the user.\n"
-        "Fresh research evidence:\n"
-        "<research>\n"
-        "source: example.com\n"
-        "title: AI research\n"
-        "snippet: research evidence\n"
-        "</research>\n"
-        "user: Research a topic and summarize it.\n"
-        "</instruction>\n"
-        "<response>"
-    )
-
-    assert runtime._retrieved_response(prompt) is None

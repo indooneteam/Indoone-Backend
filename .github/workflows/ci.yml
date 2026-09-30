@@ -5,6 +5,7 @@ on:
     branches:
       - develop
       - main
+      - terminal
   pull_request:
     branches:
       - main
@@ -47,6 +48,9 @@ jobs:
                   ast.parse("".join(cell.get("source", [])), filename=f"colab-cell-{index}")
           print("colab_notebook_python=valid")
           PY
+
+      - name: Verify Qwen runtime import
+        run: python -c "from app.ai.qwen_runtime import QwenLocalModelRuntime; print('qwen_runtime_import=ok')"
 
       - name: Run tests
         run: >-

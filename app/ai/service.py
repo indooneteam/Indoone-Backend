@@ -546,6 +546,27 @@ def _research_extract_fallback(
     return " ".join(candidates[0].snippet.split()).strip()[:1200]
 
 
+def _is_current_office_question(message: str) -> bool:
+    """Identify present office-holder questions that should use source evidence directly."""
+    normalized = " ".join(message.casefold().split())
+    role_markers = (
+        "president", "prime minister", "minister",
+        "ರಾಷ್ಟ್ರಪತಿ", "ಪ್ರಧಾನಮಂತ್ರಿ", "ಮಂತ್ರಿ",
+    )
+    present_markers = (
+        "current", "currently", "latest", "now", "today", "right now",
+        "ಈಗ", "ಈಗಿನ", "ಪ್ರಸ್ತುತ", "ಸದ್ಯ", "ಇಂದಿನ",
+    )
+    historical_markers = (
+        "first", "former", "formerly", "historical", "history", "was", "were",
+        "ಮೊದಲ", "ಹಿಂದಿನ", "ಭೂತಪೂರ್ವ", "ಇತಿಹಾಸ",
+    )
+    has_role = any(marker in normalized for marker in role_markers)
+    has_present = any(marker in normalized for marker in present_markers)
+    has_historical = any(marker in normalized for marker in historical_markers)
+    return has_role and has_present and not has_historical
+
+
 def _generation_error_reply(language: str) -> str:
     messages = {
         "Kannada": "ಕ್ಷಮಿಸಿ, ಈ ಪ್ರಶ್ನೆಗೆ ಈಗ ಸರಿಯಾದ ಉತ್ತರವನ್ನು ರಚಿಸಲು ನನಗೆ ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಕೇಳಿ.",
@@ -655,6 +676,15 @@ class LocalAIService:
         # the tiny local model is unavailable or produces unusable output.
         if _is_learning_request(prompt):
             return _learning_fallback_reply(language)
+
+        # Present office-holder questions are factual lookup requests, not good
+        # candidates for tiny-model synthesis. Return the strongest filtered
+        # source evidence directly so related-but-wrong pages cannot be turned
+        # into an invented answer.
+        if _is_current_office_question(prompt) and research_results:
+            office_answer = _research_extract_fallback(research_results, prompt)
+            if office_answer is not None:
+                return append_sources(office_answer, _evidence_from_results(research_results))
 
         # A strongly matched approved local fact can answer immediately without
         # paying the CPU cost of model loading/generation.

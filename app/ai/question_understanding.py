@@ -60,6 +60,13 @@ _FRESH_MARKERS = (
 
 )
 
+_KANNADA_FRESH_MARKERS = (
+    "ಇವತ್ತು", "ಇತ್ತೀಚಿನ", "ಈಗ", "ಈಗಿನ", "ಪ್ರಸ್ತುತ", "ಸದ್ಯ", "ಇಂದಿನ",
+    "ರಾಷ್ಟ್ರಪತಿ", "ಪ್ರಧಾನಮಂತ್ರಿ", "ಮಂತ್ರಿ",
+    "ದರ", "ಹವಾಮಾನ", "ಫಲಿತಾಂಶ", "ಬೆಲೆ",
+)
+
+
 _CROSS_CHECK_MARKERS = (
     "price", "cost", "stock", "weather", "forecast", "score", "election",
     "law", "regulation", "policy", "exchange rate", "currency rate",

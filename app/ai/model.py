@@ -5,7 +5,7 @@ from torch import nn
 from torch.nn import functional as F
 
 
-MODEL_VERSION = "indoone-gpt-v2"
+MODEL_VERSION = "indoone-gpt-v1"
 
 
 class DecoderBlock(nn.Module):

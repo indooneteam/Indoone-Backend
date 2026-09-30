@@ -1,0 +1,39 @@
+name: Gemma 3 270M IT Candidate Smoke Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - candidate/gemma3-270m-it
+
+jobs:
+  gemma-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install llama.cpp Python CPU wheel
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install             "llama-cpp-python==0.3.35"             --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+      - name: Download and verify Gemma
+        run: |
+          python -m pip install "huggingface-hub>=0.34,<1.0"
+          python scripts/download_gemma_model.py             --repo-id bartowski/google_gemma-3-270m-it-GGUF             --filename google_gemma-3-270m-it-Q4_K_M.gguf             --local-dir models/gemma3-270m-it
+
+      - name: Run CPU smoke test
+        run: |
+          env PYTHONPATH=. /usr/bin/time -v python scripts/test_gemma_model.py             --model models/gemma3-270m-it/google_gemma-3-270m-it-Q4_K_M.gguf             2>&1 | tee gemma-smoke.txt
+
+      - name: Upload smoke output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gemma-smoke-output
+          path: gemma-smoke.txt

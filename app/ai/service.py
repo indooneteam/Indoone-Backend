@@ -27,7 +27,7 @@ from app.ai.grounding import (
 from app.ai.intent import classify_intent
 from app.ai.question_understanding import understand_question
 from app.ai.knowledge import LocalKnowledgeBase, format_hits
-from app.ai.training_data import format_instruction_prompt
+from app.ai.training.training_data import format_instruction_prompt
 from app.ai.research import (
     ResearchProvider,
     ResearchResult,

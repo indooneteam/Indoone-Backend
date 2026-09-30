@@ -422,11 +422,13 @@ class CrossrefResearchProvider(ResearchProvider):
 
 
 def _research_terms(text: str) -> set[str]:
-    return {
-        token.casefold()
-        for token in re.findall(r"[\w][\w._+-]*", text, flags=re.UNICODE)
-        if len(token) >= 2
-    }
+    """Tokenize Latin words and full Indic-script spans without splitting vowel signs."""
+    tokens = re.findall(
+        r"[A-Za-z0-9][A-Za-z0-9._+-]*|[\u0900-\u0DFF]+|[\u0600-\u06FF]+",
+        text,
+        flags=re.UNICODE,
+    )
+    return {token.casefold() for token in tokens if len(token) >= 2}
 
 
 def _expand_research_terms(terms: set[str]) -> set[str]:

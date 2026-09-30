@@ -16,7 +16,6 @@ import time
 from app.ai.knowledge import LocalKnowledgeBase
 from app.ai.research import ResearchProvider, build_research_provider
 
-from app.storage.b2 import B2StorageError, ensure_model_artifacts
 from app.storage.github_release import GitHubReleaseStorageError, get_github_release_storage
 
 
@@ -51,11 +50,13 @@ _ARTIFACT_CHECK_COMPLETED = False
 
 
 def _ensure_model_artifacts(model_dir: Path) -> None:
-    """Load model artifacts from the configured private GitHub Release, else B2."""
+    """Load model artifacts only from the configured private Indoone-Model release."""
     github_storage = get_github_release_storage()
     if github_storage is None:
-        ensure_model_artifacts(model_dir)
-        return
+        raise GitHubReleaseStorageError(
+            "Indoone model serving requires GITHUB_MODEL_REPOSITORY, "
+            "GITHUB_MODEL_RELEASE_TAG, and GITHUB_MODEL_TOKEN"
+        )
 
     artifacts = {
         "indoone-small.pt": model_dir / "indoone-small.pt",
@@ -102,8 +103,8 @@ def _load_local_model_runtime() -> "LocalModelRuntime | None":
                 if get_github_release_storage() is not None:
                     logger.info("Indoone model artifacts checked from private GitHub Release")
                 else:
-                    logger.info("Indoone model artifact check completed from B2")
-            except (B2StorageError, GitHubReleaseStorageError) as exc:
+                    logger.info("Indoone model artifact check completed from private Indoone-Model GitHub Release")
+            except GitHubReleaseStorageError as exc:
                 _NEXT_MODEL_LOAD_ATTEMPT = _next_utc_midnight_timestamp()
                 logger.error("Indoone model artifact check failed: %s", exc)
                 return None

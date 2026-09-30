@@ -31,7 +31,7 @@ jobs:
 
       - name: Run smoke test
         run: |
-          /usr/bin/time -v python scripts/test_qwen_model.py             --model models/qwen3-0.6b/Qwen3-0.6B-Q4_0.gguf             2>&1 | tee qwen-smoke.txt
+          env PYTHONPATH=. /usr/bin/time -v python scripts/test_qwen_model.py             --model models/qwen3-0.6b/Qwen3-0.6B-Q4_0.gguf             2>&1 | tee qwen-smoke.txt
 
       - name: Upload smoke output
         if: always()

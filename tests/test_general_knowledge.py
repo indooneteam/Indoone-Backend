@@ -277,3 +277,12 @@ def test_historical_kannada_role_question_does_not_require_fresh_research() -> N
     assert result.language == "Kannada"
     assert result.needs_research is False
     assert result.intent == "general"
+
+
+def test_kannada_definition_with_dar_suffix_is_not_fresh_research() -> None:
+    from app.ai.question_understanding import understand_question
+
+    result = understand_question("ಗ್ರಾವಿಟಿ ಎಂದರೇನು")
+    assert result.language == "Kannada"
+    assert result.needs_research is False
+    assert result.intent == "general"

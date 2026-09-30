@@ -82,7 +82,7 @@ def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
     if not candidate.version.strip():
         raise ValueError("candidate version cannot be empty")
     if candidate.benchmark_version != "v1":
-        raise ValueError("benchmark versions must use v1")
+        raise ValueError("unsupported benchmark version; benchmark versions must use v1")
     if not math.isfinite(candidate.loss) or not math.isfinite(candidate.perplexity):
         raise ValueError("evaluation metrics must be finite")
     if candidate.loss < 0 or candidate.perplexity < 0:

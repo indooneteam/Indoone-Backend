@@ -21,7 +21,7 @@ async def test_rag_context_is_injected_into_generation(monkeypatch) -> None:
     monkeypatch.setattr(service._fallback_engine, "generate", fake_generate)
     monkeypatch.setattr(LocalAIEngine, "ready", property(lambda self: True))
 
-    result = await service.LocalAIService().generate("What is the Indoone Pro price?")
+    result = await service.LocalAIService().generate("Write a short support reply about the Indoone Pro price.")
 
     assert result == "The documented price is 499 rupees per month."
     assert "Relevant knowledge:" in captured["context"]

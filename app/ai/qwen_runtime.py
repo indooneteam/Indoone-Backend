@@ -61,13 +61,18 @@ class QwenLocalModelRuntime:
     ) -> str:
         if not messages:
             raise ValueError("messages cannot be empty")
+        normalized_messages = [dict(message) for message in messages]
+        if normalized_messages and normalized_messages[-1].get("role") == "user":
+            user_content = str(normalized_messages[-1].get("content", "")).strip()
+            if "/no_think" not in user_content:
+                normalized_messages[-1]["content"] = f"{user_content} /no_think".strip()
         if max_tokens < 0:
             raise ValueError("max_tokens must not be negative")
 
         with self._lock:
             try:
                 result = self._llm.create_chat_completion(
-                    messages=messages,
+                    messages=normalized_messages,
                     max_tokens=max_tokens,
                     temperature=temperature,
                     top_p=top_p,

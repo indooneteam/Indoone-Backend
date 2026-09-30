@@ -72,3 +72,18 @@ def test_model_artifacts_require_indoone_model_release(monkeypatch: pytest.Monke
         match="Indoone model serving requires GITHUB_MODEL_REPOSITORY, GITHUB_MODEL_RELEASE_TAG, and GITHUB_MODEL_TOKEN",
     ):
         service._ensure_model_artifacts(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_service_routes_to_qwen_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "qwen")
+
+    async def fake_generate_qwen_reply(message, history=None, document_context=""):
+        assert message == "Hello Qwen"
+        return "Qwen response"
+
+    from app.ai import qwen_service
+    monkeypatch.setattr(qwen_service, "generate_qwen_reply", fake_generate_qwen_reply)
+
+    reply = await service.generate_reply("Hello Qwen")
+    assert reply == "Qwen response"

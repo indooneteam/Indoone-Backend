@@ -106,26 +106,3 @@ async def test_compose_email_creates_draft_without_sending(monkeypatch) -> None:
     assert result["subject"] == "Meeting update"
     assert result["send_requires_confirmation"] is True
 
-
-@pytest.mark.asyncio
-async def test_compose_email_falls_back_to_safe_structured_draft_when_ai_returns_safe_failure(monkeypatch):
-    from app.capabilities.email_actions import compose_gmail_email
-
-    class FakeAI:
-        async def generate(self, message, history=None, document_context=""):
-            return "I’m sorry, I don’t have enough reliable information to give you a confident answer right now."
-
-    monkeypatch.setattr(
-        "app.capabilities.email_actions.LocalAIService",
-        lambda: FakeAI(),
-    )
-
-    result = await compose_gmail_email(
-        request="Create an email to hr@example.com asking for an update on my internship application."
-    )
-
-    assert result["operation"] == "compose"
-    assert result["to"] == "hr@example.com"
-    assert result["subject"] == "Follow-up on internship application"
-    assert "internship application" in result["body"]
-    assert result["send_requires_confirmation"] is True

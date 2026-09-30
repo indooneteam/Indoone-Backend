@@ -19,6 +19,7 @@ def record(
     behavioral_gate_passed: bool = True,
     benchmark_version: str = "v1",
     revision: str | None = None,
+    max_metric_regression: float = 0.0,
 ) -> ModelRecord:
     return ModelRecord(
         version=version,
@@ -31,6 +32,7 @@ def record(
         behavioral_gate_passed=behavioral_gate_passed,
         benchmark_version=benchmark_version,
         revision=revision or f"rev-{version}",
+        max_metric_regression=max_metric_regression,
     )
 
 
@@ -82,6 +84,32 @@ def test_same_version_update_retires_previous_revision(tmp_path: Path) -> None:
     assert active_record(registry).revision == "rev-2"
     assert active_record(registry).version == "v1"
 
+
+
+def test_capability_candidate_can_tolerate_small_metric_regression() -> None:
+    current = record("v1", 1.0, 4.0, status="active", revision="rev-1")
+    candidate = record(
+        "v1",
+        1.01,
+        4.04,
+        revision="rev-2",
+        max_metric_regression=0.02,
+    )
+
+    assert should_promote(candidate, current)
+
+
+def test_capability_candidate_cannot_exceed_declared_metric_tolerance() -> None:
+    current = record("v1", 1.0, 4.0, status="active", revision="rev-1")
+    candidate = record(
+        "v1",
+        1.03,
+        4.04,
+        revision="rev-2",
+        max_metric_regression=0.02,
+    )
+
+    assert not should_promote(candidate, current)
 
 def test_different_version_update_is_still_supported(tmp_path: Path) -> None:
     registry = tmp_path / "registry.json"

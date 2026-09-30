@@ -22,6 +22,9 @@ class ModelRecord:
     benchmark_version: str = "v1"
     revision: str | None = None
     artifact_sha256: str | None = None
+    # Capability-only updates may tolerate a small general-metric regression
+    # when all dedicated behavioral gates pass. Default keeps legacy strictness.
+    max_metric_regression: float = 0.0
 
 
 def _load_registry(path: Path) -> dict[str, object]:
@@ -87,6 +90,8 @@ def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
         raise ValueError("evaluation metrics must be finite")
     if candidate.loss < 0 or candidate.perplexity < 0:
         raise ValueError("evaluation metrics cannot be negative")
+    if not math.isfinite(candidate.max_metric_regression) or not 0.0 <= candidate.max_metric_regression <= 0.20:
+        raise ValueError("max_metric_regression must be finite and between 0.0 and 0.20")
     if not candidate.behavioral_gate_passed:
         return False
     if current is None:
@@ -100,7 +105,12 @@ def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
         if candidate.revision == current.revision:
             raise ValueError("candidate revision must differ from the active revision")
 
-    return candidate.loss < current.loss and candidate.perplexity < current.perplexity
+    tolerance = 1.0 + candidate.max_metric_regression
+    return (
+        candidate.loss <= current.loss * tolerance
+        and candidate.perplexity <= current.perplexity * tolerance
+        and (candidate.loss < current.loss or candidate.perplexity < current.perplexity)
+    )
 
 
 def promote_candidate(path: Path, candidate: ModelRecord) -> ModelRecord:

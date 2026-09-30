@@ -6,9 +6,9 @@ from secrets import token_urlsafe
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from app.ai.agent import MAX_AGENT_STEPS, execute_agent
 from app.ai.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
 from app.capabilities.document_extract import extract_document
@@ -18,6 +18,7 @@ from app.capabilities.integrations import (
     exchange_oauth_code,
     get_integration,
     list_integrations,
+    store_native_access_token,
 )
 from app.capabilities.media import save_media
 from app.capabilities.registry import list_capabilities
@@ -123,11 +124,6 @@ class DeepResearchRequest(BaseModel):
     per_query_limit: int = Field(default=5, ge=1, le=10)
 
 
-class AgentRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=20_000)
-    user_id: str = Field(default="", max_length=256)
-    approved_tools: list[str] = Field(default_factory=list, max_length=8)
-    contacts: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
 
 
 class ImageGenerationRequest(BaseModel):
@@ -157,6 +153,12 @@ class IntegrationConnectRequest(BaseModel):
 class IntegrationCallbackRequest(BaseModel):
     state: str = Field(min_length=16, max_length=512)
     code: str = Field(min_length=1, max_length=8_000)
+
+class NativeIntegrationTokenRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    access_token: str = Field(min_length=1, max_length=8_000)
+    scope: str = Field(default="", max_length=4_000)
+    expires_at: str | None = Field(default=None, max_length=128)
 
 
 @router.get("/capabilities")
@@ -190,6 +192,24 @@ async def connect_integration(integration_id: str, request: IntegrationConnectRe
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@router.post("/integrations/{integration_id}/native-token")
+async def integration_native_token(integration_id: str, request: NativeIntegrationTokenRequest) -> dict[str, object]:
+    try:
+        return await store_native_access_token(
+            request.user_id,
+            integration_id,
+            request.access_token,
+            request.scope,
+            request.expires_at,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="integration provider rejected the access token") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
 @router.post("/integrations/{integration_id}/callback")
 async def integration_callback(integration_id: str, request: IntegrationCallbackRequest) -> dict[str, object]:
     try:
@@ -198,6 +218,30 @@ async def integration_callback(integration_id: str, request: IntegrationCallback
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (RuntimeError, httpx.HTTPError) as exc:
         raise HTTPException(status_code=502, detail=f"oauth exchange failed: {exc}") from exc
+
+
+@router.get("/integrations/{integration_id}/callback", response_class=HTMLResponse)
+async def integration_callback_browser(
+    integration_id: str,
+    state: str = Query(..., min_length=16, max_length=512),
+    code: str = Query(..., min_length=1, max_length=8_000),
+) -> HTMLResponse:
+    try:
+        await exchange_oauth_code(integration_id, state, code)
+    except ValueError as exc:
+        return HTMLResponse(
+            "<html><body><h2>Indoone connection failed</h2><p>The authorization could not be completed.</p><p>Return to Indoone and try again.</p></body></html>",
+            status_code=400,
+        )
+    except (RuntimeError, httpx.HTTPError) as exc:
+        return HTMLResponse(
+            "<html><body><h2>Indoone connection failed</h2><p>The authorization service could not complete the connection.</p><p>Return to Indoone and try again.</p></body></html>",
+            status_code=502,
+        )
+    return HTMLResponse(
+        "<html><body><h2>Gmail connected to Indoone</h2><p>You can return to the Indoone app now.</p></body></html>",
+        status_code=200,
+    )
 
 
 @router.get("/integrations/{integration_id}/status")
@@ -373,55 +417,6 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
     return {"query": request.query, "queries": queries, "sources": results}
 
 
-@router.post("/agent")
-async def agent(request: AgentRequest) -> dict[str, object]:
-    execution = execute_agent(
-        request.message,
-        user_id=request.user_id,
-        approved_tools=frozenset(request.approved_tools),
-        contacts=request.contacts,
-    )
-    if not execution.steps and not execution.blocked_steps:
-        return {
-            "intent": "general",
-            "tool": None,
-            "tool_payload": None,
-            "result": None,
-            "steps": [],
-            "results": [],
-            "memories": list(execution.memories),
-            "blocked_steps": [],
-            "retry_counts": list(execution.retry_counts),
-            "run_id": execution.run_id,
-            "max_steps": MAX_AGENT_STEPS,
-        }
-    first = execution.steps[0] if execution.steps else execution.blocked_steps[0]
-    first_result = execution.results[0] if execution.results else None
-    return {
-        "intent": "tool",
-        "tool": first.tool,
-        "tool_payload": first.payload,
-        "result": None if first_result is None else {
-            "name": first_result.name,
-            "output": first_result.output,
-            "safe": first_result.safe,
-            "retryable": first_result.retryable,
-            "truncated": first_result.truncated,
-        },
-        "steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.steps],
-        "results": [{
-            "name": result.name,
-            "output": result.output,
-            "safe": result.safe,
-            "retryable": result.retryable,
-            "truncated": result.truncated,
-        } for result in execution.results],
-        "memories": list(execution.memories),
-        "blocked_steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.blocked_steps],
-        "retry_counts": list(execution.retry_counts),
-        "run_id": execution.run_id,
-        "max_steps": MAX_AGENT_STEPS,
-    }
 
 
 @router.post("/image-generation")

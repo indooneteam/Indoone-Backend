@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.dataset_registry import fingerprint_file, load_datasets, register_dataset
+from app.ai.training.dataset_registry import fingerprint_file, load_datasets, register_dataset
 
 
 def test_registration_records_hash_and_approval(tmp_path: Path) -> None:

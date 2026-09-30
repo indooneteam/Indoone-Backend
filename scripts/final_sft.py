@@ -16,7 +16,7 @@ from torch import nn
 
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
-from app.ai.train import (
+from app.ai.training.train import (
     CAPABILITY_INSTRUCTION_WEIGHT,
     CURATED_INSTRUCTION_WEIGHT,
     GENERATED_INSTRUCTION_WEIGHT,
@@ -25,7 +25,7 @@ from app.ai.train import (
     _prepare_instruction_examples,
     evaluate_instruction_loss,
 )
-from app.ai.training_data import load_examples
+from app.ai.training.training_data import load_examples
 
 
 DEFAULT_MODEL_DIR = Path("models/indoone-small")
@@ -223,7 +223,7 @@ def run_sft(
 
     torch.save(
         {
-            "config": {**model_config, "model_version": "indoone-gpt-v2"},
+            "config": {**model_config, "model_version": "indoone-gpt-v1"},
             "model_state": model.cpu().state_dict(),
         },
         model_path,

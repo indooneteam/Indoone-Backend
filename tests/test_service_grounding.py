@@ -1,56 +1,35 @@
-import asyncio
+import pytest
 
-import app.ai.service as service
+from app.ai import service
 from app.ai.research import ResearchResult
 
 
-def test_service_appends_research_sources(monkeypatch) -> None:
+@pytest.mark.asyncio
+async def test_service_adds_sources_to_a_universal_current_answer(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[str] = []
 
-    class FakeEngine:
-        async def generate(self, message: str) -> str:
-            captured.append(message)
-            return "grounded answer"
-
     class FakeProvider:
+        async def generate(self, *, system_instruction: str, user_prompt: str, temperature: float, max_output_tokens: int) -> str:
+            captured.append(user_prompt)
+            assert "LIVE RESEARCH REFERENCE:" in user_prompt
+            return "The answer is grounded in the supplied current evidence."
+
+    class FakeResearch:
         async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
             assert query == "latest Indoone news"
             assert limit == 8
             return [
-                ResearchResult(
-                    "Indoone source 1",
-                    "https://example.com/indoone",
-                    "source snippet 1",
-                ),
-                ResearchResult(
-                    "Indoone source 2",
-                    "https://example.org/indoone",
-                    "source snippet 2",
-                ),
-                ResearchResult(
-                    "Indoone source 3",
-                    "https://example.net/indoone",
-                    "source snippet 3",
-                ),
+                ResearchResult("Source one", "https://example.com/one", "Fresh evidence one."),
+                ResearchResult("Source two", "https://example.org/two", "Fresh evidence two."),
             ]
 
-    monkeypatch.setattr(service, "_runtime", None)
+    monkeypatch.setattr(service, "_universal_answer_provider", FakeProvider())
+    monkeypatch.setattr(service, "_research_provider", FakeResearch())
     monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_fallback_engine", FakeEngine())
-    monkeypatch.setattr(service, "_research_provider", FakeProvider())
 
-    reply = asyncio.run(service.generate_reply("latest Indoone news"))
+    reply = await service.generate_reply("latest Indoone news")
 
-    assert reply == (
-        "grounded answer\n\nSources:\n"
-        "1. Indoone source 1 — https://example.com/indoone\n"
-        "2. Indoone source 2 — https://example.org/indoone\n"
-        "3. Indoone source 3 — https://example.net/indoone"
-    )
-    assert captured[0].startswith("<instruction>")
-    assert "Use the supplied knowledge and research evidence when relevant." in captured[0]
-    assert "<research>" in captured[0] or "research" in captured[0]
-    assert "example.com" in captured[0]
-    assert "example.org" in captured[0]
-    assert "example.net" in captured[0]
-    assert captured[0].rstrip().endswith("<response>")
+    assert reply.startswith("The answer is grounded")
+    assert "Sources:" in reply
+    assert "https://example.com/one" in reply
+    assert len(captured) == 1

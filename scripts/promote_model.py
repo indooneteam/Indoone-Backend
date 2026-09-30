@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -11,7 +12,15 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.ai.behavior_eval import run_behavioral_eval
-from app.ai.model_registry import ModelRecord, promote_candidate
+from app.ai.training.model_registry import ModelRecord, promote_candidate
+
+
+def _artifact_revision(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()[:16]
 
 
 def _load_evaluation(report_path: Path) -> tuple[dict[str, object], float, float]:
@@ -63,6 +72,7 @@ def promote_model(
     behavior_cases: Path,
     registry_path: Path,
     evaluation_report_path: Path | None = None,
+    revision: str | None = None,
 ) -> ModelRecord:
     _require_artifacts(model_dir, behavior_cases)
     report_path = evaluation_report_path or (model_dir / "evaluation_report.json")
@@ -81,6 +91,9 @@ def promote_model(
     if not isinstance(gate_passed, bool):
         raise ValueError("behavioral evaluation gate must contain a boolean overall_pass")
 
+    resolved_revision = (revision or "").strip() or _artifact_revision(
+        model_dir / "indoone-small.pt"
+    )
     candidate = ModelRecord(
         version=version.strip(),
         model_dir=str(model_dir),
@@ -91,6 +104,7 @@ def promote_model(
         status="candidate",
         behavioral_gate_passed=gate_passed,
         benchmark_version="v1",
+        revision=resolved_revision,
     )
     promoted = promote_candidate(registry_path, candidate)
 
@@ -118,6 +132,10 @@ def promote_model(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate and promote an Indoone model candidate")
     parser.add_argument("--version", required=True)
+    parser.add_argument(
+        "--revision",
+        help="Unique checkpoint revision. Defaults to the checkpoint SHA-256 prefix.",
+    )
     parser.add_argument("--model-dir", type=Path, default=Path("models/indoone-small"))
     parser.add_argument("--behavior-cases", type=Path, default=Path("data/eval/behavior.jsonl"))
     parser.add_argument("--registry", type=Path, default=Path("models/registry.json"))
@@ -126,6 +144,7 @@ def main() -> None:
 
     promoted = promote_model(
         version=args.version,
+        revision=args.revision,
         model_dir=args.model_dir,
         behavior_cases=args.behavior_cases,
         registry_path=args.registry,

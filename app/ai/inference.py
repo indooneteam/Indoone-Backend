@@ -7,11 +7,9 @@ import torch
 
 from app.ai.language_detection import SCRIPT_RANGES
 
-from app.ai.instruction_retrieval import InstructionRetriever
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
-from app.ai.training_data import format_instruction_prompt
-
+from app.ai.training.training_data import format_instruction_prompt
 
 DEFAULT_MAX_NEW_TOKENS = 192
 DEFAULT_TEMPERATURE = 0.0
@@ -20,9 +18,8 @@ DEFAULT_NO_REPEAT_NGRAM_SIZE = 3
 DEFAULT_TOP_K = 64
 MIN_GENERATED_TOKENS_BEFORE_EOS = 4
 
-
 class LocalModelRuntime:
-    """Load an Indoone local language model with a high-confidence answer fallback."""
+    """Load the trained Indoone local language model and generate model output."""
 
     def __init__(self, checkpoint_path: Path, tokenizer_path: Path) -> None:
         # Render's free instance has a fractional CPU allocation. Limit Torch
@@ -64,12 +61,6 @@ class LocalModelRuntime:
         del checkpoint
         self.model.eval()
 
-        project_root = Path(__file__).resolve().parents[2]
-        sources = tuple(
-            project_root / relative
-            for relative in InstructionRetriever.DEFAULT_SOURCES
-        )
-        self._instruction_retriever = InstructionRetriever(sources)
         self._language_token_ids: dict[str, frozenset[int]] = {}
 
     @staticmethod
@@ -131,18 +122,6 @@ class LocalModelRuntime:
             logits[0, list(blocked)] = float("-inf")
         return logits
 
-    @staticmethod
-    def _extract_user_request(prompt: str) -> str:
-        """Recover the final user message from a prepared inference context."""
-        marker = re.findall(
-            r"(?:^|\n)user:\s*(.+?)(?=\n(?:user|assistant):|\n</instruction>|\Z)",
-            prompt,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
-        if marker:
-            return marker[-1].strip()
-        return prompt.strip()
-
     def _prompt_ids(self, prompt: str) -> list[int]:
         """Render a user request in the same instruction format used for training."""
         stripped_prompt = prompt.strip()
@@ -174,81 +153,6 @@ class LocalModelRuntime:
         if cleaned.startswith("<response>"):
             cleaned = cleaned[len("<response>") :].strip()
         return cleaned
-
-    @staticmethod
-    def _supplied_evidence_response(prompt: str) -> str | None:
-        """Answer simple evidence-only prompts without inventing unsupported facts."""
-        match = re.search(
-            r"(?is)use only (?:this|the) supplied (?:research )?evidence\s*:\s*(.+?)"
-            r"(?:\n|\?|\Z)",
-            prompt,
-        )
-        if not match:
-            return None
-
-        evidence = " ".join(match.group(1).split()).strip()
-        if not evidence:
-            return None
-
-        sentence = re.split(r"(?<=[.!?])\s+", evidence)[0].strip()
-        if not sentence:
-            return None
-        return sentence[:800]
-
-    def _retrieved_response(self, prompt: str) -> str | None:
-        """Return a curated answer when the request closely matches known behavior guidance."""
-        user_request = self._extract_user_request(prompt)
-
-        evidence_response = self._supplied_evidence_response(user_request)
-        if evidence_response is not None:
-            return evidence_response
-
-        # A real research context must reach the model generation path. Do not
-        # let curated behavior retrieval replace evidence-backed synthesis.
-        if re.search(r"fresh research evidence:|<research>", prompt, flags=re.IGNORECASE):
-            return None
-
-        retrieval_query = prompt if re.search(r"(?:^|\n)(?:user|assistant):\s*", prompt, flags=re.IGNORECASE) else user_request
-        match = self._instruction_retriever.retrieve(retrieval_query)
-        if match is not None:
-            return match.example.response.strip()
-
-        # Behavior-oriented prompts are commonly phrased as paraphrases of the
-        # curated guidance. Use a lower retrieval threshold only for those
-        # policy-style requests, and combine a few high-confidence research
-        # guidance snippets rather than falling into low-signal generation.
-        normalized = " ".join(user_request.casefold().split())
-        policy_style = (
-            "how should " in normalized
-            or "what should " in normalized
-            or "when should " in normalized
-            or "should indoone " in normalized
-            or "what is the correct " in normalized
-            or "using the concise style" in normalized
-            or ("research" in normalized and "topic" in normalized)
-            or ("research notes" in normalized and "friendly" in normalized)
-            or ("after researching" in normalized and "context" in normalized)
-        )
-        if not policy_style:
-            return None
-
-        matches = self._instruction_retriever.retrieve_many(
-            user_request,
-            minimum_score=0.30,
-            limit=3,
-        )
-        if not matches:
-            return None
-
-        if len(matches) == 1 or matches[0].score >= 0.72:
-            return matches[0].example.response.strip()
-
-        responses: list[str] = []
-        for item in matches:
-            response = item.example.response.strip()
-            if response and response not in responses:
-                responses.append(response)
-        return " ".join(responses)
 
     def _allowed_token_ids_for_language(self, language: str) -> frozenset[int]:
         """Cache token ids that can safely contribute to the requested script."""
@@ -312,6 +216,19 @@ class LocalModelRuntime:
                 return logits
         return constrained
 
+    @staticmethod
+    def _is_email_request(prompt: str) -> bool:
+        """Detect email-focused requests so the capability adapter is isolated."""
+        normalized = " ".join(prompt.casefold().split())
+        return bool(
+            re.search(
+                r"(?:\bemail\b|\be-mail\b|\binbox\b|\bmailbox\b|"
+                r"\bphishing\b|\bspam\b|\bunsubscribe\b|"
+                r"\bsubject\s*:|\bfrom\s*:|\bto\s*:)",
+                normalized,
+            )
+        )
+
     @torch.inference_mode()
     def generate(
         self,
@@ -321,6 +238,7 @@ class LocalModelRuntime:
         repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
         no_repeat_ngram_size: int = DEFAULT_NO_REPEAT_NGRAM_SIZE,
         language: str = "English",
+        use_email_adapter: bool | None = None,
     ) -> str:
         """Generate an assistant completion, using KV-cached decoding."""
         prompt = prompt.strip()
@@ -334,10 +252,8 @@ class LocalModelRuntime:
             raise ValueError("repetition_penalty must be at least 1")
         if no_repeat_ngram_size < 0:
             raise ValueError("no_repeat_ngram_size must be non-negative")
-
-        retrieved = self._retrieved_response(prompt)
-        if retrieved is not None:
-            return retrieved
+        if use_email_adapter is None:
+            use_email_adapter = self._is_email_request(prompt)
 
         prompt_ids = self._prompt_ids(prompt)
         if len(prompt_ids) > self.model.block_size:
@@ -348,7 +264,10 @@ class LocalModelRuntime:
         eos_id = self.tokenizer.stoi["<eos>"]
 
         context = torch.tensor([prompt_ids], dtype=torch.long)
-        logits, past_key_values = self.model.forward_cached(context)
+        logits, past_key_values = self.model.forward_cached(
+            context,
+            use_email_adapter=use_email_adapter,
+        )
         next_logits = logits[:, -1, :]
 
         available_tokens = max(0, self.model.block_size - len(prompt_ids))
@@ -386,6 +305,7 @@ class LocalModelRuntime:
             logits, past_key_values = self.model.forward_cached(
                 next_token,
                 past_key_values,
+                use_email_adapter=use_email_adapter,
             )
             next_logits = logits[:, -1, :]
 

@@ -13,7 +13,7 @@ if str(PROJECT_ROOT) not in sys.path:
 import torch
 
 from app.ai.tokenizer import BPETokenizer
-from app.ai.train import (
+from app.ai.training.train import (
     CAPABILITY_INSTRUCTION_WEIGHT,
     CURATED_INSTRUCTION_WEIGHT,
     DEFAULT_BATCH_SIZE,
@@ -27,7 +27,7 @@ from app.ai.train import (
     _instruction_batchify,
     _merge_instruction_sets_weighted,
 )
-from app.ai.training_data import load_examples
+from app.ai.training.training_data import load_examples
 
 
 RAW_FILES = (
@@ -66,7 +66,7 @@ def _git_clean_raw_files() -> None:
 def validate() -> dict[str, object]:
     _git_clean_raw_files()
 
-    manifest = json.loads(Path("training_manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads(Path("config/training/training_manifest.json").read_text(encoding="utf-8"))
     defaults = manifest.get("training_defaults", {})
     expected_defaults = {
         "steps": DEFAULT_TRAINING_STEPS,
@@ -78,7 +78,7 @@ def validate() -> dict[str, object]:
         "instruction_mix_ratio": DEFAULT_INSTRUCTION_MIX_RATIO,
     }
     if {key: defaults.get(key) for key in expected_defaults} != expected_defaults:
-        raise SystemExit("training_manifest.json defaults do not match the executable training recipe")
+        raise SystemExit("config/training/training_manifest.json defaults do not match the executable training recipe")
     sampling_manifest = defaults.get("instruction_sampling", {})
     expected_sampling = {
         "curated": CURATED_INSTRUCTION_WEIGHT,
@@ -86,7 +86,7 @@ def validate() -> dict[str, object]:
         "capability": CAPABILITY_INSTRUCTION_WEIGHT,
     }
     if sampling_manifest != expected_sampling:
-        raise SystemExit("training_manifest.json sampling weights do not match the executable training recipe")
+        raise SystemExit("config/training/training_manifest.json sampling weights do not match the executable training recipe")
 
     required = [GENERATED_FILE, GENERATED_CORPUS, CURATED_FILE, EVAL_FILE]
     missing = [str(path) for path in required if not path.is_file()]

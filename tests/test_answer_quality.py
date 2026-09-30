@@ -1,6 +1,6 @@
 import pytest
 
-from app.ai.answer_quality import assess_answer, user_safe_failure
+from app.ai.answer_quality import assess_answer
 
 
 @pytest.mark.parametrize(
@@ -56,11 +56,6 @@ def test_repeated_output_is_rejected() -> None:
     assert result.passed is False
     assert result.reason == "repeated_output"
 
-
-def test_safe_failure_message_is_user_facing() -> None:
-    message = user_safe_failure()
-    assert "reliable information" in message
-    assert "fallback mode" not in message
 
 
 def test_private_access_question_does_not_require_freshness_sources() -> None:

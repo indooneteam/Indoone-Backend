@@ -12,6 +12,8 @@ from urllib.parse import quote_plus, urlparse
 
 import httpx
 
+from app.ai.language_detection import detect_response_language
+
 MAX_TITLE_LENGTH = 500
 MAX_SNIPPET_LENGTH = 2_000
 MAX_RESEARCH_QUERIES = 6
@@ -29,6 +31,20 @@ _RESEARCH_TERM_ALIASES = {
     "ai": {"ai", "artificial", "intelligence"},
     "ml": {"ml", "machine", "learning"},
     "llm": {"llm", "large", "language", "model", "models"},
+    "ಭಾರತ": {"ಭಾರತ", "ಭಾರತದ", "india", "indian"},
+    "ಭಾರತದ": {"ಭಾರತ", "ಭಾರತದ", "india", "indian"},
+    "ರಾಷ್ಟ್ರಪತಿ": {"ರಾಷ್ಟ್ರಪತಿ", "president"},
+    "ಪ್ರಧಾನಮಂತ್ರಿ": {"ಪ್ರಧಾನಮಂತ್ರಿ", "prime", "minister"},
+    "ಮಂತ್ರಿ": {"ಮಂತ್ರಿ", "minister"},
+    "ರಾಜಧಾನಿ": {"ರಾಜಧಾನಿ", "capital"},
+    "ಸ್ವಾತಂತ್ರ್ಯ": {"ಸ್ವಾತಂತ್ರ್ಯ", "independence", "independent"},
+    "ಭೂಮಿ": {"ಭೂಮಿ", "earth"},
+    "ಗುರುತ್ವ": {"ಗುರುತ್ವ", "gravity"},
+    "ಹವಾಮಾನ": {"ಹವಾಮಾನ", "weather"},
+    "ಬೆಲೆ": {"ಬೆಲೆ", "price", "cost"},
+    "ಚುನಾವಣೆ": {"ಚುನಾವಣೆ", "election"},
+    "ಸರ್ಕಾರ": {"ಸರ್ಕಾರ", "government"},
+    "ಯುದ್ಧ": {"ಯುದ್ಧ", "war"},
 }
 MIN_RESEARCH_RELEVANCE_SCORE = 2.0
 
@@ -118,6 +134,78 @@ def build_research_query_variants(query: str, max_variants: int = MAX_QUERY_VARI
     return variants[:max_variants]
 
 
+class TavilyResearchProvider(ResearchProvider):
+    """General-purpose live web search provider for AI research workflows."""
+
+    _BASE_URL = "https://api.tavily.com/search"
+
+    def __init__(
+        self,
+        api_key: str,
+        timeout: float = 8.0,
+        max_response_bytes: int = 2_000_000,
+    ) -> None:
+        api_key = api_key.strip()
+        if not api_key:
+            raise ValueError("api_key cannot be empty")
+        if timeout <= 0 or timeout > MAX_RESEARCH_TIMEOUT_SECONDS:
+            raise ValueError("timeout must not exceed 60 seconds and must be greater than zero")
+        if max_response_bytes <= 0:
+            raise ValueError("max_response_bytes must be greater than zero")
+        self.api_key = api_key
+        self.timeout = timeout
+        self.max_response_bytes = max_response_bytes
+
+    async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
+        query = query.strip()
+        if not query:
+            raise ValueError("query cannot be empty")
+        if limit < 1 or limit > 20:
+            raise ValueError("limit must be between 1 and 20")
+
+        payload = {
+            "api_key": self.api_key,
+            "query": query,
+            "search_depth": "basic",
+            "topic": "general",
+            "max_results": limit,
+            "include_answer": False,
+            "include_raw_content": False,
+            "include_images": False,
+        }
+        headers = {
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "User-Agent": "Indoone-Research/1.0",
+        }
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+            headers=headers,
+        ) as client:
+            response = await client.post(self._BASE_URL, json=payload)
+            response.raise_for_status()
+            if len(response.content) > self.max_response_bytes:
+                raise RuntimeError("research response is too large")
+            payload = response.json()
+
+        raw_results = payload.get("results", []) if isinstance(payload, dict) else []
+        if not isinstance(raw_results, list):
+            raise RuntimeError("Tavily response must contain a results list")
+
+        results: list[ResearchResult] = []
+        for item in raw_results[:limit]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "")).strip()[:MAX_TITLE_LENGTH]
+            source_url = _safe_source_url(str(item.get("url", "")).strip())
+            snippet = str(item.get("content", item.get("snippet", ""))).strip()
+            snippet = " ".join(snippet.split())[:MAX_SNIPPET_LENGTH]
+            if not title or not source_url:
+                continue
+            results.append(ResearchResult(title, source_url, snippet))
+        return results
+
 class WikipediaResearchProvider(ResearchProvider):
     """Adapt the existing Wikipedia knowledge provider into research evidence."""
 
@@ -130,7 +218,8 @@ class WikipediaResearchProvider(ResearchProvider):
         from app.ai.general_knowledge import WikipediaKnowledgeProvider
 
         provider = WikipediaKnowledgeProvider(timeout=self.timeout)
-        answer = await provider.answer(query)
+        language = detect_response_language(query)
+        answer = await provider.answer(query, language=language)
         if answer is None:
             return []
         return [ResearchResult(answer.title, answer.url, answer.extract)]
@@ -334,11 +423,13 @@ class CrossrefResearchProvider(ResearchProvider):
 
 
 def _research_terms(text: str) -> set[str]:
-    return {
-        token.casefold()
-        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", text)
-        if len(token) >= 2
-    }
+    """Tokenize Latin words and full Indic-script spans without splitting vowel signs."""
+    tokens = re.findall(
+        r"[A-Za-z0-9][A-Za-z0-9._+-]*|[\u0900-\u0DFF]+|[\u0600-\u06FF]+",
+        text,
+        flags=re.UNICODE,
+    )
+    return {token.casefold() for token in tokens if len(token) >= 2}
 
 
 def _expand_research_terms(terms: set[str]) -> set[str]:
@@ -549,24 +640,31 @@ def build_research_provider() -> ResearchProvider | None:
     except ValueError as exc:
         raise ValueError("INDOONE_RESEARCH_TIMEOUT must be numeric") from exc
 
-    providers: list[ResearchProvider] = [
-        WikipediaResearchProvider(timeout=min(timeout, 6.0)),
-        WikidataResearchProvider(timeout=timeout),
-        GoogleNewsRssResearchProvider(timeout=timeout),
-        OpenAlexResearchProvider(timeout=timeout),
-        CrossrefResearchProvider(timeout=timeout),
-    ]
+    providers: list[ResearchProvider] = []
 
     url = os.getenv("INDOONE_RESEARCH_URL", "").strip()
+    tavily_api_key = os.getenv("INDOONE_TAVILY_API_KEY", "").strip()
+
     if url:
-        providers.insert(
-            0,
+        providers.append(
             HttpResearchProvider(
                 url,
                 bearer_token=os.getenv("INDOONE_RESEARCH_TOKEN"),
                 timeout=timeout,
-            ),
+            )
         )
+
+    if tavily_api_key:
+        providers.append(TavilyResearchProvider(api_key=tavily_api_key, timeout=timeout))
+
+    if not providers:
+        providers = [
+            WikipediaResearchProvider(timeout=min(timeout, 6.0)),
+            WikidataResearchProvider(timeout=timeout),
+            GoogleNewsRssResearchProvider(timeout=timeout),
+            OpenAlexResearchProvider(timeout=timeout),
+            CrossrefResearchProvider(timeout=timeout),
+        ]
 
     return MultiSourceResearchProvider(providers)
 def build_deep_research_queries(query: str, count: int = 3) -> list[str]:

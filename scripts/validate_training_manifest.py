@@ -8,7 +8,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.ai.train import (
+from app.ai.training.train import (
     CAPABILITY_INSTRUCTION_WEIGHT,
     CURATED_INSTRUCTION_WEIGHT,
     DEFAULT_BATCH_SIZE,
@@ -22,7 +22,7 @@ from app.ai.train import (
 )
 
 
-PATH = Path("training_manifest.json")
+PATH = Path("config/training/training_manifest.json")
 
 
 def main() -> int:

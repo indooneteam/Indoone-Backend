@@ -5,14 +5,22 @@ from torch import nn
 from torch.nn import functional as F
 
 
-MODEL_VERSION = "indoone-gpt-v2"
+MODEL_VERSION = "indoone-gpt-v1"
 
 
 class DecoderBlock(nn.Module):
     """Pre-norm causal Transformer block used by the local Indoone model."""
 
-    def __init__(self, n_embd: int, n_head: int, dropout: float) -> None:
+    def __init__(
+        self,
+        n_embd: int,
+        n_head: int,
+        dropout: float,
+        email_adapter_dim: int = 0,
+    ) -> None:
         super().__init__()
+        if email_adapter_dim < 0:
+            raise ValueError("email_adapter_dim must be non-negative")
         self.ln_1 = nn.LayerNorm(n_embd)
         self.attn = nn.MultiheadAttention(
             embed_dim=n_embd,
@@ -27,8 +35,33 @@ class DecoderBlock(nn.Module):
             nn.Linear(4 * n_embd, n_embd),
             nn.Dropout(dropout),
         )
+        self.email_adapter_dim = email_adapter_dim
+        if email_adapter_dim:
+            self.email_adapter_down = nn.Linear(n_embd, email_adapter_dim, bias=False)
+            self.email_adapter_up = nn.Linear(email_adapter_dim, n_embd, bias=False)
+            nn.init.normal_(self.email_adapter_down.weight, mean=0.0, std=0.02)
+            nn.init.zeros_(self.email_adapter_up.weight)
+        else:
+            self.email_adapter_down = None
+            self.email_adapter_up = None
 
-    def forward(self, x: torch.Tensor, causal_mask: torch.Tensor) -> torch.Tensor:
+    def _apply_email_adapter(
+        self,
+        x: torch.Tensor,
+        enabled: bool,
+    ) -> torch.Tensor:
+        if not enabled or self.email_adapter_down is None or self.email_adapter_up is None:
+            return x
+        adapter_input = self.ln_2(x)
+        adapter_hidden = F.gelu(self.email_adapter_down(adapter_input))
+        return x + self.email_adapter_up(adapter_hidden)
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        causal_mask: torch.Tensor,
+        use_email_adapter: bool = False,
+    ) -> torch.Tensor:
         normalized = self.ln_1(x)
         attention, _ = self.attn(
             normalized,
@@ -39,13 +72,15 @@ class DecoderBlock(nn.Module):
             is_causal=True,
         )
         x = x + attention
-        return x + self.mlp(self.ln_2(x))
+        x = x + self.mlp(self.ln_2(x))
+        return self._apply_email_adapter(x, use_email_adapter)
 
     @torch.no_grad()
     def forward_cached(
         self,
         x: torch.Tensor,
         past_key_value: tuple[torch.Tensor, torch.Tensor] | None = None,
+        use_email_adapter: bool = False,
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]]:
         """Run this block while reusing cached attention keys and values."""
         if x.ndim != 3:
@@ -113,6 +148,7 @@ class DecoderBlock(nn.Module):
 
         x = x + attention
         x = x + self.mlp(self.ln_2(x))
+        x = self._apply_email_adapter(x, use_email_adapter)
         return x, (key, value)
 
 
@@ -127,6 +163,8 @@ class IndooneTransformer(nn.Module):
         n_head: int = 8,
         n_layer: int = 10,
         dropout: float = 0.0,
+        email_adapter_dim: int = 0,
+        email_adapter_layers: int = 0,
     ) -> None:
         super().__init__()
         if vocab_size <= 0:
@@ -143,6 +181,12 @@ class IndooneTransformer(nn.Module):
             raise ValueError("n_layer must be greater than zero")
         if not 0.0 <= dropout < 1.0:
             raise ValueError("dropout must be in the range [0, 1)")
+        if email_adapter_dim < 0:
+            raise ValueError("email_adapter_dim must be non-negative")
+        if email_adapter_layers < 0 or email_adapter_layers > n_layer:
+            raise ValueError("email_adapter_layers must be between 0 and n_layer")
+        if email_adapter_layers and not email_adapter_dim:
+            raise ValueError("email_adapter_dim must be positive when email_adapter_layers is enabled")
 
         self.model_version = MODEL_VERSION
         self.block_size = block_size
@@ -151,17 +195,33 @@ class IndooneTransformer(nn.Module):
         self.n_head = n_head
         self.n_layer = n_layer
         self.dropout = dropout
+        self.email_adapter_dim = email_adapter_dim
+        self.email_adapter_layers = email_adapter_layers
 
         self.token_embedding = nn.Embedding(vocab_size, n_embd)
         self.position_embedding = nn.Embedding(block_size, n_embd)
         self.drop = nn.Dropout(dropout)
+        adapter_start = n_layer - email_adapter_layers
         self.blocks = nn.ModuleList(
-            [DecoderBlock(n_embd, n_head, dropout) for _ in range(n_layer)]
+            [
+                DecoderBlock(
+                    n_embd,
+                    n_head,
+                    dropout,
+                    email_adapter_dim=email_adapter_dim if index >= adapter_start else 0,
+                )
+                for index in range(n_layer)
+            ]
         )
         self.ln_f = nn.LayerNorm(n_embd)
         self.lm_head = nn.Linear(n_embd, vocab_size, bias=False)
         self.lm_head.weight = self.token_embedding.weight
         self.apply(self._init_weights)
+        # The Email adapter must start as an exact identity so enabling it on
+        # an untrained adapter cannot perturb the existing base model.
+        for block in self.blocks:
+            if block.email_adapter_up is not None:
+                nn.init.zeros_(block.email_adapter_up.weight)
 
     @staticmethod
     def _init_weights(module: nn.Module) -> None:
@@ -178,9 +238,16 @@ class IndooneTransformer(nn.Module):
             "n_head": self.n_head,
             "n_layer": self.n_layer,
             "dropout": self.dropout,
+            "email_adapter_dim": self.email_adapter_dim,
+            "email_adapter_layers": self.email_adapter_layers,
         }
 
-    def forward(self, idx: torch.Tensor, targets: torch.Tensor | None = None):
+    def forward(
+        self,
+        idx: torch.Tensor,
+        targets: torch.Tensor | None = None,
+        use_email_adapter: bool = False,
+    ):
         if idx.ndim != 2:
             raise ValueError("input tensor must have shape (batch, sequence)")
         _, length = idx.shape
@@ -197,7 +264,11 @@ class IndooneTransformer(nn.Module):
             diagonal=1,
         )
         for block in self.blocks:
-            x = block(x, causal_mask)
+            x = block(
+                x,
+                causal_mask,
+                use_email_adapter=use_email_adapter,
+            )
 
         logits = self.lm_head(self.ln_f(x))
         loss = None
@@ -215,6 +286,7 @@ class IndooneTransformer(nn.Module):
         self,
         idx: torch.Tensor,
         past_key_values: tuple[tuple[torch.Tensor, torch.Tensor], ...] | None = None,
+        use_email_adapter: bool = False,
     ) -> tuple[torch.Tensor, tuple[tuple[torch.Tensor, torch.Tensor], ...]]:
         """Run one prompt segment or generated tokens using KV caching."""
         if idx.ndim != 2:
@@ -250,7 +322,11 @@ class IndooneTransformer(nn.Module):
 
         new_cache: list[tuple[torch.Tensor, torch.Tensor]] = []
         for block, layer_cache in zip(self.blocks, normalized_cache):
-            x, layer_cache = block.forward_cached(x, layer_cache)
+            x, layer_cache = block.forward_cached(
+                x,
+                layer_cache,
+                use_email_adapter=use_email_adapter,
+            )
             new_cache.append(layer_cache)
 
         logits = self.lm_head(self.ln_f(x))

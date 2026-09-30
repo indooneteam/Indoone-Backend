@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from app.ai.benchmark import build_comparison_report, compare_benchmark_reports
-from app.ai.model_registry import ModelRecord, should_promote
+from app.ai.training.benchmark import build_comparison_report, compare_benchmark_reports
+from app.ai.training.model_registry import ModelRecord, should_promote
 
 
 def _report(*, version: str = "v1", loss: float = 1.0, perplexity: float = 2.0, overall_pass: bool = True) -> dict[str, object]:

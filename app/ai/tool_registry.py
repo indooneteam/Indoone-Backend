@@ -30,7 +30,10 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("phone_call", "Prepare a phone call action.", risk="external", requires_approval=True, categories=("phone", "external")),
     ToolSpec("phone_call_contact", "Prepare a phone call action for a contact.", risk="external", requires_approval=True, categories=("phone", "external")),
     ToolSpec("gmail_search", "Search the authenticated user's Gmail mailbox.", categories=("gmail", "external"), connector_id="gmail", capability="messages.search"),
-    ToolSpec("gmail_read", "Read one message from the authenticated user's Gmail mailbox.", categories=("gmail", "external"), connector_id="gmail", capability="messages.read"),
+    ToolSpec("gmail_read", "Read one message from the authenticated user\'s Gmail mailbox.", categories=("gmail", "external"), connector_id="gmail", capability="messages.read"),
+    ToolSpec("gmail_compose", "Create an email draft with the local Indoone AI without sending it.", categories=("gmail", "email", "external")),
+    ToolSpec("gmail_email_safety", "Read and analyze authenticated Gmail messages with the local Indoone Email Safety behavior.", categories=("gmail", "email_safety", "external"), connector_id="gmail", capability="messages.read"),
+    ToolSpec("gmail_reply", "Reply to an authenticated Gmail message.", risk="external", requires_approval=True, categories=("gmail", "email", "external"), connector_id="gmail", capability="messages.send"),
     ToolSpec("gmail_send", "Send an email from the authenticated user's Gmail account.", risk="external", requires_approval=True, categories=("gmail", "external"), connector_id="gmail", capability="messages.send"),
 )
 

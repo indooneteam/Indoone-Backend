@@ -3,20 +3,13 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.ai.agent_async import execute_agent_async
-from app.ai.answer_quality import assess_answer, user_safe_failure
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
-from app.ai.final_answer import synthesize_tool_answer
-from app.ai.grounding import extract_sources
-from app.ai.intent import classify_intent
-from app.ai.memory_service import MemoryService
 from app.ai.service import generate_reply
 from app.api.dependencies import current_user_id
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
-_memory_service = MemoryService()
 
 
 class ChatRequest(BaseModel):
@@ -38,19 +31,6 @@ class ChatResponse(BaseModel):
 
 def _principal(request: Request) -> str:
     return current_user_id(request)
-
-
-def _memory_context(user_id: str, query: str) -> str:
-    hits = _memory_service.search(user_id, query, limit=5)
-    if not hits:
-        return ""
-    lines = ["User memory:"]
-    for item in hits:
-        key = str(item.get("key", "")).strip()
-        value = str(item.get("value", "")).strip()
-        if key and value:
-            lines.append(f"- {key}: {value}")
-    return "\n".join(lines) if len(lines) > 1 else ""
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -79,7 +59,6 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    intent = classify_intent(body.message)
     document_context = ""
 
     if body.file_id:
@@ -90,31 +69,14 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    memory_context = _memory_context(user_id, body.message)
-    if memory_context:
-        history = [*history, ("memory", memory_context)]
-
-    agent_execution = await execute_agent_async(body.message, user_id=user_id)
-    has_agent_activity = bool(agent_execution.steps or agent_execution.blocked_steps)
-
-    if has_agent_activity and not body.file_id:
-        if agent_execution.results:
-            reply = synthesize_tool_answer(agent_execution.results)
-        else:
-            reply = user_safe_failure()
-    else:
-        try:
-            reply = await generate_reply(
-                body.message,
-                history=history,
-                document_context=document_context,
-            )
-        except RuntimeError as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    quality = assess_answer(body.message, reply)
-    if not quality.passed:
-        reply = user_safe_failure()
+    try:
+        reply = await generate_reply(
+            body.message,
+            history=history,
+            document_context=document_context,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     try:
         _store.append(
@@ -126,10 +88,8 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-
-    source_items = extract_sources(reply)
     return ChatResponse(
         conversation_id=conversation_id,
         reply=reply,
-        sources=[ChatSource(title=item.title, url=item.url) for item in source_items],
+        sources=[],
     )

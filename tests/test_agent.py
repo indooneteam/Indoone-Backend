@@ -388,3 +388,32 @@ def test_agent_does_not_route_research_as_contact_lookup() -> None:
         "Research a current technology topic and turn the findings into a clear user-friendly summary with sources."
     )
     assert steps == ()
+
+
+def test_agent_routes_email_safety_request() -> None:
+    steps = build_agent_steps("check my latest Gmail email for phishing", user_id="user-1")
+    assert len(steps) == 1
+    assert steps[0].tool == "gmail_email_safety"
+    assert "user-1" in steps[0].payload
+    assert steps[0].requires_approval is False
+
+
+def test_agent_routes_email_compose_request() -> None:
+    steps = build_agent_steps(
+        "compose an email to alex@example.com about tomorrow's meeting",
+        user_id="user-1",
+    )
+    assert len(steps) == 1
+    assert steps[0].tool == "gmail_compose"
+    assert "tomorrow's meeting" in steps[0].payload
+    assert steps[0].requires_approval is False
+
+
+def test_agent_routes_email_reply() -> None:
+    steps = build_agent_steps(
+        "reply to email m123: Thanks, I can attend.",
+        user_id="user-1",
+    )
+    assert len(steps) == 1
+    assert steps[0].tool == "gmail_reply"
+    assert steps[0].requires_approval is True

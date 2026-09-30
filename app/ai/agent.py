@@ -65,20 +65,67 @@ def _extract_calculations(message: str) -> tuple[str, ...]:
 
 def _gmail_request_matches(message: str) -> bool:
     text = message.strip()
-    patterns = (r"(?:search|find|list)\s+(?:in\s+)?gmail(?:\s+for)?\s+.+$",r"gmail\s+(?:search|find|list)\s+.+$",r"(?:read|open|show)\s+(?:gmail\s+)?(?:email|message)\s+[A-Za-z0-9_-]+$")
+    patterns = (
+        r"(?:search|find|list)\s+(?:in\s+)?gmail(?:\s+for)?\s+.+$",
+        r"gmail\s+(?:search|find|list)\s+.+$",
+        r"(?:read|open|show)\s+(?:gmail\s+)?(?:email|message)\s+[A-Za-z0-9_-]+$",
+        r"\b(?:analy[sz]e|check|inspect|review|scan|classify|verify)\b.*\b(?:gmail|email|mail|inbox)\b",
+        r"\b(?:compose|create|write|draft)\b.*\b(?:email|mail)\b",
+        r"\b(?:reply|respond)\b.*\b(?:email|mail)\b",
+    )
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
 
+
 def _extract_gmail_request(message: str, user_id: str) -> tuple[str, dict[str, Any]] | None:
-    if not user_id.strip(): return None
+    if not user_id.strip():
+        return None
     text = message.strip()
-    patterns = (("gmail_search", r"(?:search|find|list)\s+(?:in\s+)?gmail(?:\s+for)?\s+(.+)$"),("gmail_search", r"gmail\s+(?:search|find|list)\s+(.+)$"),("gmail_read", r"(?:read|open|show)\s+(?:gmail\s+)?(?:email|message)\s+([A-Za-z0-9_-]+)$"))
+
+    if re.search(
+        r"\b(?:analy[sz]e|check|inspect|review|scan|classify|verify)\b.*\b(?:gmail|email|mail|inbox)\b",
+        text,
+        re.IGNORECASE,
+    ):
+        return "gmail_email_safety", {
+            "user_id": user_id,
+            "user_request": text,
+            "limit": 1,
+        }
+
+    if re.search(
+        r"\b(?:compose|create|write|draft)\b.*\b(?:email|mail)\b|"
+        r"\b(?:email|mail)\b.*\b(?:compose|create|write|draft)\b",
+        text,
+        re.IGNORECASE,
+    ):
+        return "gmail_compose", {"request": text}
+
+    reply = re.search(
+        r"(?:reply|respond)\s+(?:to\s+)?(?:gmail\s+)?(?:email|message)\s+"
+        r"([A-Za-z0-9_-]+)(?:\s*[:,-]\s*(.+))?$",
+        text,
+        re.IGNORECASE,
+    )
+    if reply and reply.group(2):
+        return "gmail_reply", {
+            "user_id": user_id,
+            "message_id": reply.group(1).strip(),
+            "body": reply.group(2).strip(),
+        }
+
+    patterns = (
+        ("gmail_search", r"(?:search|find|list)\s+(?:in\s+)?gmail(?:\s+for)?\s+(.+)$"),
+        ("gmail_search", r"gmail\s+(?:search|find|list)\s+(.+)$"),
+        ("gmail_read", r"(?:read|open|show)\s+(?:gmail\s+)?(?:email|message)\s+([A-Za-z0-9_-]+)$"),
+    )
     for tool, pattern in patterns:
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
-            query = match.group(1).strip(" .?!")
-            if query:
-                if tool == "gmail_search": return tool, {"user_id": user_id, "query": query}
-                return tool, {"user_id": user_id, "message_id": query}
+            value = match.group(1).strip(" .?!")
+            if value:
+                if tool == "gmail_search":
+                    return tool, {"user_id": user_id, "query": value}
+                return tool, {"user_id": user_id, "message_id": value}
     return None
 
 def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tuple[str, dict[str, Any]] | None:

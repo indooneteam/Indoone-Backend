@@ -6,7 +6,7 @@ import math
 from pathlib import Path
 
 from app.ai.behavior_eval import CATEGORIES, run_behavioral_eval
-from app.ai.evaluate import evaluate_checkpoint
+from app.ai.training.evaluate import evaluate_checkpoint
 
 DEFAULT_CHECKPOINT = Path("models/indoone-small/indoone-small.pt")
 DEFAULT_TOKENIZER = Path("models/indoone-small/tokenizer.json")

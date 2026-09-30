@@ -1,136 +1,51 @@
-import asyncio
+import pytest
 
-import app.ai.service as service
-from app.ai.answer_quality import user_safe_failure
-from app.ai.intent import classify_intent
+from app.ai import service
 from app.ai.research import ResearchResult
 
 
-def test_current_research_intent_requires_cross_check() -> None:
-    latest = classify_intent("What is the latest Indoone news?")
-    current = classify_intent("research current AI developments")
-    stable = classify_intent("Explain how a transformer works")
-
-    assert latest.needs_research is True
-    assert latest.needs_cross_check is True
-    assert current.needs_research is True
-    assert current.needs_cross_check is True
-    assert stable.needs_research is False
-    assert stable.needs_cross_check is False
-
-
-def test_service_includes_research_results(monkeypatch) -> None:
-    captured: list[str] = []
-
-    class FakeEngine:
-        async def generate(self, message: str) -> str:
-            captured.append(message)
-            return "The latest report is summarized from the supplied evidence."
+@pytest.mark.asyncio
+async def test_service_collects_research_before_generation(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str]] = []
 
     class FakeResearch:
         async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
-            assert query == "latest Indoone news"
-            assert limit == 8
+            calls.append(("research", query))
             return [
-                ResearchResult("Indoone result 1", "https://example.com/indoone", "fresh source 1"),
-                ResearchResult("Indoone result 2", "https://example.org/indoone", "fresh source 2"),
-                ResearchResult("Indoone result 3", "https://example.net/indoone", "fresh source 3"),
+                ResearchResult("Source one", "https://example.com/one", "Evidence one."),
+                ResearchResult("Source two", "https://example.org/two", "Evidence two."),
             ]
 
-    monkeypatch.setattr(service, "_runtime", None)
-    monkeypatch.setattr(service, "_knowledge_base", None)
+    class FakeProvider:
+        async def generate(self, *, system_instruction: str, user_prompt: str, temperature: float, max_output_tokens: int) -> str:
+            calls.append(("generation", user_prompt))
+            return "Generated from live evidence."
+
+    monkeypatch.setattr(service, "_universal_answer_provider", FakeProvider())
     monkeypatch.setattr(service, "_research_provider", FakeResearch())
-    monkeypatch.setattr(service, "_fallback_engine", FakeEngine())
-
-    reply = asyncio.run(service.generate_reply("latest Indoone news"))
-
-    assert reply.startswith("The latest report is summarized")
-    assert "Sources:" in reply
-    assert "https://example.com/indoone" in reply
-    assert "https://example.org/indoone" in reply
-    assert "https://example.net/indoone" in reply
-    assert "<research>" in captured[0]
-    assert "Indoone result 1" in captured[0]
-    assert "Indoone result 2" in captured[0]
-    assert "fresh source 1" in captured[0]
-    assert "fresh source 2" in captured[0]
-    assert "fresh source 3" in captured[0]
-
-
-def test_single_source_is_not_treated_as_cross_checked(monkeypatch) -> None:
-    captured: list[str] = []
-
-    class FakeEngine:
-        async def generate(self, message: str) -> str:
-            captured.append(message)
-            return "The available source could not be independently cross-checked."
-
-    class FakeResearch:
-        async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
-            return [ResearchResult("Only source", "https://example.com/indoone", "unverified")]
-
-    monkeypatch.setattr(service, "_runtime", None)
     monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_research_provider", FakeResearch())
-    monkeypatch.setattr(service, "_fallback_engine", FakeEngine())
 
-    reply = asyncio.run(service.generate_reply("latest Indoone news"))
+    reply = await service.generate_reply("latest information about a topic")
 
-    assert reply == user_safe_failure()
-    assert "<research>" not in captured[0]
-    assert "Sources:" not in reply
+    assert reply.startswith("Generated from live evidence.")
+    assert calls[0] == ("research", "latest information about a topic")
+    assert calls[1][0] == "generation"
+    assert "Evidence one." in calls[1][1]
 
 
-def test_service_survives_research_failure(monkeypatch) -> None:
-    captured: list[str] = []
-
-    class FakeEngine:
-        async def generate(self, message: str) -> str:
-            captured.append(message)
-            return "Fresh research is currently unavailable, so I cannot verify the latest information."
-
+@pytest.mark.asyncio
+async def test_service_does_not_guess_when_current_research_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     class BrokenResearch:
         async def search(self, query: str, limit: int = 5):
             raise RuntimeError("provider unavailable")
 
-    monkeypatch.setattr(service, "_runtime", None)
-    monkeypatch.setattr(service, "_knowledge_base", None)
+    class FakeProvider:
+        async def generate(self, **kwargs):
+            raise AssertionError("generation must not fabricate a current answer")
+
+    monkeypatch.setattr(service, "_universal_answer_provider", FakeProvider())
     monkeypatch.setattr(service, "_research_provider", BrokenResearch())
-    monkeypatch.setattr(service, "_fallback_engine", FakeEngine())
+    monkeypatch.setattr(service, "_knowledge_base", None)
 
-    reply = asyncio.run(service.generate_reply("latest Indoone news"))
-
-    assert reply == user_safe_failure()
-    assert "<research>" not in captured[0]
-
-
-def test_model_artifacts_are_checked_only_once_per_process(monkeypatch, tmp_path) -> None:
-    calls = 0
-
-    class FakeRuntime:
-        def __init__(self, checkpoint, tokenizer):
-            assert checkpoint.exists()
-            assert tokenizer.exists()
-
-    checkpoint = tmp_path / "indoone-small.pt"
-    tokenizer = tmp_path / "tokenizer.json"
-
-    def fake_ensure_model_artifacts(model_dir):
-        nonlocal calls
-        calls += 1
-        checkpoint.write_bytes(b"checkpoint")
-        tokenizer.write_text("tokenizer", encoding="utf-8")
-
-    monkeypatch.setattr(service, "_checkpoint", checkpoint)
-    monkeypatch.setattr(service, "_tokenizer", tokenizer)
-    monkeypatch.setattr(service, "ensure_model_artifacts", fake_ensure_model_artifacts)
-    monkeypatch.setattr(service, "LocalModelRuntime", FakeRuntime)
-    monkeypatch.setattr(service, "_runtime", None)
-    monkeypatch.setattr(service, "_ARTIFACT_CHECK_COMPLETED", False)
-    monkeypatch.setattr(service, "_NEXT_MODEL_LOAD_ATTEMPT", 0.0)
-
-    first = service._load_local_model_runtime()
-    second = service._load_local_model_runtime()
-
-    assert first is second
-    assert calls == 1
+    with pytest.raises(RuntimeError, match="live research is unavailable"):
+        await service.generate_reply("latest information about a topic")

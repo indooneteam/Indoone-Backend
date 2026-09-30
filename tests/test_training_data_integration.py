@@ -3,8 +3,8 @@ from pathlib import Path
 import torch
 
 from app.ai.tokenizer import BPETokenizer
-from app.ai.train import _instruction_batchify, train
-from app.ai.training_data import TrainingExample
+from app.ai.training.train import _instruction_batchify, train
+from app.ai.training.training_data import TrainingExample
 
 
 def test_train_accepts_instruction_dataset(tmp_path: Path) -> None:

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.training_data import TrainingExample, load_examples, write_corpus
+from app.ai.training.training_data import TrainingExample, load_examples, write_corpus
 
 
 def test_load_examples_validates_and_deduplicates(tmp_path: Path) -> None:

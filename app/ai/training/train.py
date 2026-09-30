@@ -12,10 +12,10 @@ from torch import nn
 
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
-from app.ai.training_data import TrainingExample, format_instruction_prompt, load_examples, write_corpus
+from app.ai.training.training_data import TrainingExample, format_instruction_prompt, load_examples, write_corpus
 
 
-# V2 is intentionally larger while remaining practical for CPU inference.
+# V1 is the active Indoone model architecture used for production inference.
 DEFAULT_MODEL_CONFIG = {
     "block_size": 512,
     "n_embd": 384,
@@ -629,7 +629,7 @@ def train(
         json.dumps(
             {
                 "model": "indoone-small",
-                "model_version": "indoone-gpt-v2",
+                "model_version": "indoone-gpt-v1",
                 "tokenizer": "bpe-v1",
                 "vocab_size": tokenizer.vocab_size,
                 "special_tokens": list(tokenizer.SPECIAL_TOKENS),

@@ -29,7 +29,9 @@
       "multilingual",
       "tool_use",
       "files",
-      "vision"
+      "vision",
+      "email_safety",
+      "email_actions"
     ]
   },
   "training_defaults": {
@@ -44,6 +46,23 @@
       "curated": 0.9,
       "generated_multilingual": 0.05,
       "capability": 0.05
+    }
+  },
+  "incremental_capabilities": {
+    "email_safety": {
+      "stable_model_version": "v1",
+      "training_mode": "incremental_sft",
+      "max_runtime_seconds": 3600,
+      "training_budget_seconds": 3300,
+      "primary_data": "data/raw/indoone_email_safety_examples.jsonl",
+      "validation_data": "data/eval/email_safety_validation.jsonl",
+      "test_data": "data/eval/email_safety_test.jsonl",
+      "action_data": "data/raw/indoone_email_actions_examples.jsonl",
+      "anchor_data": "data/raw/core_instruction_seed.jsonl",
+      "production_object_prefix": "models/indoone-small",
+      "production_release_repo": "indooneteam/Indoone-Model",
+      "production_release_tag": "indoone-model-v1",
+      "keep_previous_checkpoint_for_rollback": true
     }
   }
 }

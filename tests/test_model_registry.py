@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.model_registry import (
+from app.ai.training.model_registry import (
     ModelRecord,
     active_record,
     load_records,
@@ -18,6 +18,8 @@ def record(
     status: str = "candidate",
     behavioral_gate_passed: bool = True,
     benchmark_version: str = "v1",
+    revision: str | None = None,
+    max_metric_regression: float = 0.0,
 ) -> ModelRecord:
     return ModelRecord(
         version=version,
@@ -29,12 +31,14 @@ def record(
         status=status,
         behavioral_gate_passed=behavioral_gate_passed,
         benchmark_version=benchmark_version,
+        revision=revision or f"rev-{version}",
+        max_metric_regression=max_metric_regression,
     )
 
 
 def test_first_candidate_can_be_promoted(tmp_path: Path) -> None:
     registry = tmp_path / "registry.json"
-    candidate = record("v1", 1.5, 4.5)
+    candidate = record("v1", 1.5, 4.5, revision="initial")
 
     assert should_promote(candidate, None)
     promoted = promote_candidate(registry, candidate)
@@ -42,16 +46,17 @@ def test_first_candidate_can_be_promoted(tmp_path: Path) -> None:
     assert promoted.status == "active"
     assert promoted.parent_version is None
     assert promoted.benchmark_version == "v1"
+    assert promoted.revision == "initial"
     assert active_record(registry) == promoted
 
 
 def test_candidate_must_improve_both_metrics(tmp_path: Path) -> None:
     registry = tmp_path / "registry.json"
-    promote_candidate(registry, record("v1", 1.5, 4.5))
+    promote_candidate(registry, record("v1", 1.5, 4.5, revision="rev-1"))
 
-    better = record("v2", 1.4, 4.4)
-    worse_loss = record("v3", 1.6, 4.0)
-    worse_perplexity = record("v4", 1.4, 4.6)
+    better = record("v1", 1.4, 4.4, revision="rev-2")
+    worse_loss = record("v1", 1.6, 4.0, revision="rev-3")
+    worse_perplexity = record("v1", 1.4, 4.6, revision="rev-4")
 
     assert should_promote(better, active_record(registry))
     assert not should_promote(worse_loss, active_record(registry))
@@ -67,16 +72,52 @@ def test_behavioral_gate_is_required_for_promotion(tmp_path: Path) -> None:
         promote_candidate(registry, candidate)
 
 
-def test_promotion_retires_previous_active_model_and_tracks_parent(tmp_path: Path) -> None:
+def test_same_version_update_retires_previous_revision(tmp_path: Path) -> None:
     registry = tmp_path / "registry.json"
-    promote_candidate(registry, record("v1", 1.5, 4.5))
-    promote_candidate(registry, record("v2", 1.4, 4.4))
+    promote_candidate(registry, record("v1", 1.5, 4.5, revision="rev-1"))
+    promoted = promote_candidate(registry, record("v1", 1.4, 4.4, revision="rev-2"))
 
-    records = {item.version: item for item in load_records(registry)}
-    assert records["v1"].status == "retired"
-    assert records["v2"].status == "active"
-    assert records["v2"].parent_version == "v1"
-    assert active_record(registry).version == "v2"
+    records = {(item.version, item.revision): item for item in load_records(registry)}
+    assert records[("v1", "rev-1")].status == "retired"
+    assert records[("v1", "rev-2")].status == "active"
+    assert promoted.parent_version == "v1"
+    assert active_record(registry).revision == "rev-2"
+    assert active_record(registry).version == "v1"
+
+
+
+def test_capability_candidate_can_tolerate_small_metric_regression() -> None:
+    current = record("v1", 1.0, 4.0, status="active", revision="rev-1")
+    candidate = record(
+        "v1",
+        1.01,
+        4.04,
+        revision="rev-2",
+        max_metric_regression=0.02,
+    )
+
+    assert should_promote(candidate, current)
+
+
+def test_capability_candidate_cannot_exceed_declared_metric_tolerance() -> None:
+    current = record("v1", 1.0, 4.0, status="active", revision="rev-1")
+    candidate = record(
+        "v1",
+        1.03,
+        4.04,
+        revision="rev-2",
+        max_metric_regression=0.02,
+    )
+
+    assert not should_promote(candidate, current)
+
+def test_different_version_update_is_still_supported(tmp_path: Path) -> None:
+    registry = tmp_path / "registry.json"
+    promote_candidate(registry, record("v1", 1.5, 4.5, revision="rev-1"))
+    promoted = promote_candidate(registry, record("v2", 1.4, 4.4, revision="rev-2"))
+
+    assert promoted.status == "active"
+    assert promoted.parent_version == "v1"
 
 
 def test_non_candidate_and_negative_metrics_are_rejected(tmp_path: Path) -> None:
@@ -95,16 +136,16 @@ def test_invalid_benchmark_version_is_rejected() -> None:
 
 
 def test_benchmark_version_must_match_active_model() -> None:
-    current = record("v1", 1.5, 4.5, status="active", benchmark_version="v2")
-    candidate = record("v2", 1.4, 4.4, benchmark_version="v1")
+    current = record("v1", 1.5, 4.5, status="active", benchmark_version="v1", revision="rev-1")
+    candidate = record("v1", 1.4, 4.4, benchmark_version="v2", revision="rev-2")
 
     with pytest.raises(ValueError, match="benchmark versions"):
         should_promote(candidate, current)
 
 
-def test_candidate_version_must_differ_from_active() -> None:
-    current = record("v1", 1.5, 4.5, status="active")
-    candidate = record("v1", 1.4, 4.4)
+def test_same_version_same_revision_is_rejected() -> None:
+    current = record("v1", 1.5, 4.5, status="active", revision="rev-1")
+    candidate = record("v1", 1.4, 4.4, revision="rev-1")
 
-    with pytest.raises(ValueError, match="must differ"):
+    with pytest.raises(ValueError, match="candidate revision"):
         should_promote(candidate, current)

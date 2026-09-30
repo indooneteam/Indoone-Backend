@@ -1,3 +1,5 @@
+import pytest
+
 from app.ai.grounding import (
     GroundedEvidence,
     append_sources,
@@ -38,14 +40,13 @@ def test_append_sources_without_evidence_returns_clean_answer() -> None:
 
 
 def test_append_sources_rejects_internal_model_details() -> None:
-    result = append_sources("The trained local model is not available yet.", [])
-    assert "reliable information" in result
-    assert "trained local model" not in result
+    with pytest.raises(RuntimeError, match="quality checks"):
+        append_sources("The trained local model is not available yet.", [])
 
 
 def test_append_sources_rejects_repeated_output() -> None:
-    result = append_sources("Same answer. Same answer. Same answer.", [])
-    assert "reliable information" in result
+    with pytest.raises(RuntimeError, match="quality checks"):
+        append_sources("Same answer. Same answer. Same answer.", [])
 
 
 def test_grounding_accepts_answer_supported_by_evidence() -> None:

@@ -7,6 +7,8 @@ from urllib.parse import quote
 
 import httpx
 
+from app.ai.language_detection import SCRIPT_RANGES
+
 
 DEFAULT_TIMEOUT_SECONDS = 6.0
 MAX_SUMMARY_CHARS = 2_500
@@ -78,6 +80,28 @@ class WikipediaKnowledgeProvider:
             extract=extract[:MAX_SUMMARY_CHARS],
         )
 
+    @staticmethod
+    def _title_relevance_score(topic: str, title: str) -> int:
+        topic_normalized = " ".join(topic.casefold().split()).strip()
+        title_normalized = " ".join(title.casefold().split()).strip()
+        if not topic_normalized or not title_normalized:
+            return 0
+        if topic_normalized == title_normalized:
+            return 100
+        if topic_normalized in title_normalized or title_normalized in topic_normalized:
+            return 50
+        topic_terms = {
+            token
+            for token in re.findall(r"[\w\u0080-\uffff]+", topic_normalized, flags=re.UNICODE)
+            if len(token) > 1
+        }
+        title_terms = {
+            token
+            for token in re.findall(r"[\w\u0080-\uffff]+", title_normalized, flags=re.UNICODE)
+            if len(token) > 1
+        }
+        return len(topic_terms & title_terms)
+
     async def _summary_candidates(
         self,
         client: httpx.AsyncClient,
@@ -130,6 +154,15 @@ class WikipediaKnowledgeProvider:
             "Urdu": "ur",
         }
         code = language_codes.get(language, "en")
+        # Romanized questions (for example, "gravity andre enu?") do not
+        # reliably search localized Wikipedia editions by their Latin spelling.
+        # Use English Wikipedia as the factual source when the query is Latin-only.
+        has_native_script = any(
+            pattern.search(query)
+            for _, pattern in SCRIPT_RANGES
+        )
+        if language != "English" and re.search(r"[A-Za-z]", query) and not has_native_script:
+            code = "en"
         api_base = f"https://{code}.wikipedia.org"
         headers = {
             "Accept": "application/json",
@@ -151,7 +184,7 @@ class WikipediaKnowledgeProvider:
                         "list": "search",
                         "srsearch": search_query,
                         "srnamespace": "0",
-                        "srlimit": "1",
+                        "srlimit": "5",
                         "format": "json",
                         "formatversion": "2",
                     },
@@ -171,10 +204,18 @@ class WikipediaKnowledgeProvider:
             if not isinstance(search_items, list) or not search_items:
                 return await self._summary_candidates(client, api_base, search_query)
 
-            title = str(search_items[0].get("title", "")).strip()
-            if not title:
+            ranked_titles = [
+                str(item.get("title", "")).strip()
+                for item in search_items[:5]
+                if str(item.get("title", "")).strip()
+            ]
+            if not ranked_titles:
                 return await self._summary_candidates(client, api_base, search_query)
 
+            title = max(
+                enumerate(ranked_titles),
+                key=lambda pair: (self._title_relevance_score(search_query, pair[1]), -pair[0]),
+            )[1]
             return await self._summary(client, api_base, title)
 
 
@@ -204,6 +245,13 @@ _ENGLISH_PREFIXES = (
     "meaning of ",
     "difference between ",
     "tell me about ",
+    "teach me about ",
+)
+
+_NATIVE_FACTUAL_QUESTION_RE = re.compile(
+    r"(?:ಏನು|ಏನಿದು|ಎಂದರೇನು|ಯಾರು|ಎಲ್ಲಿ|ಯಾವಾಗ|ಏಕೆ|ಹೇಗೆ|ಯಾವುದು|ಯಾವ|ಎಷ್ಟು|ಎಷ್ಟಿದೆ|"
+    r"ಏಕೆಂದರೆ|ಬಗ್ಗೆ|ವಿವರಿಸಿ|ಅರ್ಥವೇನು|ಅರ್ಥ ಏನು)",
+    flags=re.IGNORECASE,
 )
 
 _SCRIPT_PREFIXES = (
@@ -245,8 +293,49 @@ _QUESTION_PREFIX_RE = re.compile(
     r"^(?:what\s+(?:is|are|was|were)|who\s+(?:is|was)|where\s+(?:is|was)|"
     r"when\s+(?:was|did)|why\s+(?:is|are|does|do)|how\s+(?:is|many|much|does|do)|"
     r"what\s+causes|explain|define|meaning\s+of|difference\s+between|"
-    r"tell\s+me\s+about)\s+",
+    r"tell\s+me\s+about|teach\s+me\s+about)\s+",
     flags=re.IGNORECASE,
+)
+
+_ROMAN_KANNADA_QUESTION_RE = re.compile(
+    r"(?:\bandre\s+(?:enu|yenu)\b|\b(?:enu|yenu|yaaru|yaake|hege)\b)",
+    flags=re.IGNORECASE,
+)
+
+_NATIVE_KANNADA_QUESTION_TOKENS = (
+    "ಎಂದರೇನು",
+    "ಅರ್ಥವೇನು",
+    "ಅರ್ಥ ಏನು",
+    "ಎಷ್ಟು",
+    "ಎಷ್ಟಿದೆ",
+    "ಯಾವುದು",
+    "ಯಾವಾಗ",
+    "ಯಾವ",
+    "ಯಾರು",
+    "ಎಲ್ಲಿ",
+    "ಏಕೆ",
+    "ಹೇಗೆ",
+    "ಏನು",
+    "ಬಗ್ಗೆ",
+    "ವಿವರಿಸಿ",
+)
+
+_NATIVE_KANNADA_QUESTION_TOKENS = (
+    "ಎಂದರೇನು",
+    "ಅರ್ಥವೇನು",
+    "ಅರ್ಥ ಏನು",
+    "ಎಷ್ಟು",
+    "ಎಷ್ಟಿದೆ",
+    "ಯಾವುದು",
+    "ಯಾವಾಗ",
+    "ಯಾವ",
+    "ಯಾರು",
+    "ಎಲ್ಲಿ",
+    "ಏಕೆ",
+    "ಹೇಗೆ",
+    "ಏನು",
+    "ಬಗ್ಗೆ",
+    "ವಿವರಿಸಿ",
 )
 
 
@@ -256,6 +345,23 @@ def _question_to_topic(message: str) -> str:
     if not normalized:
         return ""
     topic = _QUESTION_PREFIX_RE.sub("", normalized, count=1).strip(" ?!.")
+    romanized_tails = (
+        " andre enu", " andre yenu", " enu", " yenu", " yaaru", " yaake", " hege",
+    )
+    lowered_topic = topic.casefold()
+    for tail in romanized_tails:
+        if lowered_topic.endswith(tail) and len(topic) > len(tail):
+            topic = topic[: -len(tail)].rstrip(" ?!.")
+            break
+
+    # Native Kannada questions often contain the interrogative in the middle
+    # ("ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?") or at the end ("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?").
+    # Remove those question words before sending the query to Wikipedia so its
+    # search index sees the actual topic instead of the full sentence.
+    for marker in _NATIVE_KANNADA_QUESTION_TOKENS:
+        topic = re.sub(rf"(?<!\S){re.escape(marker)}(?!\S)", " ", topic)
+    topic = " ".join(topic.split()).strip(" ?!.")
+
     trailing_phrases = (
         " in simple words",
         " in simple terms",
@@ -316,4 +422,23 @@ def is_general_knowledge_question(message: str) -> bool:
     if any(normalized.startswith(prefix) for prefix in _ENGLISH_PREFIXES):
         return True
 
-    return any(marker in message.strip() for marker in _SCRIPT_PREFIXES)
+    if any(marker in message.strip() for marker in _SCRIPT_PREFIXES):
+        return True
+
+    if _NATIVE_FACTUAL_QUESTION_RE.search(message) and "ನೀವು" not in message and "ನಾನು" not in message:
+        return True
+
+    return bool(_ROMAN_KANNADA_QUESTION_RE.search(normalized))
+
+
+def is_question_like(message: str) -> bool:
+    normalized = " ".join(message.strip().casefold().split())
+    if not normalized:
+        return False
+    if normalized.endswith("?"):
+        return True
+    if any(normalized.startswith(prefix) for prefix in _ENGLISH_PREFIXES):
+        return True
+    if _NATIVE_FACTUAL_QUESTION_RE.search(message):
+        return True
+    return bool(_ROMAN_KANNADA_QUESTION_RE.search(normalized))

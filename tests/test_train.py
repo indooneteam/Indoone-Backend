@@ -4,9 +4,9 @@ import json
 import torch
 
 from app.ai.tokenizer import BPETokenizer
-from app.ai.training_data import format_instruction_prompt
-import app.ai.train as train_module
-from app.ai.train import _instruction_batchify, _prepare_instruction_examples, train
+from app.ai.training.training_data import format_instruction_prompt
+import app.ai.training.train as train_module
+from app.ai.training.train import _instruction_batchify, _prepare_instruction_examples, train
 
 
 def test_bpe_tokenizer_round_trip(tmp_path: Path) -> None:
@@ -69,7 +69,7 @@ def test_prepared_instruction_batches_match_on_demand_tokenization() -> None:
 
 
 def test_tokenizer_cache_reuses_matching_source_and_interrupted_run(tmp_path: Path, capsys) -> None:
-    from app.ai.train import _load_or_train_tokenizer
+    from app.ai.training.train import _load_or_train_tokenizer
 
     output_dir = tmp_path / "model"
     source = "Hello Kannada ನಮಸ್ಕಾರ Hindi नमस्ते"
@@ -199,7 +199,7 @@ def test_weighted_instruction_pools_prioritize_curated_examples(tmp_path: Path) 
         encoding="utf-8",
     )
 
-    from app.ai.train import _merge_instruction_sets_weighted
+    from app.ai.training.train import _merge_instruction_sets_weighted
 
     examples, _, weights, policy = _merge_instruction_sets_weighted(
         [curated, generated, capability]

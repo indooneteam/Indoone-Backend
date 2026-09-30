@@ -12,7 +12,7 @@ on:
       - "data/eval/**"
       - "data/evaluation/**"
       - "scripts/**"
-      - "training_manifest.json"
+      - "config/training/training_manifest.json"
       - ".github/workflows/auto-ai-training.yml"
   workflow_dispatch:
     inputs:
@@ -59,6 +59,10 @@ jobs:
       - name: Validate final curated and generated data
         run: |
           python scripts/validate_dataset_quality.py             --source data/processed/curated_instructions.jsonl             --source data/processed/instructions_validation.jsonl             --source data/processed/generated_multilingual_examples.jsonl             --source data/raw/indoone_phone_contacts_examples.jsonl
+          python scripts/validate_email_dataset.py data/raw/indoone_email_safety_examples.jsonl
+          python scripts/validate_email_dataset.py data/eval/email_safety_validation.jsonl
+          python scripts/validate_email_dataset.py data/eval/email_safety_test.jsonl
+          python scripts/validate_email_actions.py data/raw/indoone_email_actions_examples.jsonl
 
       - name: Validate training manifest
         run: python scripts/validate_training_manifest.py
@@ -122,16 +126,15 @@ jobs:
 
       - name: Promote only when all gates pass
         env:
-          MODEL_VERSION: "auto-${{ github.sha }}"
+          MODEL_VERSION: "v1"
+          MODEL_REVISION: "${{ github.sha }}"
         run: |
           python scripts/promote_model.py \
             --version "$MODEL_VERSION" \
+            --revision "$MODEL_REVISION" \
             --model-dir models/indoone-small \
             --behavior-cases data/eval/behavior.jsonl \
             --registry models/registry.json
-
-      - name: Publish promoted model to B2
-        run: python scripts/upload_model_to_b2.py --model-dir models/indoone-small --prefix models/indoone-small
 
       - name: Persist active model registry
         run: |
@@ -162,7 +165,7 @@ jobs:
         run: |
           echo "Hosted GitHub CPU training is disabled for automatic pushes."
           echo "Run colab/Indoone_AI_Training_GPU.ipynb on a Colab GPU for the actual training."
-          echo "The notebook runs training, behavioral gating, response-diversity testing, promotion, and optional B2 upload."
+          echo "The notebook runs training, behavioral gating, response-diversity testing, and promotion."
 
   note:
     name: Explain blocked automatic training

@@ -45,8 +45,6 @@ def test_append_sources_rejects_internal_model_details() -> None:
 
 
 def test_append_sources_rejects_repeated_output() -> None:
-    import pytest
-
     with pytest.raises(RuntimeError, match="quality checks"):
         append_sources("Same answer. Same answer. Same answer.", [])
 

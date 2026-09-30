@@ -34,6 +34,7 @@ from app.ai.research import (
     build_research_provider,
     format_research_context,
     format_results,
+    score_research_result,
 )
 from app.storage.b2 import B2StorageError, ensure_model_artifacts
 from app.storage.github_release import GitHubReleaseStorageError, get_github_release_storage
@@ -522,18 +523,27 @@ def _has_expected_script(
     return False
 
 
-def _research_extract_fallback(results: list[ResearchResult]) -> str | None:
-    """Return concise source evidence when synthesis is unavailable."""
-    snippets: list[str] = []
-    for result in results:
-        snippet = " ".join(result.snippet.split()).strip()
-        if snippet and snippet not in snippets:
-            snippets.append(snippet[:1200])
-        if len(snippets) >= 2:
-            break
-    if not snippets:
+def _research_extract_fallback(
+    results: list[ResearchResult],
+    query: str = "",
+) -> str | None:
+    """Return the most relevant source evidence when synthesis is unavailable."""
+    candidates = [result for result in results if " ".join(result.snippet.split()).strip()]
+    if not candidates:
         return None
-    return " ".join(snippets)
+
+    if query.strip():
+        variants = [query.strip()]
+        candidates = sorted(
+            candidates,
+            key=lambda result: (
+                -score_research_result(variants, result),
+                -len(result.snippet),
+                result.url.casefold(),
+            ),
+        )
+
+    return " ".join(candidates[0].snippet.split()).strip()[:1200]
 
 
 def _generation_error_reply(language: str) -> str:
@@ -692,7 +702,7 @@ class LocalAIService:
                 try:
                     broad_results = await _research_provider.search(prompt, limit=8)
                     if broad_results:
-                        broad_answer = _research_extract_fallback(broad_results)
+                        broad_answer = _research_extract_fallback(broad_results, prompt)
                         if broad_answer is not None:
                             return append_sources(
                                 broad_answer,
@@ -707,7 +717,7 @@ class LocalAIService:
         # local model when research coverage is incomplete. Use the available
         # evidence directly, or fail safely if no evidence exists.
         if research_blocked and intent.needs_research:
-            research_answer = _research_extract_fallback(research_candidates)
+            research_answer = _research_extract_fallback(research_candidates, prompt)
             if research_answer is not None:
                 return append_sources(
                     research_answer,
@@ -746,7 +756,7 @@ class LocalAIService:
             if knowledge_answer is not None:
                 answer = knowledge_answer
             elif intent.needs_research and answer == _fallback_reply(prompt):
-                evidence_answer = _research_extract_fallback(research_results)
+                evidence_answer = _research_extract_fallback(research_results, prompt)
                 if evidence_answer is not None:
                     answer = evidence_answer
         else:

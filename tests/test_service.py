@@ -47,6 +47,32 @@ def test_knowledge_fallback_preserves_matching_script(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_kannada_why_question_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeProvider:
+        async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
+            assert query == "ಭೂಮಿ ತಿರುಗುತ್ತದೆ"
+            assert language == "Kannada"
+            return WikipediaAnswer(
+                title="Earth's rotation",
+                url="https://en.wikipedia.org/wiki/Earth%27s_rotation",
+                extract="Earth rotates because its angular momentum was conserved as the Solar System formed.",
+            )
+
+    async def fail_model(*args, **kwargs):
+        raise AssertionError("local model must not run for a Kannada why-question")
+
+    monkeypatch.setattr(service, "_general_knowledge_provider", FakeProvider())
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_research_provider", None)
+    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
+
+    reply = await service.generate_reply("ಭೂಮಿ ಯಾಕೆ ತಿರುಗುತ್ತದೆ")
+
+    assert reply.startswith("Earth rotates because its angular momentum")
+    assert "https://en.wikipedia.org/wiki/Earth%27s_rotation" in reply
+
+
+@pytest.mark.asyncio
 async def test_romanized_kannada_factual_question_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeProvider:
         async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:

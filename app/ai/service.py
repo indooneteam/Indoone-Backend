@@ -388,11 +388,22 @@ def _knowledge_fallback_sentence(
     if score < minimum_score or not content:
         return None
 
-    query_terms = {
+    raw_query_terms = [
         token.casefold()
         for token in re.findall(r"[\w'-]+", message, flags=re.UNICODE)
         if len(token) > 1 and token.casefold() not in _KNOWLEDGE_QUERY_STOPWORDS
-    }
+    ]
+    query_terms = set(raw_query_terms)
+    for token in raw_query_terms:
+        if token.endswith("ies") and len(token) > 4:
+            query_terms.add(token[:-3] + "y")
+        elif token.endswith("es") and len(token) > 4:
+            query_terms.add(token[:-2])
+        elif token.endswith("s") and len(token) > 3:
+            query_terms.add(token[:-1])
+        if token.endswith("ing") and len(token) > 5:
+            query_terms.add(token[:-3])
+
     if not query_terms:
         return None
 
@@ -666,6 +677,7 @@ class LocalAIService:
             "translation",
             "summarization",
             "file_qa",
+            "research",
             }
         )
         if broad_question and not (research_blocked and intent.needs_research):

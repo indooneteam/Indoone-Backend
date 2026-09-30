@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.ai.answer_quality import assess_answer, user_safe_failure
+from app.ai.answer_quality import assess_answer
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file, save_text_file
 from app.ai.memory import extract_memory_candidates
@@ -78,7 +78,7 @@ async def stream_chat(request: StreamChatRequest) -> StreamingResponse:
 
     quality = assess_answer(request.message, reply)
     if not quality.passed:
-        reply = user_safe_failure()
+        raise HTTPException(status_code=503, detail=f"model answer failed quality checks: {quality.reason}")
 
     try:
         _stream_store.append(

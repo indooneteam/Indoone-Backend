@@ -29,6 +29,10 @@ jobs:
       B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
       B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
       B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+      GITHUB_MODEL_REPOSITORY: ${{ secrets.GITHUB_MODEL_REPOSITORY }}
+      GITHUB_MODEL_RELEASE_TAG: ${{ secrets.GITHUB_MODEL_RELEASE_TAG }}
+      GITHUB_MODEL_TOKEN: ${{ secrets.GITHUB_MODEL_TOKEN }}
+      GH_TOKEN: ${{ secrets.GITHUB_MODEL_TOKEN }}
       INDOONE_ALLOW_CPU_TRAINING: "false"
     steps:
       - name: Checkout

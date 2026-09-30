@@ -1,7 +1,6 @@
 import pytest
 
 from app.ai import service
-from app.ai.answer_quality import user_safe_failure
 from app.ai.research import ResearchResult
 
 
@@ -48,6 +47,5 @@ async def test_service_does_not_guess_when_current_research_fails(monkeypatch: p
     monkeypatch.setattr(service, "_research_provider", BrokenResearch())
     monkeypatch.setattr(service, "_knowledge_base", None)
 
-    reply = await service.generate_reply("latest information about a topic")
-
-    assert reply == user_safe_failure()
+    with pytest.raises(RuntimeError, match="live research is unavailable"):
+        await service.generate_reply("latest information about a topic")

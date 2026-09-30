@@ -1,0 +1,41 @@
+name: Qwen Candidate Smoke Test
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - candidate/qwen3-0.6b
+
+jobs:
+  qwen-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install candidate runtime
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install             "llama-cpp-python==0.3.35"             --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+
+      - name: Download official Qwen GGUF
+        run: |
+          python -m pip install "huggingface-hub>=0.34,<1.0"
+          python scripts/download_qwen_model.py             --repo-id ggml-org/Qwen3-0.6B-GGUF             --filename Qwen3-0.6B-Q4_0.gguf             --local-dir models/qwen3-0.6b
+
+      - name: Run smoke test
+        run: |
+          /usr/bin/time -v python scripts/test_qwen_model.py             --model models/qwen3-0.6b/Qwen3-0.6B-Q4_0.gguf             2>&1 | tee qwen-smoke.txt
+
+      - name: Upload smoke output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qwen-smoke-output
+          path: qwen-smoke.txt

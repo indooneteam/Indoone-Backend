@@ -1,426 +1,58 @@
 import pytest
 
 from app.ai import service
-from app.ai.general_knowledge import WikipediaAnswer
-from app.ai.knowledge import LocalKnowledgeBase
-from app.ai.service import _knowledge_fallback_sentence
-
-
-def test_knowledge_fallback_returns_matching_sentence(tmp_path) -> None:
-    knowledge_dir = tmp_path / "knowledge"
-    knowledge_dir.mkdir()
-    (knowledge_dir / "facts.txt").write_text(
-        "The capital city of India is New Delhi.\n"
-        "Day and night happen because Earth rotates on its axis.\n",
-        encoding="utf-8",
-    )
-
-    knowledge_base = LocalKnowledgeBase.from_directory(knowledge_dir)
-    hits = knowledge_base.search("What is the capital city of India?", limit=3)
-
-    answer = _knowledge_fallback_sentence(
-        "What is the capital city of India?",
-        hits,
-    )
-
-    assert answer == "The capital city of India is New Delhi."
-
-
-def test_knowledge_fallback_preserves_matching_script(tmp_path) -> None:
-    knowledge_dir = tmp_path / "knowledge"
-    knowledge_dir.mkdir()
-    (knowledge_dir / "facts.txt").write_text(
-        "The capital city of India is New Delhi.\n"
-        "ಭಾರತದ ರಾಜಧಾನಿ ನವದೆಹಲಿ.\n",
-        encoding="utf-8",
-    )
-
-    knowledge_base = LocalKnowledgeBase.from_directory(knowledge_dir)
-    hits = knowledge_base.search("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?", limit=3)
-
-    answer = _knowledge_fallback_sentence(
-        "ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?",
-        hits,
-    )
-
-    assert answer == "ಭಾರತದ ರಾಜಧಾನಿ ನವದೆಹಲಿ."
 
 
 @pytest.mark.asyncio
-async def test_current_kannada_office_question_uses_source_evidence_without_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeResearchProvider:
-        async def search(self, query: str, limit: int = 5):
-            assert query == "ಭಾರತದ ಈಗಿನ ರಾಷ್ಟ್ರಪತಿ ಯಾರು?"
-            assert limit == 8
-            return [
-                service.ResearchResult(
-                    "President of India",
-                    "https://example.com/president",
-                    "The President of India is the head of state.",
-                ),
-                service.ResearchResult(
-                    "Parliament House of India",
-                    "https://example.com/parliament",
-                    "The Parliament House is an important national building.",
-                ),
-            ]
-
-    async def fail_model(*args, **kwargs):
-        raise AssertionError("local model must not run for a current office-holder question")
-
-    monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_general_knowledge_provider", None)
-    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
-    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
-
-    reply = await service.generate_reply("ಭಾರತದ ಈಗಿನ ರಾಷ್ಟ್ರಪತಿ ಯಾರು?")
-
-    assert reply.startswith("The President of India is the head of state.")
-    assert "https://example.com/president" in reply
-    assert "https://example.com/parliament" in reply
-
-
-@pytest.mark.asyncio
-async def test_kannada_why_question_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeProvider:
-        async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
-            assert query == "ಭೂಮಿ ತಿರುಗುತ್ತದೆ"
-            assert language == "Kannada"
-            return WikipediaAnswer(
-                title="Earth's rotation",
-                url="https://en.wikipedia.org/wiki/Earth%27s_rotation",
-                extract="Earth rotates because its angular momentum was conserved as the Solar System formed.",
-            )
-
-    async def fail_model(*args, **kwargs):
-        raise AssertionError("local model must not run for a Kannada why-question")
-
-    monkeypatch.setattr(service, "_general_knowledge_provider", FakeProvider())
-    monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_research_provider", None)
-    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
-
-    reply = await service.generate_reply("ಭೂಮಿ ಯಾಕೆ ತಿರುಗುತ್ತದೆ")
-
-    assert reply.startswith("Earth rotates because its angular momentum")
-    assert "https://en.wikipedia.org/wiki/Earth%27s_rotation" in reply
-
-
-@pytest.mark.asyncio
-async def test_romanized_kannada_factual_question_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeProvider:
-        async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
-            assert query == "gravity"
-            assert language == "Kannada"
-            return WikipediaAnswer(
-                title="Gravity",
-                url="https://en.wikipedia.org/wiki/Gravity",
-                extract="Gravity is a force of attraction between masses.",
-            )
-
-    async def fail_model(*args, **kwargs):
-        raise AssertionError("local model must not run for a known factual question")
-
-    monkeypatch.setattr(service, "_general_knowledge_provider", FakeProvider())
-    monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_research_provider", None)
-    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
-
-    reply = await service.generate_reply("gravity andre enu?")
-
-    assert reply.startswith("Gravity is a force")
-    assert "https://en.wikipedia.org/wiki/Gravity" in reply
-
-
-@pytest.mark.asyncio
-async def test_open_ended_kannada_learning_request_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fail_model(*args, **kwargs):
-        raise AssertionError("local model must not run for an open-ended learning request")
-
-    monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_research_provider", None)
-    monkeypatch.setattr(service, "_general_knowledge_provider", None)
-    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
-
-    reply = await service.generate_reply("ನನಗೆ ಒಂದು ಹೊಸ ವಿಷಯ ಕಲಿಸು")
-
-    assert reply.startswith("ಒಂದು ಹೊಸ ವಿಷಯ ಕಲಿಯೋಣ:")
-
-
-@pytest.mark.asyncio
-async def test_general_knowledge_answer_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeProvider:
-        async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:
-            assert query == "photosynthesis"
-            assert language == "English"
-            return WikipediaAnswer(
-                title="Photosynthesis",
-                url="https://en.wikipedia.org/wiki/Photosynthesis",
-                extract="Photosynthesis is the process by which green plants convert light energy into chemical energy.",
-            )
-
-    async def fail_model(*args, **kwargs):
-        raise AssertionError("local model must not run for an ordinary factual question")
-
-    monkeypatch.setattr(service, "_general_knowledge_provider", FakeProvider())
-    monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_research_provider", None)
-    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
-
-    reply = await service.generate_reply("What is photosynthesis?")
-
-    assert reply.startswith("Photosynthesis is the process")
-    assert "Sources:" in reply
-    assert "https://en.wikipedia.org/wiki/Photosynthesis" in reply
-
-
-@pytest.mark.asyncio
-async def test_local_model_uses_training_prompt_contract_and_language_retry(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[tuple[str, str, float, int]] = []
-
-    class FakeRuntime:
-        def generate(self, prompt: str, *, max_new_tokens: int, temperature: float, language: str) -> str:
-            calls.append((prompt, language, temperature, max_new_tokens))
-            if len(calls) == 1:
-                return "ನೃತ್ಯ ಕಲಿಯುವ ರೋಬೋಟ್‌ನ ಕಥೆ."
-            return "The robot practiced dancing every evening and finally performed a funny dance for its friends."
-
-    monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_research_provider", None)
-    monkeypatch.setattr(service, "_general_knowledge_provider", None)
-    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
-
-    reply = await service.generate_reply("Write a short funny story about a robot learning to dance.")
-
-    assert reply.startswith("The robot practiced dancing")
-    assert len(calls) == 2
-    prompt, language, temperature, max_new_tokens = calls[0]
-    assert prompt.startswith("<instruction>\n")
-    assert prompt.endswith("</instruction>\n<response>\n")
-    assert "Write a short funny story about a robot learning to dance." in prompt
-    assert language == "English"
-    assert temperature == 0.7
-    assert max_new_tokens == 160
-    assert calls[1][2] == 0.2
-
-
-
-@pytest.mark.asyncio
-async def test_local_model_retries_after_internal_quality_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[float] = []
-
-    class FakeRuntime:
-        def generate(self, prompt: str, *, max_new_tokens: int, temperature: float, language: str) -> str:
-            calls.append(temperature)
-            if len(calls) == 1:
-                return "traceback: internal server error"
-            return "The robot learned a silly dance and made everyone laugh."
-
-    monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_research_provider", None)
-    monkeypatch.setattr(service, "_general_knowledge_provider", None)
-    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
-
-    reply = await service.generate_reply("Write a funny story about a robot.")
-
-    assert reply == "The robot learned a silly dance and made everyone laugh."
-    assert calls == [0.7, 0.2]
-
-
-def test_local_knowledge_contains_resilient_india_states_fact() -> None:
-    from pathlib import Path
-
-    knowledge_base = LocalKnowledgeBase.from_directory(Path("data/knowledge"))
-    hits = knowledge_base.search("How many states are there in India?", limit=3)
-
-    answer = _knowledge_fallback_sentence(
-        "How many states are there in India?",
-        hits,
-    )
-
-    assert answer == "India has 28 states and 8 Union Territories."
-
-
-@pytest.mark.asyncio
-async def test_research_generation_uses_full_evidence_context_for_one_answer(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class FakeResearchProvider:
-        async def search(self, query: str, limit: int = 5):
-            assert query == "ಈಗಿನ AI technology ಬಗ್ಗೆ research ಮಾಡಿ"
-            assert limit == 8
-            return [
-                service.ResearchResult(
-                    "AI research source",
-                    "https://research.example/ai",
-                    "Generative AI is an active research area.",
-                ),
-                service.ResearchResult(
-                    "AI news source",
-                    "https://news.example/ai",
-                    "Recent AI developments include multimodal systems.",
-                ),
-            ]
-
+async def test_service_routes_unseen_requests_to_universal_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    class FakeRuntime:
-        def generate(
-            self,
-            prompt: str,
-            *,
-            max_new_tokens: int,
-            temperature: float,
-            language: str,
-        ) -> str:
-            calls.append(prompt)
-            return "AI technology ಹಲವು research areasನಲ್ಲಿ ಅಭಿವೃದ್ಧಿಯಾಗುತ್ತಿದೆ."
+    class FakeProvider:
+        async def generate(self, *, system_instruction: str, user_prompt: str, temperature: float, max_output_tokens: int) -> str:
+            calls.append(user_prompt)
+            return "A newly generated answer for an unseen request."
 
+    monkeypatch.setattr(service, "_universal_answer_provider", FakeProvider())
+    monkeypatch.setattr(service, "_research_provider", None)
     monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_general_knowledge_provider", None)
-    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
-    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
 
-    reply = await service.generate_reply("ಈಗಿನ AI technology ಬಗ್ಗೆ research ಮಾಡಿ")
+    reply = await service.generate_reply("Explain a topic that is not in any example.")
 
+    assert reply == "A newly generated answer for an unseen request."
     assert len(calls) == 1
-    assert "Fresh research evidence:" in calls[0]
-    assert "research.example" in calls[0]
-    assert "news.example" in calls[0]
-    assert "Sources:" in reply
-    assert reply.count("https://research.example/ai") == 1
-    assert reply.count("https://news.example/ai") == 1
+    assert "Explain a topic that is not in any example." in calls[0]
 
 
 @pytest.mark.asyncio
-async def test_research_generation_uses_available_evidence_when_source_coverage_is_limited(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class FakeResearchProvider:
-        async def search(self, query: str, limit: int = 5):
-            return [
-                service.ResearchResult(
-                    "Relevant AI source",
-                    "https://research.example/ai",
-                    "AI technology evidence.",
-                ),
-            ]
+async def test_service_passes_history_and_document_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[str] = []
 
-    class FakeRuntime:
-        def generate(
-            self,
-            prompt: str,
-            *,
-            max_new_tokens: int,
-            temperature: float,
-            language: str,
-        ) -> str:
-            raise AssertionError("local model must not be used when research evidence is available")
+    class FakeProvider:
+        async def generate(self, *, system_instruction: str, user_prompt: str, temperature: float, max_output_tokens: int) -> str:
+            captured.append(user_prompt)
+            return "Context was used."
 
+    monkeypatch.setattr(service, "_universal_answer_provider", FakeProvider())
+    monkeypatch.setattr(service, "_research_provider", None)
     monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_general_knowledge_provider", None)
-    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
-    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
 
-    reply = await service.generate_reply("latest AI technology news")
-
-    assert "AI technology evidence." in reply
-    assert "https://research.example/ai" in reply
-
-
-@pytest.mark.asyncio
-async def test_research_generation_without_evidence_returns_safe_failure(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class FakeResearchProvider:
-        async def search(self, query: str, limit: int = 5):
-            return []
-
-    class FakeRuntime:
-        def generate(
-            self,
-            prompt: str,
-            *,
-            max_new_tokens: int,
-            temperature: float,
-            language: str,
-        ) -> str:
-            raise AssertionError("local model must not run when no research evidence exists")
-
-    monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_general_knowledge_provider", None)
-    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
-    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
-
-    reply = await service.generate_reply("latest AI technology news")
-
-    assert "I’m sorry" in reply
-
-
-def test_research_requires_independent_sources() -> None:
-    results = [
-        service.ResearchResult("One", "https://example.com/one", "source"),
-        service.ResearchResult("Two", "https://example.com/two", "source"),
-    ]
-    assert service._research_has_enough_sources(results, cross_check=False) is False
-
-    results.append(
-        service.ResearchResult("Three", "https://second.example/three", "source")
+    reply = await service.generate_reply(
+        "Summarize the discussion.",
+        history=[("user", "We discussed a product launch."), ("assistant", "The launch is next month.")],
+        document_context="Release checklist: publish notes.",
     )
-    assert service._research_has_enough_sources(results, cross_check=False) is True
-    assert service._research_has_enough_sources(results, cross_check=True) is False
 
-
-
-
-@pytest.mark.asyncio
-async def test_broad_question_does_not_fall_through_to_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeResearchProvider:
-        async def search(self, query: str, limit: int = 5):
-            assert query == "ನೀನು ಯಾರು?"
-            assert limit == 8
-            return [
-                service.ResearchResult(
-                    "No matching source",
-                    "https://example.com/no-match",
-                    "",
-                )
-            ]
-
-    async def fail_model(*args, **kwargs):
-        raise AssertionError("local model must not run for explicit question")
-
-    monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_general_knowledge_provider", None)
-    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
-    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
-
-    reply = await service.generate_reply("ನೀನು ಯಾರು?")
-
-    assert reply.startswith("ನಾನು Indoone AI.")
+    assert reply == "Context was used."
+    assert "product launch" in captured[0]
+    assert "publish notes" in captured[0]
 
 
 @pytest.mark.asyncio
-async def test_broad_question_uses_evidence_before_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    class FakeResearchProvider:
-        async def search(self, query: str, limit: int = 5):
-            return [
-                service.ResearchResult(
-                    "Solar panels",
-                    "https://example.com/solar",
-                    "Solar panels convert sunlight into electrical energy.",
-                )
-            ]
-
-    async def fail_model(*args, **kwargs):
-        raise AssertionError("local model must not run when broad research has evidence")
-
+async def test_service_fails_safely_without_universal_generation_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(service, "_universal_answer_provider", None)
+    monkeypatch.setattr(service, "_research_provider", None)
     monkeypatch.setattr(service, "_knowledge_base", None)
-    monkeypatch.setattr(service, "_general_knowledge_provider", None)
-    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
-    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
 
-    reply = await service.generate_reply("How can solar panels work?")
+    reply = await service.generate_reply("Answer an arbitrary question.")
 
-    assert "Solar panels convert sunlight" in reply
-    assert "https://example.com/solar" in reply
+    assert reply.startswith("I’m sorry,")

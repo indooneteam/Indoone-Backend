@@ -371,6 +371,12 @@ _KNOWLEDGE_QUERY_STOPWORDS = {
     "the", "there", "to", "was", "were", "what", "when", "where", "who", "why",
 }
 
+_KNOWLEDGE_TERM_ALIASES = {
+    "price": {"price", "cost", "costs"},
+    "cost": {"price", "cost", "costs"},
+    "costs": {"price", "cost", "costs"},
+}
+
 
 def _knowledge_fallback_sentence(
     message: str,
@@ -397,6 +403,7 @@ def _knowledge_fallback_sentence(
         ]
         terms = set(raw_terms)
         for token in raw_terms:
+            terms.update(_KNOWLEDGE_TERM_ALIASES.get(token, {token}))
             if token.endswith("ies") and len(token) > 4:
                 terms.add(token[:-3] + "y")
             elif token.endswith("es") and len(token) > 4:

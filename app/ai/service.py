@@ -13,9 +13,6 @@ from typing import TYPE_CHECKING
 import re
 import time
 
-from app.ai.knowledge import LocalKnowledgeBase
-from app.ai.research import ResearchProvider, build_research_provider
-
 from app.storage.github_release import GitHubReleaseStorageError, get_github_release_storage
 
 
@@ -29,18 +26,14 @@ if TYPE_CHECKING:
 LocalModelRuntime = None
 
 MODEL_DIR = Path("models/indoone-small")
-KNOWLEDGE_DIR = Path("data/knowledge")
 _checkpoint = MODEL_DIR / "indoone-small.pt"
 _tokenizer = MODEL_DIR / "tokenizer.json"
 # Keep model loading entirely request-driven. Constructing LocalAIEngine at import
 # time can eagerly load the full PyTorch checkpoint during Render startup, which
 # increases memory pressure and can cause the web process to restart before chat.
 _runtime: "LocalModelRuntime | None" = None
-_knowledge_base: LocalKnowledgeBase | None = None
-_research_provider: ResearchProvider | None = build_research_provider()
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0
 _MODEL_LOAD_RETRY_SECONDS = 60.0
-_MODEL_GENERATION_TIMEOUT_SECONDS = 120.0
 _MODEL_MAX_NEW_TOKENS = 128
 # Serialize the artifact check/runtime load so concurrent chat requests cannot
 # trigger duplicate B2 downloads or duplicate model loads.
@@ -141,10 +134,6 @@ def _load_local_model_runtime() -> "LocalModelRuntime | None":
         _MODEL_LOAD_LOCK.release()
 
 
-# Model loading is lazy: deployments and health checks must not consume remote model-storage bandwidth.
-if KNOWLEDGE_DIR.exists() and list(KNOWLEDGE_DIR.glob("*.txt")):
-    _knowledge_base = LocalKnowledgeBase.from_directory(KNOWLEDGE_DIR)
-
 
 _SCRIPT_RANGES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("Kannada", re.compile(r"[\u0C80-\u0CFF]")),
@@ -236,7 +225,7 @@ def _generate_with_local_model(
 
 
 class _LocalModelAnswerProvider:
-    """Adapter that uses the trained Indoone Transformer as the universal generator."""
+    """Generate every user-facing answer with the trained Indoone model."""
 
     async def generate(
         self,
@@ -244,27 +233,24 @@ class _LocalModelAnswerProvider:
         system_instruction: str,
         user_prompt: str,
         temperature: float = 0.2,
-        max_output_tokens: int = 192,
+        max_output_tokens: int = _MODEL_MAX_NEW_TOKENS,
     ) -> str:
         runtime = _load_local_model_runtime()
         if runtime is None:
             raise RuntimeError("trained Indoone local model is unavailable")
+
         context = f"{system_instruction.strip()}\n\n{user_prompt.strip()}".strip()
         try:
-            return await asyncio.wait_for(
-                asyncio.to_thread(
-                    _generate_with_local_model,
-                    runtime,
-                    context,
-                    _detect_response_language(user_prompt),
-                    min(temperature, 0.7),
-                    min(max_output_tokens, 192),
-                ),
-                timeout=_MODEL_GENERATION_TIMEOUT_SECONDS,
+            return await asyncio.to_thread(
+                _generate_with_local_model,
+                runtime,
+                context,
+                _detect_response_language(user_prompt),
+                min(temperature, 0.7),
+                min(max_output_tokens, _MODEL_MAX_NEW_TOKENS),
             )
-        except asyncio.TimeoutError as exc:
-            raise RuntimeError("trained Indoone local model generation timed out") from exc
-
+        except (RuntimeError, ValueError) as exc:
+            raise RuntimeError("trained Indoone local model generation failed") from exc
 
 from app.ai.universal_qa import UniversalQuestionAnswerPipeline
 
@@ -273,7 +259,7 @@ _universal_answer_provider = _LocalModelAnswerProvider()
 
 
 class LocalAIService:
-    """Compatibility entry point backed by the universal QA pipeline."""
+    """Direct local-model answer entry point."""
 
     async def generate(
         self,
@@ -281,19 +267,35 @@ class LocalAIService:
         history: list[tuple[str, str]] | None = None,
         document_context: str = "",
     ) -> str:
-        pipeline = UniversalQuestionAnswerPipeline(
-            _universal_answer_provider,
-            research_provider=_research_provider,
-            knowledge_base=_knowledge_base,
-        )
-        reply = await pipeline.answer(
-            message,
-            history=history,
-            document_context=document_context,
-        )
+        prompt_parts = [message.strip()]
 
-        return reply
+        if history:
+            history_lines = []
+            for role, content in history[-12:]:
+                clean_content = " ".join(str(content).split()).strip()
+                if clean_content:
+                    history_lines.append(f"{role}: {clean_content[:4_000]}")
+            if history_lines:
+                prompt_parts.extend(["", "CONVERSATION HISTORY:", *history_lines])
 
+        if document_context.strip():
+            prompt_parts.extend(["", "USER-PROVIDED DOCUMENT:", document_context.strip()[:100_000]])
+
+        system_instruction = (
+            "You are Indoone AI. Answer the user's actual request directly using "
+            "the knowledge learned by your trained Indoone model. Do not use or "
+            "invent external sources, tools, retrieval results, canned answers, "
+            "templates, or fallback responses. Think through the request before "
+            "returning the answer. Use the user's language and writing style."
+        )
+        if _universal_answer_provider is None:
+            raise RuntimeError("trained Indoone model provider is unavailable")
+        return await _universal_answer_provider.generate(
+            system_instruction=system_instruction,
+            user_prompt="\n".join(prompt_parts),
+            temperature=0.2,
+            max_output_tokens=_MODEL_MAX_NEW_TOKENS,
+        )
 
 async def generate_reply(
     message: str,

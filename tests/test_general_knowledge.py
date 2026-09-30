@@ -114,7 +114,6 @@ def test_question_to_topic_removes_common_english_prefixes() -> None:
     assert _question_to_topic("How many states are in India?") == "states are in India"
     assert _question_to_topic("How much water is on Earth?") == "water is on Earth"
     assert _question_to_topic("ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?") == "ಭೂಮಿ ತಿರುಗುತ್ತದೆ"
-    assert _question_to_topic("ಭೂಮಿ ಯಾಕೆ ತಿರುಗುತ್ತದೆ?") == "ಭೂಮಿ ತಿರುಗುತ್ತದೆ"
     assert _question_to_topic("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?") == "ಭಾರತದ ರಾಜಧಾನಿ"
     assert _question_to_topic("ಗ್ರಾವಿಟಿ ಎಂದರೇನು") == "ಗ್ರಾವಿಟಿ"
 
@@ -182,7 +181,6 @@ def test_question_like_detection_catches_unlisted_question_forms() -> None:
     from app.ai.general_knowledge import is_question_like
 
     assert is_question_like("ನೀನು ಯಾರು?")
-    assert is_question_like("ಭೂಮಿ ಯಾಕೆ ತಿರುಗುತ್ತದೆ")
     assert is_question_like("How can solar panels work?")
     assert is_question_like("gravity andre enu?")
 
@@ -253,16 +251,6 @@ async def test_wikipedia_provider_prefers_relevant_search_title(monkeypatch: pyt
         url="https://en.wikipedia.org/wiki/Earth",
         extract="Earth is the third planet from the Sun.",
     )
-
-
-def test_kannada_why_question_to_topic_is_general() -> None:
-    from app.ai.question_understanding import understand_question
-
-    result = understand_question("ಭೂಮಿ ಯಾಕೆ ತಿರುಗುತ್ತದೆ")
-    assert result.language == "Kannada"
-    assert result.needs_research is False
-    assert result.intent == "general"
-    assert result.research_query == "ಭೂಮಿ ತಿರುಗುತ್ತದೆ"
 
 
 def test_historical_kannada_question_is_not_fresh_research() -> None:

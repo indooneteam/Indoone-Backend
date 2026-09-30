@@ -78,15 +78,26 @@ async def get_gmail_message(user_id: str, message_id: str) -> dict[str, object]:
     return {"integration": "gmail", "user_id": user_id.strip(), "message": body, "secrets_exposed": False}
 
 
-async def send_gmail_message(user_id: str, to: str, subject: str, body: str, approved: bool = False) -> dict[str, object]:
+async def _send_raw_message(
+    user_id: str,
+    *,
+    to: str,
+    subject: str,
+    body: str,
+    approved: bool,
+    thread_id: str = "",
+    in_reply_to: str = "",
+    references: str = "",
+) -> dict[str, object]:
     user = user_id.strip()
     if not user:
         raise ValueError("user_id is required")
     if not approved:
         raise PermissionError("explicit approval is required for gmail send operations")
+
     recipient = to.strip()
     subject = subject.strip()
-    body = body.strip()
+    content = body.strip()
     if not recipient:
         raise ValueError("to is required")
     if not subject:
@@ -95,21 +106,31 @@ async def send_gmail_message(user_id: str, to: str, subject: str, body: str, app
         raise ValueError("to exceeds maximum length of 512")
     if len(subject) > 2000:
         raise ValueError("subject exceeds maximum length of 2000")
-    if not body:
+    if not content:
         raise ValueError("body is required")
-    if len(body) > 20000:
+    if len(content) > 20000:
         raise ValueError("body exceeds maximum length of 20000")
+
     message = EmailMessage()
     message["To"] = recipient
     message["Subject"] = subject
-    message.set_content(body)
+    if in_reply_to:
+        message["In-Reply-To"] = in_reply_to
+    if references:
+        message["References"] = references
+    message.set_content(content)
+
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
     token = _token(user)
+    payload: dict[str, object] = {"raw": raw}
+    if thread_id:
+        payload["threadId"] = thread_id
+
     async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.post(
             f"{_GMAIL_BASE_URL}/messages/send",
             headers=_headers(token),
-            json={"raw": raw},
+            json=payload,
         )
         response.raise_for_status()
         result = response.json()
@@ -118,7 +139,77 @@ async def send_gmail_message(user_id: str, to: str, subject: str, body: str, app
     return {
         "integration": "gmail",
         "user_id": user,
-        "operation": "send",
+        "operation": "reply" if in_reply_to else "send",
         "result": {"id": result.get("id"), "thread_id": result.get("threadId")},
         "secrets_exposed": False,
     }
+
+
+async def send_gmail_message(
+    user_id: str,
+    to: str,
+    subject: str,
+    body: str,
+    approved: bool = False,
+) -> dict[str, object]:
+    return await _send_raw_message(
+        user_id,
+        to=to,
+        subject=subject,
+        body=body,
+        approved=approved,
+    )
+
+
+async def reply_gmail_message(
+    user_id: str,
+    message_id: str,
+    body: str,
+    approved: bool = False,
+) -> dict[str, object]:
+    original = await get_gmail_message(user_id, message_id)
+    message = original.get("message")
+    if not isinstance(message, dict):
+        raise RuntimeError("gmail provider returned an invalid original message")
+
+    headers: dict[str, str] = {}
+    payload = message.get("payload")
+    raw_headers = payload.get("headers", []) if isinstance(payload, dict) else []
+    if isinstance(raw_headers, list):
+        for item in raw_headers:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name", "")).strip().casefold()
+            value = str(item.get("value", "")).strip()
+            if name and value:
+                headers[name] = value
+
+    sender = headers.get("from", "").strip()
+    original_subject = headers.get("subject", "").strip()
+    message_id_header = headers.get("message-id", "").strip()
+    existing_references = headers.get("references", "").strip()
+    thread_id = str(message.get("threadId", "")).strip()
+
+    if not sender:
+        raise ValueError("original email sender is missing")
+
+    subject = original_subject
+    if subject and not subject.casefold().startswith("re:"):
+        subject = f"Re: {subject}"
+    if not subject:
+        subject = "Re:"
+
+    references = " ".join(
+        part for part in (existing_references, message_id_header) if part
+    ).strip()
+
+    return await _send_raw_message(
+        user_id,
+        to=sender,
+        subject=subject,
+        body=body,
+        approved=approved,
+        thread_id=thread_id,
+        in_reply_to=message_id_header,
+        references=references,
+    )

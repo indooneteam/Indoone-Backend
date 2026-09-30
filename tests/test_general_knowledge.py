@@ -255,6 +255,16 @@ async def test_wikipedia_provider_prefers_relevant_search_title(monkeypatch: pyt
     )
 
 
+def test_kannada_why_question_to_topic_is_general() -> None:
+    from app.ai.question_understanding import understand_question
+
+    result = understand_question("ಭೂಮಿ ಯಾಕೆ ತಿರುಗುತ್ತದೆ")
+    assert result.language == "Kannada"
+    assert result.needs_research is False
+    assert result.intent == "general"
+    assert result.research_query == "ಭೂಮಿ ತಿರುಗುತ್ತದೆ"
+
+
 def test_historical_kannada_question_is_not_fresh_research() -> None:
     from app.ai.question_understanding import understand_question
 

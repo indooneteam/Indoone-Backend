@@ -114,6 +114,7 @@ def test_question_to_topic_removes_common_english_prefixes() -> None:
     assert _question_to_topic("How many states are in India?") == "states are in India"
     assert _question_to_topic("How much water is on Earth?") == "water is on Earth"
     assert _question_to_topic("ಭೂಮಿ ಏಕೆ ತಿರುಗುತ್ತದೆ?") == "ಭೂಮಿ ತಿರುಗುತ್ತದೆ"
+    assert _question_to_topic("ಭೂಮಿ ಯಾಕೆ ತಿರುಗುತ್ತದೆ?") == "ಭೂಮಿ ತಿರುಗುತ್ತದೆ"
     assert _question_to_topic("ಭಾರತದ ರಾಜಧಾನಿ ಯಾವುದು?") == "ಭಾರತದ ರಾಜಧಾನಿ"
     assert _question_to_topic("ಗ್ರಾವಿಟಿ ಎಂದರೇನು") == "ಗ್ರಾವಿಟಿ"
 
@@ -181,6 +182,7 @@ def test_question_like_detection_catches_unlisted_question_forms() -> None:
     from app.ai.general_knowledge import is_question_like
 
     assert is_question_like("ನೀನು ಯಾರು?")
+    assert is_question_like("ಭೂಮಿ ಯಾಕೆ ತಿರುಗುತ್ತದೆ")
     assert is_question_like("How can solar panels work?")
     assert is_question_like("gravity andre enu?")
 

@@ -4,7 +4,7 @@ import pytest
 from app.ai.inference import LocalModelRuntime
 from app.ai.model import MODEL_VERSION, IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
-from app.ai.train import train
+from app.ai.training.train import train
 
 
 def test_bpe_tokenizer_round_trip(tmp_path) -> None:

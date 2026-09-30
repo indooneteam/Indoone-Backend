@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.ai.training_data import load_examples
+from app.ai.training.training.training_data import load_examples
 
 
 def test_core_instruction_seed_is_valid() -> None:

@@ -17,6 +17,8 @@ from app.ai.tool_registry import get_tool_spec
 from app.capabilities.contacts import parse_contacts, resolve_contact, search_contacts
 from app.capabilities.gmail import get_gmail_message, list_gmail_messages, send_gmail_message
 from app.capabilities.email_safety import analyze_gmail_email_safety
+from app.capabilities.email_actions import compose_gmail_email
+from app.capabilities.gmail import reply_gmail_message
 from app.capabilities.phone import build_call_action
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
@@ -204,6 +206,17 @@ async def _gmail_read(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
+async def _gmail_compose(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("gmail_compose payload must be an object")
+    request = str(data.get("request", "")).strip()
+    if not request:
+        raise ValueError("compose request is required")
+    result = await _run_async(compose_gmail_email(request=request), 20.0)
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
 async def _gmail_email_safety(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
@@ -222,6 +235,28 @@ async def _gmail_email_safety(payload: str) -> str:
         ),
         spec.timeout_seconds if spec else 20.0,
     )
+
+
+async def _gmail_reply(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("gmail_reply payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    message_id = str(data.get("message_id", "")).strip()
+    body = str(data.get("body", "")).strip()
+    if not user_id or not message_id or not body:
+        raise ValueError("user_id, message_id and body are required")
+    spec = get_tool_spec("gmail_reply")
+    result = await _run_async(
+        reply_gmail_message(
+            user_id=user_id,
+            message_id=message_id,
+            body=body,
+            approved=True,
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
 async def _gmail_send(payload: str) -> str:
@@ -259,7 +294,9 @@ TOOLS: dict[str, ToolCallable] = {
     "phone_call_contact": _phone_call_contact,
     "gmail_search": _gmail_search,
     "gmail_read": _gmail_read,
+    "gmail_compose": _gmail_compose,
     "gmail_email_safety": _gmail_email_safety,
+    "gmail_reply": _gmail_reply,
     "gmail_send": _gmail_send,
 }
 

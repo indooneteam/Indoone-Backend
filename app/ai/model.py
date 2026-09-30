@@ -217,6 +217,11 @@ class IndooneTransformer(nn.Module):
         self.lm_head = nn.Linear(n_embd, vocab_size, bias=False)
         self.lm_head.weight = self.token_embedding.weight
         self.apply(self._init_weights)
+        # The Email adapter must start as an exact identity so enabling it on
+        # an untrained adapter cannot perturb the existing base model.
+        for block in self.blocks:
+            if block.email_adapter_up is not None:
+                nn.init.zeros_(block.email_adapter_up.weight)
 
     @staticmethod
     def _init_weights(module: nn.Module) -> None:

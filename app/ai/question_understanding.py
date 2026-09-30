@@ -63,6 +63,7 @@ _FRESH_MARKERS = (
 _KANNADA_FRESH_MARKERS = (
     "ಇವತ್ತು", "ಇತ್ತೀಚಿನ", "ಈಗ", "ಈಗಿನ", "ಪ್ರಸ್ತುತ", "ಸದ್ಯ", "ಇಂದಿನ",
     "ರಾಷ್ಟ್ರಪತಿ", "ಪ್ರಧಾನಮಂತ್ರಿ", "ಮಂತ್ರಿ",
+    "ಯಾಕೆ", "ಏನಕ್ಕೆ",
     "ದರ", "ಹವಾಮಾನ", "ಫಲಿತಾಂಶ", "ಬೆಲೆ",
 )
 
@@ -172,6 +173,10 @@ def _question_type(normalized: str) -> str:
 
 def _topic_for_search(normalized: str) -> str:
     topic = _QUESTION_PREFIX_RE.sub("", normalized, count=1).strip(" ?!.")
+    # Native Kannada question words can appear in the middle or at the end.
+    for marker in ("ಎಂದರೇನು", "ಅರ್ಥವೇನು", "ಅರ್ಥ ಏನು", "ಎಷ್ಟು", "ಎಷ್ಟಿದೆ", "ಯಾವುದು", "ಯಾವಾಗ", "ಯಾವ", "ಯಾರು", "ಎಲ್ಲಿ", "ಏಕೆ", "ಯಾಕೆ", "ಏನಕ್ಕೆ", "ಹೇಗೆ", "ಏನು", "ಬಗ್ಗೆ", "ವಿವರಿಸಿ"):
+        topic = re.sub(rf"(?<!\\S){re.escape(marker)}(?!\\S)", " ", topic)
+    topic = " ".join(topic.split()).strip(" ?!.")
     romanized_tails = (" andre enu", " andre yen u", " enu", " yenu", " yaake", " hege", " yaaru")
     lower = topic.casefold()
     for tail in romanized_tails:

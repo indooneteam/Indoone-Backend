@@ -546,27 +546,6 @@ def _research_extract_fallback(
     return " ".join(candidates[0].snippet.split()).strip()[:1200]
 
 
-def _is_current_office_question(message: str) -> bool:
-    """Identify present office-holder questions that should use source evidence directly."""
-    normalized = " ".join(message.casefold().split())
-    role_markers = (
-        "president", "prime minister", "minister",
-        "ರಾಷ್ಟ್ರಪತಿ", "ಪ್ರಧಾನಮಂತ್ರಿ", "ಮಂತ್ರಿ",
-    )
-    present_markers = (
-        "current", "currently", "latest", "now", "today", "right now",
-        "ಈಗ", "ಈಗಿನ", "ಪ್ರಸ್ತುತ", "ಸದ್ಯ", "ಇಂದಿನ",
-    )
-    historical_markers = (
-        "first", "former", "formerly", "historical", "history", "was", "were",
-        "ಮೊದಲ", "ಹಿಂದಿನ", "ಭೂತಪೂರ್ವ", "ಇತಿಹಾಸ",
-    )
-    has_role = any(marker in normalized for marker in role_markers)
-    has_present = any(marker in normalized for marker in present_markers)
-    has_historical = any(marker in normalized for marker in historical_markers)
-    return has_role and has_present and not has_historical
-
-
 def _generation_error_reply(language: str) -> str:
     messages = {
         "Kannada": "ಕ್ಷಮಿಸಿ, ಈ ಪ್ರಶ್ನೆಗೆ ಈಗ ಸರಿಯಾದ ಉತ್ತರವನ್ನು ರಚಿಸಲು ನನಗೆ ಸಾಧ್ಯವಾಗಲಿಲ್ಲ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಕೇಳಿ.",
@@ -613,267 +592,34 @@ def _fallback_reply(message: str) -> str:
     return "Indoone AI backend is reachable ✅, but the trained Indoone local model is not available yet."
 
 
+from app.ai.universal_qa import (
+    UniversalQuestionAnswerPipeline,
+    build_universal_answer_provider,
+)
+
+
+_universal_answer_provider = build_universal_answer_provider()
+
+
 class LocalAIService:
+    """Compatibility entry point backed by the universal QA pipeline."""
+
     async def generate(
         self,
         message: str,
         history: list[tuple[str, str]] | None = None,
         document_context: str = "",
     ) -> str:
-        prompt = message.strip()
-        if not prompt:
-            raise ValueError("message cannot be empty")
-
-        understanding = understand_question(prompt)
-        intent = classify_intent(prompt)
-        knowledge_query = understanding.research_query or prompt
-        knowledge = ""
-        knowledge_hits = []
-        if _knowledge_base is not None:
-            knowledge_hits = _knowledge_base.search(knowledge_query, limit=3)
-            knowledge = format_hits(knowledge_hits)
-        if document_context.strip():
-            knowledge = (knowledge + "\n\n" if knowledge else "") + "User-provided document:\n" + document_context.strip()[:100_000]
-
-        research = ""
-        research_results: list[ResearchResult] = []
-        research_candidates: list[ResearchResult] = []
-        research_blocked = False
-        if intent.needs_research:
-            if _research_provider is None:
-                research_blocked = True
-                logger.warning("Research provider unavailable for query: %s", prompt)
-            else:
-                try:
-                    candidate_results = await _research_provider.search(prompt, limit=8)
-                    research_candidates = candidate_results
-                    if _research_has_enough_sources(candidate_results, intent.needs_cross_check):
-                        research_results = candidate_results
-                        research = format_research_context(candidate_results)
-                    else:
-                        research_blocked = True
-                        if candidate_results:
-                            logger.warning("Insufficient independent research sources for query: %s", prompt)
-                        else:
-                            logger.warning("No research sources returned for query: %s", prompt)
-                except (httpx.HTTPError, RuntimeError, ValueError):
-                    research_results = []
-                    research = ""
-                    research_blocked = True
-                    logger.warning("Research provider failed for query: %s", prompt)
-
-        context = _build_context(prompt, history or [], knowledge=knowledge, research=research)
-        language = understanding.language
-        allow_romanized = _is_romanized_request(prompt, language)
-        minimal_context = format_instruction_prompt(
-            f"{_language_instruction(language)}\nUser request: {prompt}"
+        pipeline = UniversalQuestionAnswerPipeline(
+            _universal_answer_provider,
+            research_provider=_research_provider,
+            knowledge_base=_knowledge_base,
         )
-
-        if _is_identity_request(prompt):
-            return _identity_fallback_reply(language)
-
-        # Open-ended learning requests should still receive a useful answer when
-        # the tiny local model is unavailable or produces unusable output.
-        if _is_learning_request(prompt):
-            return _learning_fallback_reply(language)
-
-        # Present office-holder questions are factual lookup requests, not good
-        # candidates for tiny-model synthesis. Return the strongest filtered
-        # source evidence directly so related-but-wrong pages cannot be turned
-        # into an invented answer.
-        if _is_current_office_question(prompt) and research_results:
-            office_answer = _research_extract_fallback(research_results, prompt)
-            if office_answer is not None:
-                return append_sources(office_answer, _evidence_from_results(research_results))
-
-        # A strongly matched approved local fact can answer immediately without
-        # paying the CPU cost of model loading/generation.
-        knowledge_answer = _knowledge_fallback_sentence(prompt, knowledge_hits)
-        if knowledge_answer is not None and not (research_blocked and intent.needs_research):
-            return append_sources(knowledge_answer, _evidence_from_results(research_results))
-
-        # Use a bounded public-knowledge lookup for ordinary factual questions.
-        # This avoids spending the tiny Render CPU budget on a full model run
-        # when a deterministic source can answer the question directly.
-        if (
-            not (research_blocked and intent.needs_research)
-            and is_general_knowledge_question(prompt)
-        ):
-            try:
-                web_answer = await _general_knowledge_provider.answer(
-                    knowledge_query,
-                    language=language,
-                )
-                if web_answer is not None:
-                    return append_sources(
-                        web_answer.extract,
-                        [GroundedEvidence(web_answer.title, web_answer.url, web_answer.extract)],
-                    )
-            except (httpx.HTTPError, RuntimeError, ValueError) as exc:
-                logger.warning("General knowledge lookup failed: %s", exc)
-
-        # Every explicit question that is not a dedicated workflow should get
-        # one broader evidence-backed pass before the tiny local model is allowed.
-        # This prevents wrong/hallucinated answers from the CPU model being used
-        # for ordinary questions and gives a deterministic safe failure instead.
-        broad_question = (
-            is_question_like(prompt)
-            and not _is_creative_request(prompt)
-            and intent.name not in {
-            "coding",
-            "translation",
-            "summarization",
-            "file_qa",
-            "research",
-            }
+        return await pipeline.answer(
+            message,
+            history=history,
+            document_context=document_context,
         )
-        if broad_question and not (research_blocked and intent.needs_research):
-            if _research_provider is not None:
-                try:
-                    broad_results = await _research_provider.search(prompt, limit=8)
-                    if broad_results:
-                        broad_answer = _research_extract_fallback(broad_results, prompt)
-                        if broad_answer is not None:
-                            return append_sources(
-                                broad_answer,
-                                _evidence_from_results(broad_results),
-                            )
-                except (httpx.HTTPError, RuntimeError, ValueError):
-                    logger.warning("Broad question research failed for query: %s", prompt)
-
-            return user_safe_failure()
-
-        # A fresh-information request must never fall through to the tiny
-        # local model when research coverage is incomplete. Use the available
-        # evidence directly, or fail safely if no evidence exists.
-        if research_blocked and intent.needs_research:
-            research_answer = _research_extract_fallback(research_candidates, prompt)
-            if research_answer is not None:
-                return append_sources(
-                    research_answer,
-                    _evidence_from_results(research_candidates),
-                )
-            return user_safe_failure()
-
-        # Simple greetings should never pay the cost of loading/running the
-        # trained local model. They are served immediately by the safe fallback.
-        if _is_fast_fallback_message(prompt):
-            return _fallback_reply(prompt)
-
-        generation_failed = False
-        try:
-            # Model loading and CPU inference are blocking operations. Keep them
-            # off FastAPI's event loop so a slow first load cannot stall the
-            # service/proxy and turn an otherwise recoverable request into 502.
-            runtime = await asyncio.wait_for(
-                asyncio.to_thread(_load_local_model_runtime),
-                timeout=10.0,
-            )
-        except asyncio.TimeoutError:
-            logger.warning("Indoone model load timed out; returning safe fallback")
-            runtime = None
-        except Exception:
-            logger.exception("Indoone model preparation failed")
-            runtime = None
-
-        if runtime is None:
-            try:
-                answer = _clean_model_reply(await _fallback_engine.generate(context))
-            except Exception:
-                logger.exception("Indoone lightweight fallback engine failed")
-                answer = _fallback_reply(prompt)
-            knowledge_answer = _knowledge_fallback_sentence(knowledge_query, knowledge_hits)
-            if knowledge_answer is not None:
-                answer = knowledge_answer
-            elif intent.needs_research and answer == _fallback_reply(prompt):
-                evidence_answer = _research_extract_fallback(research_results, prompt)
-                if evidence_answer is not None:
-                    answer = evidence_answer
-        else:
-            answer = ""
-            if intent.needs_research:
-                # Fresh research must be synthesized from the gathered evidence.
-                # Never try an evidence-free minimal prompt first.
-                generation_contexts = [context]
-            else:
-                generation_contexts = [minimal_context]
-                if context != minimal_context:
-                    generation_contexts.append(context)
-            temperatures, max_new_tokens = _generation_profile(prompt, intent.name)
-            generation_deadline = time.monotonic() + _MODEL_GENERATION_TIMEOUT_SECONDS
-            attempt = 0
-
-            for generation_context in generation_contexts:
-                for temperature in temperatures:
-                    attempt += 1
-                    remaining = generation_deadline - time.monotonic()
-                    if remaining <= 0:
-                        break
-                    try:
-                        candidate = _clean_model_reply(
-                            await asyncio.wait_for(
-                                asyncio.to_thread(
-                                    _generate_with_local_model,
-                                    runtime,
-                                    generation_context,
-                                    language,
-                                    temperature,
-                                    max_new_tokens,
-                                ),
-                                timeout=remaining,
-                            )
-                        )
-                        if not _has_expected_script(
-                            candidate,
-                            language,
-                            allow_romanized=allow_romanized,
-                        ):
-                            logger.warning(
-                                "Discarding malformed or wrong-language model output for %s on local generation attempt %d",
-                                language,
-                                attempt,
-                            )
-                            continue
-                        quality = assess_answer(prompt, candidate)
-                        if not quality.passed:
-                            logger.warning(
-                                "Discarding low-quality local model output on attempt %d: %s",
-                                attempt,
-                                quality.reason,
-                            )
-                            continue
-                        answer = candidate
-                        break
-                    except asyncio.TimeoutError:
-                        logger.warning(
-                            "Indoone local model generation timed out after %.1fs on attempt %d",
-                            _MODEL_GENERATION_TIMEOUT_SECONDS,
-                            attempt,
-                        )
-                        break
-                    except Exception:
-                        logger.exception(
-                            "Indoone local model generation failed on attempt %d",
-                            attempt,
-                        )
-                        continue
-                if answer or generation_deadline - time.monotonic() <= 0:
-                    break
-
-            if not answer:
-                answer = _generation_error_reply(language)
-                knowledge_answer = _knowledge_fallback_sentence(knowledge_query, knowledge_hits)
-                if knowledge_answer is not None:
-                    answer = knowledge_answer
-                else:
-                    generation_failed = True
-
-        if generation_failed and intent.needs_research:
-            # Do not attach research links to a failed synthesis; sources must
-            # support a user-visible answer rather than accompany an error message.
-            research_results = []
-
-        return append_sources(answer, _evidence_from_results(research_results))
 
 
 async def generate_reply(
@@ -881,4 +627,8 @@ async def generate_reply(
     history: list[tuple[str, str]] | None = None,
     document_context: str = "",
 ) -> str:
-    return await LocalAIService().generate(message, history=history, document_context=document_context)
+    return await LocalAIService().generate(
+        message,
+        history=history,
+        document_context=document_context,
+    )

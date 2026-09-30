@@ -47,6 +47,40 @@ def test_knowledge_fallback_preserves_matching_script(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_current_kannada_office_question_uses_source_evidence_without_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResearchProvider:
+        async def search(self, query: str, limit: int = 5):
+            assert query == "ಭಾರತದ ಈಗಿನ ರಾಷ್ಟ್ರಪತಿ ಯಾರು?"
+            assert limit == 8
+            return [
+                service.ResearchResult(
+                    "President of India",
+                    "https://example.com/president",
+                    "The President of India is the head of state.",
+                ),
+                service.ResearchResult(
+                    "Parliament House of India",
+                    "https://example.com/parliament",
+                    "The Parliament House is an important national building.",
+                ),
+            ]
+
+    async def fail_model(*args, **kwargs):
+        raise AssertionError("local model must not run for a current office-holder question")
+
+    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_general_knowledge_provider", None)
+    monkeypatch.setattr(service, "_research_provider", FakeResearchProvider())
+    monkeypatch.setattr(service, "_load_local_model_runtime", fail_model)
+
+    reply = await service.generate_reply("ಭಾರತದ ಈಗಿನ ರಾಷ್ಟ್ರಪತಿ ಯಾರು?")
+
+    assert reply.startswith("The President of India is the head of state.")
+    assert "https://example.com/president" in reply
+    assert "https://example.com/parliament" in reply
+
+
+@pytest.mark.asyncio
 async def test_kannada_why_question_bypasses_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
     class FakeProvider:
         async def answer(self, query: str, language: str = "English") -> WikipediaAnswer | None:

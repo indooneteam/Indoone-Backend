@@ -410,7 +410,7 @@ class CrossrefResearchProvider(ResearchProvider):
 def _research_terms(text: str) -> set[str]:
     return {
         token.casefold()
-        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", text)
+        for token in re.findall(r"[\w][\w._+-]*", text, flags=re.UNICODE)
         if len(token) >= 2
     }
 

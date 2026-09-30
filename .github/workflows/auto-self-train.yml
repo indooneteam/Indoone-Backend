@@ -25,10 +25,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     env:
-      B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
-      B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
-      B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
-      B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
       GITHUB_MODEL_REPOSITORY: ${{ secrets.GITHUB_MODEL_REPOSITORY }}
       GITHUB_MODEL_RELEASE_TAG: ${{ secrets.GITHUB_MODEL_RELEASE_TAG }}
       GITHUB_MODEL_TOKEN: ${{ secrets.GITHUB_MODEL_TOKEN }}

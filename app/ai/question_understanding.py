@@ -218,7 +218,10 @@ def _needs_research(normalized: str) -> bool:
             return False
 
     for marker in _KANNADA_FRESH_MARKERS:
-        if marker.casefold() in lower:
+        if re.search(
+            rf"(?<![\w\u0C80-\u0CFF]){re.escape(marker.casefold())}(?![\w\u0C80-\u0CFF])",
+            lower,
+        ):
             return True
 
     for marker in _FRESH_MARKERS:

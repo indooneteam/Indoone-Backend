@@ -11,7 +11,6 @@ from fastapi.responses import JSONResponse
 from app.ai import service as ai_service
 from app.ai.conversation_store import ConversationStore
 from app.ai.language_detection import detect_response_language
-from app.api.agent_async import router as agent_async_router
 from app.api.approvals import router as approvals_router
 from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
@@ -242,7 +241,6 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
-app.include_router(agent_async_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
@@ -297,6 +295,5 @@ async def health_details() -> dict[str, object]:
         "ai": {
             "model_artifacts_checked": ai_service._ARTIFACT_CHECK_COMPLETED,
             "model_runtime_ready": ai_service._runtime is not None,
-            "universal_qa_provider_ready": ai_service._universal_answer_provider is not None,
         },
     }

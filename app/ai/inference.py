@@ -122,7 +122,6 @@ class LocalModelRuntime:
             logits[0, list(blocked)] = float("-inf")
         return logits
 
-    @staticmethod
     def _prompt_ids(self, prompt: str) -> list[int]:
         """Render a user request in the same instruction format used for training."""
         stripped_prompt = prompt.strip()
@@ -155,7 +154,6 @@ class LocalModelRuntime:
             cleaned = cleaned[len("<response>") :].strip()
         return cleaned
 
-    @staticmethod
     def _allowed_token_ids_for_language(self, language: str) -> frozenset[int]:
         """Cache token ids that can safely contribute to the requested script."""
         normalized = language.strip().casefold() or "english"

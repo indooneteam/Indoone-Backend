@@ -9,7 +9,6 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from app.ai.agent import MAX_AGENT_STEPS, execute_agent
 from app.ai.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
 from app.capabilities.document_extract import extract_document
@@ -125,11 +124,6 @@ class DeepResearchRequest(BaseModel):
     per_query_limit: int = Field(default=5, ge=1, le=10)
 
 
-class AgentRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=20_000)
-    user_id: str = Field(default="", max_length=256)
-    approved_tools: list[str] = Field(default_factory=list, max_length=8)
-    contacts: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
 
 
 class ImageGenerationRequest(BaseModel):
@@ -423,55 +417,6 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
     return {"query": request.query, "queries": queries, "sources": results}
 
 
-@router.post("/agent")
-async def agent(request: AgentRequest) -> dict[str, object]:
-    execution = execute_agent(
-        request.message,
-        user_id=request.user_id,
-        approved_tools=frozenset(request.approved_tools),
-        contacts=request.contacts,
-    )
-    if not execution.steps and not execution.blocked_steps:
-        return {
-            "intent": "general",
-            "tool": None,
-            "tool_payload": None,
-            "result": None,
-            "steps": [],
-            "results": [],
-            "memories": list(execution.memories),
-            "blocked_steps": [],
-            "retry_counts": list(execution.retry_counts),
-            "run_id": execution.run_id,
-            "max_steps": MAX_AGENT_STEPS,
-        }
-    first = execution.steps[0] if execution.steps else execution.blocked_steps[0]
-    first_result = execution.results[0] if execution.results else None
-    return {
-        "intent": "tool",
-        "tool": first.tool,
-        "tool_payload": first.payload,
-        "result": None if first_result is None else {
-            "name": first_result.name,
-            "output": first_result.output,
-            "safe": first_result.safe,
-            "retryable": first_result.retryable,
-            "truncated": first_result.truncated,
-        },
-        "steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.steps],
-        "results": [{
-            "name": result.name,
-            "output": result.output,
-            "safe": result.safe,
-            "retryable": result.retryable,
-            "truncated": result.truncated,
-        } for result in execution.results],
-        "memories": list(execution.memories),
-        "blocked_steps": [{"index": step.index, "tool": step.tool, "payload": step.payload, "requires_approval": step.requires_approval} for step in execution.blocked_steps],
-        "retry_counts": list(execution.retry_counts),
-        "run_id": execution.run_id,
-        "max_steps": MAX_AGENT_STEPS,
-    }
 
 
 @router.post("/image-generation")

@@ -8,6 +8,8 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class ModelRecord:
+    """A deployable model revision within a stable public model version."""
+
     version: str
     model_dir: str
     checkpoint: str
@@ -18,17 +20,20 @@ class ModelRecord:
     behavioral_gate_passed: bool = False
     parent_version: str | None = None
     benchmark_version: str = "v1"
+    revision: str | None = None
+    artifact_sha256: str | None = None
 
 
 def _load_registry(path: Path) -> dict[str, object]:
     if not path.exists():
-        return {"active_version": None, "models": []}
+        return {"active_version": None, "active_revision": None, "models": []}
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("model registry must contain a JSON object")
     models = payload.get("models", [])
     if not isinstance(models, list):
         raise ValueError("model registry models must be a list")
+    payload.setdefault("active_revision", None)
     return payload
 
 
@@ -51,13 +56,24 @@ def load_records(path: Path) -> list[ModelRecord]:
 
 def active_record(path: Path) -> ModelRecord | None:
     payload = _load_registry(path)
-    active = payload.get("active_version")
-    if active is None:
+    active_version = payload.get("active_version")
+    active_revision = payload.get("active_revision")
+    if active_version is None:
         return None
-    for record in load_records(path):
-        if record.version == active:
-            return record
-    raise ValueError("active model version is missing from registry")
+
+    records = load_records(path)
+    if active_revision:
+        for record in records:
+            if record.version == active_version and record.revision == active_revision:
+                return record
+
+    matches = [record for record in records if record.version == active_version]
+    active_matches = [record for record in matches if record.status == "active"]
+    if len(active_matches) == 1:
+        return active_matches[0]
+    if len(matches) == 1:
+        return matches[0]
+    raise ValueError("active model revision is missing or ambiguous in registry")
 
 
 def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
@@ -65,6 +81,8 @@ def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
         raise ValueError("only candidate models can be promoted")
     if not candidate.version.strip():
         raise ValueError("candidate version cannot be empty")
+    if not candidate.revision or not candidate.revision.strip():
+        raise ValueError("candidate revision cannot be empty")
     if candidate.benchmark_version != "v1":
         raise ValueError("unsupported benchmark version")
     if not math.isfinite(candidate.loss) or not math.isfinite(candidate.perplexity):
@@ -75,27 +93,35 @@ def should_promote(candidate: ModelRecord, current: ModelRecord | None) -> bool:
         return False
     if current is None:
         return True
-    if candidate.version == current.version:
-        raise ValueError("candidate version must differ from the active version")
+
     if candidate.benchmark_version != current.benchmark_version:
         raise ValueError("benchmark versions must match")
+    if candidate.version == current.version and candidate.revision == current.revision:
+        raise ValueError("candidate revision must differ from the active revision")
+
     return candidate.loss < current.loss and candidate.perplexity < current.perplexity
 
 
 def promote_candidate(path: Path, candidate: ModelRecord) -> ModelRecord:
     current = active_record(path)
     if not should_promote(candidate, current):
-        raise ValueError("candidate must pass the behavioral gate and improve both loss and perplexity")
+        raise ValueError(
+            "candidate must pass the behavioral gate and improve both loss and perplexity"
+        )
 
     payload = _load_registry(path)
-    records = [record for record in load_records(path) if record.version != candidate.version]
-    if current is not None:
-        records = [
-            ModelRecord(
-                **{**asdict(record), "status": "retired" if record.version == current.version else record.status}
-            )
-            for record in records
-        ]
+    records: list[ModelRecord] = []
+    for record in load_records(path):
+        if record.version == candidate.version and record.revision == candidate.revision:
+            continue
+        if (
+            current is not None
+            and record.version == current.version
+            and record.revision == current.revision
+        ):
+            records.append(ModelRecord(**{**asdict(record), "status": "retired"}))
+        else:
+            records.append(record)
 
     promoted = ModelRecord(
         **{
@@ -106,6 +132,7 @@ def promote_candidate(path: Path, candidate: ModelRecord) -> ModelRecord:
     )
     records.append(promoted)
     payload["active_version"] = promoted.version
+    payload["active_revision"] = promoted.revision
     payload["models"] = [asdict(record) for record in records]
     _write_registry(path, payload)
     return promoted

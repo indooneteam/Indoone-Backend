@@ -41,7 +41,7 @@ _knowledge_base: LocalKnowledgeBase | None = None
 _research_provider: ResearchProvider | None = build_research_provider()
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0
 _MODEL_LOAD_RETRY_SECONDS = 60.0
-_MODEL_GENERATION_TIMEOUT_SECONDS = 20.0
+_MODEL_GENERATION_TIMEOUT_SECONDS = 120.0
 _MODEL_MAX_NEW_TOKENS = 128
 # Serialize the artifact check/runtime load so concurrent chat requests cannot
 # trigger duplicate B2 downloads or duplicate model loads.
@@ -249,14 +249,20 @@ class _LocalModelAnswerProvider:
         if runtime is None:
             raise RuntimeError("trained Indoone local model is unavailable")
         context = f"{system_instruction.strip()}\n\n{user_prompt.strip()}".strip()
-        return await asyncio.to_thread(
-            _generate_with_local_model,
-            runtime,
-            context,
-            _detect_response_language(user_prompt),
-            min(temperature, 0.7),
-            min(max_output_tokens, 192),
-        )
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(
+                    _generate_with_local_model,
+                    runtime,
+                    context,
+                    _detect_response_language(user_prompt),
+                    min(temperature, 0.7),
+                    min(max_output_tokens, 192),
+                ),
+                timeout=_MODEL_GENERATION_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError as exc:
+            raise RuntimeError("trained Indoone local model generation timed out") from exc
 
 
 from app.ai.universal_qa import UniversalQuestionAnswerPipeline

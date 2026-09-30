@@ -569,3 +569,22 @@ def test_score_research_result_prioritizes_title_matches() -> None:
     assert score_research_result(["AI technology research"], relevant) > score_research_result(
         ["AI technology research"], weak
     )
+
+
+def test_research_relevance_supports_unicode_terms() -> None:
+    query = ["ಭಾರತದ ಸ್ವಾತಂತ್ರ್ಯ ಯಾವಾಗ"]
+    relevant = ResearchResult(
+        "ಭಾರತದ ಸ್ವಾತಂತ್ರ್ಯ",
+        "https://example.com/india",
+        "ಭಾರತವು 1947ರಲ್ಲಿ ಸ್ವಾತಂತ್ರ್ಯ ಪಡೆದಿತು.",
+    )
+    unrelated = ResearchResult(
+        "ಕ್ರೀಡೆ",
+        "https://example.com/sports",
+        "ಕ್ರೀಡೆ ಮತ್ತು ಪಂದ್ಯಗಳ ಕುರಿತು ಮಾಹಿತಿ.",
+    )
+
+    from app.ai.research import _is_relevant_research_result
+
+    assert _is_relevant_research_result(query, relevant)
+    assert not _is_relevant_research_result(query, unrelated)

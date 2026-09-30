@@ -57,7 +57,7 @@ _FRESH_MARKERS = (
     "availability", "exchange rate", "currency rate", "market", "election",
     "president", "prime minister", "minister", "law", "regulation", "policy",
     "deadline", "release date", "version", "update",
-    "ಯಾವಾಗ", "ಇವತ್ತು", "ಇತ್ತೀಚಿನ", "ಈಗ", "ದರ", "ಹವಾಮಾನ", "ಫಲಿತಾಂಶ", "ಬೆಲೆ",
+"ಇವತ್ತು", "ಇತ್ತೀಚಿನ", "ಈಗ", "ದರ", "ಹವಾಮಾನ", "ಫಲಿತಾಂಶ", "ಬೆಲೆ",
 )
 
 _CROSS_CHECK_MARKERS = (
@@ -191,6 +191,25 @@ def _latin_topic_terms(text: str) -> str:
 
 def _needs_research(normalized: str) -> bool:
     lower = normalized.casefold()
+    historical_markers = (
+        "first",
+        "former",
+        "formerly",
+        "historical",
+        "history",
+        "was",
+        "were",
+        "ಹಿಂದಿನ",
+        "ಮೊದಲ",
+        "ಇತಿಹಾಸ",
+        "ಭೂತಪೂರ್ವ",
+    )
+    if any(re.search(rf"(?<!\w){re.escape(marker)}(?!\w)", lower) for marker in historical_markers):
+        current_role_markers = ("president", "prime minister", "minister", "ರಾಷ್ಟ್ರಪತಿ", "ಪ್ರಧಾನಮಂತ್ರಿ", "ಮಂತ್ರಿ")
+        if any(marker in lower for marker in current_role_markers):
+            # Historical wording takes precedence over role-name freshness.
+            return False
+
     for marker in _FRESH_MARKERS:
         normalized_marker = marker.casefold()
         if normalized_marker == "ದರ":

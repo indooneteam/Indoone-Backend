@@ -122,10 +122,12 @@ jobs:
 
       - name: Promote only when all gates pass
         env:
-          MODEL_VERSION: "auto-${{ github.sha }}"
+          MODEL_VERSION: "v1"
+          MODEL_REVISION: "${{ github.sha }}"
         run: |
           python scripts/promote_model.py \
             --version "$MODEL_VERSION" \
+            --revision "$MODEL_REVISION" \
             --model-dir models/indoone-small \
             --behavior-cases data/eval/behavior.jsonl \
             --registry models/registry.json

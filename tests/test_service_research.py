@@ -135,3 +135,22 @@ def test_model_artifacts_are_checked_only_once_per_process(monkeypatch, tmp_path
 
     assert first is second
     assert calls == 1
+
+
+def test_research_extract_fallback_prefers_relevant_evidence() -> None:
+    results = [
+        ResearchResult(
+            "Unrelated",
+            "https://example.com/unrelated",
+            "This source discusses unrelated sports and entertainment topics.",
+        ),
+        ResearchResult(
+            "India independence",
+            "https://example.org/india",
+            "India became independent from British rule in 1947.",
+        ),
+    ]
+
+    reply = service._research_extract_fallback(results, "India independence")
+
+    assert reply == "India became independent from British rule in 1947."

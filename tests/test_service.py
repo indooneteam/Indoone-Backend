@@ -55,3 +55,12 @@ async def test_service_fails_safely_without_universal_generation_provider(monkey
 
     with pytest.raises(RuntimeError, match="trained Indoone model provider is unavailable"):
         await service.generate_reply("Answer an arbitrary question.")
+
+def test_model_artifacts_require_indoone_model_release(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.setattr(service, "get_github_release_storage", lambda: None)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Indoone model serving requires GITHUB_MODEL_REPOSITORY, GITHUB_MODEL_RELEASE_TAG, and GITHUB_MODEL_TOKEN",
+    ):
+        service._ensure_model_artifacts(tmp_path)

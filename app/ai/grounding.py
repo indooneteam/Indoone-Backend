@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from app.ai.answer_quality import assess_answer, user_safe_failure
+from app.ai.answer_quality import assess_answer
 
 
 @dataclass(frozen=True)
@@ -107,7 +107,7 @@ def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
     cleaned = answer.strip()
     quality = assess_answer("", cleaned)
     if not quality.passed:
-        return user_safe_failure()
+        raise RuntimeError(f"model answer failed quality checks: {quality.reason}")
 
     unique: list[GroundedEvidence] = []
     seen: set[str] = set()
@@ -120,7 +120,7 @@ def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
 
     grounding = assess_grounding(cleaned, unique)
     if not grounding.passed:
-        return user_safe_failure()
+        raise RuntimeError(f"model answer failed grounding checks: {grounding.reason}")
 
     if not unique:
         return cleaned

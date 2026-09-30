@@ -312,6 +312,20 @@ class LocalModelRuntime:
                 return logits
         return constrained
 
+
+    @staticmethod
+    def _is_email_request(prompt: str) -> bool:
+        """Detect email-focused requests so the capability adapter is isolated."""
+        normalized = " ".join(prompt.casefold().split())
+        return bool(
+            re.search(
+                r"(?:\\bemail\\b|\\be-mail\\b|\\binbox\\b|\\bmailbox\\b|"
+                r"\\bphishing\\b|\\bspam\\b|\\bunsubscribe\\b|"
+                r"\\bsubject\\s*:|\\bfrom\\s*:|\\bto\\s*:)",
+                normalized,
+            )
+        )
+
     @torch.inference_mode()
     def generate(
         self,
@@ -321,6 +335,7 @@ class LocalModelRuntime:
         repetition_penalty: float = DEFAULT_REPETITION_PENALTY,
         no_repeat_ngram_size: int = DEFAULT_NO_REPEAT_NGRAM_SIZE,
         language: str = "English",
+        use_email_adapter: bool | None = None,
     ) -> str:
         """Generate an assistant completion, using KV-cached decoding."""
         prompt = prompt.strip()
@@ -334,6 +349,8 @@ class LocalModelRuntime:
             raise ValueError("repetition_penalty must be at least 1")
         if no_repeat_ngram_size < 0:
             raise ValueError("no_repeat_ngram_size must be non-negative")
+        if use_email_adapter is None:
+            use_email_adapter = self._is_email_request(prompt)
 
         retrieved = self._retrieved_response(prompt)
         if retrieved is not None:
@@ -348,7 +365,10 @@ class LocalModelRuntime:
         eos_id = self.tokenizer.stoi["<eos>"]
 
         context = torch.tensor([prompt_ids], dtype=torch.long)
-        logits, past_key_values = self.model.forward_cached(context)
+        logits, past_key_values = self.model.forward_cached(
+            context,
+            use_email_adapter=use_email_adapter,
+        )
         next_logits = logits[:, -1, :]
 
         available_tokens = max(0, self.model.block_size - len(prompt_ids))
@@ -386,6 +406,7 @@ class LocalModelRuntime:
             logits, past_key_values = self.model.forward_cached(
                 next_token,
                 past_key_values,
+                use_email_adapter=use_email_adapter,
             )
             next_logits = logits[:, -1, :]
 

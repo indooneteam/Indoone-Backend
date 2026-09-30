@@ -29,6 +29,20 @@ _RESEARCH_TERM_ALIASES = {
     "ai": {"ai", "artificial", "intelligence"},
     "ml": {"ml", "machine", "learning"},
     "llm": {"llm", "large", "language", "model", "models"},
+    "ಭಾರತ": {"ಭಾರತ", "ಭಾರತದ", "india", "indian"},
+    "ಭಾರತದ": {"ಭಾರತ", "ಭಾರತದ", "india", "indian"},
+    "ರಾಷ್ಟ್ರಪತಿ": {"ರಾಷ್ಟ್ರಪತಿ", "president"},
+    "ಪ್ರಧಾನಮಂತ್ರಿ": {"ಪ್ರಧಾನಮಂತ್ರಿ", "prime", "minister"},
+    "ಮಂತ್ರಿ": {"ಮಂತ್ರಿ", "minister"},
+    "ರಾಜಧಾನಿ": {"ರಾಜಧಾನಿ", "capital"},
+    "ಸ್ವಾತಂತ್ರ್ಯ": {"ಸ್ವಾತಂತ್ರ್ಯ", "independence", "independent"},
+    "ಭೂಮಿ": {"ಭೂಮಿ", "earth"},
+    "ಗುರುತ್ವ": {"ಗುರುತ್ವ", "gravity"},
+    "ಹವಾಮಾನ": {"ಹವಾಮಾನ", "weather"},
+    "ಬೆಲೆ": {"ಬೆಲೆ", "price", "cost"},
+    "ಚುನಾವಣೆ": {"ಚುನಾವಣೆ", "election"},
+    "ಸರ್ಕಾರ": {"ಸರ್ಕಾರ", "government"},
+    "ಯುದ್ಧ": {"ಯುದ್ಧ", "war"},
 }
 MIN_RESEARCH_RELEVANCE_SCORE = 2.0
 

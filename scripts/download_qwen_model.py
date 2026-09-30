@@ -7,7 +7,7 @@ from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 
-DEFAULT_REPO_ID = "Qwen/Qwen3-0.6B-GGUF"
+DEFAULT_REPO_ID = "ggml-org/Qwen3-0.6B-GGUF"
 DEFAULT_FILENAME = "Qwen3-0.6B-Q4_0.gguf"
 DEFAULT_SHA256 = "da2572f16c06133561ce56accaa822216f2391ef4d37fba427801cd6736417d4"
 

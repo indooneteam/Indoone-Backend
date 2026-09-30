@@ -145,6 +145,55 @@ async def exchange_oauth_code(integration_id: str, state: str, code: str) -> dic
     return {"integration": normalized, "user_id": state_data["user_id"], "connected": True, "scope": scope, "expires_at": expires_at, "secrets_exposed": False}
 
 
+
+async def store_native_access_token(
+    user_id: str,
+    integration_id: str,
+    access_token: str,
+    scope: str = "",
+    expires_at: str | None = None,
+) -> dict[str, object]:
+    normalized = integration_id.strip().lower()
+    normalized_user = user_id.strip()
+    token = access_token.strip()
+    if normalized != "gmail":
+        raise ValueError("native access-token connection is only supported for Gmail")
+    if not normalized_user:
+        raise ValueError("user_id is required")
+    if not token:
+        raise ValueError("access_token is required")
+
+    headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(_PROBE_URLS["gmail"], headers=headers)
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict):
+        raise RuntimeError("gmail provider returned invalid profile response")
+    email_address = str(body.get("emailAddress") or "").strip()
+    if not email_address:
+        raise RuntimeError("gmail provider returned no account identity")
+
+    cipher = _fernet()
+    normalized_scope = scope.strip() or "https://www.googleapis.com/auth/gmail.modify"
+    upsert_integration_token(
+        normalized_user,
+        "gmail",
+        cipher.encrypt(token.encode("utf-8")),
+        None,
+        "Bearer",
+        normalized_scope,
+        expires_at.strip() if isinstance(expires_at, str) and expires_at.strip() else None,
+    )
+    return {
+        "integration": "gmail",
+        "user_id": normalized_user,
+        "connected": True,
+        "provider_ok": True,
+        "summary": {"email_address": email_address},
+        "secrets_exposed": False,
+    }
+
 def _provider_probe_summary(integration_id: str, payload: dict[str, object]) -> dict[str, object]:
     if integration_id == "github":
         return {"login": payload.get("login"), "name": payload.get("name"), "id": payload.get("id")}

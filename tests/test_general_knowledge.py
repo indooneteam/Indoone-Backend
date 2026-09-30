@@ -251,3 +251,12 @@ async def test_wikipedia_provider_prefers_relevant_search_title(monkeypatch: pyt
         url="https://en.wikipedia.org/wiki/Earth",
         extract="Earth is the third planet from the Sun.",
     )
+
+
+def test_historical_kannada_question_is_not_fresh_research() -> None:
+    from app.ai.question_understanding import understand_question
+
+    result = understand_question("ಭಾರತ ದೇಶಕ್ಕೆ ಸ್ವತಂತ್ರ ಲಭಿಸಿದ್ದು ಯಾವಾಗ")
+    assert result.language == "Kannada"
+    assert result.needs_research is False
+    assert result.intent == "general"

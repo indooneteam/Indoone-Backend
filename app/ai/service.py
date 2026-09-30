@@ -34,7 +34,7 @@ _tokenizer = MODEL_DIR / "tokenizer.json"
 _runtime: "LocalModelRuntime | None" = None
 _NEXT_MODEL_LOAD_ATTEMPT = 0.0
 _MODEL_LOAD_RETRY_SECONDS = 60.0
-_MODEL_MAX_NEW_TOKENS = 128
+_MODEL_MAX_NEW_TOKENS = 512
 # Serialize the artifact check/runtime load so concurrent chat requests cannot
 # trigger duplicate B2 downloads or duplicate model loads.
 _MODEL_LOAD_LOCK = threading.Lock()
@@ -132,7 +132,6 @@ def _load_local_model_runtime() -> "LocalModelRuntime | None":
         return _runtime
     finally:
         _MODEL_LOAD_LOCK.release()
-
 
 
 _SCRIPT_RANGES: tuple[tuple[str, re.Pattern[str]], ...] = (

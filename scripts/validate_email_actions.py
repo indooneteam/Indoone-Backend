@@ -44,8 +44,7 @@ def main() -> int:
         count += 1
 
     if errors:
-        print("
-".join(errors))
+        print("\n".join(errors))
         print(f"validation failed: {len(errors)} error(s)")
         return 1
 

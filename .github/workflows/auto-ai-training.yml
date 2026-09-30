@@ -60,6 +60,9 @@ jobs:
         run: |
           python scripts/validate_dataset_quality.py             --source data/processed/curated_instructions.jsonl             --source data/processed/instructions_validation.jsonl             --source data/processed/generated_multilingual_examples.jsonl             --source data/raw/indoone_phone_contacts_examples.jsonl
           python scripts/validate_email_dataset.py data/raw/indoone_email_safety_examples.jsonl
+          python scripts/validate_email_dataset.py data/eval/email_safety_validation.jsonl
+          python scripts/validate_email_dataset.py data/eval/email_safety_test.jsonl
+          python scripts/validate_email_actions.py data/raw/indoone_email_actions_examples.jsonl
 
       - name: Validate training manifest
         run: python scripts/validate_training_manifest.py

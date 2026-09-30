@@ -4,32 +4,21 @@ Backend foundation for the Indoone AI + automation platform.
 
 ## AI direction
 
-Indoone's AI core is designed to run on Indoone-owned model code and local checkpoints. No hosted AI provider is required by the chat service.
+Indoone's chat service uses one direct answer path:
 
-The current local stack is:
+`/api/chat` → local Indoone model provider → Indoone Transformer V1 checkpoint
 
-`/api/chat` → AI service → local model runtime → Indoone Transformer checkpoint
+For a normal chat request, the backend does not route the question through web research, retrieval, a canned answer, a fallback answer, or an external hosted LLM. The model receives the actual user request directly. Existing conversation history and an explicitly attached document are included only when the user supplies or continues that context.
 
-When configured, fresh-information requests can also use the optional research layer:
-
-`/api/chat` → AI service → research provider → source results → local AI model
-
-Research is separate from model inference. It returns source title, URL, and optional snippet so provenance is retained in the model context.
-
-## Live research
-
-Fresh-information requests use live research before local model synthesis. When `INDOONE_RESEARCH_URL` is configured, Indoone uses that custom search endpoint. When `INDOONE_TAVILY_API_KEY` is configured, Tavily becomes the primary general web-search provider and returns ranked web results for grounded synthesis. If neither is configured, Indoone falls back to the built-in multi-source research providers.
+The trained model artifacts are loaded only from the private `Indoone-Model` GitHub Release configured by:
 
 ```text
-INDOONE_TAVILY_API_KEY=
-INDOONE_RESEARCH_URL=https://your-search-service.example/search
-INDOONE_RESEARCH_TOKEN=
-INDOONE_RESEARCH_TIMEOUT=10
+GITHUB_MODEL_REPOSITORY=indooneteam/Indoone-Model
+GITHUB_MODEL_RELEASE_TAG=indoone-model-v1
+GITHUB_MODEL_TOKEN=
 ```
 
-The Tavily integration uses basic search by default to keep API-credit usage predictable. Tavily's current free plan provides 1,000 API credits per month and does not require a credit card. Basic search costs 1 credit per search; advanced search costs 2 credits. citeturn992854search0turn992854search6
-
-The backend invokes research for messages that indicate freshness or research needs, such as "latest", "current", "today", "news", or "research". Returned source titles, URLs, and snippets are passed into local model context for grounded synthesis.
+Model generation has no application-level timeout. Render Web Services allow HTTP responses to run for up to 100 minutes, so a one-hour model generation target remains within the platform request limit. citeturn301152search0turn301152search6
 
 ## Dataset pipeline
 

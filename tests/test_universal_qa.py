@@ -1,7 +1,6 @@
 import httpx
 import pytest
 
-from app.ai.answer_quality import user_safe_failure
 from app.ai.research import ResearchResult
 from app.ai.universal_qa import UniversalQuestionAnswerPipeline
 
@@ -70,6 +69,5 @@ async def test_universal_pipeline_fails_safely_when_current_research_unavailable
 
     pipeline = UniversalQuestionAnswerPipeline(FakeProvider(), research_provider=BrokenResearch())
 
-    reply = await pipeline.answer("latest information about a topic")
-
-    assert reply == user_safe_failure()
+    with pytest.raises(RuntimeError, match="live research is unavailable"):
+        await pipeline.answer("latest information about a topic")

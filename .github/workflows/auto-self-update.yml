@@ -38,7 +38,7 @@ jobs:
 
       - name: Commit knowledge updates
         run: |
-          if git diff --quiet -- data/knowledge/auto_web.txt data/self_update/state.json; then
+          if [ -z "$(git status --porcelain -- data/knowledge/auto_web.txt data/self_update/state.json)" ]; then
             echo "No new knowledge updates."
             exit 0
           fi

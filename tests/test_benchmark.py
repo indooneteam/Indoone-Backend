@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-import app.ai.training.training.benchmark as benchmark
+import app.ai.training.benchmark as benchmark
 
 
 def test_build_benchmark_report_combines_language_and_behavior_metrics(monkeypatch) -> None:

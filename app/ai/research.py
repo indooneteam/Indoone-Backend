@@ -27,6 +27,25 @@ _RESEARCH_QUERY_STOPWORDS = {
     "ಯಾರು", "ಯಾಕೆ", "ಏಕೆ", "ಏನಕ್ಕೆ", "ಯಾಕಾಗಿ", "ಏಕೆಗಾಗಿ", "ಯಾವ", "ಯಾವುದು",
     "ಯಾವಾಗ", "ಎಲ್ಲಿ", "ಹೇಗೆ", "ಏನು", "ಎಷ್ಟು", "ಬಗ್ಗೆ", "ವಿವರಿಸಿ", "ಮತ್ತು",
 }
+_PREFERRED_ENGLISH_ALIASES = {
+    "ಭಾರತ": "india",
+    "ಭಾರತದ": "india",
+    "ರಾಷ್ಟ್ರಪತಿ": "president",
+    "ಪ್ರಧಾನಮಂತ್ರಿ": "prime minister",
+    "ಮಂತ್ರಿ": "minister",
+    "ರಾಜಧಾನಿ": "capital",
+    "ಸ್ವಾತಂತ್ರ್ಯ": "independence",
+    "ಭೂಮಿ": "earth",
+    "ತಿರುಗುತ್ತದೆ": "rotation",
+    "ತಿರುಗುವುದು": "rotation",
+    "ಗುರುತ್ವ": "gravity",
+    "ಹವಾಮಾನ": "weather",
+    "ಬೆಲೆ": "price",
+    "ಚುನಾವಣೆ": "election",
+    "ಸರ್ಕಾರ": "government",
+    "ಯುದ್ಧ": "war",
+}
+
 _RESEARCH_TERM_ALIASES = {
     "ai": {"ai", "artificial", "intelligence"},
     "ml": {"ml", "machine", "learning"},
@@ -136,10 +155,16 @@ def build_research_query_variants(query: str, max_variants: int = MAX_QUERY_VARI
             continue
         aliases = _RESEARCH_TERM_ALIASES.get(token_lower)
         if aliases:
-            english = next(
-                (item for item in aliases if re.fullmatch(r"[A-Za-z][A-Za-z-]*", item)),
-                token,
-            )
+            english = _PREFERRED_ENGLISH_ALIASES.get(token_lower)
+            if english is None:
+                english = sorted(
+                    (
+                        item
+                        for item in aliases
+                        if re.fullmatch(r"[A-Za-z][A-Za-z-]*", item)
+                    ),
+                    key=lambda item: (len(item), item),
+                )[0] if any(re.fullmatch(r"[A-Za-z][A-Za-z-]*", item) for item in aliases) else token
             canonical_terms.append(english)
         elif re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", token):
             canonical_terms.append(token)

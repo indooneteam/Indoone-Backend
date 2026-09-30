@@ -22,6 +22,34 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     return value
 
 
+
+_EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", flags=re.IGNORECASE)
+
+def _fallback_email_json(request: str) -> dict[str, str]:
+    """Create a conservative draft when structured model output is unavailable."""
+    text = " ".join(request.split())
+    addresses = _EMAIL_RE.findall(text)
+    to = addresses[0] if addresses else ""
+
+    match = re.search(
+        r"\basking (?:for )?(?:an )?update on (?:my )?(.+?)(?:\.|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if match:
+        topic = match.group(1).strip(" .")
+        subject = f"Follow-up on {topic}"
+        body = (
+            "Hello,\n\n"
+            f"I’m writing to follow up on {topic.lower()} and ask whether there is any update on its status. "
+            "Thank you for your time.\n\nRegards,"
+        )
+    else:
+        subject = "Email draft"
+        body = f"Hello,\n\n{text}\n\nThank you,"
+
+    return {"to": to, "subject": subject, "body": body}
+
 async def compose_gmail_email(*, request: str) -> dict[str, object]:
     normalized = request.strip()
     if not normalized:
@@ -37,8 +65,11 @@ async def compose_gmail_email(*, request: str) -> dict[str, object]:
         "Never include passwords, OTPs, recovery codes, API keys, card numbers, or other secrets.\n\n"
         f"USER REQUEST:\n{normalized}"
     )
-    result = await LocalAIService().generate(prompt, history=[], document_context="")
-    data = _extract_json_object(result)
+    try:
+        result = await LocalAIService().generate(prompt, history=[], document_context="")
+        data = _extract_json_object(result)
+    except (ValueError, RuntimeError, json.JSONDecodeError):
+        data = _fallback_email_json(normalized)
 
     to = str(data.get("to", "")).strip()
     subject = str(data.get("subject", "")).strip()

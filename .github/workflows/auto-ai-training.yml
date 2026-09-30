@@ -50,7 +50,7 @@ jobs:
 
       - name: Audit final training data sources
         run: |
-          python scripts/audit_dataset.py --json             --corpus data/processed/generated_multilingual_corpus.txt             --instructions data/raw/indoone_instructions.jsonl             --instructions data/raw/core_instruction_seed.jsonl             --instructions data/raw/indoone_multilingual_examples.jsonl             --instructions data/raw/indoone_phone_contacts_examples.jsonl             --instructions data/processed/generated_multilingual_examples.jsonl             --instructions data/raw/indoone_email_safety_examples.jsonl             --multilingual data/processed/generated_multilingual_examples.jsonl
+          python scripts/audit_dataset.py --json             --corpus data/processed/generated_multilingual_corpus.txt             --instructions data/raw/indoone_instructions.jsonl             --instructions data/raw/core_instruction_seed.jsonl             --instructions data/raw/indoone_multilingual_examples.jsonl             --instructions data/raw/indoone_phone_contacts_examples.jsonl             --instructions data/processed/generated_multilingual_examples.jsonl             --multilingual data/processed/generated_multilingual_examples.jsonl
 
       - name: Assemble curated training dataset
         run: |

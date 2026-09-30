@@ -16,7 +16,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.ai.training.model_registry import ModelRecord, active_record, promote_candidate
-from app.storage.b2 import B2Storage
 from app.storage.github_release import GitHubReleaseStorage, get_github_release_storage
 
 
@@ -241,44 +240,24 @@ def _ensure_training_data() -> None:
     _run([sys.executable, "scripts/validate_final_training_recipe.py"])
 
 
-def _model_storage() -> tuple[str, object] | None:
-    github_release = get_github_release_storage()
-    if github_release is not None:
-        return "github_release", github_release
-    if B2Storage.configured():
-        return "b2", B2Storage()
-    return None
+def _model_storage() -> GitHubReleaseStorage | None:
+    return get_github_release_storage()
 
 
-def _download_active_model(storage: object, target: Path) -> None:
+def _download_active_model(storage: GitHubReleaseStorage, target: Path) -> None:
     target.mkdir(parents=True, exist_ok=True)
     for filename in ("indoone-small.pt", "tokenizer.json"):
-        if isinstance(storage, B2Storage):
-            storage.download_file(
-                f"models/indoone-small/{filename}",
-                target / filename,
-            )
-        elif isinstance(storage, GitHubReleaseStorage):
-            storage.download_file(filename, target / filename)
-        else:
-            raise TypeError("unsupported model storage")
+        storage.download_file(filename, target / filename)
 
     metadata_path = target / "metadata.json"
     try:
-        if isinstance(storage, B2Storage):
-            storage.download_file(
-                "models/indoone-small/metadata.json",
-                metadata_path,
-            )
-        else:
-            storage.download_file("metadata.json", metadata_path)
+        storage.download_file("metadata.json", metadata_path)
     except Exception:
         metadata_path.write_text("{}\n", encoding="utf-8")
 
 
 def _upload_candidate(
-    storage_name: str,
-    storage: object,
+    storage: GitHubReleaseStorage,
     candidate: Path,
     backup: Path,
 ) -> None:
@@ -288,50 +267,19 @@ def _upload_candidate(
     uploaded: list[str] = []
 
     def upload(filename: str, source: Path) -> None:
-        if isinstance(storage, B2Storage):
-            storage.upload_file(
-                source,
-                f"models/indoone-small/{filename}",
-            )
-            return
-        if isinstance(storage, GitHubReleaseStorage):
-            _run(
-                [
-                    "gh",
-                    "release",
-                    "upload",
-                    storage.release_tag,
-                    str(source),
-                    "--repo",
-                    storage.repository,
-                    "--clobber",
-                ]
-            )
-            return
-        raise TypeError("unsupported model storage")
+        _run([
+            "gh", "release", "upload", storage.release_tag,
+            str(source), "--repo", storage.repository, "--clobber",
+        ])
 
     def rollback(filename: str) -> None:
         source = backup / filename
         if not source.is_file():
             return
-        if isinstance(storage, B2Storage):
-            storage.upload_file(
-                source,
-                f"models/indoone-small/{filename}",
-            )
-        elif isinstance(storage, GitHubReleaseStorage):
-            _run(
-                [
-                    "gh",
-                    "release",
-                    "upload",
-                    storage.release_tag,
-                    str(source),
-                    "--repo",
-                    storage.repository,
-                    "--clobber",
-                ]
-            )
+        _run([
+            "gh", "release", "upload", storage.release_tag,
+            str(source), "--repo", storage.repository, "--clobber",
+        ])
 
     try:
         for filename in filenames:
@@ -431,7 +379,7 @@ def run_self_training(
 
     _ensure_training_data()
 
-    storage_name, storage = storage_selection
+    storage = storage_selection
     with tempfile.TemporaryDirectory(prefix="indoone-self-train-") as tmp:
         root = Path(tmp)
         baseline_dir = root / "baseline"
@@ -554,13 +502,13 @@ def run_self_training(
                 "new_items": len(pending),
             }
 
-        _upload_candidate(storage_name, storage, candidate_dir, baseline_dir)
+        _upload_candidate(storage, candidate_dir, baseline_dir)
         try:
             promote_candidate(registry_path, candidate_record)
         except Exception:
             # Storage was updated first; restore the previously active checkpoint
             # so registry and production storage cannot disagree.
-            _upload_candidate(storage_name, storage, baseline_dir, candidate_dir)
+            _upload_candidate(storage, baseline_dir, candidate_dir)
             raise
 
         training_state["schema_version"] = 1

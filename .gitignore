@@ -12,3 +12,13 @@ data/processed/
 # The trained Indoone runtime artifacts are intentionally tracked in this deployment
 # so Render can load the model locally without downloading it from object storage.
 # Keep the checkpoint and tokenizer below GitHub's 100 MB per-file hard limit.
+
+# Local runtime artifacts and generated state
+models/
+data/*.db
+data/*.sqlite3
+data/*.sqlite3-shm
+data/*.sqlite3-wal
+*.bak-step1
+*.bak-local
+*.bak-terminal-local

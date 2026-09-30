@@ -83,7 +83,7 @@ def _load_local_model_runtime() -> "LocalModelRuntime | None":
         return _runtime
 
     if not _MODEL_LOAD_LOCK.acquire(blocking=False):
-        logger.info("Indoone model load already in progress; using fallback for this request")
+        logger.info("Indoone model load already in progress; another request will reuse the loaded runtime")
         return None
 
     try:

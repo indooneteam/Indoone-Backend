@@ -57,7 +57,7 @@ _FRESH_MARKERS = (
     "availability", "exchange rate", "currency rate", "market", "election",
     "president", "prime minister", "minister", "law", "regulation", "policy",
     "deadline", "release date", "version", "update",
-"ಇವತ್ತು", "ಇತ್ತೀಚಿನ", "ಈಗ", "ದರ", "ಹವಾಮಾನ", "ಫಲಿತಾಂಶ", "ಬೆಲೆ",
+
 )
 
 _CROSS_CHECK_MARKERS = (
@@ -209,6 +209,10 @@ def _needs_research(normalized: str) -> bool:
         if any(marker in lower for marker in current_role_markers):
             # Historical wording takes precedence over role-name freshness.
             return False
+
+    for marker in _KANNADA_FRESH_MARKERS:
+        if marker.casefold() in lower:
+            return True
 
     for marker in _FRESH_MARKERS:
         normalized_marker = marker.casefold()

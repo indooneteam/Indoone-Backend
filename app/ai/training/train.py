@@ -12,7 +12,7 @@ from torch import nn
 
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
-from app.ai.training_data import TrainingExample, format_instruction_prompt, load_examples, write_corpus
+from app.ai.training.training_data import TrainingExample, format_instruction_prompt, load_examples, write_corpus
 
 
 # V2 is intentionally larger while remaining practical for CPU inference.

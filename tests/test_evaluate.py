@@ -2,7 +2,7 @@ from pathlib import Path
 
 import torch
 
-from app.ai.evaluate import evaluate_checkpoint
+from app.ai.training.evaluate import evaluate_checkpoint
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 

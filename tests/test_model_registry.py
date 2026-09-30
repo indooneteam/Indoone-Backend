@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.model_registry import (
+from app.ai.training.model_registry import (
     ModelRecord,
     active_record,
     load_records,

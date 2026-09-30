@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.ai.model_registry import ModelRecord, active_record, promote_candidate
+from app.ai.training.model_registry import ModelRecord, active_record, promote_candidate
 from app.storage.b2 import B2Storage
 from app.storage.github_release import GitHubReleaseStorage, get_github_release_storage
 
@@ -121,7 +121,7 @@ def _evaluate(
         [
             sys.executable,
             "-m",
-            "app.ai.evaluate",
+            "app.ai.training.evaluate",
             "--checkpoint",
             str(checkpoint),
             "--tokenizer",

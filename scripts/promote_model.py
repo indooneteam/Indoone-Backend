@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.ai.behavior_eval import run_behavioral_eval
-from app.ai.model_registry import ModelRecord, promote_candidate
+from app.ai.training.model_registry import ModelRecord, promote_candidate
 
 
 def _load_evaluation(report_path: Path) -> tuple[dict[str, object], float, float]:

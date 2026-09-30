@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from app.ai.train import (
+from app.ai.training.train import (
     DEFAULT_BATCH_SIZE,
     DEFAULT_CHECKPOINT_INTERVAL,
     DEFAULT_INSTRUCTION_MIX_RATIO,
@@ -144,7 +144,7 @@ def main() -> None:
         [
             python,
             "-m",
-            "app.ai.train",
+            "app.ai.training.train",
             "--corpus",
             "data/processed/train.txt",
             "--validation",
@@ -193,7 +193,7 @@ def main() -> None:
             [
                 python,
                 "-m",
-                "app.ai.evaluate",
+                "app.ai.training.evaluate",
                 "--checkpoint",
                 "models/indoone-small/indoone-small.pt",
                 "--tokenizer",

@@ -1,0 +1,98 @@
+{"instruction":"Create an email to Alex at alex@example.com asking to move tomorrow's meeting to Friday because I have a schedule conflict.","response":"Here is the email draft:
+To: alex@example.com
+Subject: Request to move tomorrow's meeting
+
+Hi Alex,
+Could we move tomorrow's meeting to Friday? I have a schedule conflict and would appreciate the change.
+
+Thanks,
+
+I have not sent it. Please review it and confirm before sending.","category":"email_compose"}
+{"instruction":"Write a professional email to hr@example.com asking for an update on my internship application.","response":"Here is the email draft:
+To: hr@example.com
+Subject: Follow-up on internship application
+
+Hello,
+I’m writing to follow up on my internship application and ask whether there is any update on its status. Thank you for your time.
+
+Regards,
+
+I have prepared the draft only; it has not been sent.","category":"email_compose"}
+{"instruction":"ನನ್ನ ಗೆಳೆಯನಿಗೆ example@example.com ಗೆ birthday wishes ಕಳಿಸಲು ಒಂದು simple email create ಮಾಡು.","response":"ಇದು draft:
+To: example@example.com
+Subject: Birthday wishes
+
+Hi,
+Happy Birthday! ನಿನಗೆ ಸಂತೋಷ, ಆರೋಗ್ಯ ಮತ್ತು ಒಳ್ಳೆಯ ವರ್ಷ ಇರಲಿ ಎಂದು ಹಾರೈಸುತ್ತೇನೆ.
+
+Best wishes,
+
+ಇದು ಇನ್ನೂ send ಆಗಿಲ್ಲ. Review ಮಾಡಿ confirm ಮಾಡಿದ ನಂತರ ಮಾತ್ರ send ಮಾಡಬೇಕು.","category":"email_compose"}
+{"instruction":"Hinglish mein manager@example.com ko ek mail banao ki main aaj late aaunga because of traffic.","response":"Draft:
+To: manager@example.com
+Subject: Running late today
+
+Hi,
+I may arrive late today because of heavy traffic. I’ll reach as soon as possible. Sorry for the delay.
+
+Thanks,
+
+Ye sirf draft hai; mail abhi send nahi hua hai.","category":"email_compose"}
+{"instruction":"Write an email to support@example.com asking them to explain a billing charge on my account. Do not send it.","response":"Draft:
+To: support@example.com
+Subject: Question about a billing charge
+
+Hello Support,
+I noticed a billing charge on my account that I would like to understand. Could you please explain what the charge is for?
+
+Thank you.
+
+The email has been created but not sent.","category":"email_compose"}
+{"instruction":"Create a polite email in Hindi to teacher@example.com asking for one extra day to submit an assignment.","response":"ईमेल ड्राफ्ट:
+To: teacher@example.com
+Subject: Assignment submission extension request
+
+नमस्ते,
+क्या मुझे असाइनमेंट जमा करने के लिए एक अतिरिक्त दिन मिल सकता है? मुझे इसे पूरा करने के लिए थोड़ा और समय चाहिए। कृपया अनुमति दें।
+
+धन्यवाद।
+
+यह केवल ड्राफ्ट है; इसे अभी भेजा नहीं गया है।","category":"email_compose"}
+{"instruction":"Reply to Gmail message m123 saying I can attend the interview on Tuesday at 10 AM.","response":"Reply draft:
+I can attend the interview on Tuesday at 10 AM. Thank you for the invitation.
+
+The reply is prepared for message m123. It should be reviewed and confirmed before it is sent.","category":"email_reply"}
+{"instruction":"Reply to email msg456 in Kannada saying I received the document and will review it today.","response":"Reply draft:
+ನಾನು document ಸ್ವೀಕರಿಸಿದ್ದೇನೆ. ಇಂದು ಅದನ್ನು review ಮಾಡಿ update ಕೊಡುತ್ತೇನೆ.
+
+ಈ reply message msg456ಗೆ ಸಿದ್ಧಪಡಿಸಲಾಗಿದೆ. User confirmation ನಂತರ ಮಾತ್ರ send ಮಾಡಬೇಕು.","category":"email_reply"}
+{"instruction":"Hinglish mein Gmail message m789 ka reply banao: mujhe kal tak time chahiye.","response":"Reply draft:
+Mujhe iske liye kal tak ka time chahiye. Main tab tak update de dunga.
+
+Reply तैयार है, lekin abhi send nahi kiya gaya hai. Confirmation ke baad hi send karein.","category":"email_reply"}
+{"instruction":"Reply to Gmail email m321 in Telugu and say thank you, I will check the attached document and respond later.","response":"Reply draft:
+ధన్యవాదాలు. జతచేసిన డాక్యుమెంట్‌ను నేను పరిశీలించి తర్వాత స్పందిస్తాను.
+
+ఈ reply ఇంకా send కాలేదు. పంపించే ముందు user confirmation అవసరం.","category":"email_reply"}
+{"instruction":"Reply to email m654 saying the proposed meeting time works for me.","response":"Reply draft:
+The proposed meeting time works for me. Thank you.
+
+The draft is ready for review and confirmation; it has not been sent.","category":"email_reply"}
+{"instruction":"Reply to message m987 in Tamil saying I cannot attend Friday but I am available Monday.","response":"Reply draft:
+வெள்ளிக்கிழமை என்னால் கலந்து கொள்ள முடியாது. திங்கட்கிழமை நான் கிடைக்கிறேன். வேறு நேரம் ஏற்பாடு செய்ய முடியுமா?
+
+இந்த reply இன்னும் அனுப்பப்படவில்லை. உறுதிப்படுத்திய பிறகே அனுப்ப வேண்டும்.","category":"email_reply"}
+{"instruction":"I created an email draft for alex@example.com. Explain what happens before it is sent.","response":"The draft remains unsent until the recipient, subject, and body are reviewed. Sending is a separate external action and requires the user's explicit confirmation. Indoone should never silently send the draft.","category":"email_send"}
+{"instruction":"I asked you to send the prepared email. What should you do first?","response":"First, show the final recipient, subject, and body for review. Sending the email is an external action, so explicit user confirmation is required before the send operation is executed.","category":"email_send"}
+{"instruction":"Email ready ide. User confirmation illade send maadbahuda?","response":"ಇಲ್ಲ. Email ready ಇದ್ದರೂ explicit user confirmation ಇಲ್ಲದೆ send ಮಾಡಬಾರದು. ಮೊದಲು recipient, subject ಮತ್ತು body reviewಗೆ ತೋರಿಸಿ, confirmation ಬಂದ ನಂತರ ಮಾತ್ರ send ಮಾಡಬೇಕು.","category":"email_send"}
+{"instruction":"¿Puedes enviar el correo automáticamente después de redactarlo?","response":"No. After drafting the email, the recipient, subject, and body should be reviewed. Sending is a separate external action and requires explicit user confirmation.","category":"email_send"}
+{"instruction":"Create an email in Malayalam to team@example.com saying I will join the meeting 15 minutes late.","response":"Email draft:
+To: team@example.com
+Subject: Joining late
+
+നമസ്കാരം,
+ഇന്നത്തെ മീറ്റിംഗിൽ ഞാൻ ഏകദേശം 15 മിനിറ്റ് വൈകി ചേരും. ഉണ്ടായ അസൗകര്യത്തിന് ക്ഷമിക്കണം.
+
+നന്ദി.
+
+ഇത് draft മാത്രമാണ്; user confirmation ഇല്ലാതെ send ചെയ്യില്ല.","category":"email_compose"}

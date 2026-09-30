@@ -14,7 +14,7 @@ The model must say when it cannot verify a claim from the email alone and should
 
 ## Dataset size and split
 
-Final curated target: **540 examples**.
+Final curated target: **540 Email Safety examples**, split into 360 train, 90 validation, and 90 test. A separate small Email Actions pack teaches compose/reply/send confirmation behavior and is mixed into incremental training.
 
 | Split | Total | Legitimate | Spam | Phishing |
 |---|---:|---:|---:|---:|
@@ -25,6 +25,13 @@ Final curated target: **540 examples**.
 Do not expand beyond this first controlled release until the 30-minute CPU training benchmark and evaluation results justify expansion.
 
 The 540 examples are a quality-controlled first capability dataset, not the only data Indoone may ever need.
+
+## Final files
+
+- `data/raw/indoone_email_safety_examples.jsonl` — 360 training examples.
+- `data/eval/email_safety_validation.jsonl` — 90 held-out validation examples.
+- `data/eval/email_safety_test.jsonl` — 90 held-out test examples.
+- `data/raw/indoone_email_actions_examples.jsonl` — small action-behavior pack for compose, reply, and explicit-send confirmation.
 
 ## Example format
 
@@ -139,7 +146,8 @@ Email Safety is an **incremental SFT capability** on top of the current Indoone 
 Do not retrain the base model from scratch for this capability.
 
 The incremental training pool must contain:
-- the curated Email Safety examples;
+- the curated Email Safety training examples;
+- the small Email Actions behavior pack;
 - a small, fixed set of existing general-behavior anchor examples to reduce regression.
 
 The final candidate must pass both:

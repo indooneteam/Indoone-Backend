@@ -431,12 +431,36 @@ def main() -> int:
     validation = load_examples(VALIDATION)
     test_cases = load_examples(TEST)
 
-    pool = safety + actions
+    import re
+
+    label_examples = []
+    for example in safety:
+        match = re.search(
+            r"Classification:\\s*(legitimate|spam|phishing)\\b",
+            str(example["response"]),
+            flags=re.IGNORECASE,
+        )
+        if match is None:
+            raise RuntimeError(
+                "Email safety example is missing a supported classification label."
+            )
+        label_examples.append(
+            {
+                "instruction": example["instruction"],
+                "response": f"Classification: {match.group(1).lower()}.",
+                "category": "email_safety_label",
+            }
+        )
+
+    # Email-only pool: full safety explanations + compact label supervision
+    # + email action behavior. No general/core examples enter optimization.
+    pool = safety + label_examples + actions
     if not pool:
         raise RuntimeError("Email-only training pool is empty.")
 
     sampling_weights = (
-        [0.95 / len(safety)] * len(safety)
+        [0.65 / len(safety)] * len(safety)
+        + [0.30 / len(label_examples)] * len(label_examples)
         + [0.05 / len(actions)] * len(actions)
     )
     total = sum(sampling_weights)
@@ -454,6 +478,8 @@ def main() -> int:
                 "email_safety_examples": len(safety),
                 "email_action_examples": len(actions),
                 "total_email_examples": len(pool),
+                "email_full_safety_examples": len(safety),
+                "email_label_focus_examples": len(label_examples),
                 "non_email_training_examples": 0,
                 "adapter_dimension": EMAIL_ADAPTER_DIM,
                 "adapter_layers": EMAIL_ADAPTER_LAYERS,
@@ -795,7 +821,8 @@ def main() -> int:
             "Existing behavior evaluation cases are missing."
         )
 
-    behavior_pass = behavior_preserved
+    # Compare candidate behavior with the exact same baseline prompt while the
+    # Email adapter is disabled. The frozen backbone should make this identical.
 
     # General evaluation must remain exactly the same when the Email adapter is
     # disabled. The adapter is activated only by the email router.
@@ -816,7 +843,7 @@ def main() -> int:
     all_gates = (
         email_accuracy_pass
         and email_gain_pass
-        and behavior_pass
+        and behavior_preserved
         and general_same
         and adapter_norm > 1e-8
     )
@@ -829,7 +856,7 @@ def main() -> int:
     print("CANDIDATE EMAIL:", json.dumps(candidate_email))
     print("Email accuracy gate:", email_accuracy_pass)
     print("Email gain gate:", email_gain_pass)
-    print("Existing behavior gate:", behavior_pass)
+    print("Existing behavior gate:", behavior_preserved)
     print("General metrics unchanged:", general_same)
     print("Backbone unchanged: True")
     print("Adapter trained:", adapter_norm > 1e-8)

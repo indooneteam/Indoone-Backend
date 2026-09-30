@@ -289,8 +289,7 @@ def _write_initial_registry(path: Path, base_eval: dict[str, float | int | str])
             },
             indent=2,
         )
-        + "
-",
+        + "\n",
         encoding="utf-8",
     )
 

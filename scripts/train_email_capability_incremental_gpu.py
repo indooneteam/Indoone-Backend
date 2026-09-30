@@ -21,7 +21,7 @@ from app.ai.training.train import (
     _instruction_batchify,
     _prepare_instruction_examples,
 )
-from app.ai.training.training_data import load_examples
+from app.ai.training.training_data import TrainingExample, load_examples
 from app.ai.model import IndooneTransformer
 from scripts.generate_email_training_expansion import build
 
@@ -437,7 +437,7 @@ def main() -> int:
     for example in safety:
         match = re.search(
             r"Classification:\\s*(legitimate|spam|phishing)\\b",
-            str(example["response"]),
+            example.response,
             flags=re.IGNORECASE,
         )
         if match is None:
@@ -445,11 +445,11 @@ def main() -> int:
                 "Email safety example is missing a supported classification label."
             )
         label_examples.append(
-            {
-                "instruction": example["instruction"],
-                "response": f"Classification: {match.group(1).lower()}.",
-                "category": "email_safety_label",
-            }
+            TrainingExample(
+                instruction=example.instruction,
+                response=f"Classification: {match.group(1).lower()}.",
+                category="email_safety_label",
+            )
         )
 
     # Email-only pool: full safety explanations + compact label supervision

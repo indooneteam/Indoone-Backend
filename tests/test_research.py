@@ -599,3 +599,10 @@ def test_research_relevance_crosses_common_kannada_english_terms() -> None:
         "The President of India is the head of state.",
     )
     assert _is_relevant_research_result(query, result)
+
+
+def test_research_terms_keep_kannada_vowel_signs_attached() -> None:
+    from app.ai.research import _research_terms
+
+    assert "ಭಾರತದ" in _research_terms("ಭಾರತದ")
+    assert "ರಾಷ್ಟ್ರಪತಿ" in _research_terms("ರಾಷ್ಟ್ರಪತಿ")

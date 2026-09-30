@@ -12,6 +12,7 @@ from app.ai.research import (
     MultiSourceResearchProvider,
     OpenAlexResearchProvider,
     ResearchResult,
+    _is_relevant_research_result,
     WikidataResearchProvider,
     WikipediaResearchProvider,
     build_research_query_variants,

@@ -6,11 +6,11 @@ Backend foundation for the Indoone AI + automation platform.
 
 Indoone's chat service uses one direct answer path:
 
-`/api/chat` → local Indoone model provider → Indoone Transformer V1 checkpoint
+`/api/chat` → configured local model provider. On the terminal branch, `INDOONE_MODEL_BACKEND=qwen` routes chat to the local Qwen3-0.6B GGUF runtime.
 
 For a normal chat request, the backend does not route the question through web research, retrieval, a canned answer, a fallback answer, or an external hosted LLM. The model receives the actual user request directly. Existing conversation history and an explicitly attached document are included only when the user supplies or continues that context.
 
-The trained model artifacts are loaded only from the private `Indoone-Model` GitHub Release configured by:
+The original Indoone V1 runtime loads its artifacts from the private `Indoone-Model` GitHub Release configured by:
 
 ```text
 GITHUB_MODEL_REPOSITORY=indooneteam/Indoone-Model
@@ -80,3 +80,8 @@ Until a trained checkpoint exists, the API returns a clear local-model-unavailab
 ## Important
 
 The current starter corpus is only for validating the data, training, and inference pipeline. A production-quality model requires a much larger, carefully licensed and curated dataset, stronger evaluation, safety testing, and substantially more training compute.
+
+
+## Terminal Qwen runtime
+
+The terminal branch supports a CPU-first Qwen3-0.6B GGUF runtime through `llama-cpp-python`. The verified Q4_0 model can be downloaded with `python scripts/download_qwen_model.py` and is kept as a local file under `models/qwen3-0.6b/`. The terminal AI path reads that local file when `INDOONE_MODEL_BACKEND=qwen` is enabled.

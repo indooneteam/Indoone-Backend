@@ -34,17 +34,17 @@ from scripts.train_email_capability_incremental import (
 TRAIN_BUDGET_SECONDS = 55 * 60
 BENCHMARK_STEPS = 20
 BATCH_SIZE = 8
-LEARNING_RATE = 8e-6
+LEARNING_RATE = 2e-6
 WEIGHT_DECAY = 0.01
 EVAL_INTERVAL = 25
-MAX_PLANNED_STEPS = 1200
+MAX_PLANNED_STEPS = 2500
 
 # Email capability is trained with a frozen backbone to reduce catastrophic
 # forgetting. Only the final transformer blocks and final layer norm adapt.
-TRAINABLE_LAST_BLOCKS = 2
-ANCHOR_LAMBDA = 0.25
-MAX_WEIGHT_DELTA = 0.003
-EARLY_STOP_PATIENCE = 6
+TRAINABLE_LAST_BLOCKS = 4
+ANCHOR_LAMBDA = 0.15
+MAX_WEIGHT_DELTA = 0.0015
+EARLY_STOP_PATIENCE = 10
 MAX_GENERAL_REGRESSION = 0.02
 
 MODEL_DIR = Path("models/indoone-small")

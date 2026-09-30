@@ -33,6 +33,15 @@ DEFAULT_EVAL_INTERVAL = 100
 DEFAULT_SEED = 4242
 
 
+
+def _checkpoint_revision(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()[:16]
+
+
 def _load_json(path: Path, default: dict[str, object]) -> dict[str, object]:
     if not path.is_file():
         return dict(default)
@@ -343,6 +352,7 @@ def _upload_candidate(
 def _initialize_registry(
     registry_path: Path,
     baseline_version: str,
+    baseline_revision: str,
     baseline: dict[str, object],
 ) -> ModelRecord:
     current = active_record(registry_path)
@@ -359,6 +369,7 @@ def _initialize_registry(
         status="active",
         behavioral_gate_passed=True,
         benchmark_version="v1",
+        revision=baseline_revision,
     )
     _write_json(
         registry_path,
@@ -419,15 +430,6 @@ def run_self_training(
 
     _ensure_training_data()
 
-    version_seed = (
-        datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
-        + "-"
-        + hashlib.sha256(
-            "".join(item["fingerprint"] for item in pending).encode("utf-8")
-        ).hexdigest()[:12]
-    )
-    version = f"web-{version_seed}"
-
     storage_name, storage = storage_selection
     with tempfile.TemporaryDirectory(prefix="indoone-self-train-") as tmp:
         root = Path(tmp)
@@ -458,12 +460,14 @@ def run_self_training(
         with (baseline_dir / "indoone-small.pt").open("rb") as handle:
             for chunk in iter(lambda: handle.read(1024 * 1024), b""):
                 checkpoint_digest.update(chunk)
-        baseline_version = f"baseline-{checkpoint_digest.hexdigest()[:12]}"
+        baseline_revision = checkpoint_digest.hexdigest()[:16]
         current = _initialize_registry(
             registry_path,
-            baseline_version=baseline_version,
+            baseline_version="v1",
+            baseline_revision=baseline_revision,
             baseline=baseline_eval,
         )
+        version = current.version
 
         shutil.copytree(baseline_dir, candidate_dir)
         _run(
@@ -523,6 +527,7 @@ def run_self_training(
             behavioral_gate_passed=gate_passed,
             parent_version=current.version,
             benchmark_version=current.benchmark_version,
+            revision=_checkpoint_revision(candidate_dir / "indoone-small.pt"),
         )
 
         if not gate_passed:
@@ -548,8 +553,14 @@ def run_self_training(
                 "new_items": len(pending),
             }
 
-        promote_candidate(registry_path, candidate_record)
         _upload_candidate(storage_name, storage, candidate_dir, baseline_dir)
+        try:
+            promote_candidate(registry_path, candidate_record)
+        except Exception:
+            # Storage was updated first; restore the previously active checkpoint
+            # so registry and production storage cannot disagree.
+            _upload_candidate(storage_name, storage, baseline_dir, candidate_dir)
+            raise
 
         training_state["schema_version"] = 1
         training_state["trained_fingerprints"] = sorted(
@@ -562,6 +573,7 @@ def run_self_training(
             }
         )
         training_state["last_promoted_version"] = version
+        training_state["last_promoted_revision"] = candidate_record.revision
         training_state["last_promoted_at"] = datetime.now(
             timezone.utc
         ).isoformat()

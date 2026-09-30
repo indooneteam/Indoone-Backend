@@ -149,7 +149,12 @@ def build_research_query_variants(query: str, max_variants: int = MAX_QUERY_VARI
     # literal regional-language sentence. Preserve unknown terms rather than
     # dropping them so the variant still carries the user's subject.
     canonical_terms: list[str] = []
-    for token in _research_terms(normalized):
+    ordered_tokens = re.findall(
+        r"[A-Za-z0-9][A-Za-z0-9._+-]*|[\\u0900-\\u0DFF]+|[\\u0600-\\u06FF]+",
+        normalized,
+        flags=re.UNICODE,
+    )
+    for token in ordered_tokens:
         token_lower = token.casefold()
         if token_lower in _RESEARCH_QUERY_STOPWORDS:
             continue
@@ -157,14 +162,15 @@ def build_research_query_variants(query: str, max_variants: int = MAX_QUERY_VARI
         if aliases:
             english = _PREFERRED_ENGLISH_ALIASES.get(token_lower)
             if english is None:
-                english = sorted(
+                english_options = sorted(
                     (
                         item
                         for item in aliases
                         if re.fullmatch(r"[A-Za-z][A-Za-z-]*", item)
                     ),
-                    key=lambda item: (len(item), item),
-                )[0] if any(re.fullmatch(r"[A-Za-z][A-Za-z-]*", item) for item in aliases) else token
+                    key=lambda item: (len(item), item.casefold()),
+                )
+                english = english_options[0] if english_options else token
             canonical_terms.append(english)
         elif re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]*", token):
             canonical_terms.append(token)

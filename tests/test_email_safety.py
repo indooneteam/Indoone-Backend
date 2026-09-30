@@ -82,3 +82,26 @@ async def test_analyze_gmail_email_safety_uses_local_ai(monkeypatch) -> None:
     assert "Classification: phishing" in result
     assert "Verify account" in result
     assert "UNTRUSTED DATA" in fake_ai.seen
+
+
+@pytest.mark.asyncio
+async def test_compose_email_creates_draft_without_sending(monkeypatch) -> None:
+    from app.capabilities.email_actions import compose_gmail_email
+
+    class FakeAI:
+        async def generate(self, message, history=None, document_context=""):
+            assert "Do not send the email" in message
+            return '{"to":"alex@example.com","subject":"Meeting update","body":"Hi Alex,\\nCould we move our meeting to Friday?\\nThanks."}'
+
+    monkeypatch.setattr(
+        "app.capabilities.email_actions.LocalAIService",
+        lambda: FakeAI(),
+    )
+
+    result = await compose_gmail_email(
+        request="Create an email to Alex asking to move tomorrow's meeting to Friday."
+    )
+    assert result["operation"] == "compose"
+    assert result["to"] == "alex@example.com"
+    assert result["subject"] == "Meeting update"
+    assert result["send_requires_confirmation"] is True

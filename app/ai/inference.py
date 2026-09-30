@@ -319,9 +319,9 @@ class LocalModelRuntime:
         normalized = " ".join(prompt.casefold().split())
         return bool(
             re.search(
-                r"(?:\\bemail\\b|\\be-mail\\b|\\binbox\\b|\\bmailbox\\b|"
-                r"\\bphishing\\b|\\bspam\\b|\\bunsubscribe\\b|"
-                r"\\bsubject\\s*:|\\bfrom\\s*:|\\bto\\s*:)",
+                r"(?:\bemail\b|\be-mail\b|\binbox\b|\bmailbox\b|"
+                r"\bphishing\b|\bspam\b|\bunsubscribe\b|"
+                r"\bsubject\s*:|\bfrom\s*:|\bto\s*:)",
                 normalized,
             )
         )
@@ -352,9 +352,10 @@ class LocalModelRuntime:
         if use_email_adapter is None:
             use_email_adapter = self._is_email_request(prompt)
 
-        retrieved = self._retrieved_response(prompt)
-        if retrieved is not None:
-            return retrieved
+        if not use_email_adapter:
+            retrieved = self._retrieved_response(prompt)
+            if retrieved is not None:
+                return retrieved
 
         prompt_ids = self._prompt_ids(prompt)
         if len(prompt_ids) > self.model.block_size:

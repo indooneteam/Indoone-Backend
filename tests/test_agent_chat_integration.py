@@ -18,7 +18,7 @@ def _auth_headers(user_id: str = "user-one") -> dict[str, str]:
     return {"Authorization": f"Bearer {user}.{timestamp}.{signature}"}
 
 
-def test_chat_uses_async_agent_for_tool_requests(monkeypatch) -> None:
+def test_chat_uses_model_for_tool_requests(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
 
     async def fake_execute_agent_async(message: str, **kwargs) -> AgentExecution:
@@ -30,8 +30,14 @@ def test_chat_uses_async_agent_for_tool_requests(monkeypatch) -> None:
             results=(ToolResult("text_stats", "words: 1"),),
         )
 
+    captured_history: list[tuple[str, str]] = []
+
+    async def fake_generate_reply(message: str, history=None, document_context="") -> str:
+        captured_history.extend(history or [])
+        return "The trained model summarized the tool result."
+
     monkeypatch.setattr("app.api.chat.execute_agent_async", fake_execute_agent_async)
-    monkeypatch.setattr("app.api.chat.assess_answer", lambda *_: type("Q", (), {"passed": True})())
+    monkeypatch.setattr("app.api.chat.generate_reply", fake_generate_reply)
 
     with TestClient(app) as client:
         response = client.post(
@@ -41,4 +47,8 @@ def test_chat_uses_async_agent_for_tool_requests(monkeypatch) -> None:
         )
 
     assert response.status_code == 200
-    assert response.json()["reply"] == "words: 1"
+    assert response.json()["reply"] == "The trained model summarized the tool result."
+    assert any(
+        role == "tool" and "words: 1" in content
+        for role, content in captured_history
+    )

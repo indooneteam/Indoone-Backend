@@ -1,3 +1,4 @@
+import base64
 import pytest
 from cryptography.fernet import Fernet
 

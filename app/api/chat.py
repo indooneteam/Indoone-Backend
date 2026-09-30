@@ -7,7 +7,6 @@ from app.ai.agent_async import execute_agent_async
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
 from app.ai.grounding import extract_sources
-from app.ai.intent import classify_intent
 from app.ai.memory_service import MemoryService
 from app.ai.service import generate_reply
 from app.api.dependencies import current_user_id
@@ -93,7 +92,6 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    intent = classify_intent(body.message)
     document_context = ""
 
     if body.file_id:

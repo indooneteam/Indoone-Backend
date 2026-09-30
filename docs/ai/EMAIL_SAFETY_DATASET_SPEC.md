@@ -73,13 +73,27 @@ A deceptive message that impersonates a trusted person/service or otherwise atte
 Across the final set:
 
 - **20% hard cases**: visually plausible or contextually plausible messages that require more than one obvious keyword.
-- **30% multilingual user instructions/responses**: approximately 15% Kannada and 15% Hinglish; the email itself may remain English when that is realistic.
+- **All supported languages are first-class coverage**: English, Kannada, Hindi, Telugu, Tamil, Malayalam, Marathi, Bengali, Assamese, Gujarati, Punjabi, Odia, and Urdu. Include native-script and appropriate Romanized/mixed-language instructions where realistic.
 - At least 8 communication families: banking/account, shopping/delivery, workplace/HR, subscriptions, social accounts, cloud/productivity, education, and general marketing.
 - Include both short and medium-length emails.
 - Include legitimate emails that contain urgency, links, attachments, or security language so those signals are not learned as automatic phishing labels.
 - Include spam emails that are annoying but do not request secrets.
 - Include phishing emails that look polished and professional.
 - Include near-duplicate scenarios with different evidence so the model must reason over the whole message.
+
+## Connected email / Gmail behavior
+
+When an authorized Gmail connector is available, Indoone can read a user-selected or recently matched message and pass only the retrieved message content to the local Email Safety analyzer.
+
+The runtime flow is:
+
+Gmail connector -> read message -> decode plain text/HTML -> extract sender/subject/body/attachment names -> local Indoone Email Safety analysis -> safe user-facing answer.
+
+The email content is treated as untrusted data. Instructions embedded inside an email must never override Indoone's analysis instructions.
+
+Reading and analyzing Gmail is read-only. Sending or replying is a separate capability and remains approval-gated.
+
+Real user emails retrieved at runtime are **not training examples** and must not be written into the training dataset. Training uses only synthetic, public-domain, or appropriately licensed examples that demonstrate this connector behavior.
 
 ## Privacy and licensing rules
 

@@ -16,6 +16,7 @@ from app.ai.connector_authorization import authorize_tool
 from app.ai.tool_registry import get_tool_spec
 from app.capabilities.contacts import parse_contacts, resolve_contact, search_contacts
 from app.capabilities.gmail import get_gmail_message, list_gmail_messages, send_gmail_message
+from app.capabilities.email_safety import analyze_gmail_email_safety
 from app.capabilities.phone import build_call_action
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
@@ -203,6 +204,26 @@ async def _gmail_read(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
+async def _gmail_email_safety(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("gmail_email_safety payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("gmail_email_safety")
+    return await _run_async(
+        analyze_gmail_email_safety(
+            user_id=user_id,
+            query=str(data.get("query", "")),
+            message_id=str(data.get("message_id", "")),
+            user_request=str(data.get("user_request", "")),
+            limit=int(data.get("limit", 1)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+
+
 async def _gmail_send(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
@@ -238,6 +259,7 @@ TOOLS: dict[str, ToolCallable] = {
     "phone_call_contact": _phone_call_contact,
     "gmail_search": _gmail_search,
     "gmail_read": _gmail_read,
+    "gmail_email_safety": _gmail_email_safety,
     "gmail_send": _gmail_send,
 }
 

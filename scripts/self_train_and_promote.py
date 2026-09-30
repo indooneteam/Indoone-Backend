@@ -375,6 +375,7 @@ def _initialize_registry(
         registry_path,
         {
             "active_version": model.version,
+            "active_revision": model.revision,
             "models": [model.__dict__],
         },
     )
@@ -582,6 +583,7 @@ def run_self_training(
         report = {
             "status": "promoted",
             "version": version,
+            "revision": candidate_record.revision,
             "new_items": len(pending),
             "baseline": baseline_eval,
             "candidate": candidate_eval,

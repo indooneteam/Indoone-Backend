@@ -18,6 +18,12 @@ from urllib.parse import urlparse
 import httpx
 
 from app.ai.answer_quality import assess_answer, user_safe_failure
+from app.ai.email_training_fallback import (
+    input_guidance as email_input_guidance,
+    is_email_request,
+    needs_email_payload,
+    training_fallback,
+)
 from app.ai.general_knowledge import WikipediaKnowledgeProvider, is_general_knowledge_question, is_question_like
 from app.ai.grounding import (
     GroundedEvidence,
@@ -637,11 +643,21 @@ class LocalAIService:
             research_provider=_research_provider,
             knowledge_base=_knowledge_base,
         )
-        return await pipeline.answer(
+        reply = await pipeline.answer(
             message,
             history=history,
             document_context=document_context,
         )
+
+        if is_email_request(message):
+            if needs_email_payload(message):
+                return email_input_guidance()
+            if reply == user_safe_failure():
+                fallback = training_fallback(message)
+                if fallback:
+                    return fallback
+
+        return reply
 
 
 async def generate_reply(

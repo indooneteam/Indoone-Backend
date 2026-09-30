@@ -388,22 +388,26 @@ def _knowledge_fallback_sentence(
     if score < minimum_score or not content:
         return None
 
-    raw_query_terms = [
-        token.casefold()
-        for token in re.findall(r"[\w'-]+", message, flags=re.UNICODE)
-        if len(token) > 1 and token.casefold() not in _KNOWLEDGE_QUERY_STOPWORDS
-    ]
-    query_terms = set(raw_query_terms)
-    for token in raw_query_terms:
-        if token.endswith("ies") and len(token) > 4:
-            query_terms.add(token[:-3] + "y")
-        elif token.endswith("es") and len(token) > 4:
-            query_terms.add(token[:-2])
-        elif token.endswith("s") and len(token) > 3:
-            query_terms.add(token[:-1])
-        if token.endswith("ing") and len(token) > 5:
-            query_terms.add(token[:-3])
+    def normalized_terms(text: str, *, skip_stopwords: bool) -> set[str]:
+        raw_terms = [
+            token.casefold()
+            for token in re.findall(r"[\w'-]+", text, flags=re.UNICODE)
+            if len(token) > 1
+            and (not skip_stopwords or token.casefold() not in _KNOWLEDGE_QUERY_STOPWORDS)
+        ]
+        terms = set(raw_terms)
+        for token in raw_terms:
+            if token.endswith("ies") and len(token) > 4:
+                terms.add(token[:-3] + "y")
+            elif token.endswith("es") and len(token) > 4:
+                terms.add(token[:-2])
+            elif token.endswith("s") and len(token) > 3:
+                terms.add(token[:-1])
+            if token.endswith("ing") and len(token) > 5:
+                terms.add(token[:-3])
+        return terms
 
+    query_terms = normalized_terms(message, skip_stopwords=True)
     if not query_terms:
         return None
 
@@ -415,11 +419,7 @@ def _knowledge_fallback_sentence(
     best_sentence = ""
     best_overlap = 0
     for sentence in candidates:
-        sentence_terms = {
-            token.casefold()
-            for token in re.findall(r"[\w'-]+", sentence, flags=re.UNICODE)
-            if len(token) > 1
-        }
+        sentence_terms = normalized_terms(sentence, skip_stopwords=False)
         overlap = len(query_terms & sentence_terms)
         if overlap > best_overlap:
             best_sentence = sentence

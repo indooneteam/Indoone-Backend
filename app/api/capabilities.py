@@ -6,6 +6,7 @@ from secrets import token_urlsafe
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from app.ai.agent import MAX_AGENT_STEPS, execute_agent
@@ -198,6 +199,30 @@ async def integration_callback(integration_id: str, request: IntegrationCallback
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (RuntimeError, httpx.HTTPError) as exc:
         raise HTTPException(status_code=502, detail=f"oauth exchange failed: {exc}") from exc
+
+
+@router.get("/integrations/{integration_id}/callback", response_class=HTMLResponse)
+async def integration_callback_browser(
+    integration_id: str,
+    state: str = Query(..., min_length=16, max_length=512),
+    code: str = Query(..., min_length=1, max_length=8_000),
+) -> HTMLResponse:
+    try:
+        await exchange_oauth_code(integration_id, state, code)
+    except ValueError as exc:
+        return HTMLResponse(
+            f"<html><body><h2>Indoone Gmail connection failed</h2><p>{str(exc)}</p><p>Return to Indoone and try again.</p></body></html>",
+            status_code=400,
+        )
+    except (RuntimeError, httpx.HTTPError) as exc:
+        return HTMLResponse(
+            f"<html><body><h2>Indoone connection failed</h2><p>{str(exc)}</p><p>Return to Indoone and try again.</p></body></html>",
+            status_code=502,
+        )
+    return HTMLResponse(
+        "<html><body><h2>Gmail connected to Indoone</h2><p>You can return to the Indoone app now.</p></body></html>",
+        status_code=200,
+    )
 
 
 @router.get("/integrations/{integration_id}/status")

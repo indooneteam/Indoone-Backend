@@ -13,6 +13,8 @@ from typing import TYPE_CHECKING
 import re
 import time
 
+from app.ai.knowledge import LocalKnowledgeBase
+from app.ai.research import ResearchProvider, build_research_provider
 
 from app.storage.b2 import B2StorageError, ensure_model_artifacts
 from app.storage.github_release import GitHubReleaseStorageError, get_github_release_storage

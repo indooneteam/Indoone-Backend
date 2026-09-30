@@ -1,0 +1,59 @@
+name: Indoone AI Self Training
+
+on:
+  schedule:
+    - cron: "47 */6 * * *"
+  push:
+    branches:
+      - main
+    paths:
+      - "scripts/self_train_and_promote.py"
+      - "scripts/merge_auto_web_training.py"
+      - ".github/workflows/auto-self-train.yml"
+      - "data/self_update/state.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: indoone-ai-self-training
+  cancel-in-progress: false
+
+jobs:
+  self-train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      B2_APPLICATION_KEY_ID: ${{ secrets.B2_APPLICATION_KEY_ID }}
+      B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+      B2_BUCKET_NAME: ${{ secrets.B2_BUCKET_NAME }}
+      B2_ENDPOINT: ${{ secrets.B2_ENDPOINT }}
+      INDOONE_ALLOW_CPU_TRAINING: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Run gated self-training
+        run: |
+          python scripts/self_train_and_promote.py             --min-new-items 20             --steps 500             --batch-size 16             --learning-rate 0.00003             --eval-interval 100             --seed 4242
+
+      - name: Commit promotion metadata
+        run: |
+          if [ -z "$(git status --porcelain -- models/registry.json data/self_update/training_state.json data/self_update/last_promotion.json)" ]; then
+            echo "No model promotion metadata to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add models/registry.json data/self_update/training_state.json data/self_update/last_promotion.json
+          git commit -m "chore(ai): record self-training promotion"
+          git push origin main

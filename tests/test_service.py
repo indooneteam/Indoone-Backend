@@ -4,27 +4,28 @@ from app.ai import service
 
 
 @pytest.mark.asyncio
-async def test_service_routes_unseen_requests_to_universal_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[str] = []
+async def test_service_sends_the_actual_request_directly_to_the_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
 
     class FakeProvider:
         async def generate(self, *, system_instruction: str, user_prompt: str, temperature: float, max_output_tokens: int) -> str:
-            calls.append(user_prompt)
-            return "A newly generated answer for an unseen request."
+            captured["system_instruction"] = system_instruction
+            captured["user_prompt"] = user_prompt
+            captured["temperature"] = temperature
+            captured["max_output_tokens"] = max_output_tokens
+            return "A model-generated answer."
 
-    monkeypatch.setattr(service, "_universal_answer_provider", FakeProvider())
-    monkeypatch.setattr(service, "_research_provider", None)
-    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_model_answer_provider", FakeProvider())
 
     reply = await service.generate_reply("Explain a topic that is not in any example.")
 
-    assert reply == "A newly generated answer for an unseen request."
-    assert len(calls) == 1
-    assert "Explain a topic that is not in any example." in calls[0]
+    assert reply == "A model-generated answer."
+    assert captured["user_prompt"] == "Explain a topic that is not in any example."
+    assert "retrieval" in str(captured["system_instruction"]).lower()
 
 
 @pytest.mark.asyncio
-async def test_service_passes_history_and_document_context(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_service_only_adds_explicit_conversation_and_document_context(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[str] = []
 
     class FakeProvider:
@@ -32,9 +33,7 @@ async def test_service_passes_history_and_document_context(monkeypatch: pytest.M
             captured.append(user_prompt)
             return "Context was used."
 
-    monkeypatch.setattr(service, "_universal_answer_provider", FakeProvider())
-    monkeypatch.setattr(service, "_research_provider", None)
-    monkeypatch.setattr(service, "_knowledge_base", None)
+    monkeypatch.setattr(service, "_model_answer_provider", FakeProvider())
 
     reply = await service.generate_reply(
         "Summarize the discussion.",
@@ -48,13 +47,22 @@ async def test_service_passes_history_and_document_context(monkeypatch: pytest.M
 
 
 @pytest.mark.asyncio
-async def test_service_fails_safely_without_universal_generation_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(service, "_universal_answer_provider", None)
-    monkeypatch.setattr(service, "_research_provider", None)
-    monkeypatch.setattr(service, "_knowledge_base", None)
+async def test_local_model_provider_has_no_generation_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeRuntime:
+        def generate(self, *args, **kwargs) -> str:
+            return "slow-model-answer"
 
-    with pytest.raises(RuntimeError, match="trained Indoone model provider is unavailable"):
-        await service.generate_reply("Answer an arbitrary question.")
+    monkeypatch.setattr(service, "_load_local_model_runtime", lambda: FakeRuntime())
+    provider = service._LocalModelAnswerProvider()
+
+    reply = await provider.generate(
+        system_instruction="You are Indoone AI.",
+        user_prompt="Take as long as needed.",
+    )
+
+    assert reply == "slow-model-answer"
+    assert not hasattr(service, "_MODEL_GENERATION_TIMEOUT_SECONDS")
+
 
 def test_model_artifacts_require_indoone_model_release(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setattr(service, "get_github_release_storage", lambda: None)

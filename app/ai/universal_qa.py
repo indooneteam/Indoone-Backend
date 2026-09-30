@@ -173,7 +173,7 @@ class UniversalQuestionAnswerPipeline:
 
         try:
             research_results = await self._collect_research(understanding)
-        except RuntimeError:
+        except RuntimeError as exc:
             if understanding.needs_research:
                 raise RuntimeError("live research is unavailable") from exc
             research_results = []

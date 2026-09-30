@@ -88,3 +88,74 @@ async def test_gmail_get_message_returns_provider_payload(monkeypatch, tmp_path)
     result = await get_gmail_message("user-one", "m1")
     assert result["message"]["id"] == "m1"
     assert result["secrets_exposed"] is False
+
+
+@pytest.mark.asyncio
+async def test_gmail_reply_preserves_thread_and_reply_headers(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    key = Fernet.generate_key().decode("ascii")
+    monkeypatch.setenv("INDOONE_OAUTH_ENCRYPTION_KEY", key)
+    cipher = Fernet(key.encode("ascii"))
+    upsert_integration_token("user-one", "gmail", cipher.encrypt(b"gmail-secret"), None, "Bearer", "gmail.modify", None)
+
+    class Response:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, object]:
+            return {"id": "reply1", "threadId": "t1"}
+
+    class Client:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            return None
+
+        async def get(self, url, **kwargs):
+            assert url.endswith("/messages/m1")
+            return type(
+                "GetResponse",
+                (),
+                {
+                    "raise_for_status": lambda self: None,
+                    "json": lambda self: {
+                        "id": "m1",
+                        "threadId": "t1",
+                        "payload": {
+                            "headers": [
+                                {"name": "From", "value": "Alex <alex@example.com>"},
+                                {"name": "Subject", "value": "Meeting tomorrow"},
+                                {"name": "Message-ID", "value": "<m1@example.com>"},
+                                {"name": "References", "value": "<root@example.com>"},
+                            ]
+                        },
+                    },
+                },
+            )()
+
+        async def post(self, url, **kwargs):
+            assert url.endswith("/messages/send")
+            payload = kwargs["json"]
+            raw = base64.urlsafe_b64decode(payload["raw"] + "==").decode("utf-8", errors="replace")
+            assert payload["threadId"] == "t1"
+            assert "In-Reply-To: <m1@example.com>" in raw
+            assert "References: <root@example.com> <m1@example.com>" in raw
+            assert "Subject: Re: Meeting tomorrow" in raw
+            return Response()
+
+    monkeypatch.setattr("app.capabilities.gmail.httpx.AsyncClient", Client)
+
+    from app.capabilities.gmail import reply_gmail_message
+
+    result = await reply_gmail_message(
+        "user-one",
+        "m1",
+        "Thanks, I can attend.",
+        approved=True,
+    )
+    assert result["operation"] == "reply"
+    assert result["result"]["thread_id"] == "t1"

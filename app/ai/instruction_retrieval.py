@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from app.ai.training_data import TrainingExample, load_examples
+from app.ai.training.training_data import TrainingExample, load_examples
 
 
 _TOKEN_RE = re.compile(r"[^\W_]+", flags=re.UNICODE)

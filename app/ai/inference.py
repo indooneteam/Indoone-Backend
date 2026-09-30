@@ -10,7 +10,7 @@ from app.ai.language_detection import SCRIPT_RANGES
 from app.ai.instruction_retrieval import InstructionRetriever
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
-from app.ai.training_data import format_instruction_prompt
+from app.ai.training.training_data import format_instruction_prompt
 
 
 DEFAULT_MAX_NEW_TOKENS = 192

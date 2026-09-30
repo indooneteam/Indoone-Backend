@@ -223,7 +223,7 @@ def run_sft(
 
     torch.save(
         {
-            "config": {**model_config, "model_version": "indoone-gpt-v2"},
+            "config": {**model_config, "model_version": "indoone-gpt-v1"},
             "model_state": model.cpu().state_dict(),
         },
         model_path,

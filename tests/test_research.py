@@ -588,3 +588,13 @@ def test_research_relevance_supports_unicode_terms() -> None:
 
     assert _is_relevant_research_result(query, relevant)
     assert not _is_relevant_research_result(query, unrelated)
+
+
+def test_research_relevance_crosses_common_kannada_english_terms() -> None:
+    query = ["ಭಾರತದ ರಾಷ್ಟ್ರಪತಿ"]
+    result = ResearchResult(
+        "President of India",
+        "https://example.com/president",
+        "The President of India is the head of state.",
+    )
+    assert _is_relevant_research_result(query, result)

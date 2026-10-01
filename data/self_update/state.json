@@ -1,7 +1,23 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-09-30T18:34:40.950276+00:00",
+  "updated_at": "2026-10-01T00:41:20.504216+00:00",
   "items": [
+    {
+      "source": "NASA News",
+      "title": "NASA Adds New Science Investigations for Moon Base",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1052091",
+      "summary": "Editor’s note: This release was updated on Sept. 30, 2026, to correct the name of the DISCO payload. NASA selected three new scientific investigations and their payload suites to advance our knowledge of the Moon and help pave the way for building humanity’s first lunar outpost, Moon Base. The suite of science instruments and technologies […]",
+      "published": "Wed, 30 Sep 2026 21:11:23 +0000",
+      "fingerprint": "6c831876202e5c99b323dffdaed8ce2a696ba61de2487f4d38cb00db1e5e1035"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Awards Contract to Develop 5G Communications for Moon",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1052072",
+      "summary": "NASA has awarded Modulate Space Corporation a contract to develop key elements of a 5G communications system for use on the lunar surface with built-in Wi-Fi 6, for NASA’s Glenn Research Center in Cleveland. This accelerated effort is organized into two primary work areas that together will develop a scalable, standards-based communications capability designed to […]",
+      "published": "Wed, 30 Sep 2026 20:41:26 +0000",
+      "fingerprint": "816ff2fa713a055201bed2b6d144e89bf8fe7f71477ab1f81c5b0522eb911281"
+    },
     {
       "source": "NASA News",
       "title": "Star Trails",

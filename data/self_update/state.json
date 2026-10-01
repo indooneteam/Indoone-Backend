@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-01T00:41:20.504216+00:00",
+  "updated_at": "2026-10-01T18:26:45.275661+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -105,6 +105,22 @@
       "summary": "Photos taken using a microscope reveal the colorful, kaleidoscope-like crystal structure of a new NASA-made material that could be used for manufacturing during future space missions. Developed at NASA’s Glenn Research Center in Cleveland, the material could be created directly on the Moon or Mars, allowing NASA to pack fewer supplies — saving weight and […]",
       "published": "Tue, 29 Sep 2026 14:00:00 +0000",
       "fingerprint": "7e083e0e8d512bd0422d8f2f05514106012dcabd70c32127a65ac4c3eebfe464"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s SpaceX Crew-13 Launches",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1052553",
+      "summary": "In this Oct. 1, 2026, photo, a SpaceX Falcon 9 rocket and Dragon spacecraft launch from Space Launch Complex 40 at Cape Canaveral Space Force Station in Florida. The spacecraft is carrying NASA astronauts Jessica Watkins and Luke Delaney, CSA (Canadian Space Agency) astronaut Joshua Kutryk, and Roscosmos cosmonaut Sergey Teteryatnikov to the International Space Station for a […]",
+      "published": "Thu, 01 Oct 2026 18:05:38 +0000",
+      "fingerprint": "b360cf2cc6a9d27e257a7a1dcd5b339199c59aef111bdce0b30f82e025593caf"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s SpaceX Crew-13 Launches to International Space Station",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1052403",
+      "summary": "Four crew members of NASA’s SpaceX Crew-13 mission launched at 11:10 a.m. EDT Thursday from Space Launch Complex 40 at Cape Canaveral Space Force Station in Florida for a science expedition aboard the International Space Station. “Crew-13 is another demonstration of America’s unmatched capability in human spaceflight and the strength of our commercial partnerships,” said […]",
+      "published": "Thu, 01 Oct 2026 15:59:24 +0000",
+      "fingerprint": "b0386df574f7c0e329849d484d266d7a550689d4fb4425ea28481deecbe6eaa6"
     }
   ]
 }

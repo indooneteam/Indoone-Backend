@@ -62,7 +62,8 @@ def _load_runtime() -> QwenLocalModelRuntime:
 
         try:
             context_size = int(os.getenv("QWEN_CONTEXT_SIZE", "1024"))
-            threads = int(os.getenv("QWEN_THREADS", "2"))
+            default_threads = min(4, os.cpu_count() or 1)
+            threads = int(os.getenv("QWEN_THREADS", str(default_threads)))
         except ValueError as exc:
             raise RuntimeError("Qwen context/threads configuration is invalid") from exc
 
@@ -98,7 +99,7 @@ async def generate_qwen_reply(
     runtime = await asyncio.to_thread(_load_runtime)
 
     try:
-        max_tokens = int(os.getenv("QWEN_MAX_TOKENS", "256"))
+        max_tokens = int(os.getenv("QWEN_MAX_TOKENS", "128"))
     except ValueError as exc:
         raise RuntimeError("QWEN_MAX_TOKENS configuration is invalid") from exc
 

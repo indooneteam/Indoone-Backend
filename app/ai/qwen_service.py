@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 from pathlib import Path
+import re
 import threading
 
 from app.ai.qwen_runtime import QwenLocalModelRuntime, QwenRuntimeError
@@ -25,6 +26,17 @@ _MODEL_PATH = Path(
 _LOAD_LOCK = threading.Lock()
 _INFERENCE_LOCK = threading.Lock()
 _RUNTIME: QwenLocalModelRuntime | None = None
+
+_THINK_BLOCK_RE = re.compile(r"<think\b[^>]*>.*?</think>", re.IGNORECASE | re.DOTALL)
+_UNCLOSED_THINK_RE = re.compile(r"<think\b[^>]*>.*$", re.IGNORECASE | re.DOTALL)
+
+
+def _strip_think_content(reply: str) -> str:
+    """Return only the user-facing answer from a Qwen chat completion."""
+    cleaned = reply.strip()
+    cleaned = _THINK_BLOCK_RE.sub("", cleaned)
+    cleaned = _UNCLOSED_THINK_RE.sub("", cleaned)
+    return cleaned.strip()
 
 
 def _ensure_model() -> None:
@@ -91,7 +103,7 @@ async def generate_qwen_reply(
         raise RuntimeError("QWEN_MAX_TOKENS configuration is invalid") from exc
 
     with _INFERENCE_LOCK:
-        return await asyncio.to_thread(
+        raw_reply = await asyncio.to_thread(
             runtime.generate,
             messages,
             max_tokens=max_tokens,
@@ -101,3 +113,8 @@ async def generate_qwen_reply(
             min_p=0.0,
             presence_penalty=1.5,
         )
+
+    reply = _strip_think_content(raw_reply)
+    if not reply:
+        raise RuntimeError("Qwen returned an empty user-facing answer")
+    return reply

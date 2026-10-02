@@ -206,6 +206,61 @@ class TavilyResearchProvider(ResearchProvider):
             results.append(ResearchResult(title, source_url, snippet))
         return results
 
+class DuckDuckGoResearchProvider(ResearchProvider):
+    """Keyless DuckDuckGo web search provider used for fresh web evidence."""
+
+    def __init__(
+        self,
+        timeout: float = 8.0,
+        region: str = "in-en",
+        backend: str = "duckduckgo",
+    ) -> None:
+        if timeout <= 0 or timeout > MAX_RESEARCH_TIMEOUT_SECONDS:
+            raise ValueError("timeout must not exceed 60 seconds and must be greater than zero")
+        if not region.strip():
+            raise ValueError("region cannot be empty")
+        if backend.strip().casefold() != "duckduckgo":
+            raise ValueError("backend must be duckduckgo")
+        self.timeout = timeout
+        self.region = region.strip()
+        self.backend = backend.strip()
+
+    def _search_sync(self, query: str, limit: int) -> list[ResearchResult]:
+        from ddgs import DDGS
+
+        results = DDGS(timeout=max(1, int(self.timeout))).text(
+            query,
+            region=self.region,
+            max_results=limit,
+            backend=self.backend,
+        )
+        if not isinstance(results, list):
+            return []
+
+        sanitized: list[ResearchResult] = []
+        for item in results[:limit]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "")).strip()[:MAX_TITLE_LENGTH]
+            source_url = _safe_source_url(
+                str(item.get("href", item.get("url", ""))).strip()
+            )
+            snippet = " ".join(
+                str(item.get("body", item.get("snippet", ""))).split()
+            )[:MAX_SNIPPET_LENGTH]
+            if title and source_url:
+                sanitized.append(ResearchResult(title, source_url, snippet))
+        return sanitized
+
+    async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
+        query = query.strip()
+        if not query:
+            raise ValueError("query cannot be empty")
+        if limit < 1 or limit > 20:
+            raise ValueError("limit must be between 1 and 20")
+        return await asyncio.to_thread(self._search_sync, query, limit)
+
+
 class WikipediaResearchProvider(ResearchProvider):
     """Adapt the existing Wikipedia knowledge provider into research evidence."""
 
@@ -640,10 +695,22 @@ def build_research_provider() -> ResearchProvider | None:
     except ValueError as exc:
         raise ValueError("INDOONE_RESEARCH_TIMEOUT must be numeric") from exc
 
-    providers: list[ResearchProvider] = []
-
+    provider_name = os.getenv("INDOONE_SEARCH_PROVIDER", "").strip().casefold()
     url = os.getenv("INDOONE_RESEARCH_URL", "").strip()
     tavily_api_key = os.getenv("INDOONE_TAVILY_API_KEY", "").strip()
+
+    if provider_name in {"duckduckgo", "ddg"}:
+        return MultiSourceResearchProvider(
+            [
+                DuckDuckGoResearchProvider(
+                    timeout=timeout,
+                    region=os.getenv("INDOONE_DDG_REGION", "in-en"),
+                )
+            ],
+            max_query_variants=1,
+        )
+
+    providers: list[ResearchProvider] = []
 
     if url:
         providers.append(

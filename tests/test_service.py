@@ -2,6 +2,10 @@ import pytest
 
 from app.ai import service
 
+@pytest.fixture(autouse=True)
+def disable_live_web_research(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(service, "_WEB_RESEARCH_ENABLED", False)
+
 
 @pytest.mark.asyncio
 async def test_service_sends_the_actual_request_directly_to_the_model(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -66,7 +70,7 @@ async def test_local_model_provider_has_no_generation_timeout(monkeypatch: pytes
 
 @pytest.mark.asyncio
 async def test_live_web_research_is_added_before_model_generation(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("INDOONE_ALWAYS_WEB_RESEARCH", "true")
+    monkeypatch.setattr(service, "_WEB_RESEARCH_ENABLED", True)
     captured: dict[str, str] = {}
 
     class FakeResearchResult:

@@ -28,43 +28,54 @@ _RUNTIME: GemmaLocalModelRuntime | None = None
 def _identity_response(message: str) -> str | None:
     normalized = " ".join(message.casefold().split())
 
-    kannada_hints = (
+    identity_hints = (
+        # Kannada identity questions
         "ನಿನ್ನ ಬಗ್ಗೆ",
         "ನಿಮ್ಮ ಬಗ್ಗೆ",
         "ನೀನು ಯಾರು",
         "ನೀವು ಯಾರು",
         "ಯಾರು ನೀನು",
         "ಯಾರು ನೀವು",
-        "ಯಾರು ಮಾಡಿದರು",
+        "ನಿನ್ನ ಹೆಸರು",
+        "ನಿಮ್ಮ ಹೆಸರು",
+        "ನಿನ್ನನ್ನು ಯಾರು",
+        "ನಿಮ್ಮನ್ನು ಯಾರು",
+        "ನಿನ್ನನ್ನು ಮಾಡಿದ್ದು ಯಾರು",
+        "ನಿಮ್ಮನ್ನು ಮಾಡಿದ್ದು ಯಾರು",
         "ಯಾರು ತಯಾರಿಸಿದರು",
-        "ಯಾವ ಕಂಪನಿ",
-        "ಗೂಗಲ್",
-    )
-    english_hints = (
+        "ಯಾರು ಅಭಿವೃದ್ಧಿಪಡಿಸಿದರು",
+        "ಯಾವ ಮಾಡೆಲ್",
+        "ಯಾವ ಎಐ ಮಾಡೆಲ್",
+        # English identity questions
         "who are you",
         "what are you",
         "tell me about yourself",
         "your name",
         "who made you",
+        "who created you",
         "who developed you",
-        "which company made you",
-        "are you google",
+        "which model are you",
+        "what model are you",
+        "which ai model",
+        "what ai model",
+        "what is your model",
+        "who built you",
+        "who is your creator",
+        "where are you from",
     )
 
-    if any(hint in normalized for hint in kannada_hints):
+    if any(hint in normalized for hint in identity_hints):
+        if any(token in normalized for token in ("ನ", "ಕನ್ನಡ", "ನಿನ್ನ", "ನಿಮ್ಮ")):
+            return (
+                "ನಾನು Indoone AI. ನಾನು Indoone appನ AI assistant. "
+                "ನಾನು Indooneಗಾಗಿ ವಿನ್ಯಾಸಗೊಳಿಸಲಾದ ಸಹಾಯಕ."
+            )
         return (
-            "ನಾನು Indoone AI. ನಾನು Indoone appಗಾಗಿ ಬಳಸಲಾಗುತ್ತಿರುವ AI assistant. "
-            "ನನ್ನ ಪ್ರಸ್ತುತ underlying model Gemma 3 4B ಆಗಿದೆ."
-        )
-
-    if any(hint in normalized for hint in english_hints):
-        return (
-            "I’m Indoone AI, the AI assistant used by the Indoone app. "
-            "My current underlying model is Gemma 3 4B."
+            "I’m Indoone AI, the AI assistant for the Indoone app. "
+            "I’m designed specifically for Indoone."
         )
 
     return None
-
 
 def _load_runtime() -> GemmaLocalModelRuntime:
     global _RUNTIME
@@ -96,11 +107,10 @@ async def generate_gemma_reply(
         {
             "role": "system",
             "content": (
-                "You are Indoone AI, the AI assistant used by the Indoone app. "
-                "Do not claim that you are Google, a Google assistant, or an assistant made by Google. "
-                "Do not say that Google developed Indoone AI. "
-                "When asked about your identity, say that you are Indoone AI. "
-                "If the user asks which underlying model powers you, you may say Gemma 3 4B. "
+                "You are Indoone AI, the AI assistant for the Indoone app. "
+                "For identity, creator, developer, provider, or model questions, keep the answer about Indoone AI only. "
+                "Do not disclose, name, or discuss any underlying model, provider, vendor, training model, or external AI company. "
+                "Do not identify yourself as another company's assistant or product. "
                 "Answer the user in the same language as the user's question. "
                 "For Kannada questions, use natural Kannada script. "
                 "For English questions, use natural English. "

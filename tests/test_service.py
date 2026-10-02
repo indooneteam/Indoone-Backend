@@ -119,10 +119,44 @@ async def test_live_web_research_failure_falls_back_to_model(monkeypatch: pytest
     monkeypatch.setattr(service, "_model_answer_provider", FakeProvider())
     monkeypatch.delenv("INDOONE_MODEL_BACKEND", raising=False)
 
-    reply = await service.generate_reply("hello")
+    reply = await service.generate_reply("latest information about a topic")
 
     assert reply == "Model-only answer."
     assert "LIVE WEB RESEARCH EVIDENCE:" not in captured["prompt"]
+
+
+def test_web_router_skips_non_current_questions() -> None:
+    assert service._should_use_live_web("What is gravity?") is False
+    assert service._should_use_live_web("Explain Python lists simply.") is False
+    assert service._should_use_live_web("What is the capital of India?") is False
+
+
+def test_web_router_selects_fresh_information_requests() -> None:
+    assert service._should_use_live_web("What is today's weather in Bengaluru?") is True
+    assert service._should_use_live_web("Give me the latest AI news.") is True
+    assert service._should_use_live_web("Who is the current president of India?") is True
+
+
+@pytest.mark.asyncio
+async def test_service_skips_web_for_normal_local_questions(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(service, "_WEB_RESEARCH_ENABLED", True)
+    monkeypatch.setattr(service, "_WEB_RESEARCH_MODE", "conditional")
+
+    class BrokenResearch:
+        async def search(self, query: str, limit: int = 5):
+            raise AssertionError("web search must not run for a normal local question")
+
+    monkeypatch.setattr(service, "build_research_provider", lambda: BrokenResearch())
+
+    class FakeProvider:
+        async def generate(self, *, system_instruction: str, user_prompt: str, temperature: float, max_output_tokens: int) -> str:
+            return "Local model answer."
+
+    monkeypatch.setattr(service, "_model_answer_provider", FakeProvider())
+
+    reply = await service.generate_reply("What is gravity?")
+
+    assert reply == "Local model answer."
 
 
 def test_model_artifacts_require_indoone_model_release(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:

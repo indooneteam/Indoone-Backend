@@ -64,6 +64,63 @@ async def test_local_model_provider_has_no_generation_timeout(monkeypatch: pytes
     assert not hasattr(service, "_MODEL_GENERATION_TIMEOUT_SECONDS")
 
 
+@pytest.mark.asyncio
+async def test_live_web_research_is_added_before_model_generation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INDOONE_ALWAYS_WEB_RESEARCH", "true")
+    captured: dict[str, str] = {}
+
+    class FakeResearchResult:
+        title = "Fresh web result"
+        url = "https://example.com/fresh"
+        snippet = "Current evidence from the live web."
+
+    class FakeResearchProvider:
+        async def search(self, query: str, limit: int = 5):
+            assert query == "latest AI news"
+            assert limit == 5
+            return [FakeResearchResult()]
+
+    monkeypatch.setattr(service, "build_research_provider", lambda: FakeResearchProvider())
+
+    class FakeProvider:
+        async def generate(self, *, system_instruction: str, user_prompt: str, temperature: float, max_output_tokens: int) -> str:
+            captured["prompt"] = user_prompt
+            return "Grounded answer."
+
+    monkeypatch.setattr(service, "_model_answer_provider", FakeProvider())
+    monkeypatch.delenv("INDOONE_MODEL_BACKEND", raising=False)
+
+    reply = await service.generate_reply("latest AI news")
+
+    assert reply == "Grounded answer."
+    assert "LIVE WEB RESEARCH EVIDENCE:" in captured["prompt"]
+    assert "example.com" in captured["prompt"]
+    assert "Current evidence from the live web." in captured["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_live_web_research_failure_falls_back_to_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResearchProvider:
+        async def search(self, query: str, limit: int = 5):
+            raise RuntimeError("network unavailable")
+
+    monkeypatch.setattr(service, "build_research_provider", lambda: FakeResearchProvider())
+    captured: dict[str, str] = {}
+
+    class FakeProvider:
+        async def generate(self, *, system_instruction: str, user_prompt: str, temperature: float, max_output_tokens: int) -> str:
+            captured["prompt"] = user_prompt
+            return "Model-only answer."
+
+    monkeypatch.setattr(service, "_model_answer_provider", FakeProvider())
+    monkeypatch.delenv("INDOONE_MODEL_BACKEND", raising=False)
+
+    reply = await service.generate_reply("hello")
+
+    assert reply == "Model-only answer."
+    assert "LIVE WEB RESEARCH EVIDENCE:" not in captured["prompt"]
+
+
 def test_model_artifacts_require_indoone_model_release(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     monkeypatch.setattr(service, "get_github_release_storage", lambda: None)
 

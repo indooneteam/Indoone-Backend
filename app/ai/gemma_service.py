@@ -25,6 +25,47 @@ _INFERENCE_LOCK = threading.Lock()
 _RUNTIME: GemmaLocalModelRuntime | None = None
 
 
+def _identity_response(message: str) -> str | None:
+    normalized = " ".join(message.casefold().split())
+
+    kannada_hints = (
+        "ನಿನ್ನ ಬಗ್ಗೆ",
+        "ನಿಮ್ಮ ಬಗ್ಗೆ",
+        "ನೀನು ಯಾರು",
+        "ನೀವು ಯಾರು",
+        "ಯಾರು ನೀನು",
+        "ಯಾರು ನೀವು",
+        "ಯಾರು ಮಾಡಿದರು",
+        "ಯಾರು ತಯಾರಿಸಿದರು",
+        "ಯಾವ ಕಂಪನಿ",
+        "ಗೂಗಲ್",
+    )
+    english_hints = (
+        "who are you",
+        "what are you",
+        "tell me about yourself",
+        "your name",
+        "who made you",
+        "who developed you",
+        "which company made you",
+        "are you google",
+    )
+
+    if any(hint in normalized for hint in kannada_hints):
+        return (
+            "ನಾನು Indoone AI. ನಾನು Indoone appಗಾಗಿ ಬಳಸಲಾಗುತ್ತಿರುವ AI assistant. "
+            "ನನ್ನ ಪ್ರಸ್ತುತ underlying model Gemma 3 4B ಆಗಿದೆ."
+        )
+
+    if any(hint in normalized for hint in english_hints):
+        return (
+            "I’m Indoone AI, the AI assistant used by the Indoone app. "
+            "My current underlying model is Gemma 3 4B."
+        )
+
+    return None
+
+
 def _load_runtime() -> GemmaLocalModelRuntime:
     global _RUNTIME
 
@@ -55,7 +96,11 @@ async def generate_gemma_reply(
         {
             "role": "system",
             "content": (
-                "You are Indoone AI. "
+                "You are Indoone AI, the AI assistant used by the Indoone app. "
+                "Do not claim that you are Google, a Google assistant, or an assistant made by Google. "
+                "Do not say that Google developed Indoone AI. "
+                "When asked about your identity, say that you are Indoone AI. "
+                "If the user asks which underlying model powers you, you may say Gemma 3 4B. "
                 "Answer the user in the same language as the user's question. "
                 "For Kannada questions, use natural Kannada script. "
                 "For English questions, use natural English. "
@@ -78,6 +123,10 @@ async def generate_gemma_reply(
             "\n\nUSER-PROVIDED DOCUMENT:\n"
             + document_context.strip()[:100000]
         )
+
+    identity_reply = _identity_response(cleaned)
+    if identity_reply is not None:
+        return identity_reply
 
     messages.append({"role": "user", "content": user_content})
 

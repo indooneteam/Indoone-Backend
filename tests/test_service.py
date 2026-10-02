@@ -1,6 +1,7 @@
 import pytest
 
 from app.ai import service
+from app.ai.research import ResearchResult
 
 @pytest.fixture(autouse=True)
 def disable_live_web_research(monkeypatch: pytest.MonkeyPatch) -> None:

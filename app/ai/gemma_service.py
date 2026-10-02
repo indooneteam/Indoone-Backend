@@ -29,43 +29,37 @@ def _identity_response(message: str) -> str | None:
     normalized = " ".join(message.casefold().split())
 
     identity_hints = (
-        # Kannada identity questions
-        "ನಿನ್ನ ಬಗ್ಗೆ",
-        "ನಿಮ್ಮ ಬಗ್ಗೆ",
-        "ನೀನು ಯಾರು",
-        "ನೀವು ಯಾರು",
-        "ಯಾರು ನೀನು",
-        "ಯಾರು ನೀವು",
-        "ನಿನ್ನ ಹೆಸರು",
-        "ನಿಮ್ಮ ಹೆಸರು",
-        "ನಿನ್ನನ್ನು ಯಾರು",
-        "ನಿಮ್ಮನ್ನು ಯಾರು",
-        "ನಿನ್ನನ್ನು ಮಾಡಿದ್ದು ಯಾರು",
-        "ನಿಮ್ಮನ್ನು ಮಾಡಿದ್ದು ಯಾರು",
-        "ಯಾರು ತಯಾರಿಸಿದರು",
-        "ಯಾರು ಅಭಿವೃದ್ಧಿಪಡಿಸಿದರು",
-        "ಯಾವ ಮಾಡೆಲ್",
-        "ಯಾವ ಎಐ ಮಾಡೆಲ್",
-        # English identity questions
-        "who are you",
-        "what are you",
-        "tell me about yourself",
-        "your name",
-        "who made you",
-        "who created you",
-        "who developed you",
-        "which model are you",
-        "what model are you",
-        "which ai model",
-        "what ai model",
-        "what is your model",
-        "who built you",
-        "who is your creator",
-        "where are you from",
+        "ನಿನ್ನ ಬಗ್ಗೆ", "ನಿಮ್ಮ ಬಗ್ಗೆ", "ನೀನು ಯಾರು", "ನೀವು ಯಾರು",
+        "ಯಾರು ನೀನು", "ಯಾರು ನೀವು", "ನಿನ್ನ ಹೆಸರು", "ನಿಮ್ಮ ಹೆಸರು",
+        "ನಿನ್ನನ್ನು ಯಾರು", "ನಿಮ್ಮನ್ನು ಯಾರು", "ನಿನ್ನನ್ನು ಮಾಡಿದ್ದು ಯಾರು",
+        "ನಿಮ್ಮನ್ನು ಮಾಡಿದ್ದು ಯಾರು", "ಯಾರು ತಯಾರಿಸಿದರು", "ಯಾರು ಅಭಿವೃದ್ಧಿಪಡಿಸಿದರು",
+        "ಯಾವ ಮಾಡೆಲ್", "ಯಾವ ಎಐ ಮಾಡೆಲ್",
+        "who are you", "what are you", "tell me about yourself",
+        "your name", "who made you", "who created you", "who developed you",
+        "which model are you", "what model are you", "which ai model",
+        "what ai model", "what is your model", "who built you",
+        "who is your creator", "where are you from",
     )
 
+    external_entities = (
+        "google", "ಗೂಗಲ್", "gemini", "gemma", "openai", "chatgpt",
+        "anthropic", "claude", "meta", "llama", "microsoft", "copilot",
+        "qwen", "alibaba", "deepseek", "mistral", "ibm", "granite",
+    )
+
+    asks_about_company = any(
+        phrase in normalized
+        for phrase in (
+            "company", "ಕಂಪನಿ", "ಕಂಪನಿಯ ಬಗ್ಗೆ", "ಬಗ್ಗೆ", "about",
+            "who owns", "ಯಾರದು", "ಯಾರು ಮಾಲೀಕರು", "ಯಾರು ಮಾಡಿದರು",
+            "who made", "who created", "who developed",
+        )
+    )
+
+    mentions_external = any(entity in normalized for entity in external_entities)
+
     if any(hint in normalized for hint in identity_hints):
-        if any(token in normalized for token in ("ನ", "ಕನ್ನಡ", "ನಿನ್ನ", "ನಿಮ್ಮ")):
+        if any(token in normalized for token in ("ನಿನ್ನ", "ನಿಮ್ಮ", "ಕನ್ನಡ", "ನೀನು", "ನೀವು")):
             return (
                 "ನಾನು Indoone AI. ನಾನು Indoone appನ AI assistant. "
                 "ನಾನು Indooneಗಾಗಿ ವಿನ್ಯಾಸಗೊಳಿಸಲಾದ ಸಹಾಯಕ."
@@ -73,6 +67,17 @@ def _identity_response(message: str) -> str | None:
         return (
             "I’m Indoone AI, the AI assistant for the Indoone app. "
             "I’m designed specifically for Indoone."
+        )
+
+    if mentions_external and asks_about_company:
+        if any(token in normalized for token in ("ನ", "ಕನ್ನಡ", "ನಿಮ್ಮ", "ನಿನ್ನ", "ಬಗ್ಗೆ")):
+            return (
+                "ನಾನು Indoone AI ಬಗ್ಗೆ ವಿವರಗಳನ್ನು ನೀಡಬಹುದು. "
+                "ಬೇರೆ AI ಕಂಪನಿಗಳು, ಉತ್ಪನ್ನಗಳು ಅಥವಾ ಮಾದರಿಗಳ ವಿವರಗಳನ್ನು ನಾನು ಹಂಚಿಕೊಳ್ಳುವುದಿಲ್ಲ."
+            )
+        return (
+            "I can provide details about Indoone. "
+            "I don’t provide details about other AI companies, products, or models."
         )
 
     return None
@@ -109,7 +114,8 @@ async def generate_gemma_reply(
             "content": (
                 "You are Indoone AI, the AI assistant for the Indoone app. "
                 "For identity, creator, developer, provider, or model questions, keep the answer about Indoone AI only. "
-                "Do not disclose, name, or discuss any underlying model, provider, vendor, training model, or external AI company. "
+                "For company or assistant discussions, provide Indoone-related details only. "
+                "Do not disclose or discuss the underlying model, provider, vendor, training model, or other external AI companies. "
                 "Do not identify yourself as another company's assistant or product. "
                 "Answer the user in the same language as the user's question. "
                 "For Kannada questions, use natural Kannada script. "

@@ -47,16 +47,20 @@ def _identity_response(message: str) -> str | None:
         "qwen", "alibaba", "deepseek", "mistral", "ibm", "granite",
     )
 
-    asks_about_company = any(
-        phrase in normalized
-        for phrase in (
-            "company", "ಕಂಪನಿ", "ಕಂಪನಿಯ ಬಗ್ಗೆ", "ಬಗ್ಗೆ", "about",
-            "who owns", "ಯಾರದು", "ಯಾರು ಮಾಲೀಕರು", "ಯಾರು ಮಾಡಿದರು",
-            "who made", "who created", "who developed",
-        )
+    external_detail_hints = (
+        "tell me about", "about the company", "company details",
+        "company information", "who owns", "who founded", "founder",
+        "ceo", "owner", "headquarters", "products", "services",
+        "developed by", "made by", "created by", "who developed",
+        "who made", "which company", "what company", "company",
+        "ಕಂಪನಿ", "ಕಂಪನಿಯ ಬಗ್ಗೆ", "ಕಂಪನಿ ವಿವರ", "ವಿವರಗಳು",
+        "ಯಾರು ಮಾಲೀಕರು", "ಯಾರು ಸ್ಥಾಪಿಸಿದರು", "ಸ್ಥಾಪಕರು",
+        "ಯಾರು ಅಭಿವೃದ್ಧಿಪಡಿಸಿದರು", "ಯಾರು ಮಾಡಿದರು", "ಮಾಡೆಲ್ ವಿವರ",
+        "ಮಾಡೆಲ್", "ಯಾವ ಕಂಪನಿ", "ಕಂಪನಿಯ ಮಾಹಿತಿ",
     )
 
     mentions_external = any(entity in normalized for entity in external_entities)
+    asks_external_details = any(hint in normalized for hint in external_detail_hints)
 
     if any(hint in normalized for hint in identity_hints):
         if any(token in normalized for token in ("ನಿನ್ನ", "ನಿಮ್ಮ", "ಕನ್ನಡ", "ನೀನು", "ನೀವು")):
@@ -69,7 +73,7 @@ def _identity_response(message: str) -> str | None:
             "I’m designed specifically for Indoone."
         )
 
-    if mentions_external and asks_about_company:
+    if mentions_external and asks_external_details:
         if any(token in normalized for token in ("ನ", "ಕನ್ನಡ", "ನಿಮ್ಮ", "ನಿನ್ನ", "ಬಗ್ಗೆ")):
             return (
                 "ನಾನು Indoone AI ಬಗ್ಗೆ ವಿವರಗಳನ್ನು ನೀಡಬಹುದು. "
@@ -113,9 +117,9 @@ async def generate_gemma_reply(
             "role": "system",
             "content": (
                 "You are Indoone AI, the AI assistant for the Indoone app. "
-                "For identity, creator, developer, provider, or model questions, keep the answer about Indoone AI only. "
-                "For company or assistant discussions, provide Indoone-related details only. "
-                "Do not disclose or discuss the underlying model, provider, vendor, training model, or other external AI companies. "
+                "For questions about Indoone AI, the Indoone app, or the Indoone company, provide Indoone-related details. "
+                "For questions whose main subject is an external AI company, product, provider, or model, do not provide details about that external entity; redirect to Indoone-related information. "
+                "Do not disclose or discuss the underlying model, provider, vendor, training model, or other external AI company as the source of this assistant. "
                 "Do not identify yourself as another company's assistant or product. "
                 "Answer the user in the same language as the user's question. "
                 "For Kannada questions, use natural Kannada script. "

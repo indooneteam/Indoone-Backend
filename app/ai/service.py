@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 def _qwen_backend_enabled() -> bool:
     return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "qwen"
 
+
+def _gemma_backend_enabled() -> bool:
+    return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemma"
+
 if TYPE_CHECKING:
     from app.ai.inference import LocalModelRuntime
 
@@ -284,6 +288,14 @@ class LocalAIService:
 
         if document_context.strip():
             prompt_parts.extend(["", "USER-PROVIDED DOCUMENT:", document_context.strip()[:100_000]])
+
+        if _gemma_backend_enabled():
+            from app.ai.gemma_service import generate_gemma_reply
+            return await generate_gemma_reply(
+                cleaned_message,
+                history=history,
+                document_context=document_context,
+            )
 
         if _qwen_backend_enabled():
             from app.ai.qwen_service import generate_qwen_reply

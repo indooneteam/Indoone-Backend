@@ -287,7 +287,11 @@ async def ready() -> JSONResponse:
 @app.get("/health/details")
 async def health_details() -> dict[str, object]:
     model_backend = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold()
-    if model_backend == "qwen":
+    if model_backend == "gemma":
+        from app.ai import gemma_service
+        model_artifacts_ready = gemma_service._MODEL_PATH.is_file()
+        model_runtime_ready = gemma_service._RUNTIME is not None
+    elif model_backend == "qwen":
         from app.ai import qwen_service
         model_artifacts_ready = qwen_service._MODEL_PATH.is_file()
         model_runtime_ready = qwen_service._RUNTIME is not None

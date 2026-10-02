@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-02T05:43:06.775733+00:00",
+  "updated_at": "2026-10-02T22:17:03.072741+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -129,6 +129,54 @@
       "summary": "Four crew members of NASA’s SpaceX Crew-13 mission launched at 11:10 a.m. EDT Thursday from Space Launch Complex 40 at Cape Canaveral Space Force Station in Florida for a science expedition aboard the International Space Station. “Crew-13 is another demonstration of America’s unmatched capability in human spaceflight and the strength of our commercial partnerships,” said […]",
       "published": "Thu, 01 Oct 2026 15:59:24 +0000",
       "fingerprint": "b0386df574f7c0e329849d484d266d7a550689d4fb4425ea28481deecbe6eaa6"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Astronaut Christina Koch to Join NFL Fans in Philadelphia",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1053271",
+      "summary": "As part of NASA’s ongoing Inspiration Tour, NASA astronaut Christina Koch will highlight America’s strengths in space exploration and aeronautics innovation at the Philadelphia Eagles vs. Los Angeles Rams game in Philadelphia on Sunday, Oct. 4. A self-proclaimed Philadelphia sports fan, Koch is an explorer and engineer who spent a total of 338 days in […]",
+      "published": "Fri, 02 Oct 2026 19:54:54 +0000",
+      "fingerprint": "1541549166e5962c6cbf9f70ec726140aeb57a8a490367e0fea78a97dfbf39c6"
+    },
+    {
+      "source": "NASA News",
+      "title": "Heading Home: NASA’s SpaceX Crew-12 Concludes Station Science Mission",
+      "url": "https://www.nasa.gov/?p=1051150",
+      "summary": "NASA’s SpaceX Crew-12 mission is ending, with the crew scheduled to return in early October. NASA astronauts Jessica Meir and Jack Hathaway, ESA (European Space Agency) astronaut Sophie Adenot, and Roscosmos cosmonaut Andrey Fedyaev will head home from the International Space Station after supporting research that benefits life on Earth and prepares humans for missions […]",
+      "published": "Fri, 02 Oct 2026 19:30:00 +0000",
+      "fingerprint": "fa397b2d0a2bc56c5f005f7f0302611fb89d9de2eb653db813e1252c984b797f"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s DAVINCI Probe Can Stand the Heat",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1053189",
+      "summary": "The engineering development unit for NASA’s DAVINCI (Deep Atmosphere Venus Investigation of Noble gases, Chemistry, and Imaging) probe is photographed prior to a major thermal evaluation. The DAVINCI team put the yoga ball-sized vessel into a ceramic-lined chamber with heat-scorched walls and ratcheted up the temperature to 869 F, or 465 C, over the course […]",
+      "published": "Fri, 02 Oct 2026 19:00:36 +0000",
+      "fingerprint": "2705b5f6ba864afaa648b921ab83a0ef347794a9f22d5662fa7d72979eeab182"
+    },
+    {
+      "source": "NASA News",
+      "title": "La NASA abre solicitudes para próxima promoción de directores de vuelo",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1053122",
+      "summary": "Lee esta nota de prensa en inglés aquí. La NASA busca líderes para uno de los puestos más prestigiosos de la Tierra en el ámbito de los vuelos espaciales tripulados: director de vuelo en el control de misión del Centro Espacial Johnson de la agencia, en Houston. Esta función es fundamental para reforzar el liderazgo […]",
+      "published": "Fri, 02 Oct 2026 16:36:25 +0000",
+      "fingerprint": "0fb2e61e1822157ce9d060adb5becbab0dc7ee92a6156c4351d7635eaa57821f"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Model Wing Lights Up During First Pressure Sensitive Paint Tests",
+      "url": "https://www.nasa.gov/?p=1053015",
+      "summary": "Groundbreaking tests at NASA’s Langley Research Center in Hampton, Virginia, are paving the way for new wind tunnel capabilities for designing the aircraft technologies of the future. In a first-of-its-kind test in NASA Langley’s Transonic Dynamics Tunnel, researchers used unsteady Pressure Sensitive Paint to study how air flows around a standard wind tunnel model known […]",
+      "published": "Fri, 02 Oct 2026 16:10:55 +0000",
+      "fingerprint": "40687b3cfd68199dc5d49fe863490c77692499320bdd19ab3bbefe524c60d78d"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Opens Applications for Next Class of Flight Directors",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1053090",
+      "summary": "NASA is seeking leaders for one of the most esteemed positions on Earth for human spaceflight: flight director in mission control at the agency’s Johnson Space Center in Houston. This role is critical to advancing American leadership in space exploration, as NASA paves the way for a sustained human presence on the Moon. Applications for […]",
+      "published": "Fri, 02 Oct 2026 15:49:26 +0000",
+      "fingerprint": "215eb283f5e51e6bae936283b394f82b46a71a6504e525b50e83a3fc07e6ec7b"
     }
   ]
 }

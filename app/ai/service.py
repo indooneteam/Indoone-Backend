@@ -82,9 +82,6 @@ _WEB_NO_WEB_MARKERS = (
 
 def _should_use_live_web(message: str) -> bool:
     """Route only freshness-sensitive or explicitly web-seeking requests to live search."""
-    if not _WEB_RESEARCH_ENABLED:
-        return False
-
     normalized = " ".join(message.casefold().split())
     if any(marker in normalized for marker in _WEB_NO_WEB_MARKERS):
         return False
@@ -107,6 +104,9 @@ async def _collect_live_web_context(message: str) -> str:
     """Collect live web evidence only when the backend router decides it is needed."""
     global _WEB_RESEARCH_LAST_REQUEST_AT
 
+    if not _WEB_RESEARCH_ENABLED:
+        logger.info("web research disabled: local-model answer path")
+        return ""
     if not _should_use_live_web(message):
         logger.info("web route skipped: local-model answer path")
         return ""

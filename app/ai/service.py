@@ -314,6 +314,18 @@ class LocalAIService:
         cleaned_message = message.strip()
         if not cleaned_message:
             raise ValueError("message cannot be empty")
+        live_web_context = await _collect_live_web_context(cleaned_message)
+        if live_web_context:
+            if document_context:
+                document_context = (
+                    "LIVE WEB RESEARCH EVIDENCE:\n"
+                    + live_web_context
+                    + "\n\n"
+                    + document_context
+                )
+            else:
+                document_context = "LIVE WEB RESEARCH EVIDENCE:\n" + live_web_context
+
         prompt_parts = [cleaned_message]
 
         if history:
@@ -327,18 +339,6 @@ class LocalAIService:
 
         if document_context.strip():
             prompt_parts.extend(["", "USER-PROVIDED DOCUMENT:", document_context.strip()[:100_000]])
-
-        live_web_context = await _collect_live_web_context(cleaned_message)
-        if live_web_context:
-            if document_context:
-                document_context = (
-                    "LIVE WEB RESEARCH EVIDENCE:\n"
-                    + live_web_context
-                    + "\n\n"
-                    + document_context
-                )
-            else:
-                document_context = "LIVE WEB RESEARCH EVIDENCE:\n" + live_web_context
 
         if _gemma_backend_enabled():
             from app.ai.gemma_service import generate_gemma_reply

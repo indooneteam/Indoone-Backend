@@ -182,3 +182,36 @@ async def test_service_routes_to_qwen_backend(monkeypatch: pytest.MonkeyPatch) -
 
     reply = await service.generate_reply("Hello Qwen")
     assert reply == "Qwen response"
+
+
+
+@pytest.mark.asyncio
+async def test_duckduckgo_provider_maps_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+    from app.ai.research import DuckDuckGoResearchProvider
+
+    class FakeDDGS:
+        def __init__(self, timeout: int):
+            assert timeout == 8
+
+        def text(self, query: str, region: str, max_results: int, backend: str):
+            assert query == "latest AI news"
+            assert region == "in-en"
+            assert max_results == 2
+            assert backend == "duckduckgo"
+            return [
+                {
+                    "title": "Example result",
+                    "href": "https://example.com/news",
+                    "body": "Fresh evidence",
+                }
+            ]
+
+    monkeypatch.setitem(__import__("sys").modules, "ddgs", SimpleNamespace(DDGS=FakeDDGS))
+    provider = DuckDuckGoResearchProvider(timeout=8, region="in-en")
+
+    results = await provider.search("latest AI news", limit=2)
+
+    assert results == [
+        ResearchResult("Example result", "https://example.com/news", "Fresh evidence")
+    ]

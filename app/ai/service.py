@@ -54,39 +54,110 @@ _ARTIFACT_CHECK_COMPLETED = False
 _WEB_RESEARCH_ENABLED = os.getenv(
     "INDOONE_ALWAYS_WEB_RESEARCH", "true"
 ).strip().casefold() in {"1", "true", "yes", "on"}
+_WEB_RESEARCH_MODE = os.getenv("INDOONE_WEB_RESEARCH_MODE", "conditional").strip().casefold()
 _WEB_RESEARCH_TIMEOUT_SECONDS = 15.0
 _WEB_RESEARCH_MAX_RESULTS = 5
+_WEB_RESEARCH_CACHE_TTL_SECONDS = 30.0
+_WEB_RESEARCH_MIN_INTERVAL_SECONDS = 1.0
+_WEB_RESEARCH_CACHE: dict[str, tuple[float, str]] = {}
+_WEB_RESEARCH_LOCK = asyncio.Lock()
+_WEB_RESEARCH_LAST_REQUEST_AT = 0.0
+
+_WEB_FRESHNESS_MARKERS = (
+    "latest", "current", "currently", "today", "yesterday", "tomorrow", "recent",
+    "news", "live", "price", "cost", "stock price", "weather", "score", "scores",
+    "result", "results", "availability", "available now", "update", "updates",
+    "announcement", "official announcement", "release", "released", "new version",
+    "current version", "search the web", "search online", "look it up",
+    "on the internet", "internet", "google", "duckduckgo",
+    "ಇಂದಿನ", "ಇತ್ತೀಚಿನ", "ಸುದ್ದಿ", "ಬೆಲೆ", "ಹವಾಮಾನ", "ಚುನಾವಣೆ", "ಪ್ರಸ್ತುತ",
+)
+_WEB_VOLATILE_ROLE_MARKERS = (
+    "who is the president", "who is president", "prime minister of", "chief minister of",
+    "current minister", "current ceo", "who is the ceo", "government of",
+)
+_WEB_NO_WEB_MARKERS = (
+    "without web", "offline", "don't search", "do not search", "no web",
+)
+
+def _should_use_live_web(message: str) -> bool:
+    """Route only freshness-sensitive or explicitly web-seeking requests to live search."""
+    if not _WEB_RESEARCH_ENABLED:
+        return False
+
+    normalized = " ".join(message.casefold().split())
+    if any(marker in normalized for marker in _WEB_NO_WEB_MARKERS):
+        return False
+
+    if _WEB_RESEARCH_MODE in {"off", "disabled"}:
+        return False
+    if _WEB_RESEARCH_MODE in {"always", "force"}:
+        return True
+
+    if any(marker in normalized for marker in _WEB_FRESHNESS_MARKERS):
+        return True
+    if any(marker in normalized for marker in _WEB_VOLATILE_ROLE_MARKERS):
+        return True
+    if re.search(r"\b20(?:2[6-9]|3\d)\b", normalized):
+        return True
+    return False
 
 
 async def _collect_live_web_context(message: str) -> str:
-    """Collect fresh web evidence before every chat response."""
-    if not _WEB_RESEARCH_ENABLED:
+    """Collect live web evidence only when the backend router decides it is needed."""
+    global _WEB_RESEARCH_LAST_REQUEST_AT
+
+    if not _should_use_live_web(message):
+        logger.info("web route skipped: local-model answer path")
         return ""
+
+    cache_key = " ".join(message.casefold().split())
+    now = time.monotonic()
+    cached = _WEB_RESEARCH_CACHE.get(cache_key)
+    if cached and now - cached[0] <= _WEB_RESEARCH_CACHE_TTL_SECONDS:
+        logger.info("web cache hit: query=%s", cache_key[:120])
+        return cached[1]
 
     started = time.perf_counter()
-    try:
-        provider = build_research_provider()
-        results = await asyncio.wait_for(
-            provider.search(message, limit=_WEB_RESEARCH_MAX_RESULTS),
-            timeout=_WEB_RESEARCH_TIMEOUT_SECONDS,
+    async with _WEB_RESEARCH_LOCK:
+        now = time.monotonic()
+        cached = _WEB_RESEARCH_CACHE.get(cache_key)
+        if cached and now - cached[0] <= _WEB_RESEARCH_CACHE_TTL_SECONDS:
+            logger.info("web cache hit after queue: query=%s", cache_key[:120])
+            return cached[1]
+
+        delay = _WEB_RESEARCH_MIN_INTERVAL_SECONDS - (
+            now - _WEB_RESEARCH_LAST_REQUEST_AT
         )
-    except Exception as exc:
-        logger.warning("live web research failed; continuing without web context: %s", exc)
-        return ""
+        if delay > 0:
+            await asyncio.sleep(delay)
 
-    duration_ms = round((time.perf_counter() - started) * 1000, 2)
-    logger.info(
-        "live web research completed: results=%s duration_ms=%s",
-        len(results),
-        duration_ms,
-    )
+        _WEB_RESEARCH_LAST_REQUEST_AT = time.monotonic()
+        try:
+            provider = build_research_provider()
+            results = await asyncio.wait_for(
+                provider.search(message, limit=_WEB_RESEARCH_MAX_RESULTS),
+                timeout=_WEB_RESEARCH_TIMEOUT_SECONDS,
+            )
+        except Exception as exc:
+            logger.warning("live web research failed; continuing without web context: %s", exc)
+            return ""
 
-    return format_research_context(
-        results,
-        max_results=_WEB_RESEARCH_MAX_RESULTS,
-        max_title_chars=70,
-        max_snippet_chars=140,
-    )
+        duration_ms = round((time.perf_counter() - started) * 1000, 2)
+        logger.info(
+            "live web research completed: results=%s duration_ms=%s",
+            len(results),
+            duration_ms,
+        )
+
+        context = format_research_context(
+            results,
+            max_results=_WEB_RESEARCH_MAX_RESULTS,
+            max_title_chars=70,
+            max_snippet_chars=140,
+        )
+        _WEB_RESEARCH_CACHE[cache_key] = (time.monotonic(), context)
+        return context
 
 
 def _ensure_model_artifacts(model_dir: Path) -> None:

@@ -15,6 +15,7 @@ import re
 import time
 
 from app.storage.github_release import GitHubReleaseStorageError, get_github_release_storage
+from app.ai.research import build_research_provider, format_research_context
 
 
 logger = logging.getLogger(__name__)
@@ -48,6 +49,44 @@ _MODEL_MAX_NEW_TOKENS = 512
 _MODEL_LOAD_LOCK = threading.Lock()
 _MODEL_INFERENCE_LOCK = threading.Lock()
 _ARTIFACT_CHECK_COMPLETED = False
+
+
+_WEB_RESEARCH_ENABLED = os.getenv(
+    "INDOONE_ALWAYS_WEB_RESEARCH", "true"
+).strip().casefold() in {"1", "true", "yes", "on"}
+_WEB_RESEARCH_TIMEOUT_SECONDS = 15.0
+_WEB_RESEARCH_MAX_RESULTS = 5
+
+
+async def _collect_live_web_context(message: str) -> str:
+    """Collect fresh web evidence before every chat response."""
+    if not _WEB_RESEARCH_ENABLED:
+        return ""
+
+    started = time.perf_counter()
+    try:
+        provider = build_research_provider()
+        results = await asyncio.wait_for(
+            provider.search(message, limit=_WEB_RESEARCH_MAX_RESULTS),
+            timeout=_WEB_RESEARCH_TIMEOUT_SECONDS,
+        )
+    except Exception as exc:
+        logger.warning("live web research failed; continuing without web context: %s", exc)
+        return ""
+
+    duration_ms = round((time.perf_counter() - started) * 1000, 2)
+    logger.info(
+        "live web research completed: results=%s duration_ms=%s",
+        len(results),
+        duration_ms,
+    )
+
+    return format_research_context(
+        results,
+        max_results=_WEB_RESEARCH_MAX_RESULTS,
+        max_title_chars=70,
+        max_snippet_chars=140,
+    )
 
 
 def _ensure_model_artifacts(model_dir: Path) -> None:
@@ -288,6 +327,18 @@ class LocalAIService:
 
         if document_context.strip():
             prompt_parts.extend(["", "USER-PROVIDED DOCUMENT:", document_context.strip()[:100_000]])
+
+        live_web_context = await _collect_live_web_context(cleaned_message)
+        if live_web_context:
+            if document_context:
+                document_context = (
+                    "LIVE WEB RESEARCH EVIDENCE:\n"
+                    + live_web_context
+                    + "\n\n"
+                    + document_context
+                )
+            else:
+                document_context = "LIVE WEB RESEARCH EVIDENCE:\n" + live_web_context
 
         if _gemma_backend_enabled():
             from app.ai.gemma_service import generate_gemma_reply

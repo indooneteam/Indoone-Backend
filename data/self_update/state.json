@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-01T18:26:45.275661+00:00",
+  "updated_at": "2026-10-02T05:43:06.775733+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -105,6 +105,14 @@
       "summary": "Photos taken using a microscope reveal the colorful, kaleidoscope-like crystal structure of a new NASA-made material that could be used for manufacturing during future space missions. Developed at NASA’s Glenn Research Center in Cleveland, the material could be created directly on the Moon or Mars, allowing NASA to pack fewer supplies — saving weight and […]",
       "published": "Tue, 29 Sep 2026 14:00:00 +0000",
       "fingerprint": "7e083e0e8d512bd0422d8f2f05514106012dcabd70c32127a65ac4c3eebfe464"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Awards Enterprise Logistics Support Services Agreements",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1052760",
+      "summary": "NASA selected 16 companies to provide Enterprise Logistics Support Services under new agreements that will standardize requirements, improve reporting, and streamline the management of costs and resources. The $1.4 billion blanket purchase agreements will support equipment and property management, transportation, disposal, product support, flight hardware support operations, equipment maintenance and repair, export control, move operations, […]",
+      "published": "Thu, 01 Oct 2026 20:34:27 +0000",
+      "fingerprint": "51773ec40419258b51ded8238a1a199c3b4a54d574fa53b024ee0ccd145465c7"
     },
     {
       "source": "NASA News",

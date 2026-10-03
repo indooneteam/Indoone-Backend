@@ -72,8 +72,8 @@ async def generate_sarvam_reply(
                 "Do not repeat the user's question and never output role labels such as User: or Assistant:. "
                 "For Romanized Kannada, understand it as Kannada and answer in natural Kannada; "
                 "Roman Kannada is acceptable when the user writes Kannada in English letters, but do not switch to English. "
-                "When live web evidence is provided, use that evidence for factual or current claims, prefer the most relevant "
-                "and recent evidence, and do not invent facts that are not supported by the evidence."
+                "When verified web evidence is provided, use it for factual or current claims, prefer the most relevant "
+                "and recent evidence, do not invent unsupported facts, and never repeat the evidence block or its source formatting."
             ),
         }
     ]
@@ -85,8 +85,26 @@ async def generate_sarvam_reply(
                 messages.append({"role": role, "content": clean_content[:4_000]})
 
     user_content = cleaned
-    if document_context.strip():
-        user_content += "\n\nUSER-PROVIDED DOCUMENT:\n" + document_context.strip()[:100_000]
+    context = document_context.strip()
+    if context:
+        if context.startswith("LIVE WEB EVIDENCE:\n"):
+            context = context[len("LIVE WEB EVIDENCE:\n"):]
+            user_content += (
+                "\n\nVERIFIED WEB EVIDENCE:\n"
+                + context[:7_000]
+                + "\n\nUse the evidence only to answer the question. "
+                "Do not reproduce the evidence block, source labels, or XML tags in your answer."
+            )
+        elif context.startswith("LIVE WEB RESEARCH EVIDENCE:\n"):
+            context = context[len("LIVE WEB RESEARCH EVIDENCE:\n"):]
+            user_content += (
+                "\n\nVERIFIED WEB EVIDENCE:\n"
+                + context[:7_000]
+                + "\n\nUse the evidence only to answer the question. "
+                "Do not reproduce the evidence block, source labels, or XML tags in your answer."
+            )
+        else:
+            user_content += "\n\nUSER DOCUMENT CONTEXT:\n" + context[:12_000]
     messages.append({"role": "user", "content": user_content})
 
     runtime = await asyncio.to_thread(_load_runtime)

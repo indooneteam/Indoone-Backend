@@ -227,8 +227,8 @@ async def test_live_web_evidence_is_explicitly_marked(monkeypatch: pytest.Monkey
 
     class FakeResearch:
         async def search(self, query: str, limit: int = 5):
+            assert query == "latest AI news with published date"
             return [
-                ResearchResult(
                     "Newest AI story",
                     "https://example.com/new",
                     "A current development.",
@@ -244,7 +244,8 @@ async def test_live_web_evidence_is_explicitly_marked(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(service, "build_research_provider", lambda: FakeResearch())
 
-    context = await service._collect_live_web_context("latest AI news")
+    service._WEB_RESEARCH_CACHE.clear()
+    context = await service._collect_live_web_context("latest AI news with published date")
 
     assert context.startswith("LIVE WEB EVIDENCE:\n")
     assert "result: 1" in context

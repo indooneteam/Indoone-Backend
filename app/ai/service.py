@@ -76,6 +76,17 @@ _WEB_VOLATILE_ROLE_MARKERS = (
     "who is the president", "who is president", "prime minister of", "chief minister of",
     "current minister", "current ceo", "who is the ceo", "government of",
 )
+
+_WEB_FACTUAL_MARKERS = (
+    "what is the capital", "what are the capitals", "capital of",
+    "who is", "who are", "where is", "where are", "when was", "when did",
+    "how many", "how much", "how old", "which is", "which are",
+    "population of", "currency of", "official language", "located in",
+    "founded in", "founded by", "headquarters", "president of",
+    "prime minister of", "chief minister of",
+    "rajadhani", "rajadhaani", "raajadhani", "yaaru", "yaar", "elli",
+    "eshtu", "yaake",
+)
 _WEB_NO_WEB_MARKERS = (
     "without web", "offline", "don't search", "do not search", "no web",
 )
@@ -94,6 +105,8 @@ def _should_use_live_web(message: str) -> bool:
     if any(marker in normalized for marker in _WEB_FRESHNESS_MARKERS):
         return True
     if any(marker in normalized for marker in _WEB_VOLATILE_ROLE_MARKERS):
+        return True
+    if any(marker in normalized for marker in _WEB_FACTUAL_MARKERS):
         return True
     if re.search(r"\b20(?:2[6-9]|3\d)\b", normalized):
         return True

@@ -111,7 +111,7 @@ class SarvamLocalModelRuntime:
                     max_tokens=max_tokens,
                     temperature=temperature,
                     top_p=top_p,
-                    stop=["</s>", "[INST]"],
+                    stop=["</s>", "[INST]", "User:", "Assistant:"],
                 )
             except Exception as exc:
                 raise SarvamRuntimeError("Sarvam local generation failed") from exc

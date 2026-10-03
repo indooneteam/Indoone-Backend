@@ -20,6 +20,48 @@ MAX_RESEARCH_QUERIES = 6
 MAX_RESEARCH_TIMEOUT_SECONDS = 60.0
 DEFAULT_MULTI_SOURCE_LIMIT = 8
 MAX_QUERY_VARIANTS = 2
+_ROMANIZED_QUERY_ALIASES = {
+    "rajadhani": "capital",
+    "rajadhaani": "capital",
+    "raajadhani": "capital",
+    "yava": "which",
+    "yaava": "which",
+    "yavudu": "",
+    "yaavudu": "",
+    "yaar": "who",
+    "yaaru": "who",
+    "yaru": "who",
+    "elli": "where",
+    "hege": "how",
+    "eshtu": "how many",
+    "yaake": "why",
+    "indina": "today",
+    "ivattu": "today",
+    "ivaga": "current",
+    "eega": "current",
+    "prastuta": "current",
+    "bagge": "",
+    "helu": "",
+    "heli": "",
+    "helbeku": "",
+    "helu": "",
+    "andre": "",
+    "enandre": "",
+    "namage": "",
+    "nanage": "",
+    "nimage": "",
+    "da": "",
+    "de": "",
+    "na": "",
+    "ge": "",
+    "alli": "",
+    "inda": "",
+    "mele": "",
+    "matte": "",
+    "bidi": "",
+    "beku": "",
+}
+
 _RESEARCH_QUERY_STOPWORDS = {
     "a", "an", "and", "are", "as", "about", "be", "by", "do", "does", "for",
     "from", "give", "how", "i", "in", "is", "it", "make", "me", "now", "of",
@@ -115,7 +157,7 @@ class HttpResearchProvider(ResearchProvider):
 
 
 def build_research_query_variants(query: str, max_variants: int = MAX_QUERY_VARIANTS) -> list[str]:
-    """Build a small set of resilient queries for mixed-language user prompts."""
+    """Build resilient search variants, including a Roman-Kannada English form."""
     normalized = " ".join(query.strip().split())
     if not normalized:
         raise ValueError("query cannot be empty")
@@ -123,15 +165,29 @@ def build_research_query_variants(query: str, max_variants: int = MAX_QUERY_VARI
         raise ValueError(f"max_variants must be between 1 and {MAX_QUERY_VARIANTS}")
 
     variants = [normalized]
-    latin_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", normalized)
-    filtered_terms = [
+    raw_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", normalized.casefold())
+    translated_terms: list[str] = []
+    for term in raw_terms:
+        translated = _ROMANIZED_QUERY_ALIASES.get(term, term)
+        if translated:
+            translated_terms.append(translated)
+    english_variant = " ".join(
         term
-        for term in latin_terms
-        if term.casefold() not in _RESEARCH_QUERY_STOPWORDS
-    ]
-    english_variant = " ".join(filtered_terms).strip()
-    if english_variant and english_variant.casefold() != normalized.casefold():
-        variants.append(english_variant)
+        for term in translated_terms
+        if term not in _RESEARCH_QUERY_STOPWORDS
+    ).strip()
+
+    if english_variant:
+        india_terms = {
+            "india", "indian", "bharata", "bharatada", "karnataka",
+            "bengaluru", "bangalore", "mysore", "mumbai", "delhi",
+            "hyderabad", "chennai", "kerala", "maharashtra",
+        }
+        if any(term in india_terms for term in translated_terms):
+            english_variant = f"{english_variant} India"
+        if english_variant.casefold() != normalized.casefold():
+            variants.append(" ".join(dict.fromkeys(english_variant.split())))
+
     return variants[:max_variants]
 
 

@@ -45,3 +45,31 @@ async def test_generate_sarvam_reply_uses_candidate_runtime(monkeypatch: pytest.
     reply = await generate_sarvam_reply("Namaskara")
 
     assert reply == "Namaskara!"
+
+@pytest.mark.asyncio
+async def test_generate_sarvam_reply_uses_compact_web_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeRuntime:
+        def generate(self, messages, **kwargs) -> str:
+            content = messages[-1]["content"]
+            assert "VERIFIED WEB EVIDENCE:" in content
+            assert "LIVE WEB EVIDENCE:" not in content
+            assert "USER-PROVIDED DOCUMENT:" not in content
+            assert "Do not reproduce the evidence block" in content
+            return "Bengaluru is the capital of Karnataka."
+
+    monkeypatch.setattr("app.ai.sarvam_service._load_runtime", lambda: FakeRuntime())
+
+    reply = await generate_sarvam_reply(
+        "Karnataka da rajadhani yavudu?",
+        document_context=(
+            "LIVE WEB EVIDENCE:\n"
+            "<research>\n"
+            "result: 1\n"
+            "source: karnataka.gov.in\n"
+            "title: Karnataka\n"
+            "evidence: Bengaluru is the capital of Karnataka.\n"
+            "</research>"
+        ),
+    )
+
+    assert reply == "Bengaluru is the capital of Karnataka."

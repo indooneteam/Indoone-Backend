@@ -183,7 +183,7 @@ def build_research_query_variants(query: str, max_variants: int = MAX_QUERY_VARI
             "bengaluru", "bangalore", "mysore", "mumbai", "delhi",
             "hyderabad", "chennai", "kerala", "maharashtra",
         }
-        if any(term in india_terms for term in translated_terms):
+        if any(term.casefold() in india_terms for term in translated_terms):
             english_variant = f"{english_variant} India"
         if english_variant.casefold() != normalized.casefold():
             variants.append(" ".join(dict.fromkeys(english_variant.split())))

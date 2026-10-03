@@ -155,6 +155,11 @@ async def generate_gemini_reply(
             "temperature": 0.2,
             "topP": 0.9,
             "maxOutputTokens": int(os.getenv("GEMINI_MAX_TOKENS", "512")),
+            # Gemma 4 supports MINIMAL thinking. This keeps internal reasoning
+            # from consuming the small output budget used by our chat responses.
+            "thinkingConfig": {
+                "thinkingLevel": "MINIMAL",
+            },
         },
     }
 

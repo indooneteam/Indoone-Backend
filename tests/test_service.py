@@ -229,6 +229,7 @@ async def test_live_web_evidence_is_explicitly_marked(monkeypatch: pytest.Monkey
         async def search(self, query: str, limit: int = 5):
             assert query == "latest AI news with published date"
             return [
+                ResearchResult(
                     "Newest AI story",
                     "https://example.com/new",
                     "A current development.",

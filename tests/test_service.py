@@ -141,6 +141,10 @@ def test_web_router_selects_fresh_information_requests() -> None:
     assert service._should_use_live_web("Give me the latest AI news.") is True
     assert service._should_use_live_web("Who is the current president of India?") is True
 
+def test_identity_questions_stay_local() -> None:
+    assert service._should_use_live_web("Namaskara, neenu yaaru?") is False
+    assert service._should_use_live_web("Who are you?") is False
+
 
 @pytest.mark.asyncio
 async def test_service_skips_web_for_normal_local_questions(monkeypatch: pytest.MonkeyPatch) -> None:

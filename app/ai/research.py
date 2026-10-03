@@ -165,10 +165,10 @@ def build_research_query_variants(query: str, max_variants: int = MAX_QUERY_VARI
         raise ValueError(f"max_variants must be between 1 and {MAX_QUERY_VARIANTS}")
 
     variants = [normalized]
-    raw_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", normalized.casefold())
+    raw_terms = re.findall(r"[A-Za-z0-9][A-Za-z0-9._+-]*", normalized)
     translated_terms: list[str] = []
     for term in raw_terms:
-        translated = _ROMANIZED_QUERY_ALIASES.get(term, term)
+        translated = _ROMANIZED_QUERY_ALIASES.get(term.casefold(), term)
         if translated:
             translated_terms.append(translated)
     english_variant = " ".join(

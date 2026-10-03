@@ -199,6 +199,30 @@ async def test_service_routes_to_sarvam_backend(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
+async def test_service_routes_to_gemini_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "gemini")
+
+    async def fake_generate_gemini_reply(message, history=None, document_context=""):
+        assert message == "Hello Gemini"
+        assert history == [("user", "Previous")]
+        assert document_context == ""
+        return "Gemini response"
+
+    from app.ai import gemini_service
+    monkeypatch.setattr(
+        gemini_service,
+        "generate_gemini_reply",
+        fake_generate_gemini_reply,
+    )
+
+    reply = await service.generate_reply(
+        "Hello Gemini",
+        history=[("user", "Previous")],
+    )
+    assert reply == "Gemini response"
+
+
+@pytest.mark.asyncio
 async def test_duckduckgo_provider_maps_results(monkeypatch: pytest.MonkeyPatch) -> None:
     from types import SimpleNamespace
     from app.ai.research import DuckDuckGoResearchProvider

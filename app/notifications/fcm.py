@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Mapping
-
 import firebase_admin
 from firebase_admin import credentials, messaging
 
@@ -66,3 +64,38 @@ def send_data_notification(
     )
 
     return messaging.send(message, app=_firebase_app())
+
+
+def send_user_notification(
+    *,
+    user_id: str,
+    title: str,
+    body: str,
+    category: str = "ai",
+    route: str | None = "chat",
+) -> int:
+    from app.notifications.store import delete_token, user_tokens
+
+    sent = 0
+    for document_id, token in user_tokens(user_id=user_id):
+        try:
+            send_data_notification(
+                token=token,
+                title=title,
+                body=body,
+                category=category,
+                route=route,
+            )
+            sent += 1
+        except messaging.UnregisteredError:
+            delete_token(document_id)
+        except messaging.SenderIdMismatchError:
+            delete_token(document_id)
+        except Exception:
+            # One bad device must not prevent notification delivery to the user's
+            # other registered devices or break the underlying API request.
+            import logging
+            logging.getLogger("indoone.notifications").exception(
+                "FCM notification send failed user_id=%s", user_id
+            )
+    return sent

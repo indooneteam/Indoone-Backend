@@ -20,8 +20,8 @@ from app.ai.research import build_research_provider, format_research_context
 
 logger = logging.getLogger(__name__)
 
-def _qwen_backend_enabled() -> bool:
-    return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "qwen"
+def _sarvam_backend_enabled() -> bool:
+    return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "sarvam"
 
 
 def _gemma_backend_enabled() -> bool:
@@ -423,9 +423,9 @@ class LocalAIService:
                 document_context=document_context,
             )
 
-        if _qwen_backend_enabled():
-            from app.ai.qwen_service import generate_qwen_reply
-            return await generate_qwen_reply(
+        if _sarvam_backend_enabled():
+            from app.ai.sarvam_service import generate_sarvam_reply
+            return await generate_sarvam_reply(
                 cleaned_message,
                 history=history,
                 document_context=document_context,

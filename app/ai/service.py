@@ -91,10 +91,22 @@ _WEB_NO_WEB_MARKERS = (
     "without web", "offline", "don't search", "do not search", "no web",
 )
 
+_LOCAL_IDENTITY_MARKERS = (
+    "who are you", "what are you", "who r u", "what r u",
+    "neenu yaaru", "nee yaaru", "nivu yaaru", "nivu yaru",
+    "neenu yaru", "nimage yaaru", "nimage yaru",
+    "ನೀನು ಯಾರು", "ನೀವು ಯಾರು", "ನಿಮ್ಮ ಬಗ್ಗೆ ಹೇಳು",
+)
+
 def _should_use_live_web(message: str) -> bool:
     """Route only freshness-sensitive or explicitly web-seeking requests to live search."""
     normalized = " ".join(message.casefold().split())
     if any(marker in normalized for marker in _WEB_NO_WEB_MARKERS):
+        return False
+
+    # Identity questions about Indoone itself should stay local; searching the
+    # web adds noise and can confuse a small candidate model.
+    if any(marker in normalized for marker in _LOCAL_IDENTITY_MARKERS):
         return False
 
     if _WEB_RESEARCH_MODE in {"off", "disabled"}:
@@ -404,15 +416,14 @@ class LocalAIService:
             raise ValueError("message cannot be empty")
         live_web_context = await _collect_live_web_context(cleaned_message)
         if live_web_context:
-            if document_context:
+            if document_context.strip():
                 document_context = (
-                    "LIVE WEB RESEARCH EVIDENCE:\n"
-                    + live_web_context
-                    + "\n\n"
-                    + document_context
+                    live_web_context
+                    + "\n\nUSER DOCUMENT CONTEXT:\n"
+                    + document_context.strip()
                 )
             else:
-                document_context = "LIVE WEB RESEARCH EVIDENCE:\n" + live_web_context
+                document_context = live_web_context
 
         prompt_parts = [cleaned_message]
 

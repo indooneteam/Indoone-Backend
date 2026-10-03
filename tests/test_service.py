@@ -78,6 +78,7 @@ async def test_live_web_research_is_added_before_model_generation(monkeypatch: p
         title = "Fresh web result"
         url = "https://example.com/fresh"
         snippet = "Current evidence from the live web."
+        published_date = ""
 
     class FakeResearchProvider:
         async def search(self, query: str, limit: int = 5):

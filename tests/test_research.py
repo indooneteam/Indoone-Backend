@@ -12,6 +12,7 @@ from app.ai.research import (
     MultiSourceResearchProvider,
     OpenAlexResearchProvider,
     ResearchResult,
+    SearXNGResearchProvider,
     _is_relevant_research_result,
     WikidataResearchProvider,
     WikipediaResearchProvider,
@@ -211,6 +212,56 @@ def test_build_research_provider_uses_tavily_when_configured(monkeypatch) -> Non
     assert [type(item) for item in provider.providers] == [TavilyResearchProvider]
 
 
+def test_searxng_provider_parses_json_results(monkeypatch) -> None:
+    payload = {
+        "results": [
+            {
+                "title": "Fresh AI result",
+                "url": "https://example.com/ai",
+                "content": "Current AI evidence.",
+            }
+        ]
+    }
+
+    class FakeResponse:
+        content = json.dumps(payload).encode("utf-8")
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self):
+            return payload
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            assert kwargs["follow_redirects"] is False
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def get(self, url, params):
+            assert url == "http://127.0.0.1:8888/search"
+            assert params["q"] == "latest AI news"
+            assert params["format"] == "json"
+            return FakeResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    provider = SearXNGResearchProvider("http://127.0.0.1:8888")
+    results = asyncio.run(provider.search("latest AI news", limit=1))
+
+    assert results == [
+        ResearchResult(
+            "Fresh AI result",
+            "https://example.com/ai",
+            "Current AI evidence.",
+        )
+    ]
+
+
 def test_google_news_rss_provider_parses_sources(monkeypatch) -> None:
     rss = b"""<?xml version="1.0" encoding="UTF-8"?>
     <rss version="2.0"><channel>
@@ -249,6 +300,28 @@ def test_google_news_rss_provider_parses_sources(monkeypatch) -> None:
 
     assert results[0] == ResearchResult("AI update", "https://example.com/a", "Fresh AI evidence.")
     assert results[1] == ResearchResult("Second source", "https://example.org/b", "Another source.")
+
+
+def test_build_research_provider_uses_multi_search(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_SEARCH_PROVIDER", "multi")
+    monkeypatch.setenv("INDOONE_SEARXNG_URL", "http://127.0.0.1:8888")
+    monkeypatch.delenv("INDOONE_RESEARCH_URL", raising=False)
+    monkeypatch.delenv("INDOONE_TAVILY_API_KEY", raising=False)
+
+    from app.ai.research import (
+        DuckDuckGoResearchProvider,
+        MultiSourceResearchProvider,
+        SearXNGResearchProvider,
+        build_research_provider,
+    )
+
+    provider = build_research_provider()
+
+    assert isinstance(provider, MultiSourceResearchProvider)
+    assert [type(item) for item in provider.providers] == [
+        DuckDuckGoResearchProvider,
+        SearXNGResearchProvider,
+    ]
 
 
 def test_build_research_provider_uses_multi_source_defaults(monkeypatch) -> None:

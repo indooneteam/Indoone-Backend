@@ -114,8 +114,13 @@ def _extract_text(response_data: dict[str, Any]) -> str:
 
     text_parts: list[str] = []
     for part in parts:
-        if isinstance(part, dict) and isinstance(part.get("text"), str):
-            text_parts.append(part["text"])
+        if not isinstance(part, dict) or not isinstance(part.get("text"), str):
+            continue
+        # Gemini can mark reasoning/thought parts with thought=true. These
+        # internal parts must never be returned as the user-facing answer.
+        if part.get("thought") is True:
+            continue
+        text_parts.append(part["text"])
 
     reply = "".join(text_parts).strip()
     if not reply:

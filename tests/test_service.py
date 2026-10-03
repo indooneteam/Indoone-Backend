@@ -127,10 +127,13 @@ async def test_live_web_research_failure_falls_back_to_model(monkeypatch: pytest
     assert "LIVE WEB RESEARCH EVIDENCE:" not in captured["prompt"]
 
 
-def test_web_router_skips_non_current_questions() -> None:
+def test_web_router_skips_non_factual_local_questions() -> None:
     assert service._should_use_live_web("What is gravity?") is False
     assert service._should_use_live_web("Explain Python lists simply.") is False
-    assert service._should_use_live_web("What is the capital of India?") is False
+
+def test_web_router_routes_factual_questions_to_live_evidence() -> None:
+    assert service._should_use_live_web("What is the capital of India?") is True
+    assert service._should_use_live_web("Karnataka da rajadhani yavudu?") is True
 
 
 def test_web_router_selects_fresh_information_requests() -> None:

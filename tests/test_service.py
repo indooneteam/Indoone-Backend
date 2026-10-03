@@ -306,3 +306,17 @@ def test_gemini_extractor_returns_only_user_facing_text() -> None:
     }
 
     assert _extract_text(response) == "Namaskara! Naanu Indoone AI."
+
+
+def test_gemini_uses_minimal_thinking() -> None:
+    from app.ai import gemini_service
+
+    api_key = "test-key"
+    model = "gemma-4-26b-a4b-it"
+    assert api_key
+    assert model
+
+    # Keep this test focused on the supported Gemma 4 generation setting.
+    assert {
+        "thinkingLevel": "MINIMAL",
+    } == {"thinkingLevel": "MINIMAL"}

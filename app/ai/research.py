@@ -261,6 +261,81 @@ class DuckDuckGoResearchProvider(ResearchProvider):
         return await asyncio.to_thread(self._search_sync, query, limit)
 
 
+class SearXNGResearchProvider(ResearchProvider):
+    """Self-hosted SearXNG HTTP search provider."""
+
+    def __init__(
+        self,
+        base_url: str,
+        timeout: float = 8.0,
+    ) -> None:
+        base_url = base_url.strip().rstrip("/")
+        parsed = urlparse(base_url)
+        if not base_url or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("base_url must be an absolute HTTP(S) URL")
+        if timeout <= 0 or timeout > MAX_RESEARCH_TIMEOUT_SECONDS:
+            raise ValueError("timeout must not exceed 60 seconds and must be greater than zero")
+        self.base_url = base_url
+        self.timeout = timeout
+
+    async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
+        query = query.strip()
+        if not query:
+            raise ValueError("query cannot be empty")
+        if limit < 1 or limit > 20:
+            raise ValueError("limit must be between 1 and 20")
+
+        endpoint = (
+            self.base_url
+            if self.base_url.endswith("/search")
+            else f"{self.base_url}/search"
+        )
+        params = {
+            "q": query,
+            "format": "json",
+            "language": "all",
+            "pageno": "1",
+        }
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "Indoone-Research/1.0",
+        }
+
+        async with httpx.AsyncClient(
+            timeout=self.timeout,
+            follow_redirects=False,
+            headers=headers,
+        ) as client:
+            response = await client.get(endpoint, params=params)
+            response.raise_for_status()
+            if len(response.content) > 2_000_000:
+                raise RuntimeError("research response is too large")
+            payload: Any = response.json()
+
+        raw_results = payload.get("results", []) if isinstance(payload, dict) else []
+        if not isinstance(raw_results, list):
+            raise RuntimeError("SearXNG response must contain a results list")
+
+        results: list[ResearchResult] = []
+        seen_urls: set[str] = set()
+        for item in raw_results[:limit]:
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get("title", "")).strip()[:MAX_TITLE_LENGTH]
+            source_url = _safe_source_url(
+                str(item.get("url", item.get("href", ""))).strip()
+            )
+            snippet = " ".join(
+                str(item.get("content", item.get("snippet", ""))).split()
+            )[:MAX_SNIPPET_LENGTH]
+            key = source_url.rstrip("/").casefold()
+            if not title or not source_url or key in seen_urls:
+                continue
+            seen_urls.add(key)
+            results.append(ResearchResult(title, source_url, snippet))
+        return results
+
+
 class WikipediaResearchProvider(ResearchProvider):
     """Adapt the existing Wikipedia knowledge provider into research evidence."""
 
@@ -709,6 +784,23 @@ def build_research_provider() -> ResearchProvider | None:
             ],
             max_query_variants=1,
         )
+
+    if provider_name in {"multi", "searxng+duckduckgo", "duckduckgo+searxng"}:
+        providers = [
+            DuckDuckGoResearchProvider(
+                timeout=timeout,
+                region=os.getenv("INDOONE_DDG_REGION", "in-en"),
+            )
+        ]
+        searxng_url = os.getenv("INDOONE_SEARXNG_URL", "").strip()
+        if searxng_url:
+            providers.append(
+                SearXNGResearchProvider(
+                    base_url=searxng_url,
+                    timeout=timeout,
+                )
+            )
+        return MultiSourceResearchProvider(providers, max_query_variants=1)
 
     providers: list[ResearchProvider] = []
 

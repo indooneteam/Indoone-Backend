@@ -350,7 +350,7 @@ def test_build_research_provider_uses_multi_source_defaults(monkeypatch) -> None
 def test_build_research_query_variants_translates_roman_kannada() -> None:
     variants = build_research_query_variants("Karnataka da rajadhani yavudu?")
     assert variants[0] == "Karnataka da rajadhani yavudu?"
-    assert variants[1] == "karnataka capital"
+    assert variants[1] == "karnataka capital India"
 
 
 def test_build_research_query_variants_extracts_latin_terms() -> None:

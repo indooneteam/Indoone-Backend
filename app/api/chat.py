@@ -1,12 +1,13 @@
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
 from app.ai.service import generate_reply
 from app.api.dependencies import current_user_id
+from app.notifications.fcm import send_user_notification
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
@@ -34,7 +35,7 @@ def _principal(request: Request) -> str:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: Request, body: ChatRequest) -> ChatResponse:
+async def chat(request: Request, body: ChatRequest, background_tasks: BackgroundTasks) -> ChatResponse:
     user_id = _principal(request)
     is_new_conversation = body.conversation_id is None
     conversation_id = body.conversation_id or str(uuid4())
@@ -88,6 +89,16 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    background_tasks.add_task(
+        send_user_notification,
+        user_id=user_id,
+        title="Indoone AI",
+        body=reply,
+        category="ai",
+        route="chat",
+    )
+
     return ChatResponse(
         conversation_id=conversation_id,
         reply=reply,

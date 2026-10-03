@@ -172,18 +172,22 @@ def test_model_artifacts_require_indoone_model_release(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
-async def test_service_routes_to_qwen_backend(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "qwen")
+async def test_service_routes_to_sarvam_backend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "sarvam")
 
-    async def fake_generate_qwen_reply(message, history=None, document_context=""):
-        assert message == "Hello Qwen"
-        return "Qwen response"
+    async def fake_generate_sarvam_reply(message, history=None, document_context=""):
+        assert message == "Hello Sarvam"
+        return "Sarvam response"
 
-    from app.ai import qwen_service
-    monkeypatch.setattr(qwen_service, "generate_qwen_reply", fake_generate_qwen_reply)
+    from app.ai import sarvam_service
+    monkeypatch.setattr(
+        sarvam_service,
+        "generate_sarvam_reply",
+        fake_generate_sarvam_reply,
+    )
 
-    reply = await service.generate_reply("Hello Qwen")
-    assert reply == "Qwen response"
+    reply = await service.generate_reply("Hello Sarvam")
+    assert reply == "Sarvam response"
 
 
 

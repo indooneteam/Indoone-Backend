@@ -287,3 +287,22 @@ async def test_live_web_evidence_is_explicitly_marked(monkeypatch: pytest.Monkey
     assert "result: 1" in context
     assert "published: 2026-10-03T10:00:00Z" in context
     assert "evidence: A current development." in context
+
+
+def test_gemini_extractor_returns_only_user_facing_text() -> None:
+    from app.ai.gemini_service import _extract_text
+
+    response = {
+        "candidates": [
+            {
+                "content": {
+                    "parts": [
+                        {"text": "Internal reasoning that must stay hidden.", "thought": True},
+                        {"text": "Namaskara! Naanu Indoone AI."},
+                    ]
+                }
+            }
+        ]
+    }
+
+    assert _extract_text(response) == "Namaskara! Naanu Indoone AI."

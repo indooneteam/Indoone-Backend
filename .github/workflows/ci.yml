@@ -49,8 +49,8 @@ jobs:
           print("colab_notebook_python=valid")
           PY
 
-      - name: Verify Qwen runtime import
-        run: python -c "from app.ai.qwen_runtime import QwenLocalModelRuntime; print('qwen_runtime_import=ok')"
+      - name: Verify Sarvam runtime import
+        run: python -c "from app.ai.sarvam_runtime import SarvamLocalModelRuntime; print('sarvam_runtime_import=ok')"
 
       - name: Run tests
         run: >-

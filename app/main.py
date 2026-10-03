@@ -34,6 +34,7 @@ from app.api.instagram_publishing import router as instagram_publishing_router
 from app.api.instagram_webhooks import router as instagram_webhooks_router
 from app.api.instagram_automation import router as instagram_automation_router
 from app.api.memory import router as memory_router
+from app.api.notifications import router as notifications_router
 from app.api.phone import router as phone_router
 from app.api.platform import router as platform_router
 from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
@@ -243,6 +244,7 @@ app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
+app.include_router(notifications_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(files_router, prefix="/api")

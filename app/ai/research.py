@@ -202,6 +202,9 @@ class TavilyResearchProvider(ResearchProvider):
             source_url = _safe_source_url(str(item.get("url", "")).strip())
             snippet = str(item.get("content", item.get("snippet", ""))).strip()
             snippet = " ".join(snippet.split())[:MAX_SNIPPET_LENGTH]
+            published_date = str(
+                item.get("publishedDate", item.get("published_date", ""))
+            ).strip()
             if not title or not source_url:
                 continue
             results.append(ResearchResult(title, source_url, snippet, published_date))

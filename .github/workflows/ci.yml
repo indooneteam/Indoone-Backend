@@ -52,6 +52,9 @@ jobs:
       - name: Verify Sarvam runtime import
         run: python -c "from app.ai.sarvam_runtime import SarvamLocalModelRuntime; print('sarvam_runtime_import=ok')"
 
+      - name: Verify Gemini service import
+        run: python -c "from app.ai.gemini_service import generate_gemini_reply; print('gemini_service_import=ok')"
+
       - name: Run tests
         run: >-
           python -m pytest -q -W error

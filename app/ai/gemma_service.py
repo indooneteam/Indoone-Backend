@@ -16,7 +16,7 @@ _MODEL_PATH = Path(
     )
 ).expanduser()
 
-_CONTEXT_SIZE = int(os.getenv("GEMMA_CONTEXT_SIZE", "1024"))
+_CONTEXT_SIZE = int(os.getenv("GEMMA_CONTEXT_SIZE", "2048"))
 _THREADS = int(os.getenv("GEMMA_THREADS", "2"))
 _MAX_TOKENS = int(os.getenv("GEMMA_MAX_TOKENS", "256"))
 
@@ -73,6 +73,10 @@ async def generate_gemma_reply(
                 "When the user asks a normal general-knowledge question that only mentions an external company or product as "
                 "part of the context, do not block the question merely because the name appears. Answer the actual question "
                 "unless its main subject is that external AI entity.\n\n"
+                "When LIVE WEB EVIDENCE is provided, treat it as the source for current facts. "
+                "For latest/current/news questions, synthesize the evidence across multiple results when possible, "
+                "prefer the most recent dated evidence, and do not pick one unrelated result just because its title matches. "
+                "Do not invent facts that are absent from the evidence. If the evidence is insufficient or conflicting, say so. "
                 "Be accurate, helpful, friendly, and concise."
             ),
         }
@@ -88,10 +92,19 @@ async def generate_gemma_reply(
 
     user_content = cleaned
     if document_context.strip():
-        user_content += (
-            "\n\nUSER-PROVIDED DOCUMENT:\n"
-            + document_context.strip()[:100000]
-        )
+        context_text = document_context.strip()[:100000]
+        if context_text.startswith("LIVE WEB EVIDENCE:"):
+            user_content += (
+                "\n\n"
+                + context_text
+                + "\n\nTASK: Answer the user's question using the live web evidence above. "
+                "For latest/current/news questions, synthesize multiple relevant results and prefer the newest evidence."
+            )
+        else:
+            user_content += (
+                "\n\nUSER-PROVIDED DOCUMENT:\n"
+                + context_text
+            )
 
     messages.append({"role": "user", "content": user_content})
 
@@ -102,7 +115,7 @@ async def generate_gemma_reply(
             runtime.generate,
             messages,
             max_tokens=_MAX_TOKENS,
-            temperature=0.2,
+            temperature=0.1,
         )
 
     if not reply:

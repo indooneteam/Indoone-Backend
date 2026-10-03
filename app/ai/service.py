@@ -152,10 +152,14 @@ async def _collect_live_web_context(message: str) -> str:
 
         context = format_research_context(
             results,
-            max_results=_WEB_RESEARCH_MAX_RESULTS,
-            max_title_chars=70,
-            max_snippet_chars=140,
+            max_results=min(_WEB_RESEARCH_MAX_RESULTS, 4),
+            max_title_chars=90,
+            max_snippet_chars=160,
         )
+        if not context:
+            logger.warning("live web research returned no usable evidence")
+            return ""
+        context = "LIVE WEB EVIDENCE:\n" + context
         _WEB_RESEARCH_CACHE[cache_key] = (time.monotonic(), context)
         return context
 

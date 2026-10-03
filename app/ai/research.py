@@ -54,6 +54,7 @@ class ResearchResult:
     title: str
     url: str
     snippet: str = ""
+    published_date: str = ""
 
 class ResearchProvider:
     async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
@@ -203,7 +204,7 @@ class TavilyResearchProvider(ResearchProvider):
             snippet = " ".join(snippet.split())[:MAX_SNIPPET_LENGTH]
             if not title or not source_url:
                 continue
-            results.append(ResearchResult(title, source_url, snippet))
+            results.append(ResearchResult(title, source_url, snippet, published_date))
         return results
 
 class DuckDuckGoResearchProvider(ResearchProvider):
@@ -328,6 +329,9 @@ class SearXNGResearchProvider(ResearchProvider):
             snippet = " ".join(
                 str(item.get("content", item.get("snippet", ""))).split()
             )[:MAX_SNIPPET_LENGTH]
+            published_date = str(
+                item.get("publishedDate", item.get("published_date", ""))
+            ).strip()
             key = source_url.rstrip("/").casefold()
             if not title or not source_url or key in seen_urls:
                 continue
@@ -800,7 +804,7 @@ def build_research_provider() -> ResearchProvider | None:
                     timeout=timeout,
                 )
             )
-        return MultiSourceResearchProvider(providers, max_query_variants=1)
+        return MultiSourceResearchProvider(providers, max_query_variants=2)
 
     providers: list[ResearchProvider] = []
 
@@ -880,17 +884,24 @@ def format_research_context(
     if max_title_chars < 1 or max_snippet_chars < 1:
         raise ValueError("context limits must be greater than zero")
 
-    lines = ["<research>"]
-    for result in results[:max_results]:
+    lines = [
+        "<research>",
+        "Use these live search results as evidence for current claims. "
+        "For latest/current/news questions, prefer newer dated evidence and synthesize multiple relevant results."
+    ]
+    for index, result in enumerate(results[:max_results], 1):
         title = " ".join(result.title.split())[:max_title_chars]
         domain = urlparse(result.url).netloc.casefold()
         snippet = " ".join(result.snippet.split())[:max_snippet_chars]
         if not title or not domain:
             continue
+        lines.append(f"result: {index}")
         lines.append(f"source: {domain}")
+        if result.published_date:
+            lines.append(f"published: {result.published_date[:80]}")
         lines.append(f"title: {title}")
         if snippet:
-            lines.append(f"snippet: {snippet}")
+            lines.append(f"evidence: {snippet}")
     lines.append("</research>")
     return "\n".join(lines) if len(lines) > 1 else ""
 

@@ -98,7 +98,7 @@ async def test_live_web_research_is_added_before_model_generation(monkeypatch: p
     reply = await service.generate_reply("latest AI news")
 
     assert reply == "Grounded answer."
-    assert "LIVE WEB RESEARCH EVIDENCE:" in captured["prompt"]
+    assert "LIVE WEB EVIDENCE:" in captured["prompt"]
     assert "example.com" in captured["prompt"]
     assert "Current evidence from the live web." in captured["prompt"]
 
@@ -216,3 +216,36 @@ async def test_duckduckgo_provider_maps_results(monkeypatch: pytest.MonkeyPatch)
     assert results == [
         ResearchResult("Example result", "https://example.com/news", "Fresh evidence")
     ]
+
+
+
+@pytest.mark.asyncio
+async def test_live_web_evidence_is_explicitly_marked(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(service, "_WEB_RESEARCH_ENABLED", True)
+    monkeypatch.setattr(service, "_WEB_RESEARCH_MODE", "conditional")
+
+    class FakeResearch:
+        async def search(self, query: str, limit: int = 5):
+            return [
+                ResearchResult(
+                    "Newest AI story",
+                    "https://example.com/new",
+                    "A current development.",
+                    "2026-10-03T10:00:00Z",
+                ),
+                ResearchResult(
+                    "Second AI story",
+                    "https://example.org/second",
+                    "Another current development.",
+                    "2026-10-03T09:00:00Z",
+                ),
+            ]
+
+    monkeypatch.setattr(service, "build_research_provider", lambda: FakeResearch())
+
+    context = await service._collect_live_web_context("latest AI news")
+
+    assert context.startswith("LIVE WEB EVIDENCE:\n")
+    assert "result: 1" in context
+    assert "published: 2026-10-03T10:00:00Z" in context
+    assert "evidence: A current development." in context

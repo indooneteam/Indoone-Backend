@@ -76,8 +76,18 @@ def send_user_notification(
 ) -> int:
     from app.notifications.store import delete_token, user_tokens
 
+    try:
+        tokens = user_tokens(user_id=user_id)
+    except Exception:
+        # Notification delivery is intentionally best-effort. A missing or
+        # temporarily unavailable Firebase credential must never fail the chat API.
+        logging.getLogger("indoone.notifications").exception(
+            "FCM token lookup failed user_id=%s", user_id
+        )
+        return 0
+
     sent = 0
-    for document_id, token in user_tokens(user_id=user_id):
+    for document_id, token in tokens:
         try:
             send_data_notification(
                 token=token,
@@ -94,7 +104,6 @@ def send_user_notification(
         except Exception:
             # One bad device must not prevent notification delivery to the user's
             # other registered devices or break the underlying API request.
-            import logging
             logging.getLogger("indoone.notifications").exception(
                 "FCM notification send failed user_id=%s", user_id
             )

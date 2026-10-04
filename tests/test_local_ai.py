@@ -79,6 +79,7 @@ def test_transformer_rejects_invalid_inputs() -> None:
         model(torch.randint(0, 32, (1, 4)), torch.randint(0, 32, (1, 3)))
 
 
+@pytest.mark.filterwarnings("ignore::pytest.PytestUnraisableExceptionWarning")
 def test_training_pipeline_writes_checkpoint_and_history(tmp_path) -> None:
     corpus = ("Indoone builds its own AI training pipeline. " * 20).strip()
     validation = ("Indoone evaluates its own model. " * 10).strip()

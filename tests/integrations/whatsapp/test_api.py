@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import pytest
 from starlette.requests import Request
 
 import app.integrations.whatsapp.api as whatsapp_api
 
 
+@pytest.mark.asyncio
 async def test_whatsapp_webhook_verification_returns_plain_text(monkeypatch):
     monkeypatch.setenv("INDOONE_WHATSAPP_WEBHOOK_VERIFY_TOKEN", "test-token")
 

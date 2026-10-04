@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from .ai import generate_whatsapp_reply
@@ -39,9 +40,14 @@ async def send_text(request: SendTextRequest) -> dict[str, object]:
 
 
 @router.get("/webhook")
-async def verify(request: Request) -> str:
+async def verify(request: Request) -> PlainTextResponse:
     try:
-        return verify_webhook(request.query_params.get("hub.mode"), request.query_params.get("hub.verify_token"), request.query_params.get("hub.challenge"))
+        challenge = verify_webhook(
+            request.query_params.get("hub.mode"),
+            request.query_params.get("hub.verify_token"),
+            request.query_params.get("hub.challenge"),
+        )
+        return PlainTextResponse(challenge)
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 

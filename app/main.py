@@ -41,8 +41,8 @@ from app.api.request_context import clear_principal_id, get_request_id, new_requ
 from app.api.network_security import configure_network_security, validate_network_security_config
 from app.api.environment_security import validate_environment_security_config
 from app.api.telegram import router as telegram_router
-from app.api.whatsapp import router as whatsapp_router
-from app.api.whatsapp_security import is_whatsapp_webhook_path
+from app.integrations.whatsapp.api import router as whatsapp_router
+from app.integrations.whatsapp.security import is_whatsapp_webhook_path
 from app.api.youtube import router as youtube_router
 from app.api.youtube_analytics import router as youtube_analytics_router
 from app.api.youtube_live import router as youtube_live_router

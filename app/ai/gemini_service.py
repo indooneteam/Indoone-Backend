@@ -21,9 +21,6 @@ _DEFAULT_MODEL = "gemma-4-26b-a4b-it"
 _TIMEOUT_SECONDS = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "60"))
 
 
-
-
-
 _SYSTEM_INSTRUCTION = (
     "You are Indoone AI, the AI assistant for the Indoone app. "
     "Answer the latest user message directly and use earlier turns only as conversation context. "
@@ -140,6 +137,7 @@ async def generate_gemini_reply(
     cleaned = message.strip()
     if not cleaned:
         raise ValueError("message cannot be empty")
+
     api_key, model = _get_config()
     encoded_model = quote(model, safe="")
     url = f"{_API_BASE_URL}/models/{encoded_model}:generateContent"

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-02T22:17:03.072741+00:00",
+  "updated_at": "2026-10-04T21:31:28.798468+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -129,6 +129,14 @@
       "summary": "Four crew members of NASA’s SpaceX Crew-13 mission launched at 11:10 a.m. EDT Thursday from Space Launch Complex 40 at Cape Canaveral Space Force Station in Florida for a science expedition aboard the International Space Station. “Crew-13 is another demonstration of America’s unmatched capability in human spaceflight and the strength of our commercial partnerships,” said […]",
       "published": "Thu, 01 Oct 2026 15:59:24 +0000",
       "fingerprint": "b0386df574f7c0e329849d484d266d7a550689d4fb4425ea28481deecbe6eaa6"
+    },
+    {
+      "source": "NASA News",
+      "title": "Mapping the Gaps in NASA’s Return to the Moon, featuring Richard Spolzino",
+      "url": "https://www.nasa.gov/?p=1051569",
+      "summary": "“I want to be able to look at a rocket launch and say, ‘I touched a piece of this.’” That’s how Richard Spolzino describes the thing he’s chasing. Not a title, not a specific mission, not even NASA itself, just the ability to point at something real and know his work made it possible. At […]",
+      "published": "Sun, 04 Oct 2026 19:10:59 +0000",
+      "fingerprint": "e8775aaa1bf6616a227281e1dfdf241c0ed99c7a92b8bfe1dccb3176c3e6a710"
     },
     {
       "source": "NASA News",

@@ -5,7 +5,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.ai.service import generate_reply
+from app.capabilities.whatsapp_ai import generate_whatsapp_reply
 from app.capabilities.whatsapp import parse_webhook, probe_whatsapp, send_text_message, validate_signature, verify_webhook
 
 router = APIRouter(prefix="/integrations/whatsapp", tags=["whatsapp"])
@@ -48,7 +48,7 @@ async def verify(request: Request) -> str:
 
 async def _process_incoming_text_message(sender: str, text: str) -> None:
     try:
-        reply = await generate_reply(text.strip(), history=[])
+        reply = await generate_whatsapp_reply(text.strip(), history=[])
         await send_text_message(sender, reply, approved=True)
     except Exception:
         import logging

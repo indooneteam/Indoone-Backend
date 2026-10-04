@@ -42,7 +42,7 @@ from app.api.network_security import configure_network_security, validate_networ
 from app.api.environment_security import validate_environment_security_config
 from app.api.telegram import router as telegram_router
 from app.integrations.whatsapp.api import router as whatsapp_router
-from app.integrations.whatsapp.security import is_whatsapp_webhook_path
+from app.integrations.whatsapp.security import is_public_integration_path
 from app.api.youtube import router as youtube_router
 from app.api.youtube_analytics import router as youtube_analytics_router
 from app.api.youtube_live import router as youtube_live_router
@@ -168,7 +168,7 @@ async def request_context_middleware(request: Request, call_next):
             return response
     elif (
         os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true"
-        and not is_whatsapp_webhook_path(request.url.path)
+        and not is_public_integration_path(request.url.path)
     ):
         response = _error_response_with_request_id(401, "AUTH_REQUIRED", "bearer authentication required", request_id)
         _log_request(request, request_id, started, response.status_code)

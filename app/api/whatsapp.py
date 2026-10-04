@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.ai.service import generate_reply
 from app.capabilities.whatsapp import parse_webhook, probe_whatsapp, send_text_message, validate_signature, verify_webhook
 
 router = APIRouter(prefix="/integrations/whatsapp", tags=["whatsapp"])
@@ -45,8 +46,20 @@ async def verify(request: Request) -> str:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
+async def _process_incoming_text_message(sender: str, text: str) -> None:
+    try:
+        reply = await generate_reply(text.strip(), history=[])
+        await send_text_message(sender, reply, approved=True)
+    except Exception:
+        import logging
+        logging.getLogger("indoone.whatsapp").exception(
+            "failed to process incoming WhatsApp message",
+            extra={"sender": sender},
+        )
+
+
 @router.post("/webhook")
-async def webhook(request: Request) -> dict[str, object]:
+async def webhook(request: Request, background_tasks: BackgroundTasks) -> dict[str, object]:
     raw = await request.body()
     app_secret = os.getenv("INDOONE_WHATSAPP_APP_SECRET", "").strip()
     if not app_secret:
@@ -59,4 +72,21 @@ async def webhook(request: Request) -> dict[str, object]:
         raise HTTPException(status_code=400, detail="invalid webhook JSON") from exc
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="webhook payload must be an object")
-    return {"integration": "whatsapp_business", "messages": parse_webhook(payload), "received": True}
+
+    messages = parse_webhook(payload)
+    scheduled = 0
+    for message in messages:
+        sender = str(message.get("from") or "").strip()
+        message_type = str(message.get("type") or "").strip().lower()
+        text = str(message.get("text") or "").strip()
+        if not sender or message_type != "text" or not text:
+            continue
+        background_tasks.add_task(_process_incoming_text_message, sender, text)
+        scheduled += 1
+
+    return {
+        "integration": "whatsapp_business",
+        "messages": messages,
+        "received": True,
+        "scheduled_replies": scheduled,
+    }

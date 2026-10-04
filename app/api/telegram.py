@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from app.ai.service import generate_reply
 from app.capabilities.telegram import (
     delete_webhook,
     get_updates,
@@ -100,8 +101,45 @@ async def telegram_delete_webhook(request: TelegramWebhookDeleteRequest) -> dict
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
+async def _process_telegram_message(chat_id: str, text: str) -> None:
+    try:
+        reply = await generate_reply(text)
+        await send_message(chat_id, reply, approved=True)
+    except Exception:
+        import logging
+
+        logging.getLogger("indoone.telegram").exception(
+            "failed to process Telegram message",
+            extra={"chat_id": chat_id},
+        )
+
+
 @router.post("/webhook/incoming")
-async def telegram_incoming(update: dict[str, object], x_telegram_bot_api_secret_token: str | None = Header(default=None)) -> dict[str, bool]:
+async def telegram_incoming(
+    update: dict[str, object],
+    background_tasks: BackgroundTasks,
+    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+) -> dict[str, bool]:
     if not validate_webhook_secret(x_telegram_bot_api_secret_token):
         raise HTTPException(status_code=401, detail="invalid telegram webhook secret")
+
+    message = update.get("message")
+    if not isinstance(message, dict):
+        return {"accepted": True}
+
+    chat = message.get("chat")
+    text = message.get("text")
+    if not isinstance(chat, dict) or not isinstance(text, str):
+        return {"accepted": True}
+
+    chat_id = chat.get("id")
+    clean_text = text.strip()
+    if chat_id is None or not clean_text:
+        return {"accepted": True}
+
+    background_tasks.add_task(
+        _process_telegram_message,
+        str(chat_id),
+        clean_text,
+    )
     return {"accepted": True}

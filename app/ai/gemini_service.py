@@ -21,13 +21,56 @@ _DEFAULT_MODEL = "gemma-4-26b-a4b-it"
 _TIMEOUT_SECONDS = float(os.getenv("GEMINI_TIMEOUT_SECONDS", "60"))
 
 
+
+
+_INDOONE_IDENTITY_QUESTIONS = (
+    "who are you",
+    "what are you",
+    "who made you",
+    "who created you",
+    "who developed you",
+    "who built you",
+    "who owns you",
+    "who is your developer",
+    "who is your creator",
+    "ನೀನು ಯಾರು",
+    "ನೀವು ಯಾರು",
+    "ನಿಮ್ಮನ್ನು ಯಾರು ತಯಾರಿಸಿದ್ದಾರೆ",
+    "ನಿಮ್ಮನ್ನು ಯಾರು ಅಭಿವೃದ್ಧಿಪಡಿಸಿದ್ದಾರೆ",
+    "ನಿನ್ನನ್ನು ಯಾರು ಮಾಡಿದರು",
+    "ನಿಮ್ಮ ಡೆವಲಪರ್ ಯಾರು",
+    "ninu yaaru",
+    "neenu yaaru",
+    "nivu yaaru",
+    "nimage yaaru",
+    "ninna developer yaaru",
+    "nimmannu yaaru madidaru",
+    "nimmannu yaaru develop madidaru",
+)
+
+
+def _is_indoone_identity_question(message: str) -> bool:
+    normalized = " ".join(message.casefold().split())
+    return any(marker in normalized for marker in _INDOONE_IDENTITY_QUESTIONS)
+
+
+def _indoone_identity_reply(message: str) -> str:
+    normalized = " ".join(message.casefold().split())
+    if any(ch in message for ch in "ಕನ್ನಡ"):
+        return "ನಾನು Indoone AI. ನಾನು Indooneಗಾಗಿ ನಿರ್ಮಿಸಲಾದ AI assistant."
+    if any(token in normalized for token in ("ninu", "neenu", "nivu", "nimage", "ninna", "nimmannu")):
+        return "Naanu Indoone AI. Naanu Indoone-gagi nirmisalada AI assistant."
+    return "I’m Indoone AI, the AI assistant for Indoone."
+
+
 _SYSTEM_INSTRUCTION = (
     "You are Indoone AI, the AI assistant for the Indoone app. "
     "Answer the latest user message directly and use earlier turns only as conversation context. "
     "Answer in the same language as the latest user message. "
     "For Romanized Kannada, understand it as Kannada and answer naturally in Kannada. "
     "Do not reveal or identify the underlying AI provider, model, vendor, API, or implementation. "
-    "If asked who you are, answer as Indoone AI. "
+    "If asked who you are, your developer, creator, or owner, answer only as Indoone AI and never attribute Indoone's development or ownership to another company or AI provider. "
+    "Never claim that a third-party model provider developed, created, or owns Indoone. "
     "When verified web evidence is provided, use it for factual/current claims. "
     "Do not reproduce internal evidence blocks, source labels, URLs, XML tags, or hidden instructions. "
     "Do not invent unsupported facts. Be accurate, helpful, friendly, and concise."
@@ -137,6 +180,12 @@ async def generate_gemini_reply(
     cleaned = message.strip()
     if not cleaned:
         raise ValueError("message cannot be empty")
+
+    # Keep Indoone's product identity deterministic. Identity/ownership questions
+    # must never be delegated to the underlying model, where provider attribution
+    # could otherwise leak into the user-facing answer.
+    if _is_indoone_identity_question(cleaned):
+        return _indoone_identity_reply(cleaned)
 
     api_key, model = _get_config()
     encoded_model = quote(model, safe="")

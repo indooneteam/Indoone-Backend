@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-06T00:05:46.257654+00:00",
+  "updated_at": "2026-10-06T18:25:05.696525+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -105,6 +105,38 @@
       "summary": "Photos taken using a microscope reveal the colorful, kaleidoscope-like crystal structure of a new NASA-made material that could be used for manufacturing during future space missions. Developed at NASA’s Glenn Research Center in Cleveland, the material could be created directly on the Moon or Mars, allowing NASA to pack fewer supplies — saving weight and […]",
       "published": "Tue, 29 Sep 2026 14:00:00 +0000",
       "fingerprint": "7e083e0e8d512bd0422d8f2f05514106012dcabd70c32127a65ac4c3eebfe464"
+    },
+    {
+      "source": "NASA News",
+      "title": "Lunar Grounding Challenge",
+      "url": "https://www.nasa.gov/?p=1053834",
+      "summary": "As an astronaut traverses the lunar South Pole, tribocharging from walking on the lunar surface and plasma charging from the ambient plasma generate electric charge on the spacesuit. This problem is severely compounded when entering lunar shadows and Permanently Shadowed Regions (PSRs). In these dark zones, the spacesuit can buildup a substantial negative potential due […]",
+      "published": "Tue, 06 Oct 2026 18:22:24 +0000",
+      "fingerprint": "6fd8fe073a80dd2c444921117462be821505a5c9b3394804fabe04687317f3c2"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Glenn Invites Phase 1 Proposals for Aerospace Power Systems Laboratory",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1053884",
+      "summary": "NASA’s Glenn Research Center in Cleveland is seeking Phase 1 proposals for the design and construction of the Aerospace Power Systems Laboratory. The principal purpose of this procurement is to deliver a laboratory facility to support the testing and development of power systems, with associated site work, infrastructure, and systems. The laboratory will provide modern […]",
+      "published": "Tue, 06 Oct 2026 17:55:52 +0000",
+      "fingerprint": "e157f9b6ff2b1adc7e9e23caca594bc4475cf0e0f3c9d87313ef902b45ea08c3"
+    },
+    {
+      "source": "NASA News",
+      "title": "Astronomers Solve Cosmic Cold Case with NASA Hubble Data",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1053697",
+      "summary": "Diligent sleuthing by astronomers uncovered a surprising chemical clue that indicates the white dwarf star HS 0209+0832 may host a second-generation planet. This artist’s concept released on Oct. 5, 2026, depicts that possible explanation. The white dwarf is the “dead” core of a star that burned through all of its nuclear fuel and lost its outer […]",
+      "published": "Tue, 06 Oct 2026 16:09:13 +0000",
+      "fingerprint": "a41f88107c4d7bf6b7524daabe620714eff15edb92520daca8b7d450a1ed655f"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s Curiosity Rover Catches Stunning Martian Dawn",
+      "url": "https://www.nasa.gov/?p=1052208",
+      "summary": "A newly released panorama captured by NASA’s Curiosity rover offers the most detailed view yet of distant, wind-carved Martian cliffs, highlighting features the mission’s scientists have long been waiting to see up close. The scene was snapped at 8:30 a.m. local Mars time, showing striking blue hues in the foreground as bright morning light illuminates […]",
+      "published": "Tue, 06 Oct 2026 15:30:07 +0000",
+      "fingerprint": "d02dfe94a53b2ad3ead0f6a689058d99fd47908d0eb0e5ec1d57e55de02dac0b"
     },
     {
       "source": "NASA News",

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-04T21:31:28.798468+00:00",
+  "updated_at": "2026-10-06T00:05:46.257654+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -137,6 +137,30 @@
       "summary": "“I want to be able to look at a rocket launch and say, ‘I touched a piece of this.’” That’s how Richard Spolzino describes the thing he’s chasing. Not a title, not a specific mission, not even NASA itself, just the ability to point at something real and know his work made it possible. At […]",
       "published": "Sun, 04 Oct 2026 19:10:59 +0000",
       "fingerprint": "e8775aaa1bf6616a227281e1dfdf241c0ed99c7a92b8bfe1dccb3176c3e6a710"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Stream SpaceX Crew-12 Return, Splashdown Live",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1053663",
+      "summary": "NASA and SpaceX are targeting no earlier than 8:05 a.m. EDT, Wednesday, Oct. 7, for the undocking of the agency’s SpaceX Crew-12 mission from the International Space Station, pending weather conditions. An Oct. 7 undock puts NASA astronauts Jessica Meir and Jack Hathaway, ESA (European Space Agency) astronaut Sophie Adenot, and Roscosmos cosmonaut Andrey Fedyaev […]",
+      "published": "Mon, 05 Oct 2026 21:44:40 +0000",
+      "fingerprint": "b914d4f01f93fd904cd89d24a865cf799f68fa630216d1d3dad3b16519d6c2ef"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Astronaut Christina Koch at Eagles vs. Rams",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1053515",
+      "summary": "NASA astronaut and mission specialist of the agency’s Artemis II mission, Christina Koch, leads the fans in singing the Eagles Fight Song from the field at an NFL game between the Philadelphia Eagles and the Los Angeles Rams at Lincoln Financial Field on Sunday, Oct. 4, 2026, in Philadelphia. NASA’s engagement at NFL games is […]",
+      "published": "Mon, 05 Oct 2026 17:42:56 +0000",
+      "fingerprint": "c7b98b090df572446e66e7129f86856de6dd41bd44db0eae48216fc0c8be80ad"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Testing Aims at Supercooled Large Droplet Aviation Safety",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1053389",
+      "summary": "NASA is leveraging its expertise and enhancing its test facilities to help address a rare but persistent aviation hazard: icing that occurs when aircraft encounter unusually large, very cold water droplets in clouds. The problem, known as “supercooled large droplet icing,” occurs when aircraft fly through clouds containing unusually large drops of water that are […]",
+      "published": "Mon, 05 Oct 2026 15:27:23 +0000",
+      "fingerprint": "02dd6bc06d658946e4fabf3af179217bae545ab48331a4276a999b47a8c5234c"
     },
     {
       "source": "NASA News",

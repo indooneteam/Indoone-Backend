@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-07T06:04:43.811336+00:00",
+  "updated_at": "2026-10-07T23:08:00.580640+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -25,6 +25,30 @@
       "summary": "This long-duration image shows star trails above Earth and the blue lights of fishing boats and the yellow lights of Indonesian cities stretching below the International Space Station as it orbited 258 miles above the Banda Sea on Sept. 20, 2026. Image credit: NASA/Anil Menon",
       "published": "Wed, 30 Sep 2026 17:50:50 +0000",
       "fingerprint": "8f322f461ca55b2cac30e801e8b7be9883878846d69765a94c3b0cac4b1723c5"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Sets Coverage for SpaceX 35th Station Resupply Launch, Arrival",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1054784",
+      "summary": "NASA and SpaceX are targeting 6:33 a.m. EDT, Tuesday, Oct. 13, for the next launch to deliver science investigations, supplies, and equipment, including the final set of International Space Station Roll-Out Solar Arrays, to the space station. This is the 35th SpaceX commercial resupply services mission to the orbital complex for NASA. NASA also will […]",
+      "published": "Wed, 07 Oct 2026 21:16:42 +0000",
+      "fingerprint": "204ea3c412ad3a3987bdc6e5d21f793e0c325d0200733b5a8ac69da1a658519d"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s SpaceX 35th Commercial Resupply Mission Overview",
+      "url": "https://www.nasa.gov/?p=1054755",
+      "summary": "NASA and SpaceX are targeting no earlier than Tuesday, Oct. 13 to launch scientific investigations, supplies, and equipment to the International Space Station.",
+      "published": "Wed, 07 Oct 2026 20:17:16 +0000",
+      "fingerprint": "4e06f0ead50092fc3b5756579071673779ed1035e20a68fb0d56510a2f92f53b"
+    },
+    {
+      "source": "NASA News",
+      "title": "Artemis II Crew Moon Photo Annotations",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1054372",
+      "summary": "A visualization of a dark Moon eclipsing the Sun is marked with handwritten notes in this April 6, 2026, screenshot from an Artemis II crew member’s tablet. NASA astronauts Reid Wiseman (in blue) and Victor “Ike” Glover (in green) and CSA (Canadian Space Agency) Jeremy Hansen (in red) observed impact flashes and their locations, which […]",
+      "published": "Wed, 07 Oct 2026 15:44:59 +0000",
+      "fingerprint": "9da9889dbb384aa41c2cbf95c6ab0beb379c1c3235f97bdbbb7a344fe0ded0c7"
     },
     {
       "source": "NASA News",

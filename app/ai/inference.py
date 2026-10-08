@@ -17,6 +17,9 @@ DEFAULT_REPETITION_PENALTY = 1.08
 DEFAULT_NO_REPEAT_NGRAM_SIZE = 3
 DEFAULT_TOP_K = 64
 MIN_GENERATED_TOKENS_BEFORE_EOS = 4
+# Preserve enough context for useful answers while reserving output room so
+# prompts cannot consume the entire 512-token model window.
+DEFAULT_OUTPUT_TOKEN_RESERVE = 256
 
 class LocalModelRuntime:
     """Load the trained Indoone local language model and generate model output."""
@@ -229,6 +232,49 @@ class LocalModelRuntime:
             )
         )
 
+    @staticmethod
+    def _find_subsequence(sequence: list[int], subsequence: list[int]) -> int:
+        if not subsequence or len(subsequence) > len(sequence):
+            return -1
+        width = len(subsequence)
+        for index in range(len(sequence) - width + 1):
+            if sequence[index : index + width] == subsequence:
+                return index
+        return -1
+
+    def _fit_prompt_to_context(
+        self,
+        prompt: str,
+        max_new_tokens: int,
+    ) -> list[int]:
+        """Keep the current request and newest context while reserving output space."""
+        prompt_ids = self._prompt_ids(prompt)
+        output_reserve = min(max_new_tokens, DEFAULT_OUTPUT_TOKEN_RESERVE)
+        prompt_budget = max(1, self.model.block_size - output_reserve)
+        if len(prompt_ids) <= prompt_budget:
+            return prompt_ids
+
+        history_marker = self.tokenizer.encode(
+            "\n\nCONVERSATION HISTORY:",
+            add_special_tokens=False,
+        )
+        history_index = self._find_subsequence(prompt_ids, history_marker)
+
+        if history_index >= 0:
+            prefix = prompt_ids[:history_index]
+            suffix = prompt_ids[history_index:]
+            if len(prefix) < prompt_budget:
+                suffix_budget = prompt_budget - len(prefix)
+                return prefix + suffix[-suffix_budget:]
+
+        # For unusually large standalone requests/documents, preserve the beginning
+        # and the newest tail rather than dropping the user's request entirely.
+        head_budget = min(len(prompt_ids), max(1, prompt_budget * 2 // 3))
+        tail_budget = max(0, prompt_budget - head_budget)
+        if tail_budget == 0:
+            return prompt_ids[:prompt_budget]
+        return prompt_ids[:head_budget] + prompt_ids[-tail_budget:]
+
     @torch.inference_mode()
     def generate(
         self,
@@ -255,9 +301,7 @@ class LocalModelRuntime:
         if use_email_adapter is None:
             use_email_adapter = self._is_email_request(prompt)
 
-        prompt_ids = self._prompt_ids(prompt)
-        if len(prompt_ids) > self.model.block_size:
-            prompt_ids = prompt_ids[-self.model.block_size :]
+        prompt_ids = self._fit_prompt_to_context(prompt, max_new_tokens)
 
         generated_ids = list(prompt_ids)
         completion_ids: list[int] = []

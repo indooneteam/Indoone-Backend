@@ -189,6 +189,7 @@ def claim_channel_inbound_event(event_key: str, retry_after_seconds: int = 600) 
             (normalized, timestamp, timestamp),
         )
         if cursor.rowcount > 0:
+            db.commit()
             return True
         row = db.execute(
             "SELECT status, updated_at FROM channel_inbound_events WHERE event_key = ?",
@@ -211,6 +212,7 @@ def claim_channel_inbound_event(event_key: str, retry_after_seconds: int = 600) 
             "UPDATE channel_inbound_events SET status='processing', updated_at=? WHERE event_key=?",
             (timestamp, normalized),
         )
+        db.commit()
         return cursor.rowcount > 0
 
 

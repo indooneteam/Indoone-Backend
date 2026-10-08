@@ -173,6 +173,8 @@ class ConversationStore:
                     "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?",
                     (conversation_id, self.max_messages),
                 ).fetchall()
+        if self.max_messages is None:
+            return [(str(row["role"]), str(row["content"])) for row in rows]
         return [(str(row["role"]), str(row["content"])) for row in reversed(rows)]
 
     def list_for_user(self, user_id: str, limit: int = 50) -> list[dict[str, object]]:

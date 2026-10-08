@@ -95,6 +95,14 @@ def initialize() -> None:
                 updated_at TEXT NOT NULL,
                 PRIMARY KEY (user_id, integration_id)
             );
+            CREATE TABLE IF NOT EXISTS channel_inbound_events (
+                event_key TEXT PRIMARY KEY,
+                status TEXT NOT NULL CHECK(status IN ('processing', 'sent', 'failed')),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_channel_inbound_events_updated
+                ON channel_inbound_events(updated_at);
             CREATE INDEX IF NOT EXISTS idx_integration_tokens_user ON integration_tokens(user_id);
             CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
             CREATE INDEX IF NOT EXISTS idx_projects_user_updated ON projects(user_id, updated_at DESC);
@@ -165,6 +173,56 @@ def upsert_integration_token(
                 updated_at=excluded.updated_at
             """,
             (user_id, integration_id, access_token, refresh_token, token_type, scope, expires_at, timestamp, timestamp),
+        )
+        db.commit()
+
+
+def claim_channel_inbound_event(event_key: str, retry_after_seconds: int = 600) -> bool:
+    normalized = event_key.strip()
+    if not normalized or len(normalized) > 512:
+        raise ValueError("event_key is required and must be at most 512 characters")
+    initialize()
+    timestamp = _now()
+    with closing(_connect()) as db:
+        cursor = db.execute(
+            "INSERT OR IGNORE INTO channel_inbound_events(event_key, status, created_at, updated_at) VALUES (?, 'processing', ?, ?)",
+            (normalized, timestamp, timestamp),
+        )
+        if cursor.rowcount > 0:
+            return True
+        row = db.execute(
+            "SELECT status, updated_at FROM channel_inbound_events WHERE event_key = ?",
+            (normalized,),
+        ).fetchone()
+        if row is None:
+            return False
+        status = str(row["status"])
+        if status == "sent":
+            return False
+        if status == "processing":
+            try:
+                updated = datetime.fromisoformat(str(row["updated_at"]))
+                age = (datetime.now(timezone.utc) - updated).total_seconds()
+            except ValueError:
+                age = 0
+            if age < max(1, retry_after_seconds):
+                return False
+        cursor = db.execute(
+            "UPDATE channel_inbound_events SET status='processing', updated_at=? WHERE event_key=?",
+            (timestamp, normalized),
+        )
+        return cursor.rowcount > 0
+
+
+def complete_channel_inbound_event(event_key: str, success: bool) -> None:
+    normalized = event_key.strip()
+    if not normalized:
+        return
+    initialize()
+    with closing(_connect()) as db:
+        db.execute(
+            "UPDATE channel_inbound_events SET status=?, updated_at=? WHERE event_key=?",
+            ("sent" if success else "failed", _now(), normalized),
         )
         db.commit()
 

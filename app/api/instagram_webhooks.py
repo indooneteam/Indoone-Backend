@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 
+from app.capabilities.channel_ai_reply import process_instagram_webhook
 from app.capabilities.instagram_webhooks import normalize_event, verify_challenge, verify_signature
 
 router = APIRouter(prefix="/integrations/instagram/webhook", tags=["instagram-webhooks"])
@@ -25,7 +26,7 @@ async def verify(
 
 
 @router.post("")
-async def receive(request: Request) -> dict[str, object]:
+async def receive(request: Request, background_tasks: BackgroundTasks) -> dict[str, object]:
     signature = request.headers.get("X-Hub-Signature-256", "")
     raw_body = await request.body()
     try:
@@ -42,6 +43,8 @@ async def receive(request: Request) -> dict[str, object]:
         raise HTTPException(status_code=400, detail="instagram webhook payload must be an object")
 
     try:
-        return normalize_event(payload)
+        normalized = normalize_event(payload)
+        background_tasks.add_task(process_instagram_webhook, payload)
+        return normalized
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

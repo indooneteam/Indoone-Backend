@@ -122,6 +122,31 @@ def test_cached_forward_respects_block_size() -> None:
         model.forward_cached(torch.tensor([[5]]), cache)
 
 
+def test_prompt_fitting_preserves_current_request_and_reserves_output_tokens() -> None:
+    tokenizer = BPETokenizer.train(
+        "<instruction>\ncurrent request\n</instruction>\n<response>\n"
+        "CONVERSATION HISTORY: old message new message context",
+        vocab_size=128,
+        min_frequency=1,
+    )
+    runtime = object.__new__(LocalModelRuntime)
+    runtime.tokenizer = tokenizer
+    runtime.model = type("ModelConfig", (), {"block_size": 96})()
+
+    prompt = (
+        "current request"
+        "\n\nCONVERSATION HISTORY:"
+        "\nuser: " + ("old context " * 80)
+        + "\nassistant: latest context"
+    )
+
+    fitted = runtime._fit_prompt_to_context(prompt, max_new_tokens=48)
+
+    assert len(fitted) <= 48
+    decoded = tokenizer.decode(fitted)
+    assert "current request" in decoded
+
+
 def test_language_constraint_keeps_english_tokens(tmp_path) -> None:
     tokenizer = BPETokenizer.train(
         "Hello world. ಕನ್ನಡ ನಮಸ್ಕಾರ.",

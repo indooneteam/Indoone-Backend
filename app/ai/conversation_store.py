@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 DEFAULT_DB_PATH = Path(os.getenv("INDOONE_CONVERSATION_DB", "data/indoone_conversations.sqlite3"))
-DEFAULT_MAX_MESSAGES = 50
+DEFAULT_MAX_MESSAGES: int | None = None
 SQLITE_TIMEOUT_SECONDS = 30.0
 SQLITE_BUSY_TIMEOUT_MS = 30_000
 
@@ -14,9 +14,9 @@ SQLITE_BUSY_TIMEOUT_MS = 30_000
 class ConversationStore:
     """Persistent SQLite conversation history with strict user ownership."""
 
-    def __init__(self, db_path: Path = DEFAULT_DB_PATH, max_messages: int = DEFAULT_MAX_MESSAGES) -> None:
-        if max_messages <= 0:
-            raise ValueError("max_messages must be greater than zero")
+    def __init__(self, db_path: Path = DEFAULT_DB_PATH, max_messages: int | None = DEFAULT_MAX_MESSAGES) -> None:
+        if max_messages is not None and max_messages <= 0:
+            raise ValueError("max_messages must be greater than zero when provided")
         self.db_path = db_path
         self.max_messages = max_messages
         self._initialize()
@@ -152,9 +152,10 @@ class ConversationStore:
                 raise ValueError("conversation is closed")
             connection.executemany("INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)", [(conversation_id, role, content.strip()) for role, content in rows])
             connection.execute("UPDATE conversations SET updated_at=CURRENT_TIMESTAMP WHERE conversation_id=?", (conversation_id,))
-            count = int(connection.execute("SELECT COUNT(*) FROM messages WHERE conversation_id = ?", (conversation_id,)).fetchone()[0])
-            if count >= self.max_messages:
-                connection.execute("UPDATE conversations SET status='closed', closed_at=CURRENT_TIMESTAMP WHERE conversation_id=?", (conversation_id,))
+            if self.max_messages is not None:
+                count = int(connection.execute("SELECT COUNT(*) FROM messages WHERE conversation_id = ?", (conversation_id,)).fetchone()[0])
+                if count >= self.max_messages:
+                    connection.execute("UPDATE conversations SET status='closed', closed_at=CURRENT_TIMESTAMP WHERE conversation_id=?", (conversation_id,))
 
     def recent(self, conversation_id: str, user_id: str | None = None) -> list[tuple[str, str]]:
         if not conversation_id:
@@ -162,7 +163,16 @@ class ConversationStore:
         with self._connect() as connection:
             owner = connection.execute("SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)).fetchone()
             self._assert_owner(owner, user_id)
-            rows = connection.execute("SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?", (conversation_id, self.max_messages)).fetchall()
+            if self.max_messages is None:
+                rows = connection.execute(
+                    "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id ASC",
+                    (conversation_id,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    "SELECT role, content FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT ?",
+                    (conversation_id, self.max_messages),
+                ).fetchall()
         return [(str(row["role"]), str(row["content"])) for row in reversed(rows)]
 
     def list_for_user(self, user_id: str, limit: int = 50) -> list[dict[str, object]]:

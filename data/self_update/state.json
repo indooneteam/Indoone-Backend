@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-07T23:08:00.580640+00:00",
+  "updated_at": "2026-10-08T23:23:39.252882+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -169,6 +169,62 @@
       "summary": "A newly released panorama captured by NASA’s Curiosity rover offers the most detailed view yet of distant, wind-carved Martian cliffs, highlighting features the mission’s scientists have long been waiting to see up close. The scene was snapped at 8:30 a.m. local Mars time, showing striking blue hues in the foreground as bright morning light illuminates […]",
       "published": "Tue, 06 Oct 2026 15:30:07 +0000",
       "fingerprint": "d02dfe94a53b2ad3ead0f6a689058d99fd47908d0eb0e5ec1d57e55de02dac0b"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Briefing to Highlight Contributions to Martian Moons Mission",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1055240",
+      "summary": "Media are invited to join NASA for a media teleconference at 4 p.m. EDT, Thursday, Oct. 15, to preview the agency’s contributions to JAXA’s (Japan Aerospace Exploration Agency) Martian Moons eXploration (MMX) mission. The mission is scheduled to launch from JAXA’s Tanegashima Space Center in Japan on Monday, Oct. 19 EDT (Tuesday, Oct. 20 JST). […]",
+      "published": "Thu, 08 Oct 2026 20:22:12 +0000",
+      "fingerprint": "82eff0e55f4b2a5945702780837c95cc9c655e83ec6bc60ccb3c025b2a915517"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Announces Bold Science Initiatives for America’s Golden Age Summit",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1055155",
+      "summary": "NASA is launching two new science and technology initiatives to deepen scientific understanding and accelerate the innovation that will shape America’s future in space. The initiatives are announced in conjunction with the White House Office of Science and Technology Policy’s (OSTP) “Golden Age Summit” in Washington on Thursday with top U.S. agency leaders. The programs […]",
+      "published": "Thu, 08 Oct 2026 19:40:00 +0000",
+      "fingerprint": "cbc22ce030ce032ce78f54448cd5bee9a3ff0c4c60dca9fdb7e6b53beeee53bd"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s SSPICY Mission to Demonstrate In-Space Inspection Technologies",
+      "url": "https://www.nasa.gov/?p=1054943",
+      "summary": "A new NASA-supported spacecraft will get up close to satellites that are no longer in service, demonstrating technologies that could support future in-space repairs and reduce orbital debris. The Small Spacecraft Propulsion and Inspection Capability (SSPICY) mission launched Oct. 1 from Vandenberg Space Force Base in California. The mission is a technology demonstration where an […]",
+      "published": "Thu, 08 Oct 2026 18:56:25 +0000",
+      "fingerprint": "963ecc6902a46524ff814d454d2e8cfa40c12edfb64ef2dd2aa6f362be8cd483"
+    },
+    {
+      "source": "NASA News",
+      "title": "Crew-12 Returns to Earth",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1055007",
+      "summary": "The SpaceX Crew Dragon Freedom spacecraft is seen moments before splashing down in the Pacific Ocean off the coast of California in this Oct. 8, 2026, photograph. Aboard were NASA’s SpaceX Crew-12 members NASA astronauts Jessica Meir and Jack Hathaway, ESA (European Space Agency) astronaut Sophie Adenot, and Roscosmos cosmonaut Andrey Fedyaev. The four spent […]",
+      "published": "Thu, 08 Oct 2026 18:52:27 +0000",
+      "fingerprint": "7746904a0a019334b9dcd7b0668b08d76b899ca8337f8629e75d22287a8c3731"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s SPHEREx Telescope Sees Menagerie of Brown Dwarfs",
+      "url": "https://www.nasa.gov/?p=1055029",
+      "summary": "NASA’s SPHEREx (Spectro-Photometer for the History of the Universe, Epoch of Reionization, and Ices Explorer) space telescope is shedding light on brown dwarfs, celestial objects that blur the line between stars and exoplanets. New findings published in The Astrophysical Journal show that these dark and cloudy worlds have chemically rich atmospheres not unlike the giant […]",
+      "published": "Thu, 08 Oct 2026 18:22:48 +0000",
+      "fingerprint": "35f5e7c2a01c2e684b96444068187ab38eac7cfd2e57c02ed7a0105dd04e0fa1"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s SpaceX Crew‑12 Splashes Down, Sets Briefing to Discuss Mission",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1055028",
+      "summary": "After more than seven months aboard the International Space Station, NASA’s SpaceX Crew-12 mission safely splashed down Thursday in the Pacific Ocean off the coast of Los Angeles. The crew members will discuss their science mission during a news conference at 3:30 p.m. EDT, Thursday, Oct. 15, at the agency’s Johnson Space Center in Houston. […]",
+      "published": "Thu, 08 Oct 2026 17:02:28 +0000",
+      "fingerprint": "2a8404f17116fb9432b4295fa7808a3a91c4061ce56df07708ea935e2e3e6289"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA, Energy Department Advance New Era of Nuclear-Powered Exploration",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1054933",
+      "summary": "As the Golden Age of deep-space exploration begins, NASA and the U.S. Department of Energy are advancing the development of safe, reliable, next-generation nuclear technologies for space. Together, the agencies will supercharge civil space exploration, unlock bold scientific discovery, and solidify American leadership in space nuclear power and propulsion. “We are entering the ‘Nuclear NASA-era,’ […]",
+      "published": "Thu, 08 Oct 2026 15:46:25 +0000",
+      "fingerprint": "119c71d38ce5ec6a4a015d7d7a5f5059cd76719363829d1b8b024b01705df2f1"
     },
     {
       "source": "NASA News",

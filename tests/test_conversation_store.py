@@ -85,6 +85,16 @@ def test_recent_history_is_bounded(tmp_path: Path) -> None:
     assert store.recent("c1", user_id=OWNER) == [("user", "three"), ("assistant", "four")]
 
 
+def test_default_history_has_no_message_cap(tmp_path: Path) -> None:
+    store = ConversationStore(tmp_path / "conversations.sqlite3")
+    rows = [(("user" if index % 2 == 0 else "assistant"), f"message-{index}") for index in range(60)]
+    store.append("c1", rows, user_id=OWNER)
+
+    assert store.message_count("c1", user_id=OWNER) == 60
+    assert store.is_closed("c1", user_id=OWNER) is False
+    assert store.recent("c1", user_id=OWNER) == rows
+
+
 def test_conversation_closes_at_message_limit(tmp_path: Path) -> None:
     store = ConversationStore(tmp_path / "conversations.sqlite3", max_messages=4)
     store.append("c1", [("user", "one"), ("assistant", "two"), ("user", "three")], user_id=OWNER)

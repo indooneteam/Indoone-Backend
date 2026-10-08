@@ -7,6 +7,7 @@ def _close_conversation(store: ConversationStore, conversation_id: str) -> None:
         for index in range(50)
     ]
     store.append(conversation_id, messages, user_id="user-1")
+    store.close(conversation_id, user_id="user-1")
 
 
 def test_purge_expired_closed_conversation(tmp_path):

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.capabilities.channel_ai_reply import process_whatsapp_message
 from app.capabilities.whatsapp import parse_webhook, probe_whatsapp, send_text_message, validate_signature, verify_webhook
 
 router = APIRouter(prefix="/integrations/whatsapp", tags=["whatsapp"])
@@ -46,7 +47,7 @@ async def verify(request: Request) -> str:
 
 
 @router.post("/webhook")
-async def webhook(request: Request) -> dict[str, object]:
+async def webhook(request: Request, background_tasks: BackgroundTasks) -> dict[str, object]:
     raw = await request.body()
     app_secret = os.getenv("INDOONE_WHATSAPP_APP_SECRET", "").strip()
     if not app_secret:
@@ -59,4 +60,7 @@ async def webhook(request: Request) -> dict[str, object]:
         raise HTTPException(status_code=400, detail="invalid webhook JSON") from exc
     if not isinstance(payload, dict):
         raise HTTPException(status_code=400, detail="webhook payload must be an object")
-    return {"integration": "whatsapp_business", "messages": parse_webhook(payload), "received": True}
+    messages = parse_webhook(payload)
+    for message in messages:
+        background_tasks.add_task(process_whatsapp_message, message)
+    return {"integration": "whatsapp_business", "messages": messages, "received": True}

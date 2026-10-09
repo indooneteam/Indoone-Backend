@@ -5,7 +5,7 @@ import base64
 import json
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -14,6 +14,7 @@ from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file, save_text_file
 from app.ai.memory import extract_memory_candidates
 from app.ai.service import generate_reply
+from app.capabilities.control_center import record_control_event, replies_enabled
 
 router = APIRouter(tags=["platform"])
 _stream_store = ConversationStore()
@@ -53,47 +54,56 @@ class StreamChatRequest(BaseModel):
 
 
 @router.post("/chat/stream")
-async def stream_chat(request: StreamChatRequest) -> StreamingResponse:
-    conversation_id = request.conversation_id or str(uuid4())
+async def stream_chat(body: StreamChatRequest, request: Request) -> StreamingResponse:
+    if not replies_enabled("android"):
+        record_control_event("android", "reply", "skipped", "/api/platform/chat/stream", 503)
+        raise HTTPException(status_code=503, detail="Android AI replies are paused in the Control Center")
+
+    conversation_id = body.conversation_id or str(uuid4())
     if _stream_store.is_closed(conversation_id):
         conversation_id = str(uuid4())
 
     history = _stream_store.recent(conversation_id)
     document_context = ""
-    if request.file_id:
+    if body.file_id:
         try:
-            document_context = read_text_file(request.file_id)
+            document_context = read_text_file(body.file_id)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     try:
         reply = await generate_reply(
-            request.message,
+            body.message,
             history=history,
             document_context=document_context,
         )
     except RuntimeError as exc:
+        record_control_event("android", "reply", "failed", "/api/platform/chat/stream", 503)
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    quality = assess_answer(request.message, reply)
+    quality = assess_answer(body.message, reply)
     if not quality.passed:
+        record_control_event("android", "reply", "failed", "/api/platform/chat/stream", 503)
         raise HTTPException(status_code=503, detail=f"model answer failed quality checks: {quality.reason}")
 
     try:
         _stream_store.append(
             conversation_id,
-            [("user", request.message), ("assistant", reply)],
+            [("user", body.message), ("assistant", reply)],
         )
     except ValueError as exc:
+        record_control_event("android", "reply", "failed", "/api/platform/chat/stream", 409)
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    record_control_event("android", "reply", "success", "/api/platform/chat/stream", 200)
+
     async def events():
-        yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conversation_id}, ensure_ascii=False)}\\n\\n"
         for chunk_start in range(0, len(reply), 48):
             payload = {"type": "delta", "text": reply[chunk_start : chunk_start + 48]}
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\\n\\n"
             await asyncio.sleep(0)
-        yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\\n\\n"
 
     return StreamingResponse(
         events(),

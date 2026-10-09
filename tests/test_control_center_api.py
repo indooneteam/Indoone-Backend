@@ -185,7 +185,7 @@ def test_android_reply_off_skips_model_and_tracks_skipped_reply(tmp_path, monkey
 
     response = client.post("/api/chat", json={"message": "hello"})
     assert response.status_code == 503
-    assert "paused" in response.json()["detail"].lower()
+    assert "paused" in response.json()["message"].lower()
 
     metrics = client.get("/api/control-center/metrics", headers=headers)
     assert metrics.status_code == 200

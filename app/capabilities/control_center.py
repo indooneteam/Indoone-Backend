@@ -12,6 +12,7 @@ from app.capabilities import store
 CHANNELS = ("whatsapp", "instagram", "telegram", "android")
 EVENT_TYPES = ("request", "reply")
 EVENT_STATUSES = ("success", "failed", "blocked", "skipped")
+_INITIALIZED_DB_PATH: str | None = None
 
 _REPLY_ENV_DEFAULTS = {
     "whatsapp": "INDOONE_WHATSAPP_AI_REPLY_ENABLED",
@@ -32,7 +33,11 @@ def _env_enabled(name: str, default: bool = False) -> bool:
 
 
 def initialize_control_center() -> None:
-    """Create only the Control Center's tables in the existing capabilities database."""
+    """Create Control Center tables once per configured capabilities database."""
+    global _INITIALIZED_DB_PATH
+    db_path = str(store._db_path())
+    if _INITIALIZED_DB_PATH == db_path:
+        return
     store.initialize()
     with closing(store._connect()) as db:
         db.executescript(
@@ -61,6 +66,7 @@ def initialize_control_center() -> None:
             """
         )
         db.commit()
+    _INITIALIZED_DB_PATH = db_path
 
 
 def _setting_default(key: str) -> bool:

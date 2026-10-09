@@ -16,6 +16,7 @@ from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
 from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
+from app.api.control_center import router as control_center_router
 from app.api.connector_security import enforce_connector_user_scope
 from app.api.contacts import router as contacts_router
 from app.api.conversations import router as conversations_router
@@ -48,6 +49,7 @@ from app.api.youtube_advanced import router as youtube_advanced_router
 from app.api.voice_session import router as voice_session_router
 from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
 from app.capabilities.store import initialize as initialize_capability_store
+from app.capabilities.control_center import initialize_control_center, is_control_center_admin_authorization
 
 logger = logging.getLogger("indoone.api")
 ai_service._detect_response_language = detect_response_language
@@ -130,6 +132,7 @@ async def lifespan(_: FastAPI):
     validate_environment_security_config()
     configure_sqlite_runtime()
     initialize_capability_store()
+    initialize_control_center()
     cleanup_task = asyncio.create_task(_conversation_cleanup_loop())
     try:
         yield
@@ -154,7 +157,12 @@ async def request_context_middleware(request: Request, call_next):
     request.state.principal_id = ""
     authorization = request.headers.get("authorization", "")
     principal = ""
-    if authorization:
+    is_control_center_path = request.url.path.startswith("/api/control-center/")
+    is_control_center_admin = is_control_center_path and is_control_center_admin_authorization(authorization)
+    if is_control_center_admin:
+        # Control Center has its own server-side token and must not impersonate an app user.
+        principal = ""
+    elif authorization:
         try:
             principal = extract_principal(authorization)
             set_principal_id(principal)
@@ -267,6 +275,7 @@ app.include_router(instagram_automation_router, prefix="/api")
 app.include_router(facebook_router, prefix="/api")
 app.include_router(google_photos_router, prefix="/api")
 app.include_router(canva_router, prefix="/api")
+app.include_router(control_center_router, prefix="/api")
 
 
 @app.get("/health")

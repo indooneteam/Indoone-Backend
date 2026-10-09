@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-08T23:23:39.252882+00:00",
+  "updated_at": "2026-10-09T06:13:51.972575+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -188,6 +188,14 @@
     },
     {
       "source": "NASA News",
+      "title": "NASA Announces Bold Science Initiatives for America’s Golden Age Summit",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1055155",
+      "summary": "Editor’s note: This release was updated Oct. 8, 2026 with the formal name of the summit. NASA is launching two new science and technology initiatives to deepen scientific understanding and accelerate the innovation that will shape America’s future in space. The initiatives are announced in conjunction with the White House Office of Science and Technology […]",
+      "published": "Thu, 08 Oct 2026 19:40:00 +0000",
+      "fingerprint": "010c00cd5493a80264fd9c627f3ebb9b22532b9d8284d8ec28475e914a5e8576"
+    },
+    {
+      "source": "NASA News",
       "title": "NASA’s SSPICY Mission to Demonstrate In-Space Inspection Technologies",
       "url": "https://www.nasa.gov/?p=1054943",
       "summary": "A new NASA-supported spacecraft will get up close to satellites that are no longer in service, demonstrating technologies that could support future in-space repairs and reduce orbital debris. The Small Spacecraft Propulsion and Inspection Capability (SSPICY) mission launched Oct. 1 from Vandenberg Space Force Base in California. The mission is a technology demonstration where an […]",
@@ -217,6 +225,14 @@
       "summary": "After more than seven months aboard the International Space Station, NASA’s SpaceX Crew-12 mission safely splashed down Thursday in the Pacific Ocean off the coast of Los Angeles. The crew members will discuss their science mission during a news conference at 3:30 p.m. EDT, Thursday, Oct. 15, at the agency’s Johnson Space Center in Houston. […]",
       "published": "Thu, 08 Oct 2026 17:02:28 +0000",
       "fingerprint": "2a8404f17116fb9432b4295fa7808a3a91c4061ce56df07708ea935e2e3e6289"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA, Energy Department Advance New Era of Nuclear-Powered Exploration",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1054933",
+      "summary": "Editor’s note: This release was updated Oct. 8, 2026 with the formal name of the summit. As the Golden Age of deep-space exploration begins, NASA and the U.S. Department of Energy are advancing the development of safe, reliable, next-generation nuclear technologies for space. Together, the agencies will supercharge civil space exploration, unlock bold scientific discovery, […]",
+      "published": "Thu, 08 Oct 2026 15:46:25 +0000",
+      "fingerprint": "658479513f413f679b9e217c191af5d310b91bc9b66e64755fd3927885c95317"
     },
     {
       "source": "NASA News",

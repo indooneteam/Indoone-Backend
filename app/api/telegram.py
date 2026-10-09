@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.capabilities.telegram import (
@@ -12,8 +12,6 @@ from app.capabilities.telegram import (
     set_webhook,
     validate_webhook_secret,
 )
-from app.capabilities.control_center import intake_enabled
-from app.capabilities.channel_ai_reply import process_telegram_update
 
 router = APIRouter(prefix="/telegram", tags=["telegram"])
 
@@ -103,16 +101,7 @@ async def telegram_delete_webhook(request: TelegramWebhookDeleteRequest) -> dict
 
 
 @router.post("/webhook/incoming")
-async def telegram_incoming(
-    update: dict[str, object],
-    request: Request,
-    background_tasks: BackgroundTasks,
-    x_telegram_bot_api_secret_token: str | None = Header(default=None),
-) -> dict[str, object]:
+async def telegram_incoming(update: dict[str, object], x_telegram_bot_api_secret_token: str | None = Header(default=None)) -> dict[str, bool]:
     if not validate_webhook_secret(x_telegram_bot_api_secret_token):
         raise HTTPException(status_code=401, detail="invalid telegram webhook secret")
-    if not intake_enabled("telegram"):
-        request.state.control_intake_blocked = True
-        return {"accepted": True, "processed": False, "reason": "intake_paused"}
-    background_tasks.add_task(process_telegram_update, update)
-    return {"accepted": True, "processed": False, "reason": "queued_for_processing"}
+    return {"accepted": True}

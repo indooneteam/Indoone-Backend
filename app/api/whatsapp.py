@@ -6,7 +6,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.capabilities.channel_ai_reply import process_whatsapp_message
-from app.capabilities.control_center import intake_enabled
 from app.capabilities.whatsapp import parse_webhook, probe_whatsapp, send_text_message, validate_signature, verify_webhook
 
 router = APIRouter(prefix="/integrations/whatsapp", tags=["whatsapp"])
@@ -55,9 +54,6 @@ async def webhook(request: Request, background_tasks: BackgroundTasks) -> dict[s
         raise HTTPException(status_code=503, detail="whatsapp webhook signature validation is not configured")
     if not validate_signature(app_secret, request.headers.get("X-Hub-Signature-256"), raw):
         raise HTTPException(status_code=403, detail="invalid whatsapp webhook signature")
-    if not intake_enabled("whatsapp"):
-        request.state.control_intake_blocked = True
-        return {"integration": "whatsapp_business", "received": True, "processed": False, "reason": "intake_paused"}
     try:
         payload = await request.json()
     except ValueError as exc:

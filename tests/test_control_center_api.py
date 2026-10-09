@@ -158,3 +158,35 @@ def test_individual_android_intake_pause_does_not_pause_other_control_plane_rout
     still_online = client.get("/api/control-center/status", headers=headers)
     assert still_online.status_code == 200
     assert still_online.json()["controls"]["channels"]["whatsapp"]["effective_intake_enabled"] is True
+
+
+
+def test_android_reply_off_skips_model_and_tracks_skipped_reply(tmp_path, monkeypatch):
+    import app.api.chat as chat_api
+
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.sqlite3"))
+    monkeypatch.setenv("INDOONE_CONTROL_CENTER_ADMIN_TOKEN", "control-center-admin-token-for-tests-123456789")
+    monkeypatch.setattr(chat_api, "current_user_id", lambda request: "test-user")
+
+    async def unexpected_generate(*args, **kwargs):
+        raise AssertionError("Android model generation must not happen when replies are disabled")
+
+    monkeypatch.setattr(chat_api, "generate_reply", unexpected_generate)
+    client = TestClient(app)
+    headers = _headers()
+
+    patch = client.patch(
+        "/api/control-center/settings",
+        headers=headers,
+        json={"global_replies_enabled": False},
+    )
+    assert patch.status_code == 200
+
+    response = client.post("/api/chat", json={"message": "hello"})
+    assert response.status_code == 503
+    assert "paused" in response.json()["detail"].lower()
+
+    metrics = client.get("/api/control-center/metrics", headers=headers)
+    assert metrics.status_code == 200
+    assert metrics.json()["channels"]["android"]["replies"]["skipped"] == 1

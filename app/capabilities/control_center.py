@@ -303,3 +303,56 @@ def get_control_activity(limit: int = 50) -> dict[str, Any]:
             for row in rows
         ],
     }
+
+
+def classify_request_channel(path: str, method: str = "GET") -> str | None:
+    """Map API traffic to the channel whose intake/reply behavior it belongs to."""
+    normalized = path.split("?", 1)[0]
+    if not normalized.startswith("/api/") or normalized.startswith("/api/control-center/"):
+        return None
+    if method.upper() == "GET" and is_webhook_verification_request(normalized, method):
+        return None
+    if normalized == "/api/integrations/whatsapp" or normalized.startswith("/api/integrations/whatsapp/") or normalized == "/api/whatsapp" or normalized.startswith("/api/whatsapp/"):
+        return "whatsapp"
+    if normalized == "/api/integrations/instagram" or normalized.startswith("/api/integrations/instagram/") or normalized == "/api/instagram" or normalized.startswith("/api/instagram/"):
+        return "instagram"
+    if normalized == "/api/telegram" or normalized.startswith("/api/telegram/"):
+        return "telegram"
+    return "android"
+
+
+def is_provider_webhook_request(path: str, method: str) -> bool:
+    """Provider callbacks authenticate using their own signature/secret inside their route."""
+    normalized = path.split("?", 1)[0]
+    method = method.upper()
+    return method == "POST" and normalized in {
+        "/api/integrations/whatsapp/webhook",
+        "/api/integrations/instagram/webhook",
+        "/api/telegram/webhook/incoming",
+    }
+
+
+def is_webhook_verification_request(path: str, method: str) -> bool:
+    normalized = path.split("?", 1)[0]
+    return method.upper() == "GET" and normalized in {
+        "/api/integrations/whatsapp/webhook",
+        "/api/integrations/instagram/webhook",
+    }
+
+
+def should_block_application_request(path: str, method: str) -> bool:
+    """Pause application API handlers without pausing health, admin, or provider acknowledgements."""
+    normalized = path.split("?", 1)[0]
+    method = method.upper()
+    if method == "OPTIONS" or not normalized.startswith("/api/"):
+        return False
+    if normalized.startswith("/api/control-center/") or is_provider_webhook_request(normalized, method):
+        return False
+    channel = classify_request_channel(normalized, method)
+    if channel is None:
+        return False
+    if not get_setting("global_intake_enabled"):
+        return True
+    if channel == "android" and not get_setting("android_intake_enabled"):
+        return True
+    return False

@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 
 from app.capabilities.channel_ai_reply import process_instagram_webhook
 from app.capabilities.instagram_webhooks import normalize_event, verify_challenge, verify_signature
+from app.capabilities.control_center import intake_enabled
 
 router = APIRouter(prefix="/integrations/instagram/webhook", tags=["instagram-webhooks"])
 
@@ -31,6 +32,9 @@ async def receive(request: Request, background_tasks: BackgroundTasks) -> dict[s
     raw_body = await request.body()
     try:
         verify_signature(raw_body, signature)
+        if not intake_enabled("instagram"):
+            request.state.control_intake_blocked = True
+            return {"integration": "instagram", "received": True, "processed": False, "reason": "intake_paused"}
         payload = json.loads(raw_body.decode("utf-8"))
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc

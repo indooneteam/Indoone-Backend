@@ -77,3 +77,84 @@ def test_control_center_rejects_invalid_settings_and_limits(tmp_path, monkeypatc
     assert invalid_patch.status_code == 422
     assert invalid_metrics.status_code == 422
     assert invalid_activity.status_code == 422
+
+
+def test_global_intake_pause_blocks_app_routes_but_leaves_health_and_admin_online(tmp_path, monkeypatch):
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.sqlite3"))
+    monkeypatch.setenv("INDOONE_CONTROL_CENTER_ADMIN_TOKEN", "control-center-admin-token-for-tests-123456789")
+    client = TestClient(app)
+    headers = _headers()
+
+    patch = client.patch("/api/control-center/settings", headers=headers, json={"global_intake_enabled": False})
+    assert patch.status_code == 200
+
+    blocked = client.get("/api/capabilities")
+    assert blocked.status_code == 503
+    assert blocked.json()["code"] == "INTAKE_PAUSED"
+
+    # The backend process and the admin plane remain live, so an operator can resume intake.
+    assert client.get("/health").status_code == 200
+    status = client.get("/api/control-center/status", headers=headers)
+    assert status.status_code == 200
+    assert status.json()["controls"]["global_intake_enabled"] is False
+
+    metrics = client.get("/api/control-center/metrics", headers=headers)
+    assert metrics.status_code == 200
+    assert metrics.json()["channels"]["android"]["requests"]["blocked"] == 1
+
+
+def test_signed_whatsapp_webhook_is_acknowledged_but_not_processed_while_intake_paused(tmp_path, monkeypatch):
+    import hashlib
+    import hmac
+    import json
+
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.sqlite3"))
+    monkeypatch.setenv("INDOONE_CONTROL_CENTER_ADMIN_TOKEN", "control-center-admin-token-for-tests-123456789")
+    monkeypatch.setenv("INDOONE_WHATSAPP_APP_SECRET", "whatsapp-test-app-secret")
+    client = TestClient(app)
+    headers = _headers()
+
+    paused = client.patch("/api/control-center/settings", headers=headers, json={"global_intake_enabled": False})
+    assert paused.status_code == 200
+
+    body = json.dumps({"object": "whatsapp_business_account", "entry": []}).encode()
+    signature = hmac.new(b"whatsapp-test-app-secret", body, hashlib.sha256).hexdigest()
+    response = client.post(
+        "/api/integrations/whatsapp/webhook",
+        content=body,
+        headers={"X-Hub-Signature-256": "sha256=" + signature},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["received"] is True
+    assert response.json()["processed"] is False
+    assert response.json()["reason"] == "intake_paused"
+
+    metrics = client.get("/api/control-center/metrics", headers=headers)
+    assert metrics.status_code == 200
+    assert metrics.json()["channels"]["whatsapp"]["requests"]["blocked"] == 1
+
+
+def test_individual_android_intake_pause_does_not_pause_other_control_plane_routes(tmp_path, monkeypatch):
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.sqlite3"))
+    monkeypatch.setenv("INDOONE_CONTROL_CENTER_ADMIN_TOKEN", "control-center-admin-token-for-tests-123456789")
+    client = TestClient(app)
+    headers = _headers()
+
+    patch = client.patch(
+        "/api/control-center/settings",
+        headers=headers,
+        json={"channels": {"android": {"intake_enabled": False}}},
+    )
+    assert patch.status_code == 200
+
+    blocked = client.get("/api/capabilities")
+    assert blocked.status_code == 503
+    assert blocked.json()["code"] == "INTAKE_PAUSED"
+
+    still_online = client.get("/api/control-center/status", headers=headers)
+    assert still_online.status_code == 200
+    assert still_online.json()["controls"]["channels"]["whatsapp"]["effective_intake_enabled"] is True

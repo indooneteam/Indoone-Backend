@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-09T06:13:51.972575+00:00",
+  "updated_at": "2026-10-09T22:41:27.278102+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -297,6 +297,30 @@
       "summary": "NASA is leveraging its expertise and enhancing its test facilities to help address a rare but persistent aviation hazard: icing that occurs when aircraft encounter unusually large, very cold water droplets in clouds. The problem, known as “supercooled large droplet icing,” occurs when aircraft fly through clouds containing unusually large drops of water that are […]",
       "published": "Mon, 05 Oct 2026 15:27:23 +0000",
       "fingerprint": "02dd6bc06d658946e4fabf3af179217bae545ab48331a4276a999b47a8c5234c"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Seeks US Industry Plans for Commercial Space Stations",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1055597",
+      "summary": "NASA is advancing American leadership in space by taking the next step toward a future where commercial space stations lead the way in low Earth orbit. On Friday, the agency released its final Request for Proposals inviting industry to submit plans for the next generation of commercial space stations. “In alignment with the President’s National […]",
+      "published": "Fri, 09 Oct 2026 18:11:44 +0000",
+      "fingerprint": "e063c36ae547d9f0619d1624b9257745a58f242d1c28a71b224a2ae5c1d10cbc"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Demonstrates Next-Generation Heat Shield Technologies",
+      "url": "https://www.nasa.gov/?p=1055289",
+      "summary": "NASA is testing heat shields that can keep astronauts safe as they return from missions to the Moon and Mars in an unusual way: by taking out the trash. When Northrop Grumman 24th cargo resupply mission for NASA undocked from the International Space Station, it carried a fleet of 12 small, experimental capsules designed to […]",
+      "published": "Fri, 09 Oct 2026 16:59:24 +0000",
+      "fingerprint": "b8c963bfe644e9833b6d01eb66049e7a34edb78b953798d302f8bc7f12a0375d"
+    },
+    {
+      "source": "NASA News",
+      "title": "Cosmic House of Mirrors",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1055170",
+      "summary": "Galaxies warp and multiply as if in a house of mirrors in this image from NASA’s James Webb Space Telescope released on Sept. 29, 2026. The brilliant golden galaxies seen here are part of a galaxy cluster called MACS J0454.1-0300. The orange galaxies bunched together on one side of the image, however, are not actually […]",
+      "published": "Fri, 09 Oct 2026 13:57:24 +0000",
+      "fingerprint": "e87ce6bf18471c53e88580d524655b6a3c2b1e2bcad94971f402ed1764c06a20"
     },
     {
       "source": "NASA News",

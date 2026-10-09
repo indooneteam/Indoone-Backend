@@ -16,7 +16,6 @@ from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
 from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
-from app.api.control_center import router as control_center_router
 from app.api.connector_security import enforce_connector_user_scope
 from app.api.contacts import router as contacts_router
 from app.api.conversations import router as conversations_router
@@ -49,15 +48,6 @@ from app.api.youtube_advanced import router as youtube_advanced_router
 from app.api.voice_session import router as voice_session_router
 from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
 from app.capabilities.store import initialize as initialize_capability_store
-from app.capabilities.control_center import (
-    classify_request_channel,
-    initialize_control_center,
-    is_control_center_admin_authorization,
-    is_provider_webhook_request,
-    is_webhook_verification_request,
-    record_control_event,
-    should_block_application_request,
-)
 
 logger = logging.getLogger("indoone.api")
 ai_service._detect_response_language = detect_response_language
@@ -140,7 +130,6 @@ async def lifespan(_: FastAPI):
     validate_environment_security_config()
     configure_sqlite_runtime()
     initialize_capability_store()
-    initialize_control_center()
     cleanup_task = asyncio.create_task(_conversation_cleanup_loop())
     try:
         yield
@@ -157,58 +146,15 @@ app = FastAPI(title="Indoone Backend", version="0.3.0", lifespan=lifespan)
 configure_network_security(app)
 
 
-def _record_control_request(request: Request, status_code: int) -> None:
-    channel = classify_request_channel(request.url.path, request.method)
-    if channel is None or is_webhook_verification_request(request.url.path, request.method):
-        return
-    if bool(getattr(request.state, "control_intake_blocked", False)):
-        status = "blocked"
-    else:
-        status = "success" if status_code < 400 else "failed"
-    try:
-        record_control_event(
-            channel=channel,
-            event_type="request",
-            status=status,
-            path=request.url.path,
-            http_status=status_code,
-        )
-    except Exception:
-        # Metrics must never take down the app endpoint being measured.
-        logger.exception(
-            "Control Center request metric recording failed",
-            extra={"path": request.url.path, "channel": channel},
-        )
-
-
 @app.middleware("http")
 async def request_context_middleware(request: Request, call_next):
     started = time.perf_counter()
     request_id = new_request_id()
     clear_principal_id()
     request.state.principal_id = ""
-    request.state.control_intake_blocked = False
     authorization = request.headers.get("authorization", "")
-    provider_webhook = is_provider_webhook_request(request.url.path, request.method)
-    is_preflight = request.method.upper() == "OPTIONS"
-    if should_block_application_request(request.url.path, request.method):
-        request.state.control_intake_blocked = True
-        response = _error_response_with_request_id(
-            503,
-            "INTAKE_PAUSED",
-            "application request intake is paused by the Control Center",
-            request_id,
-        )
-        _log_request(request, request_id, started, response.status_code)
-        _record_control_request(request, response.status_code)
-        return response
     principal = ""
-    is_control_center_path = request.url.path.startswith("/api/control-center/")
-    is_control_center_admin = is_control_center_path and is_control_center_admin_authorization(authorization)
-    if is_control_center_admin:
-        # Control Center has its own server-side token and must not impersonate an app user.
-        principal = ""
-    elif authorization and not provider_webhook and not is_preflight:
+    if authorization:
         try:
             principal = extract_principal(authorization)
             set_principal_id(principal)
@@ -216,7 +162,7 @@ async def request_context_middleware(request: Request, call_next):
             response = _error_response_with_request_id(401, "AUTH_INVALID", str(exc), request_id)
             _log_request(request, request_id, started, response.status_code)
             return response
-    elif not provider_webhook and not is_preflight and os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
+    elif os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
         response = _error_response_with_request_id(401, "AUTH_REQUIRED", "bearer authentication required", request_id)
         _log_request(request, request_id, started, response.status_code)
         return response
@@ -261,7 +207,6 @@ async def request_context_middleware(request: Request, call_next):
     if request.url.scheme == "https":
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     _log_request(request, request_id, started, response.status_code)
-    _record_control_request(request, response.status_code)
     return response
 
 
@@ -322,7 +267,6 @@ app.include_router(instagram_automation_router, prefix="/api")
 app.include_router(facebook_router, prefix="/api")
 app.include_router(google_photos_router, prefix="/api")
 app.include_router(canva_router, prefix="/api")
-app.include_router(control_center_router, prefix="/api")
 
 
 @app.get("/health")

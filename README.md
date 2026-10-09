@@ -77,29 +77,6 @@ Chat endpoint: `POST /api/chat` with `{ "message": "Hello Indoone" }`
 
 Until a trained checkpoint exists, the API returns a clear local-model-unavailable error. Once the checkpoint is present, the same `/api/chat` endpoint uses the Indoone local model runtime.
 
-
-## Live Backend Control Center
-
-The Control Center connects to these protected server endpoints:
-
-- `GET /api/control-center/status` — effective global and per-channel settings.
-- `PATCH /api/control-center/settings` — persist global intake/reply switches and per-channel intake/reply switches.
-- `GET /api/control-center/metrics` — request and reply counters by channel (default window: 24 hours; `window_hours` supports 1–720).
-- `GET /api/control-center/activity` — recent privacy-safe request/reply outcomes (route, status, HTTP code, time).
-
-All Control Center endpoints require `Authorization: Bearer <INDOONE_CONTROL_CENTER_ADMIN_TOKEN>`. The dedicated token must be configured on the backend host and be at least 32 characters. It is separate from ordinary app-user tokens. Never commit it, send it in chat, or expose it through a `VITE_*` frontend variable.
-
-Configure `INDOONE_ALLOWED_ORIGINS` to the exact dashboard origin, such as `https://indooneteam.github.io`. This variable is a comma-separated list and must not contain `*` in production. Configure the frontend with `VITE_INDOONE_API_BASE_URL` at build time or enter the HTTPS backend origin on the Control Center sign-in page.
-
-### Pause behavior
-
-- **Pause all app requests** leaves the server process and Control Center API running. Normal application `/api/` handlers are blocked with `503 INTAKE_PAUSED`; provider webhooks still validate their signature/secret and receive a safe acknowledgement without being processed or queued.
-- Each app has its own intake switch. Turning off WhatsApp intake does not turn off Instagram, Telegram, or Android intake.
-- **Pause AI replies** is independent from intake. Incoming events can still be accepted and counted, but an automated reply is skipped and recorded. WhatsApp, Instagram, Telegram, and Android reply switches are independent.
-- Metrics begin recording after this feature is deployed; older requests are not reconstructed. Message contents, access tokens, customer phone numbers, and provider payloads are not stored in the Control Center activity table.
-
-The repository change does not configure the live server automatically. Set the dedicated token and allowed origin in the server's private environment, then deploy/restart the backend and verify the protected status endpoint before using the dashboard.
-
 ## Important
 
 The current starter corpus is only for validating the data, training, and inference pipeline. A production-quality model requires a much larger, carefully licensed and curated dataset, stronger evaluation, safety testing, and substantially more training compute.

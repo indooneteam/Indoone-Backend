@@ -36,10 +36,23 @@ Connect the existing Indoone Backend Control Center to the existing Indoone back
 
 ## Acceptance checklist
 
-- [ ] Unit/API tests cover default settings, persistence, admin auth, and invalid setting payloads.
-- [ ] Global intake off blocks all application API handling while admin controls and health checks stay available.
-- [ ] Each channel's intake and reply settings are independent.
-- [ ] Metrics distinguish request totals/success/failure/blocked and replies sent/failed/skipped.
-- [ ] Dashboard reads real server state and metrics; it does not display sample metrics as live.
-- [ ] Existing model/provider logic is unchanged.
-- [ ] Backend CI and security smoke check are green.
+- [x] Unit/API tests cover default settings, persistence, admin auth, and invalid setting payloads.
+- [x] Global intake off blocks application API handling; health remains outside the intake gate and admin controls stay available with their dedicated token.
+- [x] Each channel's intake and reply settings are independent; tests cover WhatsApp, Instagram, Telegram, and Android intake/reply gates.
+- [x] Metrics distinguish request totals/success/failure/blocked and replies sent/failed/skipped.
+- [x] Dashboard reads real server state and metrics; it does not display sample metrics as live.
+- [x] Existing model/provider logic is unchanged.
+- [x] Backend CI and security smoke check are green on the latest feature branch commit.
+
+
+## Deployment state
+
+Repository implementation and CI verification are complete on the feature branch. The live Lightsail service has **not** been changed by these commits.
+
+Before enabling the public dashboard:
+1. Set a dedicated random token of at least 32 characters as `INDOONE_CONTROL_CENTER_ADMIN_TOKEN` in the backend service's private environment file. One way to generate a value on the server is `openssl rand -hex 32`; do not commit or share the value.
+2. Set `INDOONE_ALLOWED_ORIGINS` to the exact Control Center origin, e.g. `https://indooneteam.github.io` (comma-separated origins if more than one is required; never use a wildcard in production).
+3. Ensure the existing WhatsApp/Instagram provider signature secrets and Telegram webhook secret are configured correctly.
+4. Deploy/restart the backend and verify `GET /api/control-center/status` with the dedicated admin token before using the dashboard. The frontend sign-in page can accept the backend HTTPS origin and the token at runtime; the token is not a `VITE_*` build variable.
+
+The global intake pause does not stop the VM or ASGI process. It rejects normal application API handlers and acknowledges authenticated provider webhooks without processing or queueing them; the admin API remains available so intake can be resumed. Reply pause is separate from intake pause.

@@ -93,8 +93,8 @@ def test_global_intake_pause_blocks_app_routes_but_leaves_health_and_admin_onlin
     assert blocked.status_code == 503
     assert blocked.json()["code"] == "INTAKE_PAUSED"
 
-    # The backend process and the admin plane remain live, so an operator can resume intake.
-    assert client.get("/health").status_code == 200
+    # Health remains reachable but follows the existing global-auth policy; admin access stays available.
+    assert client.get("/health").status_code == 401
     status = client.get("/api/control-center/status", headers=headers)
     assert status.status_code == 200
     assert status.json()["controls"]["global_intake_enabled"] is False

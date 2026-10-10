@@ -46,6 +46,7 @@ from app.api.youtube_analytics import router as youtube_analytics_router
 from app.api.youtube_live import router as youtube_live_router
 from app.api.youtube_advanced import router as youtube_advanced_router
 from app.api.voice_session import router as voice_session_router
+from app.api.vibe import router as vibe_router
 from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
 from app.capabilities.store import initialize as initialize_capability_store
 
@@ -254,6 +255,7 @@ app.include_router(capabilities_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(files_router, prefix="/api")
 app.include_router(voice_session_router, prefix="/api")
+app.include_router(vibe_router, prefix="/api")
 app.include_router(contacts_router, prefix="/api")
 app.include_router(phone_router, prefix="/api")
 app.include_router(approvals_router, prefix="/api")

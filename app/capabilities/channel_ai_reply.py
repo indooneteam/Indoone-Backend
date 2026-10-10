@@ -12,7 +12,7 @@ from app.capabilities.store import (
     complete_channel_inbound_event,
     get_single_integration_token_user_id,
 )
-from app.capabilities.telegram import send_message as send_telegram_message
+from app.telegram.service import send_message as send_telegram_message
 from app.capabilities.whatsapp import send_text_message as send_whatsapp_text_message
 from app.ai.conversation_store import ConversationStore
 

@@ -40,7 +40,7 @@ from app.api.platform import router as platform_router
 from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
 from app.api.network_security import configure_network_security, validate_network_security_config
 from app.api.environment_security import validate_environment_security_config
-from app.api.telegram import router as telegram_router
+from app.telegram.api import router as telegram_router
 from app.api.whatsapp import router as whatsapp_router
 from app.api.youtube import router as youtube_router
 from app.api.youtube_analytics import router as youtube_analytics_router

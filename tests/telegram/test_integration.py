@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.capabilities import telegram
+from app.telegram import service as telegram
 
 
 @pytest.mark.asyncio

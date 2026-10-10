@@ -57,6 +57,13 @@ _PROCESS_STARTED = time.monotonic()
 _REQUEST_COUNT = 0
 _STATUS_COUNTS: dict[str, int] = {}
 _CONVERSATION_CLEANUP_STORE = ConversationStore()
+_PROVIDER_WEBHOOK_PATHS = frozenset(
+    {
+        "/api/integrations/whatsapp/webhook",
+        "/api/integrations/instagram/webhook",
+        "/api/telegram/webhook/incoming",
+    }
+)
 
 
 class RequestBodyTooLarge(Exception):
@@ -153,8 +160,9 @@ async def request_context_middleware(request: Request, call_next):
     clear_principal_id()
     request.state.principal_id = ""
     authorization = request.headers.get("authorization", "")
+    provider_webhook = request.url.path in _PROVIDER_WEBHOOK_PATHS and request.method.upper() in {"GET", "POST"}
     principal = ""
-    if authorization:
+    if authorization and not provider_webhook:
         try:
             principal = extract_principal(authorization)
             set_principal_id(principal)
@@ -162,7 +170,7 @@ async def request_context_middleware(request: Request, call_next):
             response = _error_response_with_request_id(401, "AUTH_INVALID", str(exc), request_id)
             _log_request(request, request_id, started, response.status_code)
             return response
-    elif os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
+    elif not provider_webhook and os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
         response = _error_response_with_request_id(401, "AUTH_REQUIRED", "bearer authentication required", request_id)
         _log_request(request, request_id, started, response.status_code)
         return response

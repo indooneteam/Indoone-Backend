@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 from urllib.parse import urlparse
+import re
 
 from app.web_research.research import ResearchResult
 
@@ -54,6 +55,42 @@ def extract_grounding_sources(response_data: dict[str, Any]) -> list[ResearchRes
         seen.add(key)
         results.append(ResearchResult(title=title, url=url, snippet=""))
     return results
+
+
+
+def split_sources_footer(answer: str) -> tuple[str, list[ResearchResult]]:
+    """Extract the source footer for structured API responses.
+
+    If the answer does not contain valid generated source links, it is returned
+    unchanged so normal model text is never silently removed.
+    """
+    marker = "\\n\\nSources:\\n"
+    marker_index = answer.rfind(marker)
+    if marker_index < 0:
+        return answer, []
+
+    footer = answer[marker_index + len(marker):]
+    pattern = re.compile(r"^- \\[(?P<title>.+?)\\]\\((?P<url>https?://[^)\\s]+)\\)$")
+    sources: list[ResearchResult] = []
+    seen: set[str] = set()
+    for line in footer.splitlines():
+        match = pattern.match(line.strip())
+        if not match:
+            continue
+        title = " ".join(match.group("title").split()).strip()[:500]
+        url = match.group("url").strip()
+        parsed = urlparse(url)
+        if not title or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            continue
+        key = url.rstrip("/").casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        sources.append(ResearchResult(title=title, url=url, snippet=""))
+
+    if not sources:
+        return answer, []
+    return answer[:marker_index].rstrip(), sources
 
 
 def format_sources_footer(answer: str, sources: list[ResearchResult]) -> str:

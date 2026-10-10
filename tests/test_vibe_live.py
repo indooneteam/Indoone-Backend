@@ -15,6 +15,7 @@ def test_gemini_live_setup_uses_audio_and_transcription() -> None:
     setup = vibe_api._setup_message("models/gemini-live-test", "Aoede")["setup"]
 
     assert setup["model"] == "models/gemini-live-test"
+    assert ".v1alpha.GenerativeService.BidiGenerateContent" in vibe_api._GEMINI_LIVE_ENDPOINT
     assert setup["generationConfig"]["responseModalities"] == ["AUDIO"]
     assert setup["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "MEDIUM"}
     tool = setup["tools"][0]["functionDeclarations"][0]
@@ -285,7 +286,7 @@ def test_vibe_executes_nonblocking_gmail_tool_and_tracks_interaction_status(
     function_response = tool_response["toolResponse"]["functionResponses"][0]
     assert function_response["id"] == "call-gmail-1"
     assert function_response["name"] == "search_gmail_messages"
-    assert function_response["response"]["result"] == {
+    assert function_response["response"]["output"] == {
         "ok": True,
         "count": 1,
         "emails": [{"subject": "Invoice"}],

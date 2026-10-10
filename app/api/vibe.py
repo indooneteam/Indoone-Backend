@@ -21,7 +21,7 @@ router = APIRouter(tags=["vibe"])
 
 _GEMINI_LIVE_ENDPOINT = (
     "wss://generativelanguage.googleapis.com/ws/"
-    "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+    "google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent"
 )
 _MAX_AUDIO_BYTES = 12_000_000
 _MAX_TEXT_LENGTH = 8_000
@@ -239,7 +239,7 @@ async def _execute_and_send_tool_response(
             "functionResponses": [{
                 "id": call_id,
                 "name": name,
-                "response": {"result": result},
+                "response": {"output": result},
             }],
         },
     }

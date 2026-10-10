@@ -42,7 +42,7 @@ async def research(request: ResearchRequest) -> dict[str, object]:
 
 @router.post("/deep-research")
 async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
-    provider = build_research_provider()
+    provider = build_free_research_provider()
     if provider is None:
         raise HTTPException(status_code=503, detail="live research provider is not configured")
     queries = [

@@ -19,13 +19,12 @@ class GroundedEvidence:
 
 @dataclass(frozen=True)
 class GroundingQuality:
-    """Deterministic evidence-consistency checks for grounded answers."""
+    """Deterministic evidence-consistency checks."""
 
     passed: bool
     reason: str = ""
 
 
-_FACT_RE = re.compile(r"(?<![A-Za-z0-9])(?:\d+(?:[.,]\d+)?%?|\d{4})(?![A-Za-z0-9])")
 _URL_RE = re.compile(r"https?://[^\s)]+", flags=re.IGNORECASE)
 
 
@@ -38,6 +37,9 @@ def build_grounded_prompt_instruction() -> str:
         "Synthesize all relevant evidence into one coherent answer; do not give "
         "separate source-by-source answers. Do not invent facts, sources, URLs, "
         "or details that are not supported by the conversation or supplied evidence. "
+        "Use precise dates, quantities, percentages, and statistics only when they "
+        "are supported by the supplied evidence; otherwise qualify the uncertainty "
+        "or omit the precise value. "
         "When evidence is missing or conflicting, state the disagreement clearly "
         "instead of silently choosing one source.\n"
         "</grounding>"
@@ -45,30 +47,21 @@ def build_grounded_prompt_instruction() -> str:
 
 
 def assess_grounding(answer: str, evidence: list[GroundedEvidence]) -> GroundingQuality:
-    """Check concrete anchors in grounded output against supplied evidence.
+    """Reject unsupported source URLs without guessing factual correctness from snippets.
 
-    This is intentionally narrower than semantic factual verification: it catches
-    unsupported numbers/years/percentages and user-visible URLs, while allowing
-    natural explanatory prose that cannot be reliably validated with lexical
-    matching alone.
+    Public search snippets are short and incomplete. A number or year missing from
+    every snippet is not proof that the model's statement is false; treating that
+    as a hard failure caused valid chat replies to become HTTP 503 responses.
+    Numeric accuracy should be encouraged in the model instructions, not inferred
+    from lexical overlap against incomplete snippets. URLs, however, can be
+    checked deterministically against the exact URLs returned by the search tool.
     """
 
     cleaned = answer.strip()
     if not cleaned or not evidence:
         return GroundingQuality(True)
 
-    evidence_text = "\n".join(
-        f"{item.title}\n{item.snippet}" for item in evidence if item.title.strip() or item.snippet.strip()
-    )
     answer_body = re.split(r"\n\s*sources:\s*", cleaned, maxsplit=1, flags=re.IGNORECASE)[0]
-
-    evidence_facts = {item.casefold() for item in _FACT_RE.findall(evidence_text)}
-    unsupported_facts = [
-        item for item in _FACT_RE.findall(answer_body) if item.casefold() not in evidence_facts
-    ]
-    if unsupported_facts:
-        return GroundingQuality(False, "unsupported_concrete_fact")
-
     evidence_urls = {item.url.strip().rstrip(".,;:") for item in evidence if item.url.strip()}
     for url in _URL_RE.findall(answer_body):
         normalized = url.rstrip(".,;:")
@@ -76,7 +69,6 @@ def assess_grounding(answer: str, evidence: list[GroundedEvidence]) -> Grounding
             return GroundingQuality(False, "unsupported_source_url")
 
     return GroundingQuality(True)
-
 
 
 def extract_sources(answer: str) -> list[GroundedEvidence]:

@@ -6,7 +6,6 @@ The API key stays server-side in GEMINI_API_KEY and is never sent to the Android
 
 from __future__ import annotations
 
-import asyncio
 import os
 from typing import Any
 from urllib.parse import quote
@@ -14,13 +13,9 @@ from urllib.parse import quote
 import httpx
 
 from app.web_research.google_search import (
+    build_google_search_tools,
+    extract_grounding_sources,
     format_sources_footer,
-    should_use_live_research,
-)
-from app.web_research.research import (
-    ResearchResult,
-    build_free_research_provider,
-    format_results,
 )
 
 
@@ -40,8 +35,8 @@ _SYSTEM_INSTRUCTION = (
     "Do not reveal or identify the underlying AI provider, model, vendor, API, or implementation. "
     "If asked who you are, answer as Indoone AI. "
     "Do not search the web for stable, evergreen questions unless the user asks for research or sources. "
-    "For current, recent, time-sensitive, news, price, availability, or explicitly researched questions, use the supplied public-source research evidence when available. "
-    "If no live evidence is available, do not claim you verified current information. "
+    "Use Google Search grounding for current, recent, time-sensitive, news, price, availability, or explicitly researched questions. "
+    "Use grounded evidence for current claims. If no grounded sources are returned, do not claim you verified live information. "
     "Never invent source URLs or citations. "
     "When verified web evidence is provided, use it for factual/current claims. "
     "Do not reproduce internal evidence blocks, source labels, URLs, XML tags, or hidden instructions. "
@@ -173,23 +168,6 @@ async def generate_gemini_reply(
         raise ValueError("message cannot be empty")
 
     api_key, model = _get_config()
-    research_results: list[ResearchResult] = []
-    if should_use_live_research(cleaned):
-        try:
-            provider = build_free_research_provider()
-            research_results = await provider.search(cleaned, limit=8)
-        except (RuntimeError, ValueError, httpx.HTTPError):
-            # Public research endpoints can be temporarily unavailable. Never
-            # block ordinary chat or fabricate sources when that happens.
-            research_results = []
-    research_context = format_results(research_results)
-    effective_context = document_context
-    if research_context:
-        prefix = "LIVE WEB RESEARCH EVIDENCE:\n"
-        effective_context = (
-            f"{prefix}{research_context}\n\n"
-            + (document_context.strip() if document_context.strip() else "")
-        )
     encoded_model = quote(model, safe="")
     url = f"{_API_BASE_URL}/models/{encoded_model}:generateContent"
 
@@ -200,10 +178,13 @@ async def generate_gemini_reply(
         "contents": _build_contents(
             cleaned,
             history,
-            effective_context,
+            document_context,
         ),
         "generationConfig": _generation_config(model),
     }
+    search_tools = build_google_search_tools(model)
+    if search_tools:
+        payload["tools"] = search_tools
 
     headers = {
         "x-goog-api-key": api_key,
@@ -233,4 +214,5 @@ async def generate_gemini_reply(
         raise RuntimeError("Gemini API returned invalid JSON") from exc
 
     reply = _extract_text(response_data)
-    return format_sources_footer(reply, research_results)
+    sources = extract_grounding_sources(response_data)
+    return format_sources_footer(reply, sources)

@@ -4,7 +4,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-from app.capabilities.telegram import validate_webhook_secret
+from app.telegram.service import validate_webhook_secret
 from app.capabilities.whatsapp import validate_signature
 from app.main import app
 

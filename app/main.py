@@ -14,6 +14,7 @@ from app.ai.language_detection import detect_response_language
 from app.api.approvals import router as approvals_router
 from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
+from app.web_research.api import router as web_research_router
 from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
 from app.api.connector_security import enforce_connector_user_scope
@@ -252,6 +253,7 @@ app.include_router(conversations_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")
+app.include_router(web_research_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(files_router, prefix="/api")
 app.include_router(voice_session_router, prefix="/api")

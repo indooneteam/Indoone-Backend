@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from app.ai.research import (
+from app.web_research.research import (
     CrossrefResearchProvider,
     TavilyResearchProvider,
     GoogleNewsRssResearchProvider,
@@ -205,7 +205,7 @@ def test_build_research_provider_uses_tavily_when_configured(monkeypatch) -> Non
     monkeypatch.setenv("INDOONE_TAVILY_API_KEY", "test-key")
     monkeypatch.delenv("INDOONE_RESEARCH_URL", raising=False)
 
-    provider = __import__("app.ai.research", fromlist=["build_research_provider"]).build_research_provider()
+    provider = __import__("app.web_research.research", fromlist=["build_research_provider"]).build_research_provider()
 
     assert isinstance(provider, MultiSourceResearchProvider)
     assert [type(item) for item in provider.providers] == [TavilyResearchProvider]
@@ -244,7 +244,7 @@ def test_google_news_rss_provider_parses_sources(monkeypatch) -> None:
 
     monkeypatch.setattr(httpx, "AsyncClient", lambda *args, **kwargs: FakeClient())
 
-    from app.ai.research import GoogleNewsRssResearchProvider
+    from app.web_research.research import GoogleNewsRssResearchProvider
     results = asyncio.run(GoogleNewsRssResearchProvider().search("Indoone AI", limit=2))
 
     assert results[0] == ResearchResult("AI update", "https://example.com/a", "Fresh AI evidence.")
@@ -253,7 +253,7 @@ def test_google_news_rss_provider_parses_sources(monkeypatch) -> None:
 
 def test_build_research_provider_uses_multi_source_defaults(monkeypatch) -> None:
     monkeypatch.delenv("INDOONE_RESEARCH_URL", raising=False)
-    from app.ai.research import (
+    from app.web_research.research import (
         CrossrefResearchProvider,
         GoogleNewsRssResearchProvider,
         MultiSourceResearchProvider,
@@ -585,7 +585,7 @@ def test_research_relevance_supports_unicode_terms() -> None:
         "ಕ್ರೀಡೆ ಮತ್ತು ಪಂದ್ಯಗಳ ಕುರಿತು ಮಾಹಿತಿ.",
     )
 
-    from app.ai.research import _is_relevant_research_result
+    from app.web_research.research import _is_relevant_research_result
 
     assert _is_relevant_research_result(query, relevant)
     assert not _is_relevant_research_result(query, unrelated)
@@ -602,7 +602,7 @@ def test_research_relevance_crosses_common_kannada_english_terms() -> None:
 
 
 def test_research_terms_keep_kannada_vowel_signs_attached() -> None:
-    from app.ai.research import _research_terms
+    from app.web_research.research import _research_terms
 
     assert "ಭಾರತದ" in _research_terms("ಭಾರತದ")
     assert "ರಾಷ್ಟ್ರಪತಿ" in _research_terms("ರಾಷ್ಟ್ರಪತಿ")

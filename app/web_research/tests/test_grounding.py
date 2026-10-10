@@ -1,6 +1,6 @@
 import pytest
 
-from app.ai.grounding import (
+from app.web_research.grounding import (
     GroundedEvidence,
     append_sources,
     extract_sources,

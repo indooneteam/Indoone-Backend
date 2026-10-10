@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
 from app.ai.service import generate_reply
+from app.web_research.google_search import split_sources_footer
 from app.api.dependencies import current_user_id
 
 router = APIRouter(tags=["chat"])
@@ -70,7 +71,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     try:
-        reply = await generate_reply(
+        reply_with_sources = await generate_reply(
             body.message,
             history=history,
             document_context=document_context,
@@ -78,10 +79,12 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    reply, web_sources = split_sources_footer(reply_with_sources)
+
     try:
         _store.append(
             conversation_id,
-            [("user", body.message), ("assistant", reply)],
+            [("user", body.message), ("assistant", reply_with_sources)],
             user_id=user_id,
         )
     except PermissionError as exc:
@@ -91,5 +94,5 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     return ChatResponse(
         conversation_id=conversation_id,
         reply=reply,
-        sources=[],
+        sources=[ChatSource(title=source.title, url=source.url) for source in web_sources],
     )

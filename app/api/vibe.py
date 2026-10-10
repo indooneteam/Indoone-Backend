@@ -6,12 +6,14 @@ import binascii
 import json
 import logging
 import os
+from typing import Any
 from urllib.parse import urlencode
 
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.auth import extract_principal
+from app.capabilities.gmail import get_gmail_message, list_gmail_messages
 
 logger = logging.getLogger("indoone.vibe")
 
@@ -25,6 +27,8 @@ _MAX_AUDIO_BYTES = 12_000_000
 _MAX_TEXT_LENGTH = 8_000
 _MAX_WS_MESSAGE_BYTES = _MAX_AUDIO_BYTES + 1_000_000
 _DEFAULT_VOICE = "Aoede"
+_DEFAULT_LIVE_MODEL = "gemini-3.8-live-extended-thinking"
+_DEFAULT_THINKING_LEVEL = "medium"
 
 _SYSTEM_INSTRUCTION = (
     "You are Indoone AI, having a natural real-time voice conversation with the user. "
@@ -35,23 +39,55 @@ _SYSTEM_INSTRUCTION = (
 )
 
 
-def _live_config() -> tuple[str, str, str]:
+def _live_config() -> tuple[str, str, str, str]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured")
 
-    model = os.getenv("GEMINI_LIVE_MODEL", "").strip()
-    if not model:
-        raise RuntimeError("GEMINI_LIVE_MODEL is not configured")
-
+    model = os.getenv("GEMINI_LIVE_MODEL", _DEFAULT_LIVE_MODEL).strip() or _DEFAULT_LIVE_MODEL
     if not model.startswith("models/"):
         model = f"models/{model}"
+    if model != "models/gemini-3.8-live-extended-thinking":
+        raise RuntimeError(
+            "Indoone Vibe requires GEMINI_LIVE_MODEL=gemini-3.8-live-extended-thinking"
+        )
 
     voice = os.getenv("GEMINI_LIVE_VOICE", _DEFAULT_VOICE).strip() or _DEFAULT_VOICE
-    return api_key, model, voice
+    thinking_level = os.getenv("GEMINI_LIVE_THINKING_LEVEL", _DEFAULT_THINKING_LEVEL).strip().lower()
+    if thinking_level not in {"low", "medium", "high"}:
+        raise RuntimeError("GEMINI_LIVE_THINKING_LEVEL must be low, medium, or high")
+    return api_key, model, voice, thinking_level
 
 
-def _setup_message(model: str, voice: str) -> dict[str, object]:
+_GMAIL_SEARCH_TOOL: dict[str, object] = {
+    "name": "search_gmail_messages",
+    "description": (
+        "Search the authenticated user's connected Gmail messages and return read-only "
+        "email metadata and snippets. Use for requests to check, track, find, or summarize "
+        "recent/unread emails. This tool never sends, modifies, archives, or deletes email."
+    ),
+    "behavior": "NON_BLOCKING",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "query": {
+                "type": "STRING",
+                "description": (
+                    "Gmail search query, for example newer_than:7d, is:unread, "
+                    "from:someone@example.com newer_than:30d, or a subject keyword."
+                ),
+            },
+            "max_results": {
+                "type": "INTEGER",
+                "description": "Maximum number of emails to inspect, from 1 to 10.",
+            },
+        },
+        "required": ["query"],
+    },
+}
+
+
+def _setup_message(model: str, voice: str, thinking_level: str = _DEFAULT_THINKING_LEVEL) -> dict[str, object]:
     return {
         "setup": {
             "model": model,
@@ -62,14 +98,102 @@ def _setup_message(model: str, voice: str) -> dict[str, object]:
                         "prebuiltVoiceConfig": {"voiceName": voice},
                     },
                 },
+                "thinkingConfig": {"thinkingLevel": thinking_level.upper()},
             },
             "systemInstruction": {
-                "parts": [{"text": _SYSTEM_INSTRUCTION}],
+                "parts": [{
+                    "text": (
+                        _SYSTEM_INSTRUCTION
+                        + " When the user asks to check or track their email, use the "
+                        "search_gmail_messages tool rather than guessing. Only report "
+                        "email details returned by the tool. The tool is read-only; never "
+                        "claim an email was sent or changed. If Gmail is not connected, "
+                        "explain that the user must connect Gmail in Indoone."
+                    )
+                }],
             },
+            "tools": [{"functionDeclarations": [_GMAIL_SEARCH_TOOL]}],
             "inputAudioTranscription": {},
             "outputAudioTranscription": {},
         },
     }
+
+
+def _header_value(message: dict[str, Any], header_name: str) -> str:
+    payload = message.get("payload")
+    if not isinstance(payload, dict):
+        return ""
+    headers = payload.get("headers")
+    if not isinstance(headers, list):
+        return ""
+    wanted = header_name.casefold()
+    for header in headers:
+        if isinstance(header, dict) and str(header.get("name", "")).casefold() == wanted:
+            return str(header.get("value") or "")[:400]
+    return ""
+
+
+async def _search_gmail_for_voice(user_id: str, args: dict[str, Any]) -> dict[str, object]:
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return {"ok": False, "error": "Please specify which emails to search for."}
+    if len(query) > 300:
+        return {"ok": False, "error": "Email search query is too long."}
+    try:
+        max_results = int(args.get("max_results", 5))
+    except (TypeError, ValueError):
+        max_results = 5
+    max_results = max(1, min(max_results, 10))
+
+    try:
+        listing = await list_gmail_messages(user_id, query=query, max_results=max_results)
+    except ValueError:
+        return {
+            "ok": False,
+            "error": "Gmail is not connected to this Indoone account. Connect Gmail and try again.",
+        }
+    except Exception:
+        logger.exception("Vibe Gmail search failed")
+        return {"ok": False, "error": "Gmail search failed. Check the Gmail connection and try again."}
+
+    messages = listing.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return {"ok": True, "query": query, "count": 0, "emails": []}
+
+    emails: list[dict[str, str]] = []
+    for item in messages[:max_results]:
+        if not isinstance(item, dict):
+            continue
+        message_id = str(item.get("id") or "").strip()
+        if not message_id:
+            continue
+        try:
+            result = await get_gmail_message(user_id, message_id)
+        except Exception:
+            logger.warning("Vibe could not fetch one Gmail message's metadata")
+            continue
+        message = result.get("message")
+        if not isinstance(message, dict):
+            continue
+        emails.append({
+            "message_id": message_id,
+            "thread_id": str(message.get("threadId") or item.get("threadId") or "")[:256],
+            "date": _header_value(message, "Date"),
+            "from": _header_value(message, "From"),
+            "to": _header_value(message, "To"),
+            "subject": _header_value(message, "Subject"),
+            "snippet": str(message.get("snippet") or "")[:600],
+        })
+
+    return {"ok": True, "query": query, "count": len(emails), "emails": emails}
+
+
+async def _execute_voice_tool(user_id: str, name: str, args: object) -> dict[str, object]:
+    if name != "search_gmail_messages":
+        return {"ok": False, "error": "This voice action is not available."}
+    if not isinstance(args, dict):
+        return {"ok": False, "error": "Invalid email-search arguments."}
+    return await _search_gmail_for_voice(user_id, args)
 
 
 def _google_error_detail(message: dict[str, object], api_key: str) -> str:
@@ -92,10 +216,47 @@ async def _send_error(websocket: WebSocket, detail: str) -> None:
         pass
 
 
+async def _send_gemini_message(gemini, send_lock: asyncio.Lock, payload: dict[str, object]) -> None:
+    async with send_lock:
+        await gemini.send(json.dumps(payload))
+
+
+async def _execute_and_send_tool_response(
+    user_id: str,
+    call: dict[str, Any],
+    gemini,
+    send_lock: asyncio.Lock,
+) -> None:
+    call_id = str(call.get("id") or "").strip()
+    name = str(call.get("name") or "").strip()
+    if not call_id or not name:
+        logger.warning("Gemini Live returned a function call without an ID or name")
+        return
+
+    result = await _execute_voice_tool(user_id, name, call.get("args", {}))
+    payload: dict[str, object] = {
+        "toolResponse": {
+            "functionResponses": [{
+                "id": call_id,
+                "name": name,
+                "response": {"result": result},
+            }],
+        },
+    }
+    try:
+        await _send_gemini_message(gemini, send_lock, payload)
+    except Exception:
+        logger.exception("Could not return Vibe tool result to Gemini Live")
+
+
 async def _handle_gemini_message(
     websocket: WebSocket,
     raw_message: str | bytes,
     api_key: str,
+    user_id: str,
+    gemini,
+    send_lock: asyncio.Lock,
+    tool_tasks: set[asyncio.Task],
 ) -> bool:
     try:
         message = json.loads(raw_message)
@@ -111,6 +272,30 @@ async def _handle_gemini_message(
         return False
 
     server_content = message.get("serverContent", message.get("server_content"))
+    status = message.get("interactionStatus", message.get("interaction_status"))
+    if status is None and isinstance(server_content, dict):
+        status = server_content.get("interactionStatus", server_content.get("interaction_status"))
+    if status:
+        status_text = str(status).strip().upper()
+        if status_text in {"IN_PROGRESS", "IDLE"}:
+            await websocket.send_json({
+                "type": "status",
+                "interaction_status": status_text,
+            })
+
+    tool_call = message.get("toolCall", message.get("tool_call"))
+    if isinstance(tool_call, dict):
+        calls = tool_call.get("functionCalls", tool_call.get("function_calls"))
+        if isinstance(calls, list):
+            for call in calls:
+                if not isinstance(call, dict):
+                    continue
+                task = asyncio.create_task(
+                    _execute_and_send_tool_response(user_id, call, gemini, send_lock)
+                )
+                tool_tasks.add(task)
+                task.add_done_callback(tool_tasks.discard)
+
     if not isinstance(server_content, dict):
         return True
 
@@ -176,14 +361,16 @@ async def _handle_gemini_message(
             "text": "".join(fallback_text),
         })
 
-    # Deliver transcript/status events before audio chunks from the same server
-    # message so the UI can update its transcript before playback begins.
     for event in [*events, *audio_events]:
         await websocket.send_json(event)
 
     return True
 
-async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
+async def _forward_client_messages(
+    websocket: WebSocket,
+    gemini,
+    send_lock: asyncio.Lock,
+) -> None:
     while True:
         raw = await websocket.receive_text()
         try:
@@ -203,7 +390,9 @@ async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
 
         if message_type == "stop":
             try:
-                await gemini.send(json.dumps({"realtimeInput": {"audioStreamEnd": True}}))
+                await _send_gemini_message(
+                    gemini, send_lock, {"realtimeInput": {"audioStreamEnd": True}}
+                )
             except Exception:
                 pass
             try:
@@ -214,7 +403,9 @@ async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
             return
 
         if message_type == "audio_stream_end":
-            await gemini.send(json.dumps({"realtimeInput": {"audioStreamEnd": True}}))
+            await _send_gemini_message(
+                gemini, send_lock, {"realtimeInput": {"audioStreamEnd": True}}
+            )
             continue
 
         if message_type == "text":
@@ -224,7 +415,9 @@ async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
             if len(text) > _MAX_TEXT_LENGTH:
                 await websocket.send_json({"type": "error", "detail": "Text message is too long."})
                 continue
-            await gemini.send(json.dumps({"realtimeInput": {"text": text}}))
+            await _send_gemini_message(
+                gemini, send_lock, {"realtimeInput": {"text": text}}
+            )
             continue
 
         if message_type == "audio":
@@ -247,29 +440,43 @@ async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
             if not mime_type.lower().startswith("audio/pcm"):
                 await websocket.send_json({"type": "error", "detail": "Vibe requires raw PCM audio input."})
                 continue
-            await gemini.send(json.dumps({
+            await _send_gemini_message(gemini, send_lock, {
                 "realtimeInput": {
                     "audio": {
                         "data": audio_base64,
                         "mimeType": mime_type,
                     },
                 },
-            }))
+            })
             continue
 
         await websocket.send_json({"type": "error", "detail": "Unsupported Vibe message type."})
 
-
-async def _forward_gemini_messages(websocket: WebSocket, gemini, api_key: str) -> None:
+async def _forward_gemini_messages(
+    websocket: WebSocket,
+    gemini,
+    api_key: str,
+    user_id: str,
+    send_lock: asyncio.Lock,
+    tool_tasks: set[asyncio.Task],
+) -> None:
     while True:
         message = await gemini.recv()
-        if not await _handle_gemini_message(websocket, message, api_key):
+        if not await _handle_gemini_message(
+            websocket, message, api_key, user_id, gemini, send_lock, tool_tasks
+        ):
             return
 
 
-async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str) -> None:
-    client_task = asyncio.create_task(_forward_client_messages(websocket, gemini))
-    gemini_task = asyncio.create_task(_forward_gemini_messages(websocket, gemini, api_key))
+async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str, user_id: str) -> None:
+    send_lock = asyncio.Lock()
+    tool_tasks: set[asyncio.Task] = set()
+    client_task = asyncio.create_task(_forward_client_messages(websocket, gemini, send_lock))
+    gemini_task = asyncio.create_task(
+        _forward_gemini_messages(
+            websocket, gemini, api_key, user_id, send_lock, tool_tasks
+        )
+    )
     tasks = {client_task, gemini_task}
 
     try:
@@ -287,19 +494,21 @@ async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str) -> None:
         for task in tasks:
             if not task.done():
                 task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-
+        for task in tuple(tool_tasks):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, *tool_tasks, return_exceptions=True)
 
 async def _vibe_live_session(websocket: WebSocket) -> None:
     try:
-        extract_principal(websocket.headers.get("authorization", ""))
+        user_id = extract_principal(websocket.headers.get("authorization", ""))
     except Exception:
         # WebSockets bypass the HTTP request middleware, so authenticate explicitly.
         await websocket.close(code=1008, reason="authentication required")
         return
 
     try:
-        api_key, model, voice = _live_config()
+        api_key, model, voice, thinking_level = _live_config()
     except RuntimeError as exc:
         await websocket.accept()
         await _send_error(websocket, str(exc))
@@ -317,7 +526,7 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
             ping_timeout=20,
             max_size=_MAX_WS_MESSAGE_BYTES,
         ) as gemini:
-            await gemini.send(json.dumps(_setup_message(model, voice)))
+            await gemini.send(json.dumps(_setup_message(model, voice, thinking_level)))
             first_message = await asyncio.wait_for(gemini.recv(), timeout=30)
             try:
                 setup_response = json.loads(first_message)
@@ -335,7 +544,7 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
                 "protocol": "indoone.vibe.v1",
                 "capabilities": ["audio_input", "audio_output", "text_input", "transcription", "interruption"],
             })
-            await _run_live_proxy(websocket, gemini, api_key)
+            await _run_live_proxy(websocket, gemini, api_key, user_id)
     except WebSocketDisconnect:
         return
     except Exception as exc:

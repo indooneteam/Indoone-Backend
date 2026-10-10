@@ -4,11 +4,13 @@ Backend foundation for the Indoone AI + automation platform.
 
 ## AI direction
 
-Indoone's chat service uses one direct answer path:
+Indoone chat keeps local-model inference as the default:
 
-`/api/chat` → local Indoone model provider → Indoone Transformer V1 checkpoint
+`/api/chat` → configured provider → local Indoone model (default) or Google Gemini (when explicitly enabled)
 
-For a normal chat request, the backend does not route the question through web research, retrieval, a canned answer, a fallback answer, or an external hosted LLM. The model receives the actual user request directly. Existing conversation history and an explicitly attached document are included only when the user supplies or continues that context.
+Set `INDOONE_MODEL_BACKEND=gemini` to route chat through Google AI Studio/Gemini. In this mode, supported Gemma 4 models can decide whether a question needs live web research. When needed, the backend runs the bounded `search_web` tool against keyless public sources (Wikipedia, Wikidata, Google News RSS, OpenAlex, and Crossref), passes the evidence back to the model, and includes validated source links in the chat response. No separate paid search-provider API key is required for this free provider set. Stable questions can be answered without a search.
+
+The Gemini key stays server-side in `GEMINI_API_KEY`; the chat provider is not enabled merely because a key exists. Explicitly configure `INDOONE_MODEL_BACKEND=gemini` and a supported `GEMINI_MODEL` to activate it. If the variable is absent or set to `local`, the existing local-model answer path remains unchanged.
 
 The trained model artifacts are loaded only from the private `Indoone-Model` GitHub Release configured by:
 
@@ -34,7 +36,7 @@ The processed dataset is a generated training artifact and should not be committ
 
 - `app/api/` — HTTP API routes
 - `app/ai/` — local AI runtime and domain modules; `app/ai/training/` contains model training and evaluation
-- `app/web_research/` — isolated live web research providers, Google Search grounding, evidence validation, source formatting, and research-specific tests
+- `app/web_research/` — free public search providers, model-selected search tool, evidence validation, source formatting, and research-specific tests
 - `data/raw/` — source training documents
 - `data/knowledge/` — approved local knowledge sources
 - `data/processed/` — generated train/validation/test splits

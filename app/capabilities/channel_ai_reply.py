@@ -51,10 +51,9 @@ async def process_whatsapp_message(message: dict[str, Any]) -> bool:
     if not _enabled("INDOONE_WHATSAPP_AI_REPLY_ENABLED"):
         return False
 
-    owner_user_id = _owner_user_id("INDOONE_WHATSAPP_AI_OWNER_USER_ID")
-    if not owner_user_id:
-        logger.error("WhatsApp AI reply is enabled but owner user id is not configured")
-        return False
+    # WhatsApp already uses server-side credentials. The Firebase UID is optional
+    # for conversation ownership; use a dedicated internal scope when it is absent.
+    owner_user_id = _owner_user_id("INDOONE_WHATSAPP_AI_OWNER_USER_ID") or "system:whatsapp"
 
     message_id = str(message.get("id") or "").strip()
     sender_id = str(message.get("from") or "").strip()

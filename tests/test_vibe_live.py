@@ -43,15 +43,36 @@ class FakeGeminiWebSocket:
             await self.incoming.put(json.dumps({"setupComplete": {}}))
             return
 
+        if "toolResponse" in message:
+            await self.incoming.put(json.dumps({
+                "interactionStatus": "IDLE",
+                "serverContent": {
+                    "outputTranscription": {"text": "I found one unread email."},
+                },
+            }))
+            return
+
         realtime = message.get("realtimeInput")
         if not isinstance(realtime, dict):
             return
         if isinstance(realtime.get("text"), str):
-            await self.incoming.put(json.dumps({
-                "serverContent": {
-                    "outputTranscription": {"text": "Hello from Gemini Live."},
-                },
-            }))
+            if "email" in realtime["text"].lower():
+                await self.incoming.put(json.dumps({
+                    "interactionStatus": "IN_PROGRESS",
+                    "toolCall": {
+                        "functionCalls": [{
+                            "id": "call-gmail-1",
+                            "name": "search_gmail_messages",
+                            "args": {"query": "is:unread", "max_results": 2},
+                        }],
+                    },
+                }))
+            else:
+                await self.incoming.put(json.dumps({
+                    "serverContent": {
+                        "outputTranscription": {"text": "Hello from Gemini Live."},
+                    },
+                }))
         elif isinstance(realtime.get("audio"), dict):
             await self.incoming.put(json.dumps({
                 "serverContent": {
@@ -216,6 +237,58 @@ def test_search_gmail_for_voice_uses_user_scoped_read_only_tools(monkeypatch: py
             "subject": "Updated estimate",
             "snippet": "Please review the updated estimate.",
         }],
+    }
+
+
+
+def test_vibe_executes_nonblocking_gmail_tool_and_tracks_interaction_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
+    monkeypatch.setenv("GEMINI_LIVE_MODEL", "gemini-3.8-live-extended-thinking")
+    monkeypatch.setattr(vibe_api, "extract_principal", lambda authorization: "firebase-user-1")
+
+    async def fake_tool(user_id: str, name: str, args: object) -> dict[str, object]:
+        assert user_id == "firebase-user-1"
+        assert name == "search_gmail_messages"
+        assert args == {"query": "is:unread", "max_results": 2}
+        await asyncio.sleep(0)
+        return {"ok": True, "count": 1, "emails": [{"subject": "Invoice"}]}
+
+    monkeypatch.setattr(vibe_api, "_execute_voice_tool", fake_tool)
+    upstream = FakeGeminiWebSocket()
+    monkeypatch.setattr(vibe_api.websockets, "connect", lambda *args, **kwargs: upstream)
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/api/vibe/session",
+            headers={"Authorization": "Bearer test-firebase-token"},
+        ) as websocket:
+            assert websocket.receive_json()["type"] == "ready"
+            websocket.send_json({"type": "text", "text": "Check my unread email"})
+
+            in_progress = websocket.receive_json()
+            assert in_progress == {"type": "status", "interaction_status": "IN_PROGRESS"}
+            idle = websocket.receive_json()
+            assert idle == {"type": "status", "interaction_status": "IDLE"}
+            transcript = websocket.receive_json()
+            assert transcript == {
+                "type": "transcript",
+                "role": "assistant",
+                "text": "I found one unread email.",
+            }
+
+            websocket.send_json({"type": "stop"})
+            assert websocket.receive_json()["type"] == "stopped"
+
+    tool_response = next(message for message in upstream.sent if "toolResponse" in message)
+    function_response = tool_response["toolResponse"]["functionResponses"][0]
+    assert function_response["id"] == "call-gmail-1"
+    assert function_response["name"] == "search_gmail_messages"
+    assert function_response["response"]["result"] == {
+        "ok": True,
+        "count": 1,
+        "emails": [{"subject": "Invoice"}],
     }
 
 

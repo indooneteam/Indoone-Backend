@@ -90,3 +90,22 @@ def test_extract_sources_parses_deterministic_source_list() -> None:
         GroundedEvidence("First source", "https://example.com/one"),
         GroundedEvidence("Second source", "https://example.org/two"),
     ]
+
+
+def test_split_grounded_sources_returns_numbered_links_and_preserves_unparsed_text() -> None:
+    from app.web_research.grounding import split_grounded_sources
+
+    text = "\n".join([
+        "Current answer.",
+        "",
+        "Sources:",
+        "1. Official update — https://example.com/update",
+        "2. Public report — https://example.org/report",
+    ])
+    answer, sources = split_grounded_sources(text)
+    assert answer == "Current answer."
+    assert [(source.title, source.url) for source in sources] == [
+        ("Official update", "https://example.com/update"),
+        ("Public report", "https://example.org/report"),
+    ]
+    assert split_grounded_sources("Just a simple answer.") == ("Just a simple answer.", [])

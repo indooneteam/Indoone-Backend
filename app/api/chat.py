@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
 from app.ai.service import generate_reply
-from app.web_research.google_search import split_sources_footer
+from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
 
 router = APIRouter(tags=["chat"])
@@ -79,7 +79,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    reply, web_sources = split_sources_footer(reply_with_sources)
+    reply, web_sources = split_grounded_sources(reply_with_sources)
 
     try:
         _store.append(

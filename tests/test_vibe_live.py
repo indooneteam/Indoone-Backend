@@ -337,3 +337,14 @@ def test_vibe_websocket_rejects_missing_authentication() -> None:
         with pytest.raises(WebSocketDisconnect):
             with client.websocket_connect("/api/vibe/session"):
                 pass
+
+
+
+def test_vibe_identity_uses_product_name_without_forcing_a_fixed_phrase() -> None:
+    setup = vibe_api._setup_message("models/gemini-live-test", "Aoede")["setup"]
+    instruction = setup["systemInstruction"]["parts"][0]["text"]
+
+    assert "Indoone Vibe" in instruction
+    assert "Do not call the live voice experience only 'Indoone AI'." in instruction
+    assert "Do not force the fixed phrase 'I am Indoone Vibe' as a standalone reply" in instruction
+    assert "live voice experience in the Indoone app" in instruction

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-10T12:36:52.128863+00:00",
+  "updated_at": "2026-10-10T21:47:38.745716+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -273,6 +273,14 @@
       "summary": "“I want to be able to look at a rocket launch and say, ‘I touched a piece of this.’” That’s how Richard Spolzino describes the thing he’s chasing. Not a title, not a specific mission, not even NASA itself, just the ability to point at something real and know his work made it possible. At […]",
       "published": "Sun, 04 Oct 2026 19:10:59 +0000",
       "fingerprint": "e8775aaa1bf6616a227281e1dfdf241c0ed99c7a92b8bfe1dccb3176c3e6a710"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Conduct Flyover, Engage NFL Fans at MetLife Stadium",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1055705",
+      "summary": "As part of the agency’s Inspiration Tour flyover, NASA Administrator Jared Isaacman will pilot one of three F-5 fighter jets to kick off the New York Jets vs. Cleveland Browns game in East Rutherford, New Jersey, on Sunday, Oct. 11. NASA team members will engage with fans at the agency’s Experience Zone, located at the […]",
+      "published": "Sat, 10 Oct 2026 14:18:59 +0000",
+      "fingerprint": "db7588421d09e7cefb0ed11138795530fb3667ff7c798b782a3a7a449b0b0a2e"
     },
     {
       "source": "NASA News",

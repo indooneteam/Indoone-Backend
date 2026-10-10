@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -35,7 +34,7 @@ def test_provider_webhooks_use_provider_validation_without_app_bearer(monkeypatc
     assert whatsapp.status_code == 403
     assert "invalid whatsapp webhook signature" in whatsapp.text
     assert instagram.status_code == 403
-    assert "invalid instagram webhook signature" in instagram.text
+    assert "instagram webhook signature is invalid" in instagram.text
     assert telegram.status_code == 401
     assert "invalid telegram webhook secret" in telegram.text
     assert all("bearer authentication required" not in response.text for response in (whatsapp, instagram, telegram))

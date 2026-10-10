@@ -1,7 +1,7 @@
 import pytest
 
 from app.ai import service
-from app.ai.research import ResearchResult
+from app.web_research.research import ResearchResult
 
 
 @pytest.mark.asyncio

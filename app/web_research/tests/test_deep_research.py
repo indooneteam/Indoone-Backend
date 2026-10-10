@@ -1,4 +1,4 @@
-from app.ai.research import ResearchResult, build_deep_research_queries, merge_research_results
+from app.web_research.research import ResearchResult, build_deep_research_queries, merge_research_results
 
 
 def test_build_deep_research_queries_is_deterministic() -> None:

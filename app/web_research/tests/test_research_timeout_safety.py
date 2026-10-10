@@ -1,6 +1,6 @@
 import pytest
 
-from app.ai.research import HttpResearchProvider
+from app.web_research.research import HttpResearchProvider
 
 
 def test_research_provider_rejects_excessive_timeout() -> None:

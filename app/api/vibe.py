@@ -366,7 +366,11 @@ async def _handle_gemini_message(
 
     return True
 
-async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
+async def _forward_client_messages(
+    websocket: WebSocket,
+    gemini,
+    send_lock: asyncio.Lock,
+) -> None:
     while True:
         raw = await websocket.receive_text()
         try:
@@ -386,7 +390,9 @@ async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
 
         if message_type == "stop":
             try:
-                await gemini.send(json.dumps({"realtimeInput": {"audioStreamEnd": True}}))
+                await _send_gemini_message(
+                    gemini, send_lock, {"realtimeInput": {"audioStreamEnd": True}}
+                )
             except Exception:
                 pass
             try:
@@ -397,7 +403,9 @@ async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
             return
 
         if message_type == "audio_stream_end":
-            await gemini.send(json.dumps({"realtimeInput": {"audioStreamEnd": True}}))
+            await _send_gemini_message(
+                gemini, send_lock, {"realtimeInput": {"audioStreamEnd": True}}
+            )
             continue
 
         if message_type == "text":
@@ -407,7 +415,9 @@ async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
             if len(text) > _MAX_TEXT_LENGTH:
                 await websocket.send_json({"type": "error", "detail": "Text message is too long."})
                 continue
-            await gemini.send(json.dumps({"realtimeInput": {"text": text}}))
+            await _send_gemini_message(
+                gemini, send_lock, {"realtimeInput": {"text": text}}
+            )
             continue
 
         if message_type == "audio":
@@ -430,29 +440,43 @@ async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
             if not mime_type.lower().startswith("audio/pcm"):
                 await websocket.send_json({"type": "error", "detail": "Vibe requires raw PCM audio input."})
                 continue
-            await gemini.send(json.dumps({
+            await _send_gemini_message(gemini, send_lock, {
                 "realtimeInput": {
                     "audio": {
                         "data": audio_base64,
                         "mimeType": mime_type,
                     },
                 },
-            }))
+            })
             continue
 
         await websocket.send_json({"type": "error", "detail": "Unsupported Vibe message type."})
 
-
-async def _forward_gemini_messages(websocket: WebSocket, gemini, api_key: str) -> None:
+async def _forward_gemini_messages(
+    websocket: WebSocket,
+    gemini,
+    api_key: str,
+    user_id: str,
+    send_lock: asyncio.Lock,
+    tool_tasks: set[asyncio.Task],
+) -> None:
     while True:
         message = await gemini.recv()
-        if not await _handle_gemini_message(websocket, message, api_key):
+        if not await _handle_gemini_message(
+            websocket, message, api_key, user_id, gemini, send_lock, tool_tasks
+        ):
             return
 
 
-async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str) -> None:
-    client_task = asyncio.create_task(_forward_client_messages(websocket, gemini))
-    gemini_task = asyncio.create_task(_forward_gemini_messages(websocket, gemini, api_key))
+async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str, user_id: str) -> None:
+    send_lock = asyncio.Lock()
+    tool_tasks: set[asyncio.Task] = set()
+    client_task = asyncio.create_task(_forward_client_messages(websocket, gemini, send_lock))
+    gemini_task = asyncio.create_task(
+        _forward_gemini_messages(
+            websocket, gemini, api_key, user_id, send_lock, tool_tasks
+        )
+    )
     tasks = {client_task, gemini_task}
 
     try:
@@ -470,19 +494,21 @@ async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str) -> None:
         for task in tasks:
             if not task.done():
                 task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-
+        for task in tuple(tool_tasks):
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, *tool_tasks, return_exceptions=True)
 
 async def _vibe_live_session(websocket: WebSocket) -> None:
     try:
-        extract_principal(websocket.headers.get("authorization", ""))
+        user_id = extract_principal(websocket.headers.get("authorization", ""))
     except Exception:
         # WebSockets bypass the HTTP request middleware, so authenticate explicitly.
         await websocket.close(code=1008, reason="authentication required")
         return
 
     try:
-        api_key, model, voice = _live_config()
+        api_key, model, voice, thinking_level = _live_config()
     except RuntimeError as exc:
         await websocket.accept()
         await _send_error(websocket, str(exc))
@@ -500,7 +526,7 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
             ping_timeout=20,
             max_size=_MAX_WS_MESSAGE_BYTES,
         ) as gemini:
-            await gemini.send(json.dumps(_setup_message(model, voice)))
+            await gemini.send(json.dumps(_setup_message(model, voice, thinking_level)))
             first_message = await asyncio.wait_for(gemini.recv(), timeout=30)
             try:
                 setup_response = json.loads(first_message)
@@ -518,7 +544,7 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
                 "protocol": "indoone.vibe.v1",
                 "capabilities": ["audio_input", "audio_output", "text_input", "transcription", "interruption"],
             })
-            await _run_live_proxy(websocket, gemini, api_key)
+            await _run_live_proxy(websocket, gemini, api_key, user_id)
     except WebSocketDisconnect:
         return
     except Exception as exc:

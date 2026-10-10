@@ -114,8 +114,11 @@ async def _handle_gemini_message(
     if not isinstance(server_content, dict):
         return True
 
+    events: list[dict[str, object]] = []
+    audio_events: list[dict[str, object]] = []
+
     if server_content.get("interrupted") is True:
-        await websocket.send_json({"type": "interrupted"})
+        events.append({"type": "interrupted"})
 
     input_transcription = server_content.get(
         "inputTranscription",
@@ -124,7 +127,7 @@ async def _handle_gemini_message(
     if isinstance(input_transcription, dict):
         text = str(input_transcription.get("text") or "").strip()
         if text:
-            await websocket.send_json({"type": "transcript", "role": "user", "text": text})
+            events.append({"type": "transcript", "role": "user", "text": text})
 
     output_transcription = server_content.get(
         "outputTranscription",
@@ -147,9 +150,13 @@ async def _handle_gemini_message(
                 inline_data = part.get("inlineData", part.get("inline_data"))
                 if isinstance(inline_data, dict):
                     audio_data = inline_data.get("data")
-                    mime_type = str(inline_data.get("mimeType") or inline_data.get("mime_type") or "audio/pcm;rate=24000")
+                    mime_type = str(
+                        inline_data.get("mimeType")
+                        or inline_data.get("mime_type")
+                        or "audio/pcm;rate=24000"
+                    )
                     if isinstance(audio_data, str) and audio_data:
-                        await websocket.send_json({
+                        audio_events.append({
                             "type": "audio",
                             "audio_base64": audio_data,
                             "mime_type": mime_type,
@@ -161,16 +168,20 @@ async def _handle_gemini_message(
                     fallback_text.append(text.strip())
 
     if assistant_text:
-        await websocket.send_json({"type": "transcript", "role": "assistant", "text": assistant_text})
+        events.append({"type": "transcript", "role": "assistant", "text": assistant_text})
     elif fallback_text:
-        await websocket.send_json({
+        events.append({
             "type": "transcript",
             "role": "assistant",
             "text": "".join(fallback_text),
         })
 
-    return True
+    # Deliver transcript/status events before audio chunks from the same server
+    # message so the UI can update its transcript before playback begins.
+    for event in [*events, *audio_events]:
+        await websocket.send_json(event)
 
+    return True
 
 async def _forward_client_messages(websocket: WebSocket, gemini) -> None:
     while True:

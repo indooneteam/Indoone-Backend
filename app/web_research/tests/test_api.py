@@ -67,6 +67,6 @@ def test_research_endpoint_returns_503_when_provider_unavailable(monkeypatch: py
 def test_main_registers_research_routes() -> None:
     from app.main import app
 
-    paths = {getattr(route, "path", "") for route in app.routes}
+    paths = set(app.openapi()["paths"])
     assert "/api/research" in paths
     assert "/api/deep-research" in paths

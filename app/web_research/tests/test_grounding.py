@@ -13,6 +13,7 @@ def test_grounded_prompt_instruction_requires_evidence_discipline() -> None:
     instruction = build_grounded_prompt_instruction()
     assert "Do not invent facts" in instruction
     assert "supplied evidence" in instruction
+    assert "precise dates, quantities, percentages, and statistics" in instruction
 
 
 def test_grounded_prompt_requires_one_synthesized_answer() -> None:
@@ -57,13 +58,25 @@ def test_grounding_accepts_answer_supported_by_evidence() -> None:
     assert result.passed is True
 
 
-def test_grounding_rejects_unsupported_concrete_fact() -> None:
+def test_grounding_does_not_fail_only_because_number_is_absent_from_snippets() -> None:
+    # Search snippets are incomplete; lexical absence is not proof a numeric claim is false.
+    # The model prompt asks for evidence-supported precision, while hard failures focus
+    # on source URLs that can be checked deterministically.
     evidence = [
-        GroundedEvidence("Pricing", "https://example.com/pricing", "Indoone Pro costs 499 rupees per month.")
+        GroundedEvidence("Pricing", "https://example.com/pricing", "Pricing details are available.")
     ]
-    result = assess_grounding("Indoone Pro costs 599 rupees per month.", evidence)
-    assert result.passed is False
-    assert result.reason == "unsupported_concrete_fact"
+    result = assess_grounding("The plan was updated in 2026 and costs 599 rupees.", evidence)
+    assert result.passed is True
+
+
+def test_append_sources_keeps_research_answer_when_compact_snippets_omit_year() -> None:
+    evidence = [
+        GroundedEvidence("Research report", "https://example.com/report", "The report summarizes the project.")
+    ]
+    result = append_sources("The project update was published in 2025.", evidence)
+    assert "published in 2025" in result
+    assert "Sources:" in result
+    assert "https://example.com/report" in result
 
 
 def test_grounding_allows_nonnumeric_explanatory_prose() -> None:

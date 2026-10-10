@@ -179,7 +179,8 @@ async def process_telegram_update(update: dict[str, Any]) -> bool:
     if not chat_id or not message_id or not text:
         return False
 
-    event_key = f"telegram:{update_id or f'{chat_id}:{message_id}'}"
+    dedupe_id = update_id or f"{chat_id}:{message_id}"
+    event_key = f"telegram:{dedupe_id}"
     if not claim_channel_inbound_event(event_key):
         return False
 

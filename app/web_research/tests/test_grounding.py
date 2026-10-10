@@ -58,15 +58,24 @@ def test_grounding_accepts_answer_supported_by_evidence() -> None:
     assert result.passed is True
 
 
-def test_grounding_does_not_fail_only_because_number_is_absent_from_snippets() -> None:
-    # Search snippets are incomplete; lexical absence is not proof a numeric claim is false.
-    # The model prompt asks for evidence-supported precision, while hard failures focus
-    # on source URLs that can be checked deterministically.
+def test_grounding_flags_unsupported_concrete_fact_for_evaluation() -> None:
     evidence = [
-        GroundedEvidence("Pricing", "https://example.com/pricing", "Pricing details are available.")
+        GroundedEvidence("Pricing", "https://example.com/pricing", "Indoone Pro costs 499 rupees per month.")
     ]
-    result = assess_grounding("The plan was updated in 2026 and costs 599 rupees.", evidence)
-    assert result.passed is True
+    result = assess_grounding("Indoone Pro costs 599 rupees per month.", evidence)
+    assert result.passed is False
+    assert result.reason == "unsupported_concrete_fact"
+
+
+def test_append_sources_does_not_turn_numeric_mismatch_into_chat_failure() -> None:
+    evidence = [
+        GroundedEvidence("Pricing", "https://example.com/pricing", "Indoone Pro costs 499 rupees per month.")
+    ]
+    # The checker flags this mismatch for evaluation, but production must not return
+    # HTTP 503 solely because compact search snippets don't prove a numerical claim.
+    result = append_sources("Indoone Pro costs 599 rupees per month.", evidence)
+    assert "costs 599 rupees" in result
+    assert "https://example.com/pricing" in result
 
 
 def test_append_sources_keeps_research_answer_when_compact_snippets_omit_year() -> None:

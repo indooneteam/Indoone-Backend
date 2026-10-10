@@ -65,23 +65,24 @@ def assess_grounding(answer: str, evidence: list[GroundedEvidence]) -> Grounding
     if not cleaned or not evidence:
         return GroundingQuality(True)
 
+    answer_body = re.split(r"\n\s*sources:\s*", cleaned, maxsplit=1, flags=re.IGNORECASE)[0]
+    evidence_urls = {item.url.strip().rstrip(".,;:") for item in evidence if item.url.strip()}
+    # Validate URLs first so an unrelated URL cannot slip through merely because
+    # a numeric mismatch was also detected in the same answer.
+    for url in _URL_RE.findall(answer_body):
+        normalized = url.rstrip(".,;:")
+        if normalized not in evidence_urls:
+            return GroundingQuality(False, "unsupported_source_url")
+
     evidence_text = "\n".join(
         f"{item.title}\n{item.snippet}" for item in evidence if item.title.strip() or item.snippet.strip()
     )
-    answer_body = re.split(r"\n\s*sources:\s*", cleaned, maxsplit=1, flags=re.IGNORECASE)[0]
-
     evidence_facts = {item.casefold() for item in _FACT_RE.findall(evidence_text)}
     unsupported_facts = [
         item for item in _FACT_RE.findall(answer_body) if item.casefold() not in evidence_facts
     ]
     if unsupported_facts:
         return GroundingQuality(False, "unsupported_concrete_fact")
-
-    evidence_urls = {item.url.strip().rstrip(".,;:") for item in evidence if item.url.strip()}
-    for url in _URL_RE.findall(answer_body):
-        normalized = url.rstrip(".,;:")
-        if normalized not in evidence_urls:
-            return GroundingQuality(False, "unsupported_source_url")
 
     return GroundingQuality(True)
 
@@ -145,7 +146,7 @@ def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
 
 
 def split_grounded_sources(answer: str) -> tuple[str, list[GroundedEvidence]]:
-    """Split a validated numbered Sources footer for clients that render source cards."""
+    """Split a validated numbered Sources footer for chat clients."""
     cleaned = answer.strip()
     parts = re.split(r"\n\s*sources:\s*\n", cleaned, maxsplit=1, flags=re.IGNORECASE)
     if len(parts) != 2:

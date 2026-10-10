@@ -198,3 +198,34 @@ def test_instagram_message_adapter_uses_gateway_when_configured(monkeypatch):
     assert result["result"]["message_id"] == "ig-sent-id"
     assert captured["channel"] == "instagram"
     assert captured["target_url"] == "https://graph.instagram.com/me/messages"
+
+
+
+def test_loopback_gateway_http_is_allowed_for_same_server(monkeypatch):
+    monkeypatch.setenv("INDOONE_CONTROL_GATEWAY_ORIGIN", "http://127.0.0.1:8080")
+    monkeypatch.setenv("INDOONE_GATEWAY_BACKEND_TOKEN", SERVICE_TOKEN)
+    monkeypatch.setenv("INDOONE_GATEWAY_REQUIRED", "true")
+    calls = []
+
+    class LocalClient(FakeAsyncClient):
+        async def post(self, url, *, headers=None, json=None):
+            calls.append((url, headers))
+            return httpx.Response(
+                200,
+                json={"status": "ok", "channel": "whatsapp", "allowed": False},
+                request=httpx.Request("POST", url),
+            )
+
+    monkeypatch.setattr(control_gateway.httpx, "AsyncClient", LocalClient)
+    result = asyncio.run(control_gateway.check_reply_allowed("whatsapp"))
+    assert result is False
+    assert calls[0][0] == "http://127.0.0.1:8080/internal/replies/check/whatsapp"
+    assert calls[0][1] == {"Authorization": f"Bearer {SERVICE_TOKEN}"}
+
+
+def test_non_loopback_http_gateway_origin_is_rejected(monkeypatch):
+    monkeypatch.setenv("INDOONE_CONTROL_GATEWAY_ORIGIN", "http://gateway.example:8080")
+    monkeypatch.setenv("INDOONE_GATEWAY_BACKEND_TOKEN", SERVICE_TOKEN)
+    monkeypatch.setenv("INDOONE_GATEWAY_REQUIRED", "true")
+    with pytest.raises(RuntimeError, match="HTTPS or local loopback HTTP"):
+        asyncio.run(control_gateway.check_reply_allowed("whatsapp"))

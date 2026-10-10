@@ -34,17 +34,28 @@ async def send_via_control_gateway(
         return None
 
     parsed = urlsplit(origin)
-    if (
-        parsed.scheme != "https"
-        or not parsed.hostname
-        or parsed.username
-        or parsed.password
-        or parsed.path not in {"", "/"}
-        or parsed.query
-        or parsed.fragment
-        or parsed.port not in {None, 443}
-    ):
-        raise RuntimeError("Control Gateway origin must be a valid HTTPS origin without a path")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise RuntimeError("Control Gateway origin is invalid") from exc
+    valid_common = bool(
+        parsed.hostname
+        and not parsed.username
+        and not parsed.password
+        and parsed.path in {"", "/"}
+        and not parsed.query
+        and not parsed.fragment
+    )
+    valid_https = parsed.scheme == "https" and port in {None, 443}
+    valid_loopback = (
+        parsed.scheme == "http"
+        and parsed.hostname in {"127.0.0.1", "::1"}
+        and port == 8080
+    )
+    if not valid_common or not (valid_https or valid_loopback):
+        raise RuntimeError(
+            "Control Gateway origin must be HTTPS or local loopback HTTP on port 8080"
+        )
 
     service_token = os.getenv("INDOONE_GATEWAY_BACKEND_TOKEN", "").strip()
     if len(service_token) < 32:
@@ -98,17 +109,24 @@ async def check_reply_allowed(channel: str) -> bool | None:
         port = parsed.port
     except ValueError as exc:
         raise RuntimeError("Control Gateway origin is invalid") from exc
-    if (
-        parsed.scheme != "https"
-        or not parsed.hostname
-        or parsed.username
-        or parsed.password
-        or parsed.path not in {"", "/"}
-        or parsed.query
-        or parsed.fragment
-        or port not in {None, 443}
-    ):
-        raise RuntimeError("Control Gateway origin must be a valid HTTPS origin without a path")
+    valid_common = bool(
+        parsed.hostname
+        and not parsed.username
+        and not parsed.password
+        and parsed.path in {"", "/"}
+        and not parsed.query
+        and not parsed.fragment
+    )
+    valid_https = parsed.scheme == "https" and port in {None, 443}
+    valid_loopback = (
+        parsed.scheme == "http"
+        and parsed.hostname in {"127.0.0.1", "::1"}
+        and port == 8080
+    )
+    if not valid_common or not (valid_https or valid_loopback):
+        raise RuntimeError(
+            "Control Gateway origin must be HTTPS or local loopback HTTP on port 8080"
+        )
 
     service_token = os.getenv("INDOONE_GATEWAY_BACKEND_TOKEN", "").strip()
     if len(service_token) < 32:

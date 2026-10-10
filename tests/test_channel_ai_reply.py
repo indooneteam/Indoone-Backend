@@ -143,3 +143,87 @@ def test_whatsapp_reply_works_without_owner_uid(tmp_path, monkeypatch) -> None:
         "system:whatsapp",
     )
     assert history == [("user", "Hello without UID"), ("assistant", "Reply without UID")]
+
+def test_instagram_reply_resolves_existing_connected_account_without_uid(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.sqlite3"))
+    monkeypatch.setenv("INDOONE_INSTAGRAM_AI_REPLY_ENABLED", "true")
+    monkeypatch.delenv("INDOONE_INSTAGRAM_AI_OWNER_USER_ID", raising=False)
+    monkeypatch.delenv("INDOONE_INSTAGRAM_ACCOUNT_ID", raising=False)
+    store.upsert_integration_token(
+        "instagram-account-owner",
+        "instagram",
+        b"encrypted-token-placeholder",
+        None,
+        "Bearer",
+        "instagram_business_manage_messages",
+        None,
+    )
+
+    conversation_db = tmp_path / "conversations.sqlite3"
+    monkeypatch.setattr(
+        channel_ai_reply,
+        "ConversationStore",
+        lambda: ConversationStore(conversation_db),
+    )
+    sent: list[tuple[str, str, str]] = []
+
+    async def fake_generate_reply(message: str, history=None, document_context: str = "") -> str:
+        assert message == "Hello from Instagram"
+        return "Instagram reply"
+
+    async def fake_send(user_id: str, recipient_id: str, text: str, approved: bool = False) -> dict[str, object]:
+        sent.append((user_id, recipient_id, text))
+        assert approved is True
+        return {"sent": True}
+
+    monkeypatch.setattr(channel_ai_reply, "generate_reply", fake_generate_reply)
+    monkeypatch.setattr(channel_ai_reply, "send_instagram_text_message", fake_send)
+
+    event = {
+        "sender": {"id": "ig-customer-7"},
+        "recipient": {"id": "ig-business-2"},
+        "message": {"mid": "mid.no-owner-uid", "text": "Hello from Instagram"},
+    }
+    assert asyncio.run(channel_ai_reply.process_instagram_messaging_event(event)) is True
+    assert sent == [("instagram-account-owner", "ig-customer-7", "Instagram reply")]
+
+
+def test_telegram_reply_uses_existing_bot_token_without_owner_uid(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.sqlite3"))
+    monkeypatch.setenv("INDOONE_TELEGRAM_BOT_TOKEN", "configured-bot-token")
+    monkeypatch.delenv("INDOONE_TELEGRAM_AI_REPLY_ENABLED", raising=False)
+    monkeypatch.delenv("INDOONE_TELEGRAM_AI_OWNER_USER_ID", raising=False)
+
+    conversation_db = tmp_path / "conversations.sqlite3"
+    monkeypatch.setattr(
+        channel_ai_reply,
+        "ConversationStore",
+        lambda: ConversationStore(conversation_db),
+    )
+    sent: list[tuple[str, str]] = []
+
+    async def fake_generate_reply(message: str, history=None, document_context: str = "") -> str:
+        assert message == "Hello from Telegram"
+        return "Telegram reply"
+
+    async def fake_send(chat_id: str, text: str, approved: bool = False, parse_mode: str = "") -> dict[str, object]:
+        sent.append((chat_id, text))
+        assert approved is True
+        return {"sent": True}
+
+    monkeypatch.setattr(channel_ai_reply, "generate_reply", fake_generate_reply)
+    monkeypatch.setattr(channel_ai_reply, "send_telegram_message", fake_send)
+
+    update = {
+        "update_id": 9876,
+        "message": {
+            "message_id": 25,
+            "chat": {"id": 123456},
+            "from": {"id": 123456},
+            "text": "Hello from Telegram",
+        },
+    }
+    assert asyncio.run(channel_ai_reply.process_telegram_update(update)) is True
+    assert asyncio.run(channel_ai_reply.process_telegram_update(update)) is False
+    assert sent == [("123456", "Telegram reply")]
+

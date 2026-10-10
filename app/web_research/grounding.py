@@ -130,3 +130,15 @@ def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
         title = item.title.strip() or item.url.strip()
         lines.append(f"{index}. {title} — {item.url.strip()}")
     return "\n".join(lines)
+
+
+def split_grounded_sources(answer: str) -> tuple[str, list[GroundedEvidence]]:
+    """Split a validated numbered Sources footer for chat clients."""
+    cleaned = answer.strip()
+    parts = re.split(r"\n\s*sources:\s*\n", cleaned, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) != 2:
+        return answer, []
+    sources = extract_sources(cleaned)
+    if not sources:
+        return answer, []
+    return parts[0].rstrip(), sources

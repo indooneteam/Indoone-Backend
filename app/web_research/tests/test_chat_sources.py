@@ -27,7 +27,7 @@ def test_chat_returns_grounded_sources_and_persists_full_reply(monkeypatch) -> N
         assert message == "What is the latest update?"
         return (
             "Current answer.\n\nSources:\n"
-            "- [Official update](https://example.com/update)"
+            "1. Official update — https://example.com/update"
         )
 
     monkeypatch.setattr(chat_api, "_store", FakeStore())
@@ -58,5 +58,5 @@ def test_chat_returns_grounded_sources_and_persists_full_reply(monkeypatch) -> N
         ("Official update", "https://example.com/update")
     ]
     stored = captured["messages"]
-    assert stored[1][1].endswith("- [Official update](https://example.com/update)")
+    assert stored[1][1].endswith("1. Official update — https://example.com/update")
     assert captured["user_id"] == "user-one"

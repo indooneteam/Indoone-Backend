@@ -6,12 +6,14 @@ import binascii
 import json
 import logging
 import os
+from typing import Any
 from urllib.parse import urlencode
 
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.auth import extract_principal
+from app.capabilities.gmail import get_gmail_message, list_gmail_messages
 
 logger = logging.getLogger("indoone.vibe")
 
@@ -25,6 +27,8 @@ _MAX_AUDIO_BYTES = 12_000_000
 _MAX_TEXT_LENGTH = 8_000
 _MAX_WS_MESSAGE_BYTES = _MAX_AUDIO_BYTES + 1_000_000
 _DEFAULT_VOICE = "Aoede"
+_DEFAULT_LIVE_MODEL = "gemini-3.8-live-extended-thinking"
+_DEFAULT_THINKING_LEVEL = "medium"
 
 _SYSTEM_INSTRUCTION = (
     "You are Indoone AI, having a natural real-time voice conversation with the user. "
@@ -35,23 +39,55 @@ _SYSTEM_INSTRUCTION = (
 )
 
 
-def _live_config() -> tuple[str, str, str]:
+def _live_config() -> tuple[str, str, str, str]:
     api_key = os.getenv("GEMINI_API_KEY", "").strip()
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not configured")
 
-    model = os.getenv("GEMINI_LIVE_MODEL", "").strip()
-    if not model:
-        raise RuntimeError("GEMINI_LIVE_MODEL is not configured")
-
+    model = os.getenv("GEMINI_LIVE_MODEL", _DEFAULT_LIVE_MODEL).strip() or _DEFAULT_LIVE_MODEL
     if not model.startswith("models/"):
         model = f"models/{model}"
+    if model != "models/gemini-3.8-live-extended-thinking":
+        raise RuntimeError(
+            "Indoone Vibe requires GEMINI_LIVE_MODEL=gemini-3.8-live-extended-thinking"
+        )
 
     voice = os.getenv("GEMINI_LIVE_VOICE", _DEFAULT_VOICE).strip() or _DEFAULT_VOICE
-    return api_key, model, voice
+    thinking_level = os.getenv("GEMINI_LIVE_THINKING_LEVEL", _DEFAULT_THINKING_LEVEL).strip().lower()
+    if thinking_level not in {"low", "medium", "high"}:
+        raise RuntimeError("GEMINI_LIVE_THINKING_LEVEL must be low, medium, or high")
+    return api_key, model, voice, thinking_level
 
 
-def _setup_message(model: str, voice: str) -> dict[str, object]:
+_GMAIL_SEARCH_TOOL: dict[str, object] = {
+    "name": "search_gmail_messages",
+    "description": (
+        "Search the authenticated user's connected Gmail messages and return read-only "
+        "email metadata and snippets. Use for requests to check, track, find, or summarize "
+        "recent/unread emails. This tool never sends, modifies, archives, or deletes email."
+    ),
+    "behavior": "NON_BLOCKING",
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {
+            "query": {
+                "type": "STRING",
+                "description": (
+                    "Gmail search query, for example newer_than:7d, is:unread, "
+                    "from:someone@example.com newer_than:30d, or a subject keyword."
+                ),
+            },
+            "max_results": {
+                "type": "INTEGER",
+                "description": "Maximum number of emails to inspect, from 1 to 10.",
+            },
+        },
+        "required": ["query"],
+    },
+}
+
+
+def _setup_message(model: str, voice: str, thinking_level: str = _DEFAULT_THINKING_LEVEL) -> dict[str, object]:
     return {
         "setup": {
             "model": model,
@@ -62,14 +98,102 @@ def _setup_message(model: str, voice: str) -> dict[str, object]:
                         "prebuiltVoiceConfig": {"voiceName": voice},
                     },
                 },
+                "thinkingConfig": {"thinkingLevel": thinking_level.upper()},
             },
             "systemInstruction": {
-                "parts": [{"text": _SYSTEM_INSTRUCTION}],
+                "parts": [{
+                    "text": (
+                        _SYSTEM_INSTRUCTION
+                        + " When the user asks to check or track their email, use the "
+                        "search_gmail_messages tool rather than guessing. Only report "
+                        "email details returned by the tool. The tool is read-only; never "
+                        "claim an email was sent or changed. If Gmail is not connected, "
+                        "explain that the user must connect Gmail in Indoone."
+                    )
+                }],
             },
+            "tools": [{"functionDeclarations": [_GMAIL_SEARCH_TOOL]}],
             "inputAudioTranscription": {},
             "outputAudioTranscription": {},
         },
     }
+
+
+def _header_value(message: dict[str, Any], header_name: str) -> str:
+    payload = message.get("payload")
+    if not isinstance(payload, dict):
+        return ""
+    headers = payload.get("headers")
+    if not isinstance(headers, list):
+        return ""
+    wanted = header_name.casefold()
+    for header in headers:
+        if isinstance(header, dict) and str(header.get("name", "")).casefold() == wanted:
+            return str(header.get("value") or "")[:400]
+    return ""
+
+
+async def _search_gmail_for_voice(user_id: str, args: dict[str, Any]) -> dict[str, object]:
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return {"ok": False, "error": "Please specify which emails to search for."}
+    if len(query) > 300:
+        return {"ok": False, "error": "Email search query is too long."}
+    try:
+        max_results = int(args.get("max_results", 5))
+    except (TypeError, ValueError):
+        max_results = 5
+    max_results = max(1, min(max_results, 10))
+
+    try:
+        listing = await list_gmail_messages(user_id, query=query, max_results=max_results)
+    except ValueError:
+        return {
+            "ok": False,
+            "error": "Gmail is not connected to this Indoone account. Connect Gmail and try again.",
+        }
+    except Exception:
+        logger.exception("Vibe Gmail search failed")
+        return {"ok": False, "error": "Gmail search failed. Check the Gmail connection and try again."}
+
+    messages = listing.get("messages")
+    if not isinstance(messages, list) or not messages:
+        return {"ok": True, "query": query, "count": 0, "emails": []}
+
+    emails: list[dict[str, str]] = []
+    for item in messages[:max_results]:
+        if not isinstance(item, dict):
+            continue
+        message_id = str(item.get("id") or "").strip()
+        if not message_id:
+            continue
+        try:
+            result = await get_gmail_message(user_id, message_id)
+        except Exception:
+            logger.warning("Vibe could not fetch one Gmail message's metadata")
+            continue
+        message = result.get("message")
+        if not isinstance(message, dict):
+            continue
+        emails.append({
+            "message_id": message_id,
+            "thread_id": str(message.get("threadId") or item.get("threadId") or "")[:256],
+            "date": _header_value(message, "Date"),
+            "from": _header_value(message, "From"),
+            "to": _header_value(message, "To"),
+            "subject": _header_value(message, "Subject"),
+            "snippet": str(message.get("snippet") or "")[:600],
+        })
+
+    return {"ok": True, "query": query, "count": len(emails), "emails": emails}
+
+
+async def _execute_voice_tool(user_id: str, name: str, args: object) -> dict[str, object]:
+    if name != "search_gmail_messages":
+        return {"ok": False, "error": "This voice action is not available."}
+    if not isinstance(args, dict):
+        return {"ok": False, "error": "Invalid email-search arguments."}
+    return await _search_gmail_for_voice(user_id, args)
 
 
 def _google_error_detail(message: dict[str, object], api_key: str) -> str:

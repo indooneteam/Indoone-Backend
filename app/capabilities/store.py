@@ -177,6 +177,28 @@ def upsert_integration_token(
         db.commit()
 
 
+def get_single_integration_token_user_id(integration_id: str) -> str | None:
+    """Return the owner of the sole connected account for an integration.
+
+    Webhook handlers do not carry the Indoone app's Firebase UID. If exactly one
+    account is connected, its stored owner can be resolved without another
+    environment variable. Ambiguous integrations deliberately fail closed.
+    """
+    normalized = integration_id.strip()
+    if not normalized:
+        return None
+    initialize()
+    with closing(_connect()) as db:
+        rows = db.execute(
+            "SELECT user_id FROM integration_tokens WHERE integration_id = ? ORDER BY updated_at DESC LIMIT 2",
+            (normalized,),
+        ).fetchall()
+    if len(rows) != 1:
+        return None
+    user_id = str(rows[0]["user_id"] or "").strip()
+    return user_id or None
+
+
 def claim_channel_inbound_event(event_key: str, retry_after_seconds: int = 600) -> bool:
     normalized = event_key.strip()
     if not normalized or len(normalized) > 512:

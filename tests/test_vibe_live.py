@@ -292,6 +292,45 @@ def test_vibe_executes_nonblocking_gmail_tool_and_tracks_interaction_status(
     }
 
 
+
+def test_vibe_does_not_forward_gemini_parts_marked_as_internal_thought() -> None:
+    class FakeFrontend:
+        def __init__(self) -> None:
+            self.events: list[dict[str, object]] = []
+
+        async def send_json(self, event: dict[str, object]) -> None:
+            self.events.append(event)
+
+    frontend = FakeFrontend()
+
+    async def run() -> bool:
+        return await vibe_api._handle_gemini_message(
+            frontend,  # type: ignore[arg-type]
+            json.dumps({
+                "serverContent": {
+                    "modelTurn": {
+                        "parts": [
+                            {"text": "Internal reasoning that must stay hidden.", "thought": True},
+                            {"text": "I found one unread email."},
+                        ],
+                    },
+                },
+            }),
+            "test-api-key",
+            "user-1",
+            object(),
+            asyncio.Lock(),
+            set(),
+        )
+
+    assert asyncio.run(run()) is True
+    assert frontend.events == [{
+        "type": "transcript",
+        "role": "assistant",
+        "text": "I found one unread email.",
+    }]
+
+
 def test_vibe_websocket_rejects_missing_authentication() -> None:
     with TestClient(app) as client:
         with pytest.raises(WebSocketDisconnect):

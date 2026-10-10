@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 from pydantic import BaseModel, Field
 
+from app.capabilities.channel_ai_reply import process_telegram_update
 from app.capabilities.telegram import (
     delete_webhook,
     get_updates,
@@ -101,7 +102,12 @@ async def telegram_delete_webhook(request: TelegramWebhookDeleteRequest) -> dict
 
 
 @router.post("/webhook/incoming")
-async def telegram_incoming(update: dict[str, object], x_telegram_bot_api_secret_token: str | None = Header(default=None)) -> dict[str, bool]:
+async def telegram_incoming(
+    update: dict[str, object],
+    background_tasks: BackgroundTasks,
+    x_telegram_bot_api_secret_token: str | None = Header(default=None),
+) -> dict[str, bool]:
     if not validate_webhook_secret(x_telegram_bot_api_secret_token):
         raise HTTPException(status_code=401, detail="invalid telegram webhook secret")
-    return {"accepted": True}
+    background_tasks.add_task(process_telegram_update, update)
+    return {"accepted": True, "queued": True}

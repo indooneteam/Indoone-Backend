@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+from app.capabilities.control_gateway import send_via_control_gateway
+
 _API_BASE = "https://graph.facebook.com"
 _API_VERSION = os.getenv("INDOONE_WHATSAPP_GRAPH_VERSION", "v23.0")
 _MAX_TEXT_LENGTH = 4096
@@ -64,10 +66,16 @@ async def send_text_message(to: str, text: str, approved: bool = False, preview_
         "type": "text",
         "text": {"preview_url": bool(preview_url), "body": message},
     }
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.post(_url(f"{_phone_number_id()}/messages"), headers=_headers(), json=payload)
-        response.raise_for_status()
-        body = response.json()
+    target_url = _url(f"{_phone_number_id()}/messages")
+    headers = _headers()
+    response = await send_via_control_gateway(
+        "whatsapp", target_url, headers, payload, timeout=20.0
+    )
+    if response is None:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            response = await client.post(target_url, headers=headers, json=payload)
+    response.raise_for_status()
+    body = response.json()
     return {"integration": "whatsapp_business", "operation": "send_text", "result": body, "secrets_exposed": False}
 
 

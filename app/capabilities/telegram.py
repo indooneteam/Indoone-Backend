@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+from app.capabilities.control_gateway import send_via_control_gateway
+
 _API_BASE = "https://api.telegram.org/bot"
 _MAX_MESSAGE_LENGTH = 4096
 _MAX_DOCUMENT_BYTES = 50 * 1024 * 1024
@@ -26,10 +28,21 @@ def _url(method: str) -> str:
 
 
 async def _call(method: str, payload: dict[str, Any] | None = None, timeout: float = 20.0) -> Any:
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(_url(method), json=payload or {})
-        response.raise_for_status()
-        body = response.json()
+    target_url = _url(method)
+    response = None
+    if method == "sendMessage":
+        response = await send_via_control_gateway(
+            "telegram",
+            target_url,
+            {"Content-Type": "application/json"},
+            payload or {},
+            timeout=timeout,
+        )
+    if response is None:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(target_url, json=payload or {})
+    response.raise_for_status()
+    body = response.json()
     if not isinstance(body, dict) or body.get("ok") is not True:
         detail = body.get("description") if isinstance(body, dict) else "invalid telegram response"
         raise RuntimeError(str(detail or "telegram api request failed"))

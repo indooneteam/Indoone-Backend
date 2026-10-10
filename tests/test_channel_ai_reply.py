@@ -101,3 +101,68 @@ def test_instagram_message_replies_with_indoon_ai(tmp_path, monkeypatch) -> None
             "Hi! Thanks for messaging Indoone.",
         )
     ]
+
+
+
+def test_whatsapp_reply_off_is_checked_before_ai_generation(monkeypatch):
+    monkeypatch.setenv("INDOONE_WHATSAPP_AI_OWNER_USER_ID", "indoone-user-1")
+
+    async def gateway_says_off(channel):
+        assert channel == "whatsapp"
+        return False
+
+    async def should_not_generate(*args, **kwargs):
+        raise AssertionError("AI generation must not run when gateway replies are OFF")
+
+    monkeypatch.setattr(channel_ai_reply, "check_reply_allowed", gateway_says_off)
+    monkeypatch.setattr(channel_ai_reply, "generate_reply", should_not_generate)
+    result = asyncio.run(
+        channel_ai_reply.process_whatsapp_message({
+            "id": "wamid.preflight-off",
+            "from": "919999999999",
+            "type": "text",
+            "text": "do not generate",
+        })
+    )
+    assert result is False
+
+
+def test_telegram_incoming_replies_through_existing_ai_and_sender(tmp_path, monkeypatch):
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.sqlite3"))
+    monkeypatch.setenv("INDOONE_TELEGRAM_AI_OWNER_USER_ID", "indoone-user-1")
+    conversation_db = tmp_path / "conversations.sqlite3"
+    monkeypatch.setattr(
+        channel_ai_reply,
+        "ConversationStore",
+        lambda: ConversationStore(conversation_db),
+    )
+
+    async def gateway_says_on(channel):
+        assert channel == "telegram"
+        return True
+
+    async def fake_generate_reply(message: str, history=None, document_context: str = "") -> str:
+        assert message == "Hello Telegram"
+        return "Hello from Indoone."
+
+    sent = []
+
+    async def fake_send(chat_id: str, text: str, approved: bool = False, parse_mode: str = ""):
+        sent.append((chat_id, text, approved))
+        return {"ok": True}
+
+    monkeypatch.setattr(channel_ai_reply, "check_reply_allowed", gateway_says_on)
+    monkeypatch.setattr(channel_ai_reply, "generate_reply", fake_generate_reply)
+    monkeypatch.setattr(channel_ai_reply, "send_telegram_message", fake_send)
+
+    update = {
+        "update_id": 887766,
+        "message": {
+            "chat": {"id": 456},
+            "from": {"id": 123, "is_bot": False},
+            "text": "Hello Telegram",
+        },
+    }
+    assert asyncio.run(channel_ai_reply.process_telegram_update(update)) is True
+    assert asyncio.run(channel_ai_reply.process_telegram_update(update)) is False
+    assert sent == [("456", "Hello from Indoone.", True)]

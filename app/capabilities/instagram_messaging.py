@@ -6,6 +6,7 @@ from typing import Any
 import httpx
 
 from app.capabilities.instagram import _GRAPH_URL, _access_token, _refresh_access_token, _token_row
+from app.capabilities.control_gateway import send_via_control_gateway
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,256}$")
 _MAX_TEXT_LENGTH = 1000
@@ -38,17 +39,31 @@ async def _request_json(
     token = await _access_token(user_id)
     url = f"{_GRAPH_URL}/{path.lstrip('/')}"
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+    is_message_send = method.upper() == "POST" and path.strip("/") == "me/messages"
     async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.request(method, url, params=params, json=json, headers=headers)
+        response = None
+        if is_message_send:
+            response = await send_via_control_gateway(
+                "instagram", url, headers, json or {}, timeout=20.0
+            )
+        if response is None:
+            response = await client.request(method, url, params=params, json=json, headers=headers)
         if response.status_code == 401:
             refreshed = await _refresh_access_token(user_id, _token_row(user_id))
-            response = await client.request(
-                method,
-                url,
-                params=params,
-                json=json,
-                headers={"Authorization": f"Bearer {refreshed}", "Accept": "application/json"},
-            )
+            refreshed_headers = {"Authorization": f"Bearer {refreshed}", "Accept": "application/json"}
+            response = None
+            if is_message_send:
+                response = await send_via_control_gateway(
+                    "instagram", url, refreshed_headers, json or {}, timeout=20.0
+                )
+            if response is None:
+                response = await client.request(
+                    method,
+                    url,
+                    params=params,
+                    json=json,
+                    headers=refreshed_headers,
+                )
         if response.status_code == 204:
             return {}
         response.raise_for_status()

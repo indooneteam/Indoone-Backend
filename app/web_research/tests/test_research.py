@@ -205,7 +205,7 @@ def test_build_research_provider_uses_tavily_when_configured(monkeypatch) -> Non
     monkeypatch.setenv("INDOONE_TAVILY_API_KEY", "test-key")
     monkeypatch.delenv("INDOONE_RESEARCH_URL", raising=False)
 
-    provider = __import__("app.ai.research", fromlist=["build_research_provider"]).build_research_provider()
+    provider = __import__("app.web_research.research", fromlist=["build_research_provider"]).build_research_provider()
 
     assert isinstance(provider, MultiSourceResearchProvider)
     assert [type(item) for item in provider.providers] == [TavilyResearchProvider]

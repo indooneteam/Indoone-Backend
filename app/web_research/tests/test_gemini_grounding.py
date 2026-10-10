@@ -56,3 +56,10 @@ def test_generate_gemini_reply_returns_grounded_sources(monkeypatch) -> None:
         "- [Official update](https://example.com/update)"
     )
 
+
+
+def test_gemini_search_policy_uses_web_selectively() -> None:
+    instruction = gemini_service._SYSTEM_INSTRUCTION
+    assert "Do not search the web for stable, evergreen questions" in instruction
+    assert "time-sensitive, news, price, availability" in instruction
+    assert "Never invent source URLs or citations" in instruction

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Iterable
 
 from app.ai.answer_quality import assess_answer
-from app.ai.grounding import GroundedEvidence, assess_grounding
+from app.web_research.grounding import GroundedEvidence, assess_grounding
 from app.ai.hallucination import assess_hallucination
 from app.ai.inference import LocalModelRuntime
 from app.ai.response_style import assess_response_style

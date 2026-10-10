@@ -34,7 +34,7 @@ The processed dataset is a generated training artifact and should not be committ
 
 - `app/api/` — HTTP API routes
 - `app/ai/` — local AI runtime and domain modules; `app/ai/training/` contains model training and evaluation
-- `app/web_research/` — isolated live web research providers, source handling, evidence formatting, and research-specific tests
+- `app/web_research/` — isolated live web research providers, Google Search grounding, evidence validation, source formatting, and research-specific tests
 - `data/raw/` — source training documents
 - `data/knowledge/` — approved local knowledge sources
 - `data/processed/` — generated train/validation/test splits

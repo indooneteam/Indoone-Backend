@@ -44,7 +44,7 @@ def test_gemini_reply_uses_free_public_sources_for_live_queries(monkeypatch) -> 
         async def post(self, url: str, *, headers: dict[str, str], json: dict[str, object]) -> FakeResponse:
             assert "googleSearch" not in json.get("tools", [{}])[0] if json.get("tools") else True
             user_text = json["contents"][-1]["parts"][0]["text"]
-            assert "LIVE WEB RESEARCH EVIDENCE:" in user_text
+            assert "VERIFIED WEB EVIDENCE:" in user_text
             assert "Verified current evidence." in user_text
             return FakeResponse()
 
@@ -52,7 +52,12 @@ def test_gemini_reply_uses_free_public_sources_for_live_queries(monkeypatch) -> 
     monkeypatch.setattr(gemini_service, "build_free_research_provider", lambda: FakeProvider())
     monkeypatch.setattr(gemini_service.httpx, "AsyncClient", FakeAsyncClient)
     reply = asyncio.run(gemini_service.generate_gemini_reply("What is the latest update?"))
-    assert reply == "A current answer.\\n\\nSources:\\n- [Official update](https://example.com/update)"
+    assert reply == chr(10).join([
+        "A current answer.",
+        "",
+        "Sources:",
+        "- [Official update](https://example.com/update)",
+    ])
 
 
 def test_gemini_reply_skips_search_for_stable_questions(monkeypatch) -> None:

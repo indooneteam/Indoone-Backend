@@ -17,7 +17,7 @@ def test_research_endpoint_returns_sources(monkeypatch: pytest.MonkeyPatch) -> N
             assert limit == 2
             return [ResearchResult("Official update", "https://example.com/update", "Fresh evidence")]
 
-    monkeypatch.setattr(api, "build_research_provider", lambda: FakeProvider())
+    monkeypatch.setattr(api, "build_free_research_provider", lambda: FakeProvider())
 
     response = asyncio.run(api.research(api.ResearchRequest(query="latest AI news", limit=2)))
 
@@ -43,7 +43,7 @@ def test_deep_research_endpoint_deduplicates_urls(monkeypatch: pytest.MonkeyPatc
                 ResearchResult("Source B", "https://example.com/b", "Two"),
             ]
 
-    monkeypatch.setattr(api, "build_research_provider", lambda: FakeProvider())
+    monkeypatch.setattr(api, "build_free_research_provider", lambda: FakeProvider())
 
     response = asyncio.run(
         api.deep_research(api.DeepResearchRequest(query="Indoone", queries=2, per_query_limit=2))
@@ -57,7 +57,7 @@ def test_deep_research_endpoint_deduplicates_urls(monkeypatch: pytest.MonkeyPatc
 
 
 def test_research_endpoint_returns_503_when_provider_unavailable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(api, "build_research_provider", lambda: None)
+    monkeypatch.setattr(api, "build_free_research_provider", lambda: None)
 
     with pytest.raises(HTTPException) as error:
         asyncio.run(api.research(api.ResearchRequest(query="latest AI news")))
@@ -70,7 +70,7 @@ def test_main_registers_research_routes(monkeypatch: pytest.MonkeyPatch) -> None
         async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
             return []
 
-    monkeypatch.setattr(api, "build_research_provider", lambda: EmptyProvider())
+    monkeypatch.setattr(api, "build_free_research_provider", lambda: EmptyProvider())
 
     from app.main import app
 

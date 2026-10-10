@@ -1,42 +1,16 @@
 from app.web_research.google_search import (
-    build_google_search_tools,
-    extract_grounding_sources,
     format_sources_footer,
+    should_use_live_research,
     split_sources_footer,
 )
 from app.web_research.research import ResearchResult
 
 
-def test_google_search_grounding_is_enabled_for_both_gemma4_models() -> None:
-    assert build_google_search_tools("gemma-4-26b-a4b-it") == [{"googleSearch": {}}]
-    assert build_google_search_tools("gemma-4-31b-it") == [{"googleSearch": {}}]
-
-
-def test_google_search_grounding_is_not_added_to_unconfigured_models() -> None:
-    assert build_google_search_tools("gemini-2.5-flash") == []
-    assert build_google_search_tools(" custom-model ") == []
-
-
-def test_extract_grounding_sources_validates_urls_and_deduplicates() -> None:
-    response = {
-        "candidates": [{
-            "groundingMetadata": {
-                "groundingChunks": [
-                    {"web": {"title": "Latest AI news", "uri": "https://example.com/news"}},
-                    {"web": {"title": "Latest AI news duplicate", "uri": "https://example.com/news/"}},
-                    {"web": {"title": "Bad URL", "uri": "javascript:alert(1)"}},
-                    {"web": {"title": "", "uri": "https://example.com/no-title"}},
-                ]
-            }
-        }]
-    }
-    sources = extract_grounding_sources(response)
-    assert sources == [ResearchResult("Latest AI news", "https://example.com/news", "")]
-
-
-def test_extract_grounding_sources_handles_missing_metadata() -> None:
-    assert extract_grounding_sources({"candidates": [{"content": {"parts": [{"text": "Hi"}]}}]}) == []
-    assert extract_grounding_sources({}) == []
+def test_live_research_intent_is_selective_and_multilingual() -> None:
+    assert should_use_live_research("What is the latest Indoone update?")
+    assert should_use_live_research("ಇವತ್ತಿನ ಸುದ್ದಿ ಏನು?")
+    assert should_use_live_research("ivattina suddi heli")
+    assert not should_use_live_research("Explain photosynthesis simply")
 
 
 def test_format_sources_footer_appends_only_valid_sources() -> None:
@@ -57,9 +31,14 @@ def test_format_sources_footer_leaves_answer_unchanged_without_sources() -> None
 
 
 def test_split_sources_footer_returns_structured_sources() -> None:
-    answer, sources = split_sources_footer(
-        "Current answer.\n\nSources:\n- [Official update](https://example.com/update)\n- [Second source](https://example.org/news)"
-    )
+    answer_text = "\n".join([
+        "Current answer.",
+        "",
+        "Sources:",
+        "- [Official update](https://example.com/update)",
+        "- [Second source](https://example.org/news)",
+    ])
+    answer, sources = split_sources_footer(answer_text)
     assert answer == "Current answer."
     assert sources == [
         ResearchResult("Official update", "https://example.com/update", ""),
@@ -68,6 +47,6 @@ def test_split_sources_footer_returns_structured_sources() -> None:
 
 
 def test_split_sources_footer_leaves_regular_or_invalid_text_unchanged() -> None:
-    text = "Answer.\n\nSources:\n- [Unsafe](javascript:alert(1))"
+    text = "\n".join(["Answer.", "", "Sources:", "- [Unsafe](javascript:alert(1))"])
     assert split_sources_footer("Just an answer.") == ("Just an answer.", [])
     assert split_sources_footer(text) == (text, [])

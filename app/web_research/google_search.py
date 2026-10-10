@@ -28,12 +28,12 @@ def should_use_live_research(message: str) -> bool:
 
 def split_sources_footer(answer: str) -> tuple[str, list[ResearchResult]]:
     """Extract verified HTTP(S) source links from the answer's source footer."""
-    marker = "\\n\\nSources:\\n"
+    marker = "\n\nSources:\n"
     marker_index = answer.rfind(marker)
     if marker_index < 0:
         return answer, []
     footer = answer[marker_index + len(marker):]
-    pattern = re.compile(r"^- \\[(?P<title>.+?)\\]\\((?P<url>https?://[^)\\s]+)\\)$")
+    pattern = re.compile(r"^- \[(?P<title>.+?)\]\((?P<url>https?://[^)\s]+)\)$")
     sources: list[ResearchResult] = []
     seen: set[str] = set()
     for line in footer.splitlines():
@@ -62,4 +62,4 @@ def format_sources_footer(answer: str, sources: list[ResearchResult]) -> str:
         parsed = urlparse(url)
         if title and parsed.scheme in {"http", "https"} and parsed.netloc:
             lines.append(f"- [{title}]({url})")
-    return "\\n".join(lines) if len(lines) > 3 else clean_answer
+    return "\n".join(lines) if len(lines) > 3 else clean_answer

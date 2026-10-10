@@ -2,7 +2,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from app.capabilities.instagram import build_instagram_authorization
+from app.instagram.capabilities.instagram import build_instagram_authorization
 
 
 def test_instagram_authorization_uses_current_business_scopes(monkeypatch: pytest.MonkeyPatch) -> None:

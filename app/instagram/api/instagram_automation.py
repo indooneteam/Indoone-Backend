@@ -4,9 +4,9 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.capabilities.instagram_automation import plan_automation
-from app.capabilities.instagram_comments import reply_to_comment
-from app.capabilities.instagram_messaging import send_text_message
+from app.instagram.capabilities.instagram_automation import plan_automation
+from app.instagram.capabilities.instagram_comments import reply_to_comment
+from app.instagram.capabilities.instagram_messaging import send_text_message
 
 router = APIRouter(prefix="/integrations/instagram/automation", tags=["instagram-automation"])
 

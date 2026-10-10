@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from app.capabilities.instagram import _GRAPH_URL, _access_token, _refresh_access_token, _token_row
+from app.instagram.capabilities.instagram import _GRAPH_URL, _access_token, _refresh_access_token, _token_row
 
 _ID_RE = re.compile(r"^[A-Za-z0-9_.:-]{1,256}$")
 

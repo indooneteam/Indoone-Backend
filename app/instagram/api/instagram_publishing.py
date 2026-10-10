@@ -4,7 +4,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.capabilities.instagram_publishing import create_carousel_container, publish_ready_container
+from app.instagram.capabilities.instagram_publishing import create_carousel_container, publish_ready_container
 
 router = APIRouter(prefix="/integrations/instagram/publishing", tags=["instagram-publishing"])
 

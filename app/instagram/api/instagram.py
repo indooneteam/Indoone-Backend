@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from secrets import token_urlsafe
 
-from app.capabilities.instagram import (
+from app.instagram.capabilities.instagram import (
     build_instagram_authorization,
     create_media_container,
     exchange_instagram_code,

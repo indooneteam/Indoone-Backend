@@ -4,7 +4,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.capabilities.instagram_comments import (
+from app.instagram.capabilities.instagram_comments import (
     create_media_comment,
     delete_comment,
     list_media_comments,

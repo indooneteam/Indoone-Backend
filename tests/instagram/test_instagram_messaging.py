@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from app.capabilities import instagram_messaging
+from app.instagram.capabilities import instagram_messaging
 
 
 def test_validate_id_and_text() -> None:

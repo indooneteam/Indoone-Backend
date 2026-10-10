@@ -4,7 +4,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.capabilities.instagram_insights import get_account_insights, get_media_insights
+from app.instagram.capabilities.instagram_insights import get_account_insights, get_media_insights
 
 router = APIRouter(prefix="/integrations/instagram/insights", tags=["instagram-insights"])
 

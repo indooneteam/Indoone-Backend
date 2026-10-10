@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from app.capabilities import instagram_insights
+from app.instagram.capabilities import instagram_insights
 
 
 def test_validate_metrics_deduplicates_and_rejects_invalid() -> None:

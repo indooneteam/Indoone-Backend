@@ -5,7 +5,7 @@ from typing import Any
 
 import httpx
 
-from app.capabilities.instagram import (
+from app.instagram.capabilities.instagram import (
     _GRAPH_URL,
     _access_token,
     _refresh_access_token,

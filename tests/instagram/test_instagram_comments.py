@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from app.capabilities import instagram_comments
+from app.instagram.capabilities import instagram_comments
 
 
 def test_validate_id_rejects_invalid_values() -> None:

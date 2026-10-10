@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from app.capabilities import instagram_webhooks
+from app.instagram.capabilities import instagram_webhooks
 
 
 def test_verify_challenge(monkeypatch: pytest.MonkeyPatch) -> None:

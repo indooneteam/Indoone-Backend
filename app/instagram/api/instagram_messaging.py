@@ -4,7 +4,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.capabilities.instagram_messaging import (
+from app.instagram.capabilities.instagram_messaging import (
     get_message,
     list_conversation_messages,
     list_conversations,

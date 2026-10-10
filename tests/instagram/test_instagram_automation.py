@@ -1,6 +1,6 @@
 import pytest
 
-from app.capabilities.instagram_automation import plan_automation
+from app.instagram.capabilities.instagram_automation import plan_automation
 
 
 def test_plan_comment_rule() -> None:

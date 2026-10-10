@@ -2,7 +2,7 @@ import asyncio
 
 import pytest
 
-from app.capabilities import instagram_publishing
+from app.instagram.capabilities import instagram_publishing
 
 
 def test_carousel_validation() -> None:

@@ -6,7 +6,7 @@ import os
 from typing import Any
 
 from app.ai.service import generate_reply
-from app.capabilities.instagram_messaging import send_text_message as send_instagram_text_message
+from app.instagram.capabilities.instagram_messaging import send_text_message as send_instagram_text_message
 from app.capabilities.store import (
     claim_channel_inbound_event,
     complete_channel_inbound_event,

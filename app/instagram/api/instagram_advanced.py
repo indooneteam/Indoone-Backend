@@ -4,7 +4,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.capabilities.instagram_advanced import (
+from app.instagram.capabilities.instagram_advanced import (
     get_container_status,
     get_media_details,
     list_reels,

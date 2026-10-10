@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import asyncio
 from pathlib import Path
 import logging
+import os
 import threading
 from typing import TYPE_CHECKING
 import re
@@ -17,6 +18,11 @@ from app.storage.github_release import GitHubReleaseStorageError, get_github_rel
 
 
 logger = logging.getLogger(__name__)
+
+
+def _gemini_backend_enabled() -> bool:
+    """Use Gemini only when explicitly selected; preserve local inference by default."""
+    return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
 
 if TYPE_CHECKING:
     from app.ai.inference import LocalModelRuntime
@@ -267,6 +273,18 @@ class LocalAIService:
         cleaned_message = message.strip()
         if not cleaned_message:
             raise ValueError("message cannot be empty")
+
+        # Keep the existing local-model path as the default. When explicitly configured,
+        # Google Gemini handles the chat turn and can call the bounded free web-search tool.
+        if _gemini_backend_enabled():
+            from app.ai.gemini_service import generate_gemini_reply
+
+            return await generate_gemini_reply(
+                cleaned_message,
+                history=history,
+                document_context=document_context,
+            )
+
         prompt_parts = [cleaned_message]
 
         if history:

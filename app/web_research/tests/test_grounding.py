@@ -78,6 +78,29 @@ def test_append_sources_does_not_turn_numeric_mismatch_into_chat_failure() -> No
     assert "https://example.com/pricing" in result
 
 
+def test_grounding_rejects_unknown_url_even_when_a_numeric_mismatch_exists() -> None:
+    evidence = [
+        GroundedEvidence("Pricing", "https://example.com/pricing", "Indoone Pro costs 499 rupees per month.")
+    ]
+    result = assess_grounding(
+        "Indoone Pro costs 599 rupees per month. https://attacker.example",
+        evidence,
+    )
+    assert result.passed is False
+    assert result.reason == "unsupported_source_url"
+
+
+def test_append_sources_rejects_unknown_url_even_when_a_numeric_mismatch_exists() -> None:
+    evidence = [
+        GroundedEvidence("Pricing", "https://example.com/pricing", "Indoone Pro costs 499 rupees per month.")
+    ]
+    with pytest.raises(RuntimeError, match="unsupported_source_url"):
+        append_sources(
+            "Indoone Pro costs 599 rupees per month. https://attacker.example",
+            evidence,
+        )
+
+
 def test_append_sources_keeps_research_answer_when_compact_snippets_omit_year() -> None:
     evidence = [
         GroundedEvidence("Research report", "https://example.com/report", "The report summarizes the project.")

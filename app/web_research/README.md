@@ -8,4 +8,4 @@ This directory owns the live web research implementation and research-specific t
 
 AI-runtime and channel modules should call this package through a narrow interface; search-provider code should not be duplicated in those modules.
 
-`app/ai/research.py` is temporarily retained as an import-only compatibility shim for the existing server-side integration. New code should import from `app.web_research`.
+The implementation has one canonical location: `app/web_research/`. Repository callers should import research functionality from this package; do not reintroduce the implementation under `app/ai/` or channel-specific modules.

@@ -26,22 +26,22 @@ from app.api.errors import error_response
 from app.api.facebook import router as facebook_router
 from app.api.google_photos import router as google_photos_router
 from app.api.integrations import router as integrations_router
-from app.api.instagram import router as instagram_router
-from app.api.instagram_comments import router as instagram_comments_router
-from app.api.instagram_insights import router as instagram_insights_router
-from app.api.instagram_messaging import router as instagram_messaging_router
-from app.api.instagram_advanced import router as instagram_advanced_router
-from app.api.instagram_publishing import router as instagram_publishing_router
-from app.api.instagram_webhooks import router as instagram_webhooks_router
-from app.api.instagram_automation import router as instagram_automation_router
+from app.instagram.api.instagram import router as instagram_router
+from app.instagram.api.instagram_comments import router as instagram_comments_router
+from app.instagram.api.instagram_insights import router as instagram_insights_router
+from app.instagram.api.instagram_messaging import router as instagram_messaging_router
+from app.instagram.api.instagram_advanced import router as instagram_advanced_router
+from app.instagram.api.instagram_publishing import router as instagram_publishing_router
+from app.instagram.api.instagram_webhooks import router as instagram_webhooks_router
+from app.instagram.api.instagram_automation import router as instagram_automation_router
 from app.api.memory import router as memory_router
 from app.api.phone import router as phone_router
 from app.api.platform import router as platform_router
 from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
 from app.api.network_security import configure_network_security, validate_network_security_config
 from app.api.environment_security import validate_environment_security_config
-from app.api.telegram import router as telegram_router
-from app.api.whatsapp import router as whatsapp_router
+from app.telegram.api import router as telegram_router
+from app.whatsapp.api import router as whatsapp_router
 from app.api.youtube import router as youtube_router
 from app.api.youtube_analytics import router as youtube_analytics_router
 from app.api.youtube_live import router as youtube_live_router

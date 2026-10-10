@@ -129,4 +129,5 @@ def build_search_web_function_response(
     function_response: dict[str, Any] = {"name": _SEARCH_TOOL_NAME, "response": response}
     if call.call_id:
         function_response["id"] = call.call_id
-    return {"role": "function", "parts": [{"functionResponse": function_response}]}
+    # GenerateContent expects function responses inside a user-role Content turn.
+    return {"role": "user", "parts": [{"functionResponse": function_response}]}

@@ -216,10 +216,47 @@ async def _send_error(websocket: WebSocket, detail: str) -> None:
         pass
 
 
+async def _send_gemini_message(gemini, send_lock: asyncio.Lock, payload: dict[str, object]) -> None:
+    async with send_lock:
+        await gemini.send(json.dumps(payload))
+
+
+async def _execute_and_send_tool_response(
+    user_id: str,
+    call: dict[str, Any],
+    gemini,
+    send_lock: asyncio.Lock,
+) -> None:
+    call_id = str(call.get("id") or "").strip()
+    name = str(call.get("name") or "").strip()
+    if not call_id or not name:
+        logger.warning("Gemini Live returned a function call without an ID or name")
+        return
+
+    result = await _execute_voice_tool(user_id, name, call.get("args", {}))
+    payload: dict[str, object] = {
+        "toolResponse": {
+            "functionResponses": [{
+                "id": call_id,
+                "name": name,
+                "response": {"result": result},
+            }],
+        },
+    }
+    try:
+        await _send_gemini_message(gemini, send_lock, payload)
+    except Exception:
+        logger.exception("Could not return Vibe tool result to Gemini Live")
+
+
 async def _handle_gemini_message(
     websocket: WebSocket,
     raw_message: str | bytes,
     api_key: str,
+    user_id: str,
+    gemini,
+    send_lock: asyncio.Lock,
+    tool_tasks: set[asyncio.Task],
 ) -> bool:
     try:
         message = json.loads(raw_message)
@@ -235,6 +272,30 @@ async def _handle_gemini_message(
         return False
 
     server_content = message.get("serverContent", message.get("server_content"))
+    status = message.get("interactionStatus", message.get("interaction_status"))
+    if status is None and isinstance(server_content, dict):
+        status = server_content.get("interactionStatus", server_content.get("interaction_status"))
+    if status:
+        status_text = str(status).strip().upper()
+        if status_text in {"IN_PROGRESS", "IDLE"}:
+            await websocket.send_json({
+                "type": "status",
+                "interaction_status": status_text,
+            })
+
+    tool_call = message.get("toolCall", message.get("tool_call"))
+    if isinstance(tool_call, dict):
+        calls = tool_call.get("functionCalls", tool_call.get("function_calls"))
+        if isinstance(calls, list):
+            for call in calls:
+                if not isinstance(call, dict):
+                    continue
+                task = asyncio.create_task(
+                    _execute_and_send_tool_response(user_id, call, gemini, send_lock)
+                )
+                tool_tasks.add(task)
+                task.add_done_callback(tool_tasks.discard)
+
     if not isinstance(server_content, dict):
         return True
 
@@ -300,8 +361,6 @@ async def _handle_gemini_message(
             "text": "".join(fallback_text),
         })
 
-    # Deliver transcript/status events before audio chunks from the same server
-    # message so the UI can update its transcript before playback begins.
     for event in [*events, *audio_events]:
         await websocket.send_json(event)
 

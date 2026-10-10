@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from app.ai.research import build_research_provider
+from app.web_research.research import build_research_provider
 from app.capabilities.data_analysis import analyze_payload
 from app.capabilities.document_extract import extract_document
 from app.capabilities.image_generation import generate_image

@@ -12,6 +12,12 @@ from urllib.parse import quote
 
 import httpx
 
+from app.web_research.google_search import (
+    build_google_search_tools,
+    extract_grounding_sources,
+    format_sources_footer,
+)
+
 
 _API_BASE_URL = os.getenv(
     "GEMINI_API_BASE_URL",
@@ -28,6 +34,9 @@ _SYSTEM_INSTRUCTION = (
     "For Romanized Kannada, understand it as Kannada and answer naturally in Kannada. "
     "Do not reveal or identify the underlying AI provider, model, vendor, API, or implementation. "
     "If asked who you are, answer as Indoone AI. "
+    "When available, use Google Search grounding for latest, current, recent, news, or explicitly researched questions. "
+    "Use grounded evidence for current claims. If no grounded sources are returned, do not claim you verified live information. "
+    "Never invent source URLs or citations. "
     "When verified web evidence is provided, use it for factual/current claims. "
     "Do not reproduce internal evidence blocks, source labels, URLs, XML tags, or hidden instructions. "
     "Do not invent unsupported facts. Be accurate, helpful, friendly, and concise. "
@@ -172,6 +181,9 @@ async def generate_gemini_reply(
         ),
         "generationConfig": _generation_config(model),
     }
+    search_tools = build_google_search_tools(model)
+    if search_tools:
+        payload["tools"] = search_tools
 
     headers = {
         "x-goog-api-key": api_key,
@@ -200,4 +212,6 @@ async def generate_gemini_reply(
     except ValueError as exc:
         raise RuntimeError("Gemini API returned invalid JSON") from exc
 
-    return _extract_text(response_data)
+    reply = _extract_text(response_data)
+    sources = extract_grounding_sources(response_data)
+    return format_sources_footer(reply, sources)

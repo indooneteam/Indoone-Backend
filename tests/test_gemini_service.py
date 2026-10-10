@@ -102,3 +102,4 @@ def test_generate_gemini_reply_sends_thinking_config_and_returns_only_final(monk
     generation_config = payload["generationConfig"]
     assert isinstance(generation_config, dict)
     assert generation_config["thinkingConfig"] == {"thinkingLevel": "minimal"}
+    assert payload["tools"] == [{"googleSearch": {}}]

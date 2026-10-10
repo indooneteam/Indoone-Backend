@@ -634,6 +634,19 @@ class GoogleNewsRssResearchProvider(ResearchProvider):
                 break
         return results
 
+
+def build_free_research_provider() -> MultiSourceResearchProvider:
+    """Return only keyless public providers; no paid API keys or hosted search plans."""
+    return MultiSourceResearchProvider(
+        providers=[
+            WikipediaResearchProvider(timeout=6.0),
+            WikidataResearchProvider(timeout=8.0),
+            GoogleNewsRssResearchProvider(timeout=8.0),
+            OpenAlexResearchProvider(timeout=8.0),
+            CrossrefResearchProvider(timeout=8.0),
+        ]
+    )
+
 def build_research_provider() -> ResearchProvider | None:
     try:
         timeout = float(os.getenv("INDOONE_RESEARCH_TIMEOUT", "8"))

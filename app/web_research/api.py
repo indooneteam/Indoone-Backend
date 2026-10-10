@@ -6,7 +6,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.web_research.research import build_research_provider
+from app.web_research.research import build_free_research_provider
 
 router = APIRouter(tags=["web-research"])
 
@@ -24,7 +24,7 @@ class DeepResearchRequest(BaseModel):
 
 @router.post("/research")
 async def research(request: ResearchRequest) -> dict[str, object]:
-    provider = build_research_provider()
+    provider = build_free_research_provider()
     if provider is None:
         raise HTTPException(status_code=503, detail="live research provider is not configured")
     try:

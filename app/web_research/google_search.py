@@ -1,75 +1,39 @@
-"""Google Search grounding helpers for supported Gemma 4 models."""
+"""Intent detection and source formatting for keyless public web research."""
 
 from __future__ import annotations
 
 import re
-from typing import Any
 from urllib.parse import urlparse
 
 from app.web_research.research import ResearchResult
 
-
-def build_google_search_tools(model: str) -> list[dict[str, Any]]:
-    """Expose Google Search grounding to supported Gemma 4 models.
-
-    The model can decide whether a question needs a search. Other model families
-    are left unchanged until their supported tool matrix is configured explicitly.
-    """
-    normalized = model.strip().casefold()
-    if normalized.startswith("gemma-4-"):
-        return [{"googleSearch": {}}]
-    return []
+_LIVE_RESEARCH_TERMS = (
+    "latest", "current", "currently", "recent", "today", "news", "search",
+    "research", "sources", "source links", "look up", "find online", "price",
+    "cost", "availability", "weather", "update", "updates", "right now",
+    "ಈಗಿನ", "ಇತ್ತೀಚಿನ", "ಇವತ್ತಿನ", "ಇಂದು", "ಈಗ", "ಸುದ್ದಿ", "ಹುಡುಕು",
+    "ಹುಡುಕಿ", "ಬೆಲೆ", "ಹವಾಮಾನ", "ಮಾಹಿತಿ ಹುಡುಕು",
+    "ivattina", "ivattu", "eegina", "eega", "hosa suddi", "suddi",
+    "bele", "havamaana", "latest update",
+)
 
 
-def extract_grounding_sources(response_data: dict[str, Any]) -> list[ResearchResult]:
-    """Extract and validate source links returned by Gemini grounding metadata."""
-    candidates = response_data.get("candidates")
-    if not isinstance(candidates, list) or not candidates:
-        return []
-    candidate = candidates[0]
-    if not isinstance(candidate, dict):
-        return []
-    metadata = candidate.get("groundingMetadata")
-    if not isinstance(metadata, dict):
-        return []
-    chunks = metadata.get("groundingChunks")
-    if not isinstance(chunks, list):
-        return []
-
-    results: list[ResearchResult] = []
-    seen: set[str] = set()
-    for chunk in chunks:
-        if not isinstance(chunk, dict):
-            continue
-        web = chunk.get("web")
-        if not isinstance(web, dict):
-            continue
-        title = " ".join(str(web.get("title", "")).split()).strip()[:500]
-        url = str(web.get("uri", "")).strip()
-        parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc or not title:
-            continue
-        key = url.rstrip("/").casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        results.append(ResearchResult(title=title, url=url, snippet=""))
-    return results
+def should_use_live_research(message: str) -> bool:
+    """Search only when the user's wording signals a current/live lookup."""
+    normalized = " ".join(message.casefold().split())
+    if not normalized:
+        return False
+    return any(term in normalized for term in _LIVE_RESEARCH_TERMS)
 
 
 def split_sources_footer(answer: str) -> tuple[str, list[ResearchResult]]:
-    """Extract the source footer for structured API responses.
-
-    If the answer does not contain valid generated source links, it is returned
-    unchanged so normal model text is never silently removed.
-    """
-    marker = "\n\nSources:\n"
+    """Extract verified HTTP(S) source links from the answer's source footer."""
+    marker = "\\n\\nSources:\\n"
     marker_index = answer.rfind(marker)
     if marker_index < 0:
         return answer, []
-
     footer = answer[marker_index + len(marker):]
-    pattern = re.compile(r"^- \[(?P<title>.+?)\]\((?P<url>https?://[^)\s]+)\)$")
+    pattern = re.compile(r"^- \\[(?P<title>.+?)\\]\\((?P<url>https?://[^)\\s]+)\\)$")
     sources: list[ResearchResult] = []
     seen: set[str] = set()
     for line in footer.splitlines():
@@ -82,27 +46,20 @@ def split_sources_footer(answer: str) -> tuple[str, list[ResearchResult]]:
         if not title or parsed.scheme not in {"http", "https"} or not parsed.netloc:
             continue
         key = url.rstrip("/").casefold()
-        if key in seen:
-            continue
-        seen.add(key)
-        sources.append(ResearchResult(title=title, url=url, snippet=""))
-
-    if not sources:
-        return answer, []
-    return answer[:marker_index].rstrip(), sources
+        if key not in seen:
+            seen.add(key)
+            sources.append(ResearchResult(title=title, url=url, snippet=""))
+    return (answer[:marker_index].rstrip(), sources) if sources else (answer, [])
 
 
 def format_sources_footer(answer: str, sources: list[ResearchResult]) -> str:
-    """Append a compact source list so every channel receives grounding links."""
+    """Append source links obtained from public providers, never invented URLs."""
     clean_answer = answer.rstrip()
-    if not sources:
-        return clean_answer
     lines = [clean_answer, "", "Sources:"]
     for source in sources:
         title = " ".join(source.title.split()).strip()[:500]
         url = source.url.strip()
         parsed = urlparse(url)
-        if not title or parsed.scheme not in {"http", "https"} or not parsed.netloc:
-            continue
-        lines.append(f"- [{title}]({url})")
-    return "\n".join(lines) if len(lines) > 3 else clean_answer
+        if title and parsed.scheme in {"http", "https"} and parsed.netloc:
+            lines.append(f"- [{title}]({url})")
+    return "\\n".join(lines) if len(lines) > 3 else clean_answer

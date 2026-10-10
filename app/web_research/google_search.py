@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 from urllib.parse import urlparse
-import re
 
 from app.web_research.research import ResearchResult
 
@@ -57,20 +57,19 @@ def extract_grounding_sources(response_data: dict[str, Any]) -> list[ResearchRes
     return results
 
 
-
 def split_sources_footer(answer: str) -> tuple[str, list[ResearchResult]]:
     """Extract the source footer for structured API responses.
 
     If the answer does not contain valid generated source links, it is returned
     unchanged so normal model text is never silently removed.
     """
-    marker = "\\n\\nSources:\\n"
+    marker = "\n\nSources:\n"
     marker_index = answer.rfind(marker)
     if marker_index < 0:
         return answer, []
 
     footer = answer[marker_index + len(marker):]
-    pattern = re.compile(r"^- \\[(?P<title>.+?)\\]\\((?P<url>https?://[^)\\s]+)\\)$")
+    pattern = re.compile(r"^- \[(?P<title>.+?)\]\((?P<url>https?://[^)\s]+)\)$")
     sources: list[ResearchResult] = []
     seen: set[str] = set()
     for line in footer.splitlines():

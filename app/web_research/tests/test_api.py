@@ -4,6 +4,7 @@ import asyncio
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from app.web_research import api
 from app.web_research.research import ResearchResult
@@ -64,9 +65,23 @@ def test_research_endpoint_returns_503_when_provider_unavailable(monkeypatch: py
     assert error.value.status_code == 503
 
 
-def test_main_registers_research_routes() -> None:
+def test_main_registers_research_routes(monkeypatch: pytest.MonkeyPatch) -> None:
+    class EmptyProvider:
+        async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
+            return []
+
+    monkeypatch.setattr(api, "build_research_provider", lambda: EmptyProvider())
+
     from app.main import app
 
-    paths = set(app.openapi()["paths"])
-    assert "/api/research" in paths
-    assert "/api/deep-research" in paths
+    client = TestClient(app)
+    research_response = client.post("/api/research", json={"query": "latest AI news"})
+    deep_response = client.post(
+        "/api/deep-research",
+        json={"query": "latest AI news", "queries": 2},
+    )
+
+    assert research_response.status_code == 200
+    assert deep_response.status_code == 200
+    assert research_response.json()["results"] == []
+    assert deep_response.json()["sources"] == []

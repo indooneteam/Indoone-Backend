@@ -332,6 +332,9 @@ async def _handle_gemini_message(
             for part in parts:
                 if not isinstance(part, dict):
                     continue
+                # Do not forward explicitly marked internal reasoning to the user.
+                if part.get("thought") is True:
+                    continue
                 inline_data = part.get("inlineData", part.get("inline_data"))
                 if isinstance(inline_data, dict):
                     audio_data = inline_data.get("data")

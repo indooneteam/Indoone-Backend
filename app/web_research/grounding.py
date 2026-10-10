@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 
 from app.ai.answer_quality import assess_answer
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -19,12 +23,13 @@ class GroundedEvidence:
 
 @dataclass(frozen=True)
 class GroundingQuality:
-    """Deterministic evidence-consistency checks."""
+    """Deterministic evidence-consistency checks for grounded answers."""
 
     passed: bool
     reason: str = ""
 
 
+_FACT_RE = re.compile(r"(?<![A-Za-z0-9])(?:\d+(?:[.,]\d+)?%?|\d{4})(?![A-Za-z0-9])")
 _URL_RE = re.compile(r"https?://[^\s)]+", flags=re.IGNORECASE)
 
 
@@ -47,21 +52,31 @@ def build_grounded_prompt_instruction() -> str:
 
 
 def assess_grounding(answer: str, evidence: list[GroundedEvidence]) -> GroundingQuality:
-    """Reject unsupported source URLs without guessing factual correctness from snippets.
+    """Check numeric anchors and source URLs against supplied evidence.
 
-    Public search snippets are short and incomplete. A number or year missing from
-    every snippet is not proof that the model's statement is false; treating that
-    as a hard failure caused valid chat replies to become HTTP 503 responses.
-    Numeric accuracy should be encouraged in the model instructions, not inferred
-    from lexical overlap against incomplete snippets. URLs, however, can be
-    checked deterministically against the exact URLs returned by the search tool.
+    Search snippets are incomplete, so an unmatched numeric anchor is a weak
+    warning rather than definitive proof of a false claim. The evaluator can
+    still flag it; production response handling must not turn that advisory into
+    an HTTP 503. URLs in the answer can be checked deterministically and remain
+    a hard validation failure when they were not returned by the search tool.
     """
 
     cleaned = answer.strip()
     if not cleaned or not evidence:
         return GroundingQuality(True)
 
+    evidence_text = "\n".join(
+        f"{item.title}\n{item.snippet}" for item in evidence if item.title.strip() or item.snippet.strip()
+    )
     answer_body = re.split(r"\n\s*sources:\s*", cleaned, maxsplit=1, flags=re.IGNORECASE)[0]
+
+    evidence_facts = {item.casefold() for item in _FACT_RE.findall(evidence_text)}
+    unsupported_facts = [
+        item for item in _FACT_RE.findall(answer_body) if item.casefold() not in evidence_facts
+    ]
+    if unsupported_facts:
+        return GroundingQuality(False, "unsupported_concrete_fact")
+
     evidence_urls = {item.url.strip().rstrip(".,;:") for item in evidence if item.url.strip()}
     for url in _URL_RE.findall(answer_body):
         normalized = url.rstrip(".,;:")
@@ -94,7 +109,7 @@ def extract_sources(answer: str) -> list[GroundedEvidence]:
 
 
 def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
-    """Quality-gate user-facing output and append deterministic source attribution."""
+    """Validate response quality, reject ungrounded URLs, and append source attribution."""
 
     cleaned = answer.strip()
     quality = assess_answer("", cleaned)
@@ -112,7 +127,12 @@ def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
 
     grounding = assess_grounding(cleaned, unique)
     if not grounding.passed:
-        raise RuntimeError(f"model answer failed grounding checks: {grounding.reason}")
+        if grounding.reason == "unsupported_source_url":
+            raise RuntimeError(f"model answer failed grounding checks: {grounding.reason}")
+        # A lexical mismatch against short snippets is not proof the claim is false.
+        # Keep the chat available, retain the verified source list, and log the
+        # advisory; the prompt already asks the model to avoid unsupported precision.
+        logger.warning("research grounding advisory: %s", grounding.reason)
 
     if not unique:
         return cleaned
@@ -125,7 +145,7 @@ def append_sources(answer: str, evidence: list[GroundedEvidence]) -> str:
 
 
 def split_grounded_sources(answer: str) -> tuple[str, list[GroundedEvidence]]:
-    """Split a validated numbered Sources footer for chat clients."""
+    """Split a validated numbered Sources footer for clients that render source cards."""
     cleaned = answer.strip()
     parts = re.split(r"\n\s*sources:\s*\n", cleaned, maxsplit=1, flags=re.IGNORECASE)
     if len(parts) != 2:

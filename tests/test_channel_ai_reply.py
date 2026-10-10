@@ -101,3 +101,45 @@ def test_instagram_message_replies_with_indoon_ai(tmp_path, monkeypatch) -> None
             "Hi! Thanks for messaging Indoone.",
         )
     ]
+
+
+def test_whatsapp_reply_works_without_owner_uid(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.sqlite3"))
+    monkeypatch.setenv("INDOONE_WHATSAPP_AI_REPLY_ENABLED", "true")
+    monkeypatch.delenv("INDOONE_WHATSAPP_AI_OWNER_USER_ID", raising=False)
+
+    conversation_db = tmp_path / "conversations.sqlite3"
+    monkeypatch.setattr(
+        channel_ai_reply,
+        "ConversationStore",
+        lambda: ConversationStore(conversation_db),
+    )
+
+    sent: list[tuple[str, str]] = []
+
+    async def fake_generate_reply(message: str, history=None, document_context: str = "") -> str:
+        assert message == "Hello without UID"
+        return "Reply without UID"
+
+    async def fake_send(to: str, text: str, approved: bool = False, preview_url: bool = False) -> dict[str, object]:
+        sent.append((to, text))
+        assert approved is True
+        return {"sent": True}
+
+    monkeypatch.setattr(channel_ai_reply, "generate_reply", fake_generate_reply)
+    monkeypatch.setattr(channel_ai_reply, "send_whatsapp_text_message", fake_send)
+
+    message = {
+        "id": "wamid.test-no-owner-uid",
+        "from": "919999999999",
+        "type": "text",
+        "text": "Hello without UID",
+    }
+
+    assert asyncio.run(channel_ai_reply.process_whatsapp_message(message)) is True
+    assert sent == [("919999999999", "Reply without UID")]
+    history = ConversationStore(conversation_db).recent(
+        channel_ai_reply._conversation_id("whatsapp", "919999999999"),
+        "system:whatsapp",
+    )
+    assert history == [("user", "Hello without UID"), ("assistant", "Reply without UID")]

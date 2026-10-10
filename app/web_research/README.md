@@ -1,11 +1,13 @@
 # Indoone Web Research
 
-This directory owns the live web research implementation and research-specific tests.
+This directory is the canonical home for live web research, source attribution, and evidence-grounding code and tests.
 
-- `research.py` contains external search providers, query variants, relevance checks, source merging, and evidence formatting.
-- `google_search.py` detects live-search intent and formats source links. Search uses only keyless public providers: Wikipedia, Wikidata, Google News RSS, OpenAlex, and Crossref; no paid search API is required.
-- `tests/` contains provider, source-formatting, and timeout-safety tests.
+- `google_search.py` configures native Google Search grounding for supported Gemma 4 models, validates grounding metadata URLs, and formats source links. The model may decide when a search is useful based on the question and system instructions.
+- `research.py` contains the optional public-source provider layer, query planning, relevance filtering, result merging, and evidence formatting. Its free provider uses public sources such as Wikipedia, Wikidata, Google News RSS, OpenAlex, and Crossref; the optional Tavily provider is used only when configured.
+- `grounding.py` checks concrete facts and source URLs against supplied evidence and produces deterministic source attribution.
+- `api.py` exposes the standalone `/api/research` and `/api/deep-research` endpoints.
+- `tests/` contains research, grounding, API, source-propagation, and timeout-safety tests.
 
-AI-runtime and channel modules should call this package through a narrow interface; search-provider code should not be duplicated in those modules.
+The general AI service and channel handlers should call this package through small interfaces. Keep provider, source, and evidence-specific logic here instead of duplicating it in chat or integration modules.
 
-The implementation has one canonical location: `app/web_research/`. Repository callers should import research functionality from this package; do not reintroduce the implementation under `app/ai/` or channel-specific modules.
+No search API secret is sent to clients. Gemini credentials remain server-side; public-source research remains available for standalone research routes and as an optional provider layer.

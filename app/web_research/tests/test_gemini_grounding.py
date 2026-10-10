@@ -48,7 +48,7 @@ def test_model_selected_search_is_executed_and_sources_are_returned(monkeypatch)
             assert len(calls) == 2
             assert "tools" not in json
             assert json["contents"][-2]["role"] == "model"
-            assert json["contents"][-1]["role"] == "function"
+            assert json["contents"][-1]["role"] == "user"
             function_response = json["contents"][-1]["parts"][0]["functionResponse"]
             assert function_response["response"]["results"][0]["url"] == "https://example.com/update"
             return FakeResponse(final)

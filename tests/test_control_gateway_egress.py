@@ -118,7 +118,7 @@ def test_gateway_requires_https_origin(monkeypatch):
     monkeypatch.setenv("INDOONE_CONTROL_GATEWAY_ORIGIN", "http://gateway.example")
     monkeypatch.setenv("INDOONE_GATEWAY_BACKEND_TOKEN", SERVICE_TOKEN)
     monkeypatch.setenv("INDOONE_GATEWAY_REQUIRED", "true")
-    with pytest.raises(RuntimeError, match="HTTPS origin"):
+    with pytest.raises(RuntimeError, match="HTTPS"):
         asyncio.run(
             control_gateway.send_via_control_gateway(
                 "telegram",

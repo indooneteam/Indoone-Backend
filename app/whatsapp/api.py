@@ -6,7 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.capabilities.channel_ai_reply import process_whatsapp_message
-from app.capabilities.whatsapp import parse_webhook, probe_whatsapp, send_text_message, validate_signature, verify_webhook
+from app.whatsapp.service import parse_webhook, probe_whatsapp, send_text_message, validate_signature, verify_webhook
 
 router = APIRouter(prefix="/integrations/whatsapp", tags=["whatsapp"])
 

@@ -13,7 +13,7 @@ from app.capabilities.store import (
     get_single_integration_token_user_id,
 )
 from app.telegram.service import send_message as send_telegram_message
-from app.capabilities.whatsapp import send_text_message as send_whatsapp_text_message
+from app.whatsapp.service import send_text_message as send_whatsapp_text_message
 from app.ai.conversation_store import ConversationStore
 
 logger = logging.getLogger("indoone.channel_ai_reply")

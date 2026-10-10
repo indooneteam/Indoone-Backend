@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from app.capabilities.channel_ai_reply import process_telegram_update
+from app.telegram.ai_reply import process_telegram_update
 from app.telegram.service import (
     delete_webhook,
     get_updates,

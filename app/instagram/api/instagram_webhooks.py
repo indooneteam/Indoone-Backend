@@ -4,7 +4,7 @@ import json
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 
-from app.capabilities.channel_ai_reply import process_instagram_webhook
+from app.instagram.ai_reply import process_instagram_webhook
 from app.instagram.capabilities.instagram_webhooks import normalize_event, verify_challenge, verify_signature
 
 router = APIRouter(prefix="/integrations/instagram/webhook", tags=["instagram-webhooks"])

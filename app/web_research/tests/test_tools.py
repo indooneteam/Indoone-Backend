@@ -82,7 +82,7 @@ def test_function_response_contains_call_id_and_sources() -> None:
         results=(ResearchResult("News source", "https://example.com/news", "Snippet"),),
     )
     output = tools.build_search_web_function_response(call, result)
-    assert output["role"] == "function"
+    assert output["role"] == "user"
     fn = output["parts"][0]["functionResponse"]
     assert fn["name"] == "search_web"
     assert fn["id"] == "call-42"

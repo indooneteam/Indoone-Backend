@@ -58,7 +58,7 @@ def test_format_sources_footer_leaves_answer_unchanged_without_sources() -> None
 
 def test_split_sources_footer_returns_structured_sources() -> None:
     answer, sources = split_sources_footer(
-        "Current answer.\\n\\nSources:\\n- [Official update](https://example.com/update)\\n- [Second source](https://example.org/news)"
+        "Current answer.\n\nSources:\n- [Official update](https://example.com/update)\n- [Second source](https://example.org/news)"
     )
     assert answer == "Current answer."
     assert sources == [
@@ -68,6 +68,6 @@ def test_split_sources_footer_returns_structured_sources() -> None:
 
 
 def test_split_sources_footer_leaves_regular_or_invalid_text_unchanged() -> None:
-    text = "Answer.\\n\\nSources:\\n- [Unsafe](javascript:alert(1))"
+    text = "Answer.\n\nSources:\n- [Unsafe](javascript:alert(1))"
     assert split_sources_footer("Just an answer.") == ("Just an answer.", [])
     assert split_sources_footer(text) == (text, [])

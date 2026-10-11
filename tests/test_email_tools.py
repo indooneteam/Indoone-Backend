@@ -246,3 +246,33 @@ def test_send_tool_is_rejected_without_explicit_send_intent(monkeypatch) -> None
     assert result["ok"] is False
     assert result["code"] == "ACTION_NOT_REQUESTED"
     assert saved == []
+
+
+
+def test_tool_uses_mailbox_named_by_user_over_model_argument(monkeypatch) -> None:
+    monkeypatch.setattr(
+        email_tools,
+        "get_integration_token_metadata",
+        lambda user_id, provider: {"provider": provider} if provider == "zoho_mail" else None,
+    )
+    monkeypatch.setattr(
+        email_tools,
+        "_list_mail",
+        lambda *args, **kwargs: _async_value([
+            {"id": "zoho-message", "subject": "Zoho result", "from": "sender@example.com"}
+        ]),
+    )
+
+    result = asyncio.run(
+        email_tools.execute_email_tool(
+            "user-1",
+            "conversation-1",
+            "list_recent_emails",
+            {"provider": "gmail", "limit": 1},
+            original_message="Show recent Zoho Mail",
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["provider"] == "Zoho Mail"
+    assert result["emails"][0]["id"] == "zoho-message"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 from urllib.parse import quote, urlsplit
 
@@ -60,11 +61,12 @@ async def _request(
     if not isinstance(result, dict):
         raise RuntimeError("Zoho Mail API returned an unexpected response")
     provider_status = result.get("status")
-    if isinstance(provider_status, dict):
-        code = provider_status.get("code")
-        if code is not None and str(code) not in {"200", "201", "202"}:
-            description = str(provider_status.get("description") or "request failed")
-            raise RuntimeError(f"Zoho Mail API failed: {description[:200]}")
+    if not isinstance(provider_status, dict):
+        raise RuntimeError("Zoho Mail API response omitted its status object")
+    code = provider_status.get("code")
+    if str(code) not in {"200", "201", "202"}:
+        description = str(provider_status.get("description") or "request failed")
+        raise RuntimeError(f"Zoho Mail API failed: {description[:200]}")
     return result
 
 
@@ -95,7 +97,18 @@ async def list_messages(
     if search_key.strip():
         if len(search_key) > 512:
             raise ValueError("search_key exceeds maximum length of 512")
-        params["searchKey"] = search_key.strip()
+        normalized_search = search_key.strip()
+        # Zoho's search API expects field-qualified search syntax. Treat
+        # ordinary user phrases as a full-message search, while preserving
+        # explicit Zoho filters such as subject:invoice or sender:user@host.
+        if not re.match(
+            r"(?i)^(entire|subject|sender|from|to|cc|bcc|has|before|after|on|date|folder|tag):",
+            normalized_search,
+        ):
+            normalized_search = f"entire:{normalized_search}"
+        if len(normalized_search) > 512:
+            raise ValueError("normalized search_key exceeds maximum length of 512")
+        params["searchKey"] = normalized_search
         return await _request(user_id, "GET", f"accounts/{account}/messages/search", params=params)
     if folder_id.strip():
         params["folderId"] = _identifier(folder_id, "folder_id")

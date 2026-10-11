@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.capabilities.github_writes import github_comment_issue_or_pr, github_create_issue
-from app.capabilities.gmail import get_gmail_message, list_gmail_messages, send_gmail_message
+from app.plugins.gmail.routes import router as gmail_router
 from app.capabilities.google_calendar import create_event as create_calendar_event, delete_event as delete_calendar_event, get_event as get_calendar_event, list_calendars, list_events, update_event as update_calendar_event
 from app.capabilities.google_drive import (
     build_google_drive_authorization,
@@ -26,6 +26,7 @@ from app.capabilities.store import create_oauth_state
 from secrets import token_urlsafe
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
+router.include_router(gmail_router)
 
 
 class IntegrationProbeRequest(BaseModel):
@@ -59,26 +60,6 @@ class GithubCommentRequest(BaseModel):
     repository: str = Field(min_length=3, max_length=200)
     number: int = Field(ge=1, le=100000000)
     body: str = Field(min_length=1, max_length=12000)
-    approved: bool = False
-
-
-class GmailMessagesRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    query: str = Field(default="", max_length=500)
-    page_token: str = Field(default="", max_length=2048)
-    max_results: int = Field(default=20, ge=1, le=100)
-
-
-class GmailMessageRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    message_id: str = Field(min_length=1, max_length=256)
-
-
-class GmailSendRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    to: str = Field(min_length=1, max_length=512)
-    subject: str = Field(min_length=1, max_length=2000)
-    body: str = Field(min_length=1, max_length=20000)
     approved: bool = False
 
 
@@ -365,43 +346,5 @@ async def github_comment_endpoint(request: GithubCommentRequest) -> dict[str, ob
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"github provider failed: {exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@router.post("/gmail/messages")
-async def gmail_messages(request: GmailMessagesRequest) -> dict[str, object]:
-    try:
-        return await list_gmail_messages(request.user_id, request.query, request.page_token, request.max_results)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"gmail provider failed: {exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@router.post("/gmail/message")
-async def gmail_message(request: GmailMessageRequest) -> dict[str, object]:
-    try:
-        return await get_gmail_message(request.user_id, request.message_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"gmail provider failed: {exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@router.post("/gmail/send")
-async def gmail_send(request: GmailSendRequest) -> dict[str, object]:
-    try:
-        return await send_gmail_message(request.user_id, request.to, request.subject, request.body, request.approved)
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"gmail provider failed: {exc}") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

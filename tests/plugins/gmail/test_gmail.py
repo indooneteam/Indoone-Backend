@@ -2,7 +2,7 @@ import base64
 import pytest
 from cryptography.fernet import Fernet
 
-from app.capabilities.gmail import get_gmail_message, list_gmail_messages, send_gmail_message
+from app.plugins.gmail.service import get_gmail_message, list_gmail_messages, send_gmail_message
 from app.capabilities.store import upsert_integration_token
 
 
@@ -38,7 +38,7 @@ async def test_gmail_message_list_uses_user_scoped_encrypted_token(monkeypatch, 
             assert kwargs["params"]["q"] == "is:unread"
             return Response()
 
-    monkeypatch.setattr("app.capabilities.gmail.httpx.AsyncClient", Client)
+    monkeypatch.setattr("app.plugins.gmail.service.httpx.AsyncClient", Client)
     result = await list_gmail_messages("user-one", query="is:unread")
     assert result["messages"] == [{"id": "m1", "threadId": "t1"}]
     with pytest.raises(ValueError, match="not connected"):
@@ -85,7 +85,7 @@ async def test_gmail_get_message_returns_provider_payload(monkeypatch, tmp_path)
             assert url.endswith("/messages/m1")
             return Response()
 
-    monkeypatch.setattr("app.capabilities.gmail.httpx.AsyncClient", Client)
+    monkeypatch.setattr("app.plugins.gmail.service.httpx.AsyncClient", Client)
     result = await get_gmail_message("user-one", "m1")
     assert result["message"]["id"] == "m1"
     assert result["secrets_exposed"] is False
@@ -148,9 +148,9 @@ async def test_gmail_reply_preserves_thread_and_reply_headers(monkeypatch, tmp_p
             assert "Subject: Re: Meeting tomorrow" in raw
             return Response()
 
-    monkeypatch.setattr("app.capabilities.gmail.httpx.AsyncClient", Client)
+    monkeypatch.setattr("app.plugins.gmail.service.httpx.AsyncClient", Client)
 
-    from app.capabilities.gmail import reply_gmail_message
+    from app.plugins.gmail.service import reply_gmail_message
 
     result = await reply_gmail_message(
         "user-one",

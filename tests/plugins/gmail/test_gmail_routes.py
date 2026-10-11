@@ -1,24 +1,87 @@
 from __future__ import annotations
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app.main import app
 from app.plugins.gmail import oauth_routes
 
 
-def test_gmail_oauth_routes_are_mounted_under_api_prefix() -> None:
-    registered = {
-        (route.path, method)
-        for route in app.routes
-        for method in getattr(route, "methods", set())
-    }
-    expected = {
-        ("/api/integrations/gmail/auth-config", "GET"),
-        ("/api/integrations/gmail/server-auth-code", "POST"),
-        ("/api/integrations/gmail/native-token", "POST"),
-        ("/api/integrations/gmail/status", "GET"),
-    }
-    assert expected <= registered
+def test_gmail_oauth_endpoints_are_mounted_and_reachable(monkeypatch) -> None:
+    # Exercise the real FastAPI routing stack without requiring production credentials.
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "false")
+    monkeypatch.setattr(
+        oauth_routes,
+        "gmail_server_authorization_config",
+        lambda: {
+            "integration": "gmail",
+            "server_client_id": "public-client-id",
+            "offline_access": True,
+        },
+    )
+    monkeypatch.setattr(
+        oauth_routes,
+        "get_integration_token_metadata",
+        lambda user_id, integration_id: None,
+    )
+
+    async def fake_exchange(user_id, server_auth_code, requested_scope=""):
+        return {
+            "integration": "gmail",
+            "user_id": user_id,
+            "connected": True,
+            "provider_ok": True,
+            "scope": requested_scope,
+            "summary": {"email_address": "gmail-test@example.com"},
+            "secrets_exposed": False,
+        }
+
+    async def fake_store(user_id, integration_id, access_token, scope="", expires_at=None):
+        return {
+            "integration": integration_id,
+            "user_id": user_id,
+            "connected": True,
+            "summary": {"email_address": "gmail-test@example.com"},
+            "secrets_exposed": False,
+        }
+
+    monkeypatch.setattr(oauth_routes, "exchange_gmail_server_auth_code", fake_exchange)
+    monkeypatch.setattr(oauth_routes, "store_native_access_token", fake_store)
+
+    # Avoid running the app lifespan: this is a route-wiring test, not a deployment test.
+    client = TestClient(app, raise_server_exceptions=False)
+
+    auth_config = client.get("/api/integrations/gmail/auth-config")
+    assert auth_config.status_code == 200
+    assert auth_config.json()["server_client_id"] == "public-client-id"
+
+    server_auth = client.post(
+        "/api/integrations/gmail/server-auth-code",
+        json={
+            "user_id": "user-one",
+            "server_auth_code": "test-code",
+            "scope": "https://www.googleapis.com/auth/gmail.modify",
+        },
+    )
+    assert server_auth.status_code == 200
+    assert server_auth.json()["connected"] is True
+
+    native_token = client.post(
+        "/api/integrations/gmail/native-token",
+        json={
+            "user_id": "user-one",
+            "access_token": "test-access-token",
+            "scope": "https://www.googleapis.com/auth/gmail.modify",
+        },
+    )
+    assert native_token.status_code == 200
+    assert native_token.json()["connected"] is True
+
+    status = client.get("/api/integrations/gmail/status", params={"user_id": "user-one"})
+    assert status.status_code == 200
+    assert status.json()["connected"] is False
+    assert status.json()["metadata"] == {}
 
 
 @pytest.mark.asyncio

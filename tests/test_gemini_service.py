@@ -253,3 +253,52 @@ def test_generate_gemini_function_call_reply_executes_tool_and_returns_final_ans
     assert followup_contents[-1]["role"] == "user"
     assert followup_contents[-1]["parts"][0]["functionResponse"]["id"] == "call-1"
     assert followup_contents[-1]["parts"][0]["functionResponse"]["response"]["result"]["count"] == 3
+
+
+
+def test_function_call_flow_does_not_trust_unverified_first_answer(monkeypatch) -> None:
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        @staticmethod
+        def json() -> dict[str, object]:
+            return _response([{"text": "You have 4 new emails."}])
+
+    class FakeAsyncClient:
+        def __init__(self, *, timeout: object) -> None:
+            pass
+
+        async def __aenter__(self) -> "FakeAsyncClient":
+            return self
+
+        async def __aexit__(self, exc_type, exc, traceback) -> None:
+            return None
+
+        async def post(self, url: str, *, headers: dict[str, str], json: dict[str, object]) -> FakeResponse:
+            return FakeResponse()
+
+    async def unused_tool(name: str, arguments: dict[str, object]) -> dict[str, object]:
+        raise AssertionError("No tool should be called when Gemini does not request it")
+
+    monkeypatch.setattr(gemini_service, "_get_config", lambda: ("test-key", "gemma-4-26b-a4b-it"))
+    monkeypatch.setattr(gemini_service.httpx, "AsyncClient", FakeAsyncClient)
+
+    reply = asyncio.run(
+        gemini_service.generate_gemini_function_call_reply(
+            "Check my emails",
+            history=None,
+            tool_declarations=[
+                {
+                    "name": "list_recent_emails",
+                    "description": "Get recent email data.",
+                    "parameters": {"type": "OBJECT", "properties": {}},
+                }
+            ],
+            execute_tool=unused_tool,
+            extra_system_instruction="Use the email tool.",
+        )
+    )
+
+    assert "couldn't verify the mailbox data" in reply
+    assert "4 new emails" not in reply

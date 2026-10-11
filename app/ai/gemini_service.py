@@ -151,10 +151,11 @@ def _extract_text(response_data: dict[str, Any]) -> str:
 
 
 def _generation_config(model: str) -> dict[str, Any]:
+    # Do not impose an app-level output-token cap. When maxOutputTokens is
+    # omitted, the Gemini API uses the selected model's own output-token limit.
     config: dict[str, Any] = {
         "temperature": 0.2,
         "topP": 0.9,
-        "maxOutputTokens": int(os.getenv("GEMINI_MAX_TOKENS", "512")),
     }
     # Gemma 4 exposes a thinking-level control through the GenerateContent API.
     # Minimal disables its thinking mode, preventing internal deliberation from

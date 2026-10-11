@@ -69,9 +69,17 @@ def run_smoke() -> None:
 
         auth = {"Authorization": _token()}
         with TestClient(app, base_url="https://testserver") as client:
+            # Health/readiness probes are public for load balancers and monitors.
             response = client.get("/health")
-            assert response.status_code == 401
+            assert response.status_code == 200
+            assert response.json() == {"status": "ok"}
 
+            response = client.get("/ready")
+            assert response.status_code == 200
+            assert response.json() == {"status": "ready"}
+
+            # Authenticated requests continue to work, while sensitive routes below
+            # remain protected by the production bearer-auth requirement.
             response = client.get("/health", headers=auth)
             assert response.status_code == 200
             assert response.json() == {"status": "ok"}

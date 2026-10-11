@@ -195,6 +195,18 @@ def _explicit_draft_edit_intent(message: str) -> bool:
     )
 
 
+def _provider_named_by_user(message: str) -> str:
+    value = message.casefold()
+    zoho_names = ("zoho", "ಜೋಹೋ", "ಜೂಹೋ")
+    gmail_names = ("gmail", "ಜಿಮೇಲ್")
+    has_zoho = any(name in value for name in zoho_names)
+    has_gmail = any(name in value for name in gmail_names)
+    # Leave multi-provider requests to the model so it can call each mailbox.
+    if has_zoho == has_gmail:
+        return ""
+    return "zoho_mail" if has_zoho else "gmail"
+
+
 def _limit(value: object, default: int = MAX_EMAIL_RESULTS) -> int:
     try:
         number = int(value) if value is not None else default
@@ -304,7 +316,9 @@ async def execute_email_tool(
         return {"ok": False, "code": "ACTION_NOT_REQUESTED", "message": "The user did not explicitly ask to create a draft in the current message. Ask a clarifying question instead."}
     if name == "update_email_draft" and not _explicit_draft_edit_intent(original_message):
         return {"ok": False, "code": "ACTION_NOT_REQUESTED", "message": "The user did not explicitly ask to edit a draft in the current message. Ask a clarifying question instead."}
-    provider, provider_error = _resolve_provider(user_id, arguments.get("provider"))
+    user_named_provider = _provider_named_by_user(original_message)
+    requested_provider = user_named_provider or arguments.get("provider")
+    provider, provider_error = _resolve_provider(user_id, requested_provider)
     if provider_error:
         return {"ok": False, **provider_error}
     assert provider is not None

@@ -10,8 +10,11 @@ from app.plugins.zoho_mail.service import (
     get_message_content,
     list_accounts,
     list_folders,
+    delete_message,
     list_messages,
+    replace_draft,
     reply_to_message,
+    save_draft,
     send_message,
 )
 
@@ -43,6 +46,7 @@ class ZohoMailSendRequest(ZohoMailAccountRequest):
     to_address: str = Field(min_length=3, max_length=512)
     subject: str = Field(min_length=1, max_length=2000)
     content: str = Field(min_length=1, max_length=20_000)
+    approved: bool = False
 
 class ZohoMailReplyRequest(ZohoMailAccountRequest):
     message_id: str = Field(min_length=1, max_length=256)
@@ -50,6 +54,27 @@ class ZohoMailReplyRequest(ZohoMailAccountRequest):
     to_address: str = Field(min_length=3, max_length=512)
     subject: str = Field(min_length=1, max_length=2000)
     content: str = Field(min_length=1, max_length=20_000)
+    approved: bool = False
+
+
+class ZohoMailDeleteRequest(ZohoMailAccountRequest):
+    folder_id: str = Field(min_length=1, max_length=256)
+    message_id: str = Field(min_length=1, max_length=256)
+    approved: bool = False
+    permanently: bool = False
+
+
+class ZohoMailDraftRequest(ZohoMailAccountRequest):
+    from_address: str = Field(min_length=3, max_length=512)
+    to_address: str = Field(default="", max_length=512)
+    subject: str = Field(default="", max_length=2000)
+    content: str = Field(default="", max_length=20_000)
+
+
+class ZohoMailReplaceDraftRequest(ZohoMailDraftRequest):
+    folder_id: str = Field(min_length=1, max_length=256)
+    draft_id: str = Field(min_length=1, max_length=256)
+    approved: bool = False
 
 
 def _raise_provider_error(exc: Exception) -> None:
@@ -57,6 +82,8 @@ def _raise_provider_error(exc: Exception) -> None:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if isinstance(exc, httpx.HTTPError):
         raise HTTPException(status_code=502, detail="Zoho Mail API request failed") from exc
+    if isinstance(exc, PermissionError):
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     if isinstance(exc, RuntimeError):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     raise HTTPException(status_code=500, detail="Zoho Mail request failed") from exc
@@ -116,8 +143,9 @@ async def zoho_mail_send(request: ZohoMailSendRequest) -> dict[str, object]:
             request.to_address,
             request.subject,
             request.content,
+            approved=request.approved,
         )
-    except (ValueError, RuntimeError, httpx.HTTPError) as exc:
+    except (PermissionError, ValueError, RuntimeError, httpx.HTTPError) as exc:
         _raise_provider_error(exc)
 
 @router.post("/reply")
@@ -131,6 +159,56 @@ async def zoho_mail_reply(request: ZohoMailReplyRequest) -> dict[str, object]:
             request.to_address,
             request.subject,
             request.content,
+            approved=request.approved,
+        )
+    except (PermissionError, ValueError, RuntimeError, httpx.HTTPError) as exc:
+        _raise_provider_error(exc)
+
+
+
+@router.post("/delete")
+async def zoho_mail_delete(request: ZohoMailDeleteRequest) -> dict[str, object]:
+    try:
+        return await delete_message(
+            request.user_id,
+            request.account_id,
+            request.folder_id,
+            request.message_id,
+            approved=request.approved,
+            permanently=request.permanently,
+        )
+    except (PermissionError, ValueError, RuntimeError, httpx.HTTPError) as exc:
+        _raise_provider_error(exc)
+
+
+@router.post("/draft")
+async def zoho_mail_save_draft(request: ZohoMailDraftRequest) -> dict[str, object]:
+    try:
+        return await save_draft(
+            request.user_id,
+            request.account_id,
+            request.from_address,
+            request.to_address,
+            request.subject,
+            request.content,
         )
     except (ValueError, RuntimeError, httpx.HTTPError) as exc:
+        _raise_provider_error(exc)
+
+
+@router.post("/draft/replace")
+async def zoho_mail_replace_draft(request: ZohoMailReplaceDraftRequest) -> dict[str, object]:
+    try:
+        return await replace_draft(
+            request.user_id,
+            request.account_id,
+            request.folder_id,
+            request.draft_id,
+            request.from_address,
+            request.to_address,
+            request.subject,
+            request.content,
+            approved=request.approved,
+        )
+    except (PermissionError, ValueError, RuntimeError, httpx.HTTPError) as exc:
         _raise_provider_error(exc)

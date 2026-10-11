@@ -4,7 +4,8 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from app.capabilities.store import get_integration_token_metadata
+from app.capabilities.integrations import _fernet
+from app.capabilities.store import delete_integration_token, get_integration_token, get_integration_token_metadata
 from app.plugins.gmail.oauth import exchange_gmail_server_auth_code, gmail_server_authorization_config, store_native_access_token
 
 
@@ -24,6 +25,10 @@ class NativeIntegrationTokenRequest(BaseModel):
     access_token: str = Field(min_length=1, max_length=8_000)
     scope: str = Field(default="", max_length=4_000)
     expires_at: str | None = Field(default=None, max_length=128)
+
+
+class GmailDisconnectRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
 
 @router.get("/integrations/gmail/auth-config")
 async def gmail_auth_config() -> dict[str, object]:
@@ -48,6 +53,50 @@ async def gmail_server_auth_code(request: GmailServerAuthCodeRequest) -> dict[st
         raise HTTPException(status_code=502, detail="Google rejected the Gmail authorization code") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+@router.post("/integrations/gmail/disconnect")
+async def gmail_disconnect(request: GmailDisconnectRequest) -> dict[str, object]:
+    """Revoke provider access when possible, then delete only this user's local token."""
+    user_id = request.user_id.strip()
+    row = get_integration_token(user_id, "gmail")
+    remote_revoked = False
+    if row is not None:
+        try:
+            cipher = _fernet()
+            encrypted_refresh = row.get("refresh_token")
+            token = (
+                cipher.decrypt(bytes(encrypted_refresh)).decode("utf-8")
+                if encrypted_refresh
+                else cipher.decrypt(bytes(row["access_token"])).decode("utf-8")
+            )
+        except Exception:
+            token = ""
+
+        if token:
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.post(
+                        "https://oauth2.googleapis.com/revoke",
+                        data={"token": token},
+                        headers={"Accept": "application/json"},
+                    )
+                    response.raise_for_status()
+                    remote_revoked = True
+            except httpx.HTTPError:
+                # Remove local credentials even if provider revocation is temporarily
+                # unavailable; never log the sensitive token or provider response body.
+                remote_revoked = False
+
+        delete_integration_token(user_id, "gmail")
+
+    return {
+        "integration": "gmail",
+        "user_id": user_id,
+        "connected": False,
+        "remote_revoked": remote_revoked or row is None,
+        "secrets_exposed": False,
+    }
+
 
 @router.get("/integrations/gmail/status")
 async def gmail_connection_status(

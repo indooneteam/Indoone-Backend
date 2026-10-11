@@ -95,6 +95,18 @@ def initialize() -> None:
                 updated_at TEXT NOT NULL,
                 PRIMARY KEY (user_id, integration_id)
             );
+            CREATE TABLE IF NOT EXISTS pending_email_actions (
+                user_id TEXT NOT NULL,
+                conversation_id TEXT NOT NULL,
+                integration_id TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                encrypted_payload BLOB NOT NULL,
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, conversation_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_pending_email_actions_expiry
+                ON pending_email_actions(expires_at);
             CREATE TABLE IF NOT EXISTS channel_inbound_events (
                 event_key TEXT PRIMARY KEY,
                 status TEXT NOT NULL CHECK(status IN ('processing', 'sent', 'failed')),
@@ -269,6 +281,112 @@ def get_integration_token_metadata(user_id: str, integration_id: str) -> dict[st
             (user_id, integration_id),
         ).fetchone()
     return _row_dict(row)
+
+
+def delete_integration_token(user_id: str, integration_id: str) -> bool:
+    """Delete only the selected user's saved credentials for one integration."""
+    normalized_user = user_id.strip()
+    normalized_integration = integration_id.strip().lower()
+    if not normalized_user or not normalized_integration:
+        raise ValueError("user_id and integration_id are required")
+    initialize()
+    with closing(_connect()) as db:
+        cursor = db.execute(
+            "DELETE FROM integration_tokens WHERE user_id = ? AND integration_id = ?",
+            (normalized_user, normalized_integration),
+        )
+        db.commit()
+    return cursor.rowcount > 0
+
+
+def save_pending_email_action(
+    user_id: str,
+    conversation_id: str,
+    integration_id: str,
+    action_type: str,
+    encrypted_payload: bytes,
+    expires_at: str,
+) -> None:
+    """Store one encrypted, user-scoped email action awaiting confirmation."""
+    values = (
+        user_id.strip(),
+        conversation_id.strip(),
+        integration_id.strip().lower(),
+        action_type.strip().lower(),
+        bytes(encrypted_payload),
+        _now(),
+        expires_at.strip(),
+    )
+    if not all(values[index] for index in (0, 1, 2, 3, 6)) or not values[4]:
+        raise ValueError("pending email action fields are required")
+    initialize()
+    with closing(_connect()) as db:
+        db.execute(
+            """
+            INSERT INTO pending_email_actions(
+                user_id, conversation_id, integration_id, action_type,
+                encrypted_payload, created_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, conversation_id) DO UPDATE SET
+                integration_id=excluded.integration_id,
+                action_type=excluded.action_type,
+                encrypted_payload=excluded.encrypted_payload,
+                created_at=excluded.created_at,
+                expires_at=excluded.expires_at
+            """,
+            values,
+        )
+        db.commit()
+
+
+def get_pending_email_action(user_id: str, conversation_id: str) -> dict[str, Any] | None:
+    normalized_user = user_id.strip()
+    normalized_conversation = conversation_id.strip()
+    if not normalized_user or not normalized_conversation:
+        return None
+    initialize()
+    with closing(_connect()) as db:
+        row = db.execute(
+            """
+            SELECT user_id, conversation_id, integration_id, action_type,
+                   encrypted_payload, created_at, expires_at
+            FROM pending_email_actions
+            WHERE user_id = ? AND conversation_id = ?
+            """,
+            (normalized_user, normalized_conversation),
+        ).fetchone()
+        if row is None:
+            return None
+        item = dict(row)
+        try:
+            expires_at = datetime.fromisoformat(str(item["expires_at"]).replace("Z", "+00:00"))
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+        except ValueError:
+            expires_at = datetime.min.replace(tzinfo=timezone.utc)
+        if expires_at <= datetime.now(timezone.utc):
+            db.execute(
+                "DELETE FROM pending_email_actions WHERE user_id = ? AND conversation_id = ?",
+                (normalized_user, normalized_conversation),
+            )
+            db.commit()
+            return None
+    return item
+
+
+def delete_pending_email_action(user_id: str, conversation_id: str) -> bool:
+    normalized_user = user_id.strip()
+    normalized_conversation = conversation_id.strip()
+    if not normalized_user or not normalized_conversation:
+        return False
+    initialize()
+    with closing(_connect()) as db:
+        cursor = db.execute(
+            "DELETE FROM pending_email_actions WHERE user_id = ? AND conversation_id = ?",
+            (normalized_user, normalized_conversation),
+        )
+        db.commit()
+    return cursor.rowcount > 0
 
 
 def upsert_memory(user_id: str, key: str, value: str, confidence: float, source: str) -> dict[str, Any]:

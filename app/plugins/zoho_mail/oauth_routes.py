@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.capabilities.store import get_integration_token_metadata
 from app.plugins.zoho_mail.oauth import (
     cancel_zoho_mail_authorization,
+    disconnect_zoho_mail,
     exchange_zoho_mail_authorization_code,
     start_zoho_mail_authorization,
     zoho_mail_auth_config,
@@ -80,6 +81,16 @@ async def zoho_mail_callback(request: Request) -> HTMLResponse:
         "</body></html>",
         status_code=200,
     )
+
+
+@router.post("/integrations/zoho-mail/disconnect")
+async def zoho_mail_disconnect(request: ZohoMailStartRequest) -> dict[str, object]:
+    try:
+        return await disconnect_zoho_mail(request.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.get("/integrations/zoho-mail/status")

@@ -17,6 +17,173 @@ def _headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}", "Accept": "application/json"}
 
 
+def _raw_message(to: str, subject: str, body: str) -> str:
+    message = EmailMessage()
+    if to.strip():
+        message["To"] = to.strip()
+    if subject.strip():
+        message["Subject"] = subject.strip()
+    message.set_content(body)
+    return base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
+
+
+async def list_gmail_drafts(user_id: str, max_results: int = 20) -> dict[str, object]:
+    if not user_id.strip():
+        raise ValueError("user_id is required")
+    if not 1 <= max_results <= 100:
+        raise ValueError("max_results must be between 1 and 100")
+    token = await _token(user_id)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_GMAIL_BASE_URL}/drafts",
+            headers=_headers(token),
+            params={"maxResults": max_results},
+        )
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict):
+        raise RuntimeError("gmail provider returned invalid draft list")
+    drafts = body.get("drafts")
+    return {
+        "integration": "gmail",
+        "user_id": user_id.strip(),
+        "drafts": drafts if isinstance(drafts, list) else [],
+        "result_size_estimate": body.get("resultSizeEstimate", 0),
+        "secrets_exposed": False,
+    }
+
+
+async def create_gmail_draft(
+    user_id: str,
+    to: str = "",
+    subject: str = "",
+    body: str = "",
+) -> dict[str, object]:
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    if len(to) > 512 or len(subject) > 2000 or len(body) > 20000:
+        raise ValueError("draft fields exceed their maximum allowed length")
+    if not body.strip() and not subject.strip() and not to.strip():
+        raise ValueError("draft content is required")
+    token = await _token(user)
+    payload = {"message": {"raw": _raw_message(to, subject, body)}}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            f"{_GMAIL_BASE_URL}/drafts",
+            headers=_headers(token),
+            json=payload,
+        )
+        response.raise_for_status()
+        result = response.json()
+    if not isinstance(result, dict):
+        raise RuntimeError("gmail provider returned invalid draft response")
+    return {
+        "integration": "gmail",
+        "user_id": user,
+        "operation": "create_draft",
+        "draft": {
+            "id": result.get("id"),
+            "message_id": (result.get("message") or {}).get("id")
+            if isinstance(result.get("message"), dict)
+            else None,
+        },
+        "secrets_exposed": False,
+    }
+
+
+async def update_gmail_draft(
+    user_id: str,
+    draft_id: str,
+    to: str = "",
+    subject: str = "",
+    body: str = "",
+) -> dict[str, object]:
+    user = user_id.strip()
+    normalized_draft_id = draft_id.strip()
+    if not user or not normalized_draft_id or len(normalized_draft_id) > 256:
+        raise ValueError("user_id and a valid draft_id are required")
+    if len(to) > 512 or len(subject) > 2000 or len(body) > 20000:
+        raise ValueError("draft fields exceed their maximum allowed length")
+    token = await _token(user)
+    payload = {"message": {"raw": _raw_message(to, subject, body)}}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.put(
+            f"{_GMAIL_BASE_URL}/drafts/{normalized_draft_id}",
+            headers=_headers(token),
+            json=payload,
+        )
+        response.raise_for_status()
+        result = response.json()
+    if not isinstance(result, dict):
+        raise RuntimeError("gmail provider returned invalid updated draft response")
+    return {
+        "integration": "gmail",
+        "user_id": user,
+        "operation": "update_draft",
+        "draft_id": result.get("id", normalized_draft_id),
+        "secrets_exposed": False,
+    }
+
+
+async def delete_gmail_draft(
+    user_id: str,
+    draft_id: str,
+    approved: bool = False,
+) -> dict[str, object]:
+    if not approved:
+        raise PermissionError("explicit approval is required for Gmail draft deletion")
+    user = user_id.strip()
+    normalized_draft_id = draft_id.strip()
+    if not user or not normalized_draft_id or len(normalized_draft_id) > 256:
+        raise ValueError("user_id and a valid draft_id are required")
+    token = await _token(user)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.delete(
+            f"{_GMAIL_BASE_URL}/drafts/{normalized_draft_id}",
+            headers=_headers(token),
+        )
+        response.raise_for_status()
+    return {
+        "integration": "gmail",
+        "user_id": user,
+        "operation": "delete_draft",
+        "draft_id": normalized_draft_id,
+        "secrets_exposed": False,
+    }
+
+
+async def delete_gmail_message(
+    user_id: str,
+    message_id: str,
+    approved: bool = False,
+) -> dict[str, object]:
+    if not approved:
+        raise PermissionError("explicit approval is required for Gmail message deletion")
+    user = user_id.strip()
+    normalized_message_id = message_id.strip()
+    if not user or not normalized_message_id or len(normalized_message_id) > 256:
+        raise ValueError("user_id and a valid message_id are required")
+    token = await _token(user)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            f"{_GMAIL_BASE_URL}/messages/{normalized_message_id}/trash",
+            headers=_headers(token),
+        )
+        response.raise_for_status()
+        result = response.json()
+    if not isinstance(result, dict):
+        raise RuntimeError("gmail provider returned invalid trash response")
+    return {
+        "integration": "gmail",
+        "user_id": user,
+        "operation": "trash_message",
+        "message_id": normalized_message_id,
+        "secrets_exposed": False,
+    }
+
+
+
 async def list_gmail_messages(user_id: str, query: str = "", page_token: str = "", max_results: int = 20) -> dict[str, object]:
     if not user_id.strip():
         raise ValueError("user_id is required")

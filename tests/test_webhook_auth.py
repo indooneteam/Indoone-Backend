@@ -38,3 +38,36 @@ def test_provider_webhooks_use_provider_validation_without_app_bearer(monkeypatc
     assert telegram.status_code == 401
     assert "invalid telegram webhook secret" in telegram.text
     assert all("bearer authentication required" not in response.text for response in (whatsapp, instagram, telegram))
+
+
+
+def test_health_and_readiness_probes_are_public_but_details_remain_authenticated(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_ENV", "development")
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
+    monkeypatch.setattr("app.main.sqlite_runtime_status", lambda: {"ready": True})
+    monkeypatch.setattr(
+        "app.main.ai_service.ai_provider_status",
+        lambda: {
+            "provider": "local",
+            "model": None,
+            "configuration_ready": True,
+            "api_key_configured": None,
+        },
+    )
+
+    with TestClient(app) as client:
+        health = client.get("/health")
+        ready = client.get("/ready")
+        details = client.get("/health/details")
+        connector = client.get(
+            "/api/integrations/zoho-mail/connection",
+            params={"user_id": "test-user"},
+        )
+
+    assert health.status_code == 200
+    assert health.json() == {"status": "ok"}
+    assert ready.status_code == 200
+    assert ready.json() == {"status": "ready"}
+    assert details.status_code == 401
+    assert connector.status_code == 401

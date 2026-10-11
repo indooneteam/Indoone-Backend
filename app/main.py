@@ -178,7 +178,14 @@ async def request_context_middleware(request: Request, call_next):
         request.url.path in _PUBLIC_OAUTH_CALLBACK_PATHS
         and request.method.upper() == "GET"
     )
-    authentication_exempt = provider_webhook or public_oauth_callback
+    # Liveness/readiness probes are intentionally public so reverse proxies and
+    # deployment monitors can check the process without app-user credentials.
+    # Detailed health remains authenticated because it exposes operational state.
+    public_health_check = (
+        request.method.upper() == "GET"
+        and request.url.path in {"/health", "/ready"}
+    )
+    authentication_exempt = provider_webhook or public_oauth_callback or public_health_check
     principal = ""
     if authorization and not authentication_exempt:
         try:

@@ -606,3 +606,18 @@ def test_explicit_reply_intent_rejects_negated_english_and_kannada_requests() ->
 def test_explicit_reply_intent_accepts_a_direct_reply_request() -> None:
     assert email_tools._explicit_reply_intent("Reply to the Zoho Mail message about Launch plan") is True
 
+
+def test_zoho_summary_formats_epoch_milliseconds_as_utc() -> None:
+    result = email_assistant._zoho_summary(
+        {
+            "messageId": "message-2",
+            "fromAddress": "sender@example.com",
+            "subject": "Quarterly report",
+            "receivedTime": "1709887053409",
+            "folderId": "inbox-1",
+        },
+        account_id="account-1",
+    )
+
+    assert result["date"] == "2024-03-08T08:37:33.409Z"
+

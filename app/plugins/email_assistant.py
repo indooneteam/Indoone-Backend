@@ -151,6 +151,30 @@ def _gmail_summary(row: dict[str, Any], detail: dict[str, Any]) -> dict[str, str
     }
 
 
+def _format_zoho_timestamp(value: Any) -> str:
+    """Normalize Zoho epoch-millisecond values to readable UTC timestamps."""
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.isdigit():
+        try:
+            numeric = int(raw)
+            is_milliseconds = numeric > 100_000_000_000
+            timestamp = numeric / 1000 if is_milliseconds else numeric
+            parsed = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            precision = "milliseconds" if is_milliseconds else "seconds"
+            return parsed.isoformat(timespec=precision).replace("+00:00", "Z")
+        except (OverflowError, OSError, ValueError):
+            return raw
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+    except ValueError:
+        return raw
+
+
 def _zoho_summary(
     row: dict[str, Any],
     account_id: str,
@@ -192,7 +216,7 @@ def _zoho_summary(
         "folder_id": str(row.get("folderId") or row.get("folder_id") or default_folder_id).strip(),
         "subject": str(row.get("subject") or "(No subject)").strip(),
         "from": str(sender).strip(),
-        "date": str(received_time or sent_time or row.get("date") or "").strip(),
+        "date": _format_zoho_timestamp(received_time or sent_time or row.get("date") or ""),
         "to": str(row.get("toAddress") or row.get("to_address") or row.get("to") or "").strip(),
         "snippet": str(row.get("summary") or row.get("snippet") or row.get("content") or "").strip(),
         "body": "",

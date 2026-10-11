@@ -106,3 +106,34 @@ def test_zoho_mail_generic_integration_registry_supports_oauth() -> None:
     assert integration["name"] == "Zoho Mail"
     assert integration["auth_type"] == "oauth2"
     assert "ZohoMail.messages.READ" in integration["permissions"]
+
+
+def test_zoho_mail_reply_endpoint_calls_provider_service(monkeypatch) -> None:
+    from app.plugins.zoho_mail import routes as zoho_routes
+
+    monkeypatch.setattr(
+        zoho_routes,
+        "reply_to_message",
+        lambda user_id, account_id, message_id, from_address, to_address, subject, content: {
+            "status": {"code": 200, "description": "success"},
+            "secrets_exposed": False,
+            "message_id": message_id,
+        },
+    )
+    client = _client(monkeypatch)
+    response = client.post(
+        "/api/integrations/zoho-mail/reply",
+        json={
+            "user_id": "test-user",
+            "account_id": "account-1",
+            "message_id": "message-1",
+            "from_address": "user@indoone.example",
+            "to_address": "sender@example.com",
+            "subject": "Re: Hello",
+            "content": "Thanks for your email.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message_id"] == "message-1"
+    assert response.json()["secrets_exposed"] is False

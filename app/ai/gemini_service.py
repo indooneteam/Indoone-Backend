@@ -6,6 +6,7 @@ The API key stays server-side in GEMINI_API_KEY and is never sent to the Android
 
 from __future__ import annotations
 
+import base64
 import os
 from typing import Any
 from urllib.parse import quote
@@ -75,6 +76,7 @@ def _build_contents(
     message: str,
     history: list[tuple[str, str]] | None,
     document_context: str,
+    media_attachment: dict[str, object] | None = None,
 ) -> list[dict[str, Any]]:
     contents: list[dict[str, Any]] = []
 
@@ -112,7 +114,22 @@ def _build_contents(
         else:
             user_content += "\n\nUSER-PROVIDED DOCUMENT:\n" + context[:12_000]
 
-    contents.append({"role": "user", "parts": [{"text": user_content}]})
+    user_parts: list[dict[str, Any]] = [{"text": user_content}]
+    if media_attachment is not None:
+        mime_type = str(media_attachment.get("mime_type", "")).strip().lower()
+        raw_content = media_attachment.get("content")
+        if not mime_type or not isinstance(raw_content, (bytes, bytearray)):
+            raise ValueError("invalid multimodal attachment")
+        user_parts.append(
+            {
+                "inlineData": {
+                    "mimeType": mime_type,
+                    "data": base64.b64encode(bytes(raw_content)).decode("ascii"),
+                }
+            }
+        )
+
+    contents.append({"role": "user", "parts": user_parts})
     return contents
 
 
@@ -198,6 +215,7 @@ async def generate_gemini_reply(
     message: str,
     history: list[tuple[str, str]] | None = None,
     document_context: str = "",
+    media_attachment: dict[str, object] | None = None,
 ) -> str:
     cleaned = message.strip()
     if not cleaned:
@@ -210,7 +228,7 @@ async def generate_gemini_reply(
 
     payload: dict[str, Any] = {
         "systemInstruction": {"parts": [{"text": system_instruction}]},
-        "contents": _build_contents(cleaned, history, document_context),
+        "contents": _build_contents(cleaned, history, document_context, media_attachment),
         "generationConfig": _generation_config(model),
     }
     tools = build_search_web_tools(model)

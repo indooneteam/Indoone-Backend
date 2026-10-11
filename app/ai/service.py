@@ -270,6 +270,7 @@ class LocalAIService:
         message: str,
         history: list[tuple[str, str]] | None = None,
         document_context: str = "",
+        media_attachment: dict[str, object] | None = None,
     ) -> str:
         cleaned_message = message.strip()
         if not cleaned_message:
@@ -280,11 +281,21 @@ class LocalAIService:
         if _gemini_backend_enabled():
             from app.ai.gemini_service import generate_gemini_reply
 
+            if media_attachment is None:
+                return await generate_gemini_reply(
+                    cleaned_message,
+                    history=history,
+                    document_context=document_context,
+                )
             return await generate_gemini_reply(
                 cleaned_message,
                 history=history,
                 document_context=document_context,
+                media_attachment=media_attachment,
             )
+
+        if media_attachment is not None:
+            raise RuntimeError("multimodal attachment processing requires INDOONE_MODEL_BACKEND=gemini")
 
         prompt_parts = [cleaned_message]
 
@@ -316,9 +327,17 @@ async def generate_reply(
     message: str,
     history: list[tuple[str, str]] | None = None,
     document_context: str = "",
+    media_attachment: dict[str, object] | None = None,
 ) -> str:
+    if media_attachment is None:
+        return await LocalAIService().generate(
+            message,
+            history=history,
+            document_context=document_context,
+        )
     return await LocalAIService().generate(
         message,
         history=history,
         document_context=document_context,
+        media_attachment=media_attachment,
     )

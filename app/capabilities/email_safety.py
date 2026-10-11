@@ -5,7 +5,7 @@ from html.parser import HTMLParser
 import re
 
 from app.ai.service import LocalAIService
-from app.capabilities.gmail import get_gmail_message, list_gmail_messages
+from app.plugins.gmail.service import get_gmail_message, list_gmail_messages
 
 MAX_ANALYZED_EMAILS = 3
 MAX_EMAIL_BODY_CHARS = 12_000

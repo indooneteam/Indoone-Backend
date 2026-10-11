@@ -592,3 +592,17 @@ def test_zoho_summary_prefers_actual_sender_address_and_provider_timestamps() ->
     assert result["folder_id"] == "inbox-1"
     assert result["to"] == "owner@zoho.example"
 
+def test_explicit_reply_intent_rejects_negated_english_and_kannada_requests() -> None:
+    for message in (
+        "Don't reply to that email",
+        "Do not send a reply to this message",
+        "ರಿಪ್ಲೈ ಬೇಡ",
+        "ರಿಪ್ಲೈ ಮಾಡಬೇಡ",
+        "ಉತ್ತರ ಕಳುಹಿಸಬೇಡಿ",
+    ):
+        assert email_tools._explicit_reply_intent(message) is False
+
+
+def test_explicit_reply_intent_accepts_a_direct_reply_request() -> None:
+    assert email_tools._explicit_reply_intent("Reply to the Zoho Mail message about Launch plan") is True
+

@@ -195,6 +195,20 @@ def _explicit_reply_intent(message: str) -> bool:
     value = message.casefold()
     if re.search(r"\b(don't|do not|never|not)\b.{0,32}\b(reply|respond|answer)\b", value):
         return False
+    if any(
+        phrase in value
+        for phrase in (
+            "ರಿಪ್ಲೈ ಬೇಡ",
+            "ರಿಪ್ಲೈ ಮಾಡಬೇಡ",
+            "ರಿಪ್ಲೈ ಮಾಡಬೇಡಿ",
+            "ಉತ್ತರಿಸಬೇಡ",
+            "ಉತ್ತರಿಸಬೇಡಿ",
+            "ಉತ್ತರ ಕಳುಹಿಸಬೇಡ",
+            "ಉತ್ತರ ಕಳುಹಿಸಬೇಡಿ",
+            "ಮೇಲ್ಗೆ ಉತ್ತರ ಬೇಡ",
+        )
+    ):
+        return False
     return bool(
         re.search(r"\b(reply|respond|answer)\b.{0,100}\b(email|mail|message)\b", value)
         or re.search(r"\b(reply|respond)\b.{0,80}\b(to|about)\b", value)

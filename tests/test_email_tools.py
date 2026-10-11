@@ -345,3 +345,111 @@ def test_model_cannot_guess_between_two_connected_mailboxes(monkeypatch) -> None
 
     assert result["ok"] is False
     assert result["code"] == "PROVIDER_REQUIRED"
+
+
+def test_send_preparation_cannot_be_reported_as_sent_by_model(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "gemini")
+    monkeypatch.setattr(email_tools, "get_pending_email_action", lambda user_id, conversation_id: None)
+    monkeypatch.setattr(
+        email_tools,
+        "get_integration_token_metadata",
+        lambda user_id, provider: {"provider": provider} if provider == "zoho_mail" else None,
+    )
+    monkeypatch.setattr(
+        email_tools,
+        "_save_pending",
+        lambda *args: None,
+    )
+
+    async def fake_list_accounts(user_id: str) -> dict[str, object]:
+        return {"data": [{"accountId": "account-1", "primaryEmailAddress": "sender@example.com"}]}
+
+    monkeypatch.setattr(email_tools, "list_accounts", fake_list_accounts)
+
+    async def fake_model(message, *, history, tool_declarations, execute_tool, extra_system_instruction):
+        result = await execute_tool(
+            "prepare_email_to_send",
+            {
+                "provider": "zoho_mail",
+                "to": "customer@example.com",
+                "subject": "Test subject",
+                "body": "Test body",
+            },
+        )
+        assert result["operation"] == "awaiting_confirmation"
+        assert result["sent"] is False
+        # Simulate the model's exact bug: claiming success before confirmation.
+        return "Email sent successfully to customer@example.com."
+
+    import app.ai.gemini_service
+
+    monkeypatch.setattr(app.ai.gemini_service, "generate_gemini_function_call_reply", fake_model)
+
+    result = asyncio.run(
+        email_tools.handle_email_chat_with_tools(
+            "user-1",
+            "conversation-1",
+            "Send a Zoho Mail email to customer@example.com",
+            history=None,
+        )
+    )
+
+    assert "NOT been sent" in result
+    assert "CONFIRM" in result
+    assert "Email sent successfully" not in result
+    assert "customer@example.com" in result
+    assert "Test subject" in result
+    assert "Test body" in result
+
+
+def test_zoho_send_is_not_reported_successful_without_provider_message_id(monkeypatch) -> None:
+    async def fake_send_message(*args, **kwargs):
+        return {
+            "status": {"code": 200, "description": "success"},
+            "data": {"subject": "Test subject"},
+        }
+
+    monkeypatch.setattr(email_assistant, "send_message", fake_send_message)
+
+    with pytest.raises(RuntimeError, match="message ID"):
+        asyncio.run(
+            email_assistant._execute_pending(
+                "user-1",
+                "zoho_mail",
+                "send_email",
+                {
+                    "account_id": "account-1",
+                    "from_address": "sender@example.com",
+                    "to": "customer@example.com",
+                    "subject": "Test subject",
+                    "body": "Test body",
+                },
+            )
+        )
+
+
+def test_verified_zoho_send_can_be_reported_successful(monkeypatch) -> None:
+    async def fake_send_message(*args, **kwargs):
+        return {
+            "status": {"code": 200, "description": "success"},
+            "data": {"messageId": "provider-message-id"},
+        }
+
+    monkeypatch.setattr(email_assistant, "send_message", fake_send_message)
+
+    result = asyncio.run(
+        email_assistant._execute_pending(
+            "user-1",
+            "zoho_mail",
+            "send_email",
+            {
+                "account_id": "account-1",
+                "from_address": "sender@example.com",
+                "to": "customer@example.com",
+                "subject": "Test subject",
+                "body": "Test body",
+            },
+        )
+    )
+
+    assert result == "Email sent successfully through Zoho Mail."

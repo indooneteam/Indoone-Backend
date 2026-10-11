@@ -59,6 +59,29 @@ def test_system_instruction_requires_final_user_facing_answer_only() -> None:
     assert "Never output hidden analysis" in gemini_service._SYSTEM_INSTRUCTION
 
 
+
+
+def test_build_contents_attaches_media_as_inline_data() -> None:
+    import base64
+
+    media_bytes = b"test-image-bytes"
+    contents = gemini_service._build_contents(
+        "What is in this picture?",
+        history=None,
+        document_context="",
+        media_attachment={"mime_type": "image/jpeg", "content": media_bytes},
+    )
+
+    parts = contents[-1]["parts"]
+    assert parts[0] == {"text": "What is in this picture?"}
+    assert parts[1] == {
+        "inlineData": {
+            "mimeType": "image/jpeg",
+            "data": base64.b64encode(media_bytes).decode("ascii"),
+        }
+    }
+
+
 def test_generate_gemini_reply_sends_thinking_config_and_returns_only_final(monkeypatch) -> None:
     captured: dict[str, object] = {}
 

@@ -430,10 +430,15 @@ async def handle_email_chat_with_tools(
             return await handle_email_chat(user, conversation, text)
         return "There is a pending email action awaiting your decision. Reply CONFIRM to approve it or CANCEL to stop it before starting another email action."
 
-    has_recent_email_context = any(
-        EMAIL_CONTEXT_RE.search(str(item or ""))
-        for _, item in (history or [])[-6:]
+    previous_user_message = next(
+        (
+            str(item or "")
+            for role, item in reversed(history or [])
+            if role == "user" and str(item or "").strip()
+        ),
+        "",
     )
+    has_recent_email_context = bool(EMAIL_CONTEXT_RE.search(previous_user_message))
     if not EMAIL_CONTEXT_RE.search(text) and not has_recent_email_context:
         return None
 

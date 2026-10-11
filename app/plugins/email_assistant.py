@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import logging
 import json
 import re
 from datetime import datetime, timedelta, timezone
@@ -35,6 +36,8 @@ from app.plugins.zoho_mail.service import (
     save_draft,
     send_message,
 )
+
+logger = logging.getLogger(__name__)
 
 MAX_EMAIL_RESULTS = 10
 EMAIL_ADDRESS_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
@@ -584,9 +587,18 @@ async def _delete_drafts(
 async def _execute_pending(user_id: str, provider: str, action_type: str, payload: dict[str, Any]) -> str:
     if action_type == "send_email":
         if provider == "gmail":
-            await send_gmail_message(user_id, str(payload["to"]), str(payload["subject"]), str(payload["body"]), approved=True)
+            result = await send_gmail_message(
+                user_id,
+                str(payload["to"]),
+                str(payload["subject"]),
+                str(payload["body"]),
+                approved=True,
+            )
+            send_result = result.get("result") if isinstance(result, dict) else None
+            if not isinstance(send_result, dict) or not str(send_result.get("id") or "").strip():
+                raise RuntimeError("Gmail send response did not include a verifiable message ID")
         else:
-            await send_message(
+            result = await send_message(
                 user_id,
                 str(payload["account_id"]),
                 str(payload["from_address"]),
@@ -595,6 +607,18 @@ async def _execute_pending(user_id: str, provider: str, action_type: str, payloa
                 str(payload["body"]),
                 approved=True,
             )
+            status = result.get("status") if isinstance(result, dict) else None
+            data = result.get("data") if isinstance(result, dict) else None
+            status_code = status.get("code") if isinstance(status, dict) else None
+            if not isinstance(status, dict) or str(status_code) not in {"200", "201", "202"}:
+                raise RuntimeError("Zoho Mail did not return a verified successful send status")
+            if not isinstance(data, dict) or not str(data.get("messageId") or "").strip():
+                raise RuntimeError("Zoho Mail send response did not include a verifiable message ID")
+
+        logger.info(
+            "confirmed email send verified by provider",
+            extra={"provider": provider, "provider_message_id_present": True},
+        )
         return "Email sent successfully through " + ("Gmail" if provider == "gmail" else "Zoho Mail") + "."
 
     if action_type == "delete_messages":
@@ -677,8 +701,21 @@ async def handle_email_chat(user_id: str, conversation_id: str, message: str) ->
             delete_pending_email_action(user, conversation)
             try:
                 return await _execute_pending(user, provider, action_type, data)
-            except Exception:
-                return "The approved email action failed. Check the mailbox before retrying."
+            except Exception as exc:
+                logger.warning(
+                    "confirmed email action could not be verified",
+                    extra={
+                        "provider": provider,
+                        "action_type": action_type,
+                        "exception_type": type(exc).__name__,
+                    },
+                )
+                if action_type == "send_email":
+                    return (
+                        "I couldn't verify that the email was accepted by the mail provider. "
+                        "Check the provider's Sent folder before retrying to avoid sending a duplicate."
+                    )
+                return "The approved email action could not be verified. Check the mailbox before retrying."
         if CANCEL_RE.fullmatch(text):
             delete_pending_email_action(user, conversation)
             return "Cancelled. No email was sent or deleted."

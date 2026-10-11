@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from fastapi.testclient import TestClient
@@ -215,3 +216,11 @@ def test_zoho_mail_disconnect_when_already_disconnected(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.json()["connected"] is False
     assert response.json()["secrets_exposed"] is False
+
+def test_zoho_default_scope_includes_delete_permission() -> None:
+    required_scope = "ZohoMail.messages.DELETE"
+    assert required_scope in zoho_oauth._DEFAULT_SCOPE.split(",")
+
+    example_env = Path(__file__).resolve().parents[3] / ".env.example"
+    assert required_scope in example_env.read_text(encoding="utf-8")
+

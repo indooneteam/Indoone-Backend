@@ -39,7 +39,7 @@ from app.plugins.zoho_mail.service import (
 MAX_EMAIL_RESULTS = 10
 EMAIL_ADDRESS_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 EMAIL_CONTEXT_RE = re.compile(
-    r"\\b(email|emails|mail|mails|inbox|gmail|zoho|draft|drafts|unread)\\b|"
+    r"\b(email|emails|mail|mails|inbox|gmail|zoho|draft|drafts|unread)\b|"
     r"ಮೇಲ್|ಮೇಲ್ಸ್|ಇಮೇಲ್|ಡ್ರಾಫ್ಟ್|ಜಿಮೇಲ್|ಜೋಹೋ|ಜೂಹೋ",
     re.IGNORECASE,
 )

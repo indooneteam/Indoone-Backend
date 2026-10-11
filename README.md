@@ -12,6 +12,26 @@ Set `INDOONE_MODEL_BACKEND=gemini` to route chat through Google AI Studio/Gemini
 
 The Gemini key stays server-side in `GEMINI_API_KEY`; the chat provider is not enabled merely because a key exists. Explicitly configure `INDOONE_MODEL_BACKEND=gemini` and a supported `GEMINI_MODEL` to activate it. If the variable is absent or set to `local`, the existing local-model answer path remains unchanged.
 
+### Gemma 4 26B A4B deployment configuration
+
+Google AI Studio / Gemini API uses the exact model ID `gemma-4-26b-a4b-it` for Gemma 4 26B A4B instruction-tuned chat. Configure these variables in the backend hosting service (keep the API key in the host's encrypted secret store; never put it in Git or the Android app):
+
+```text
+INDOONE_MODEL_BACKEND=gemini
+GEMINI_MODEL=gemma-4-26b-a4b-it
+GEMINI_API_KEY=<Google AI Studio API key stored as a secret>
+```
+
+The model ID defaults to `gemma-4-26b-a4b-it` when `GEMINI_MODEL` is not set. The selected model supports text and image input; the backend also preserves conversation history and offers the bounded `search_web` function for fresh information. Live API calls still depend on the deployed key having access to the model and any applicable quota.
+
+Deployment verification:
+
+1. Check `GET /ready`. If Gemini is selected but the model ID or API key configuration is missing, readiness returns HTTP 503 rather than reporting the service ready.
+2. Check `GET /health/details`. The `ai` object reports the selected `provider`, `model`, `configuration_ready`, and whether a key is configured. It never returns the secret value.
+3. Send a normal text message through `POST /api/chat` and then test a multi-turn follow-up, a photo attachment, and a request needing recent public information. A green build and a configured key do not by themselves prove the live API call succeeded; verify the resulting chat request after deployment.
+
+The readiness endpoint checks that required configuration exists; it does not make a paid/remote model call during every health check.
+
 The trained model artifacts are loaded only from the private `Indoone-Model` GitHub Release configured by:
 
 ```text

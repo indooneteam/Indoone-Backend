@@ -290,6 +290,22 @@ async def health() -> dict[str, str]:
 async def ready() -> JSONResponse:
     try:
         sqlite_runtime_status()
+        provider_status = ai_service.ai_provider_status()
+        if not provider_status["configuration_ready"]:
+            logger.error(
+                "AI provider configuration is incomplete",
+                extra={
+                    "provider": provider_status["provider"],
+                    "model": provider_status["model"],
+                    "api_key_configured": provider_status["api_key_configured"],
+                },
+            )
+            return _error_response_with_request_id(
+                503,
+                "AI_PROVIDER_NOT_READY",
+                "selected AI provider configuration is incomplete",
+                get_request_id() or "",
+            )
     except Exception:
         logger.exception("readiness check failed")
         return _error_response_with_request_id(503, "NOT_READY", "service dependencies are not ready", get_request_id() or "")
@@ -305,6 +321,7 @@ async def health_details() -> dict[str, object]:
         "responses_by_status": dict(sorted(_STATUS_COUNTS.items())),
         "sqlite": sqlite_runtime_status(),
         "ai": {
+            **ai_service.ai_provider_status(),
             "model_artifacts_checked": ai_service._ARTIFACT_CHECK_COMPLETED,
             "model_runtime_ready": ai_service._runtime is not None,
         },

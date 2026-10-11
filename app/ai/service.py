@@ -25,6 +25,33 @@ def _gemini_backend_enabled() -> bool:
     """Use Gemini only when explicitly selected; preserve local inference by default."""
     return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
 
+
+def ai_provider_status() -> dict[str, object]:
+    """Return safe provider/model configuration details for deploy readiness.
+
+    Never include the API key value. The Gemini model ID is safe to report and
+    makes it possible to verify that the deployed chat routes to the intended model.
+    """
+    if not _gemini_backend_enabled():
+        return {
+            "provider": "local",
+            "model": None,
+            "configuration_ready": True,
+            "api_key_configured": None,
+        }
+
+    from app.ai import gemini_service
+
+    model = os.getenv("GEMINI_MODEL", gemini_service._DEFAULT_MODEL).strip()
+    api_key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
+    return {
+        "provider": "gemini",
+        "model": model or None,
+        "configuration_ready": bool(api_key_configured and model),
+        "api_key_configured": api_key_configured,
+    }
+
+
 if TYPE_CHECKING:
     from app.ai.inference import LocalModelRuntime
 

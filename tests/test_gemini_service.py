@@ -41,6 +41,13 @@ def test_extract_text_rejects_response_containing_only_thoughts() -> None:
         )
 
 
+def test_default_model_is_exact_gemma4_26b_a4b_id(monkeypatch) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+
+    assert gemini_service._get_config() == ("test-key", "gemma-4-26b-a4b-it")
+
+
 def test_gemma4_generation_config_disables_thinking() -> None:
     config = gemini_service._generation_config("gemma-4-26b-a4b-it")
 
@@ -144,8 +151,22 @@ def test_generate_gemini_reply_sends_thinking_config_and_returns_only_final(monk
     reply = asyncio.run(gemini_service.generate_gemini_reply("Hi"))
 
     assert reply == "Hello! How can I help?"
+    assert captured["url"] == (
+        "https://generativelanguage.googleapis.com/v1beta/"
+        "models/gemma-4-26b-a4b-it:generateContent"
+    )
+    assert captured["headers"] == {
+        "x-goog-api-key": "test-key",
+        "Content-Type": "application/json",
+    }
     payload = captured["payload"]
     assert isinstance(payload, dict)
+    assert payload["systemInstruction"]["parts"][0]["text"] == (
+        gemini_service._SYSTEM_INSTRUCTION
+        + "\n\n"
+        + gemini_service.build_grounded_prompt_instruction()
+    )
+    assert payload["tools"][0]["functionDeclarations"][0]["name"] == "search_web"
     generation_config = payload["generationConfig"]
     assert isinstance(generation_config, dict)
     assert generation_config["thinkingConfig"] == {"thinkingLevel": "minimal"}

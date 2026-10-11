@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from app.capabilities.integrations import build_oauth_authorization
 from app.main import app
+from app.plugins.gmail import oauth as gmail_oauth_module
 
 
 def test_integrations_list_is_safe_metadata(monkeypatch) -> None:
@@ -109,7 +110,6 @@ async def test_expired_gmail_oauth_token_is_refreshed_and_stored_encrypted(
     from cryptography.fernet import Fernet
 
     from app.capabilities import integrations as integration_module
-from app.plugins.gmail import oauth as gmail_oauth_module
     from app.capabilities.store import get_integration_token, upsert_integration_token
 
     key = Fernet.generate_key()

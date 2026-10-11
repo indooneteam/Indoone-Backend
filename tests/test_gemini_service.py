@@ -41,6 +41,13 @@ def test_extract_text_rejects_response_containing_only_thoughts() -> None:
         )
 
 
+def test_default_model_is_exact_gemma4_26b_a4b_id(monkeypatch) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.delenv("GEMINI_MODEL", raising=False)
+
+    assert gemini_service._get_config() == ("test-key", "gemma-4-26b-a4b-it")
+
+
 def test_gemma4_generation_config_disables_thinking() -> None:
     config = gemini_service._generation_config("gemma-4-26b-a4b-it")
 

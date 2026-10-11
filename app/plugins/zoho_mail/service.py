@@ -146,3 +146,41 @@ async def send_message(
         "mailFormat": "plaintext",
     }
     return await _request(user_id, "POST", f"accounts/{account}/messages", payload=payload)
+
+
+async def reply_to_message(
+    user_id: str,
+    account_id: str,
+    message_id: str,
+    from_address: str,
+    to_address: str,
+    subject: str,
+    content: str,
+) -> dict[str, Any]:
+    account = _identifier(account_id, "account_id")
+    message = _identifier(message_id, "message_id")
+    sender = from_address.strip()
+    recipient = to_address.strip()
+    normalized_subject = subject.strip()
+    if not sender or len(sender) > 512 or "@" not in sender:
+        raise ValueError("from_address must be a valid email address")
+    if not recipient or len(recipient) > 512 or "@" not in recipient:
+        raise ValueError("to_address must be a valid email address")
+    if not normalized_subject or len(normalized_subject) > 2_000:
+        raise ValueError("subject is required and must not exceed 2000 characters")
+    if not content or len(content) > 20_000:
+        raise ValueError("content is required and must not exceed 20000 characters")
+    payload = {
+        "fromAddress": sender,
+        "toAddress": recipient,
+        "subject": normalized_subject,
+        "content": content,
+        "action": "reply",
+        "mailFormat": "plaintext",
+    }
+    return await _request(
+        user_id,
+        "POST",
+        f"accounts/{account}/messages/{message}",
+        payload=payload,
+    )

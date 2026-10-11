@@ -90,6 +90,93 @@ def _fernet() -> Fernet:
         raise RuntimeError("oauth encryption key is invalid") from exc
 
 
+async def get_valid_access_token(user_id: str, integration_id: str) -> str:
+    """Return a usable access token, refreshing expired Gmail OAuth credentials when possible.
+
+    Native Android authorization currently supplies only a short-lived access token.
+    For those records, updated_at is used as a conservative one-hour expiry estimate;
+    without a refresh token the user must reconnect once it expires.
+    """
+    normalized_user = user_id.strip()
+    normalized = integration_id.strip().lower()
+    if not normalized_user:
+        raise ValueError("user_id is required")
+    if normalized not in _TOKEN_URLS:
+        raise ValueError("integration not found")
+
+    row = get_integration_token(normalized_user, normalized)
+    if row is None:
+        raise ValueError("integration is not connected for user")
+
+    cipher = _fernet()
+    try:
+        access_token = cipher.decrypt(bytes(row["access_token"])).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("stored oauth token cannot be decrypted") from exc
+
+    now = datetime.now(timezone.utc)
+    raw_expiry = row.get("expires_at")
+    inferred_expiry = not (isinstance(raw_expiry, str) and raw_expiry.strip())
+    expiry_source = raw_expiry if not inferred_expiry else row.get("updated_at")
+    expires_at: datetime | None = None
+    if isinstance(expiry_source, str) and expiry_source.strip():
+        try:
+            expires_at = datetime.fromisoformat(expiry_source.strip().replace("Z", "+00:00"))
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if inferred_expiry:
+                expires_at += timedelta(seconds=3600)
+        except ValueError:
+            expires_at = None
+
+    if expires_at is not None and expires_at > now + timedelta(seconds=60):
+        return access_token
+
+    encrypted_refresh = row.get("refresh_token")
+    if not encrypted_refresh:
+        raise RuntimeError(
+            f"{normalized} access token has expired; reconnect {normalized} to restore access"
+        )
+    try:
+        refresh_token = cipher.decrypt(bytes(encrypted_refresh)).decode("utf-8")
+    except Exception as exc:
+        raise RuntimeError("stored oauth refresh token cannot be decrypted") from exc
+
+    client_id, client_secret = _secret(normalized)
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            _TOKEN_URLS[normalized],
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+            },
+            headers={"Accept": "application/json"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("oauth provider returned an invalid refresh response")
+    refreshed_access, refreshed_token, token_type, scope, refreshed_expiry = _token_fields(
+        normalized, payload
+    )
+    if not refreshed_expiry:
+        raise RuntimeError("oauth provider did not return an access-token expiry")
+
+    upsert_integration_token(
+        normalized_user,
+        normalized,
+        cipher.encrypt(refreshed_access.encode("utf-8")),
+        cipher.encrypt(refreshed_token.encode("utf-8")) if refreshed_token else None,
+        token_type or str(row.get("token_type") or "Bearer"),
+        scope or str(row.get("scope") or ""),
+        refreshed_expiry,
+    )
+    return refreshed_access
+
+
 def _secret(integration_id: str) -> tuple[str, str]:
     client_id = os.getenv(_CLIENT_ID_ENV[integration_id], "")
     client_secret = os.getenv(_CLIENT_SECRET_ENV[integration_id], "")

@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 import re
+from app.capabilities.store import get_integration_token_metadata
+from app.plugins.gmail.service import list_gmail_messages
+from app.plugins.zoho_mail.service import list_accounts, list_messages
 
-_EMAIL_TERMS = re.compile(r"\b(email|emails|mail|mails|inbox|gmail|zoho|draft|unread|finance|send|compose|delete|read|search|ಹೊಸ ಮೇಲ್|ಇತ್ತೀಚಿನ ಮೇಲ್)\b", re.IGNORECASE)
+EMAIL_KEYWORDS = ("email", "mail", "gmail", "zoho", "inbox", "finance", "draft", "delete", "send", "ಮೇಲ್", "ಇಮೇಲ್")
 
 
 async def handle_email_chat(user_id: str, conversation_id: str, message: str) -> str | None:
-    """Handle mail-specific requests here; return None for ordinary chat."""
-    if not user_id.strip() or not conversation_id.strip() or not message.strip():
+    text = message.strip()
+    if not any(word in text.casefold() for word in EMAIL_KEYWORDS):
         return None
-    if not _EMAIL_TERMS.search(message):
-        return None
-    return "Email assistant router is ready."
+    return "Email connection tool routing is not yet complete."

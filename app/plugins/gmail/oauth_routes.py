@@ -26,6 +26,10 @@ class NativeIntegrationTokenRequest(BaseModel):
     scope: str = Field(default="", max_length=4_000)
     expires_at: str | None = Field(default=None, max_length=128)
 
+
+class GmailDisconnectRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+
 @router.get("/integrations/gmail/auth-config")
 async def gmail_auth_config() -> dict[str, object]:
     try:
@@ -51,7 +55,7 @@ async def gmail_server_auth_code(request: GmailServerAuthCodeRequest) -> dict[st
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 @router.post("/integrations/gmail/disconnect")
-async def gmail_disconnect(request: NativeIntegrationTokenRequest) -> dict[str, object]:
+async def gmail_disconnect(request: GmailDisconnectRequest) -> dict[str, object]:
     """Revoke provider access when possible, then delete only this user's local token."""
     user_id = request.user_id.strip()
     row = get_integration_token(user_id, "gmail")

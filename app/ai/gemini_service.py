@@ -77,6 +77,7 @@ def _build_contents(
     history: list[tuple[str, str]] | None,
     document_context: str,
     media_attachment: dict[str, object] | None = None,
+    media_attachments: list[dict[str, object]] | None = None,
 ) -> list[dict[str, Any]]:
     contents: list[dict[str, Any]] = []
 
@@ -115,9 +116,12 @@ def _build_contents(
             user_content += "\n\nUSER-PROVIDED DOCUMENT:\n" + context[:12_000]
 
     user_parts: list[dict[str, Any]] = [{"text": user_content}]
+    attachments = list(media_attachments or [])
     if media_attachment is not None:
-        mime_type = str(media_attachment.get("mime_type", "")).strip().lower()
-        raw_content = media_attachment.get("content")
+        attachments.insert(0, media_attachment)
+    for attachment in attachments:
+        mime_type = str(attachment.get("mime_type", "")).strip().lower()
+        raw_content = attachment.get("content")
         if not mime_type or not isinstance(raw_content, (bytes, bytearray)):
             raise ValueError("invalid multimodal attachment")
         user_parts.append(
@@ -216,6 +220,7 @@ async def generate_gemini_reply(
     history: list[tuple[str, str]] | None = None,
     document_context: str = "",
     media_attachment: dict[str, object] | None = None,
+    media_attachments: list[dict[str, object]] | None = None,
 ) -> str:
     cleaned = message.strip()
     if not cleaned:
@@ -228,7 +233,7 @@ async def generate_gemini_reply(
 
     payload: dict[str, Any] = {
         "systemInstruction": {"parts": [{"text": system_instruction}]},
-        "contents": _build_contents(cleaned, history, document_context, media_attachment),
+        "contents": _build_contents(cleaned, history, document_context, media_attachment, media_attachments),
         "generationConfig": _generation_config(model),
     }
     tools = build_search_web_tools(model)

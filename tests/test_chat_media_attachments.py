@@ -80,3 +80,79 @@ def test_chat_attachment_rejects_file_id_and_binary_attachment_together() -> Non
         _decode_chat_attachment(body)
 
     assert error.value.status_code == 400
+
+
+
+def test_decode_multiple_chat_attachments() -> None:
+    photo_a = b"first-photo"
+    photo_b = b"second-photo"
+    body = ChatRequest(
+        message="Describe these photos",
+        attachments=[
+            {
+                "filename": "a.jpg",
+                "mime_type": "image/jpeg",
+                "content_base64": base64.b64encode(photo_a).decode("ascii"),
+            },
+            {
+                "filename": "b.png",
+                "mime_type": "image/png",
+                "content_base64": base64.b64encode(photo_b).decode("ascii"),
+            },
+        ],
+    )
+
+    from app.api.chat import _decode_chat_attachments
+
+    decoded = _decode_chat_attachments(body)
+
+    assert [item["filename"] for item in decoded] == ["a.jpg", "b.png"]
+    assert [item["content"] for item in decoded] == [photo_a, photo_b]
+
+
+def test_chat_rejects_more_than_ten_total_attachments() -> None:
+    from app.api.chat import _decode_chat_attachments
+
+    body = ChatRequest(
+        message="Review these files",
+        file_ids=[f"file-{i}" for i in range(10)],
+        attachments=[
+            {
+                "filename": "extra.jpg",
+                "mime_type": "image/jpeg",
+                "content_base64": base64.b64encode(b"image").decode("ascii"),
+            }
+        ],
+    )
+
+    with pytest.raises(HTTPException) as error:
+        _decode_chat_attachments(body)
+
+    assert error.value.status_code == 400
+    assert "up to 10" in error.value.detail
+
+
+def test_chat_rejects_aggregate_attachment_bytes_over_limit(monkeypatch) -> None:
+    from app.api import chat as chat_api
+
+    monkeypatch.setattr(chat_api, "MAX_CHAT_TOTAL_ATTACHMENT_BYTES", 5)
+    body = ChatRequest(
+        message="Review these photos",
+        attachments=[
+            {
+                "filename": "one.jpg",
+                "mime_type": "image/jpeg",
+                "content_base64": base64.b64encode(b"1234").decode("ascii"),
+            },
+            {
+                "filename": "two.jpg",
+                "mime_type": "image/jpeg",
+                "content_base64": base64.b64encode(b"5678").decode("ascii"),
+            },
+        ],
+    )
+
+    with pytest.raises(HTTPException) as error:
+        chat_api._decode_chat_attachments(body)
+
+    assert error.value.status_code == 413

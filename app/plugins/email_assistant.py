@@ -33,6 +33,7 @@ from app.plugins.zoho_mail.service import (
     list_folders,
     list_messages,
     replace_draft,
+    reply_to_message,
     save_draft,
     send_message,
 )
@@ -585,6 +586,32 @@ async def _delete_drafts(
 
 
 async def _execute_pending(user_id: str, provider: str, action_type: str, payload: dict[str, Any]) -> str:
+    if action_type == "send_reply":
+        if provider != "zoho_mail":
+            raise ValueError("reply confirmation is only supported for Zoho Mail")
+        result = await reply_to_message(
+            user_id,
+            str(payload["account_id"]),
+            str(payload["message_id"]),
+            str(payload["from_address"]),
+            str(payload["to"]),
+            str(payload["subject"]),
+            str(payload["body"]),
+            approved=True,
+        )
+        status = result.get("status") if isinstance(result, dict) else None
+        data = result.get("data") if isinstance(result, dict) else None
+        status_code = status.get("code") if isinstance(status, dict) else None
+        if not isinstance(status, dict) or str(status_code) not in {"200", "201", "202"}:
+            raise RuntimeError("Zoho Mail did not return a verified successful reply status")
+        if not isinstance(data, dict) or not str(data.get("messageId") or "").strip():
+            raise RuntimeError("Zoho Mail reply response did not include a verifiable message ID")
+        logger.info(
+            "confirmed Zoho Mail reply verified by provider",
+            extra={"provider": provider, "provider_message_id_present": True},
+        )
+        return "Reply sent successfully through Zoho Mail."
+
     if action_type == "send_email":
         if provider == "gmail":
             result = await send_gmail_message(

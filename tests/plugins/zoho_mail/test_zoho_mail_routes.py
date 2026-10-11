@@ -147,14 +147,28 @@ def test_zoho_mail_reply_endpoint_calls_provider_service(monkeypatch) -> None:
 
 
 
-def test_zoho_mail_callback_reachable_without_bearer_auth(monkeypatch) -> None:
+def test_zoho_mail_oauth_error_callback_without_code_is_handled_without_bearer_auth(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
     monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
     client = TestClient(app, raise_server_exceptions=False)
 
-    # No code/state is intentionally supplied; the route should reject the
-    # incomplete OAuth callback itself, not the absence of an Indoone token.
+    # Zoho OAuth denial callbacks include error/state and omit code.
+    response = client.get(
+        "/api/integrations/zoho-mail/callback",
+        params={"error": "access_denied", "state": "verification-check"},
+    )
+
+    assert response.status_code == 400
+    assert response.status_code != 401
+    assert "connection was not completed" in response.text
+
+
+def test_zoho_mail_callback_missing_code_and_state_returns_clear_400(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
+    client = TestClient(app, raise_server_exceptions=False)
+
     response = client.get("/api/integrations/zoho-mail/callback")
 
-    assert response.status_code in {400, 422}
-    assert response.status_code != 401
+    assert response.status_code == 400
+    assert "authorization code or state" in response.json()["detail"]

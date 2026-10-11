@@ -591,10 +591,10 @@ async def handle_email_chat_with_tools(
     )
     if pending_send is not None:
         return (
-            f"Email prepared in {pending_send['provider']}, but it has NOT been sent.\\n"
-            f"To: {pending_send['to']}\\n"
-            f"Subject: {pending_send['subject']}\\n\\n"
-            f"Message:\\n{pending_send['body']}\\n\\n"
+            f"Email prepared in {pending_send['provider']}, but it has NOT been sent.\n"
+            f"To: {pending_send['to']}\n"
+            f"Subject: {pending_send['subject']}\n\n"
+            f"Message:\n{pending_send['body']}\n\n"
             "Reply CONFIRM to send this exact email, or CANCEL to stop. No email has been sent yet."
         )
     return model_reply

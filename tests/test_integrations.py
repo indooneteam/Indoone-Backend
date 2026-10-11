@@ -201,6 +201,8 @@ async def test_expired_native_gmail_token_without_refresh_requires_reconnect(
 def test_gmail_auth_config_exposes_only_public_client_id(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_GOOGLE_CLIENT_ID", "public-google-client-id")
     monkeypatch.setenv("INDOONE_GOOGLE_CLIENT_SECRET", "do-not-return-this-secret")
+    from cryptography.fernet import Fernet
+    monkeypatch.setenv("INDOONE_OAUTH_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
     with TestClient(app) as client:
         response = client.get("/api/integrations/gmail/auth-config")
     assert response.status_code == 200

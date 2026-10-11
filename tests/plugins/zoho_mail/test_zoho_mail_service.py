@@ -72,3 +72,46 @@ def test_replace_draft_verifies_new_id_before_removing_original(monkeypatch) -> 
     assert result["replaced_message_id"] == "old-draft"
     assert len(deleted) == 1
     assert deleted[0][-1] == "old-draft"
+
+@pytest.mark.parametrize(
+    ("query", "expected"),
+    [
+        ("launch planning", 'entire:"launch planning"'),
+        ("from:alice@example.com", "sender:alice@example.com"),
+        ("folder:Sent Items", 'in:"Sent Items"'),
+        ("tag:finance", "label:finance"),
+        ("before:2026-10-12", "toDate:12-Oct-2026"),
+        ("after:12-Oct-2026", "fromDate:12-Oct-2026"),
+        ("subject:invoice::has:attachment", "subject:invoice::has:attachment"),
+        (
+            "sender:alice@example.com::or:to:alice@example.com",
+            "sender:alice@example.com::or:to:alice@example.com",
+        ),
+        (
+            "on:2026-10-12",
+            "fromDate:12-Oct-2026::toDate:12-Oct-2026",
+        ),
+    ],
+)
+def test_list_messages_normalizes_search_key_to_zoho_syntax(monkeypatch, query, expected) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_request(user_id, method, path, *, params=None, payload=None):
+        captured.update({"user_id": user_id, "method": method, "path": path, "params": params})
+        return {"status": {"code": 200, "description": "success"}, "data": []}
+
+    monkeypatch.setattr(service, "_request", fake_request)
+    asyncio.run(service.list_messages("user-1", "account-1", search_key=query))
+
+    assert captured["path"] == "accounts/account-1/messages/search"
+    assert captured["params"]["searchKey"] == expected
+
+
+def test_list_messages_rejects_unsupported_bcc_search_filter(monkeypatch) -> None:
+    async def fake_request(*args, **kwargs):
+        raise AssertionError("Invalid query must be rejected before making an API request")
+
+    monkeypatch.setattr(service, "_request", fake_request)
+    with pytest.raises(ValueError, match="does not support bcc"):
+        asyncio.run(service.list_messages("user-1", "account-1", search_key="bcc:private@example.com"))
+

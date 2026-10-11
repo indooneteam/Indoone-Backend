@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import date, datetime
 from typing import Any
 from urllib.parse import quote, urlsplit
 
@@ -79,6 +80,100 @@ async def list_folders(user_id: str, account_id: str) -> dict[str, Any]:
     return await _request(user_id, "GET", f"accounts/{account}/folders")
 
 
+_ZOHO_SEARCH_FIELDS = {
+    "entire": "entire",
+    "content": "content",
+    "sender": "sender",
+    "to": "to",
+    "cc": "cc",
+    "subject": "subject",
+    "filename": "fileName",
+    "filecontent": "fileContent",
+    "has": "has",
+    "in": "in",
+    "label": "label",
+    "fromdate": "fromDate",
+    "todate": "toDate",
+    "inclspamtrash": "inclspamtrash",
+    "groupresult": "groupResult",
+}
+_ZOHO_SEARCH_ALIASES = {
+    "from": "sender",
+    "folder": "in",
+    "tag": "label",
+}
+_ZOHO_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def _normalize_search_date(value: str) -> str:
+    raw = value.strip().strip('"')
+    try:
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:[Tt].*)?", raw):
+            parsed = date.fromisoformat(raw[:10])
+        else:
+            parsed = datetime.strptime(raw, "%d-%b-%Y").date()
+    except ValueError as exc:
+        raise ValueError(
+            "Zoho Mail date filters require YYYY-MM-DD or DD-MMM-YYYY"
+        ) from exc
+    return f"{parsed.day:02d}-{_ZOHO_MONTHS[parsed.month - 1]}-{parsed.year:04d}"
+
+
+def _quoted_search_value(value: str) -> str:
+    normalized = value.strip()
+    if normalized.startswith('"') and normalized.endswith('"'):
+        return normalized
+    return '"' + normalized.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _normalize_search_clause(clause: str) -> str:
+    value = clause.strip()
+    if not value:
+        raise ValueError("search_key contains an empty Zoho Mail search condition")
+    if value.casefold().startswith("or:"):
+        return "or:" + _normalize_search_clause(value[3:])
+
+    match = re.match(r"^([a-zA-Z][a-zA-Z0-9]*):(.*)$", value)
+    if not match:
+        return "entire:" + _quoted_search_value(value)
+
+    field = match.group(1).casefold()
+    term = match.group(2).strip()
+    if not term:
+        raise ValueError(f"Zoho Mail search filter '{field}:' requires a value")
+    if field == "bcc":
+        raise ValueError(
+            "Zoho Mail does not support bcc: search filters; use sender:, to:, cc:, subject:, or a general search"
+        )
+    if field in {"before", "after", "on", "date"}:
+        formatted_date = _normalize_search_date(term)
+        if field == "before":
+            return f"toDate:{formatted_date}"
+        if field == "after":
+            return f"fromDate:{formatted_date}"
+        return f"fromDate:{formatted_date}::toDate:{formatted_date}"
+
+    canonical = _ZOHO_SEARCH_ALIASES.get(field) or _ZOHO_SEARCH_FIELDS.get(field)
+    if canonical is None:
+        return "entire:" + _quoted_search_value(value)
+
+    if canonical in {"entire", "content", "subject", "sender", "to", "cc", "fileName", "fileContent", "in", "label"}:
+        term = _quoted_search_value(term) if re.search(r"\s", term) else term
+    return f"{canonical}:{term}"
+
+
+def _normalize_search_key(search_key: str) -> str:
+    raw = search_key.strip()
+    if not raw:
+        raise ValueError("search_key is required")
+    if len(raw) > 512:
+        raise ValueError("search_key exceeds maximum length of 512")
+    normalized = "::".join(_normalize_search_clause(part) for part in raw.split("::"))
+    if len(normalized) > 512:
+        raise ValueError("normalized search_key exceeds maximum length of 512")
+    return normalized
+
+
 async def list_messages(
     user_id: str,
     account_id: str,
@@ -95,20 +190,7 @@ async def list_messages(
         raise ValueError("limit must be between 1 and 200")
     params: dict[str, str | int | bool] = {"start": start, "limit": limit, "includeto": True}
     if search_key.strip():
-        if len(search_key) > 512:
-            raise ValueError("search_key exceeds maximum length of 512")
-        normalized_search = search_key.strip()
-        # Zoho's search API expects field-qualified search syntax. Treat
-        # ordinary user phrases as a full-message search, while preserving
-        # explicit Zoho filters such as subject:invoice or sender:user@host.
-        if not re.match(
-            r"(?i)^(entire|subject|sender|from|to|cc|bcc|has|before|after|on|date|folder|tag):",
-            normalized_search,
-        ):
-            normalized_search = f"entire:{normalized_search}"
-        if len(normalized_search) > 512:
-            raise ValueError("normalized search_key exceeds maximum length of 512")
-        params["searchKey"] = normalized_search
+        params["searchKey"] = _normalize_search_key(search_key)
         return await _request(user_id, "GET", f"accounts/{account}/messages/search", params=params)
     if folder_id.strip():
         params["folderId"] = _identifier(folder_id, "folder_id")

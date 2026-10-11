@@ -4,7 +4,7 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.capabilities.integrations import exchange_gmail_server_auth_code, gmail_server_authorization_config, store_native_access_token
+from app.plugins.gmail.oauth import exchange_gmail_server_auth_code, gmail_server_authorization_config, store_native_access_token
 
 
 router = APIRouter(tags=["gmail"])

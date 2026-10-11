@@ -109,6 +109,7 @@ async def test_expired_gmail_oauth_token_is_refreshed_and_stored_encrypted(
     from cryptography.fernet import Fernet
 
     from app.capabilities import integrations as integration_module
+from app.plugins.gmail import oauth as gmail_oauth_module
     from app.capabilities.store import get_integration_token, upsert_integration_token
 
     key = Fernet.generate_key()
@@ -265,7 +266,7 @@ async def test_gmail_server_auth_code_stores_refreshable_tokens_encrypted(
 
     monkeypatch.setattr(integration_module.httpx, "AsyncClient", FakeAsyncClient)
 
-    result = await integration_module.exchange_gmail_server_auth_code(
+    result = await gmail_oauth_module.exchange_gmail_server_auth_code(
         "gmail-user",
         "server-code-once",
         "https://www.googleapis.com/auth/gmail.modify",
@@ -325,6 +326,6 @@ async def test_gmail_server_auth_code_fails_if_google_omits_initial_refresh_toke
     monkeypatch.setattr(integration_module.httpx, "AsyncClient", FakeAsyncClient)
 
     with pytest.raises(RuntimeError, match="did not issue a refresh token"):
-        await integration_module.exchange_gmail_server_auth_code("gmail-user", "server-code-once")
+        await gmail_oauth_module.exchange_gmail_server_auth_code("gmail-user", "server-code-once")
 
     assert get_integration_token("gmail-user", "gmail") is None

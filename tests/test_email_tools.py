@@ -453,3 +453,122 @@ def test_verified_zoho_send_can_be_reported_successful(monkeypatch) -> None:
     )
 
     assert result == "Email sent successfully through Zoho Mail."
+
+def test_prepare_zoho_reply_requires_confirmation_and_resolves_recipient(monkeypatch) -> None:
+    monkeypatch.setattr(
+        email_tools,
+        "get_integration_token_metadata",
+        lambda user_id, provider: {"provider": provider} if provider == "zoho_mail" else None,
+    )
+    monkeypatch.setattr(
+        email_tools,
+        "_list_mail",
+        lambda *args, **kwargs: _async_value([
+            {
+                "id": "message-123",
+                "account_id": "account-1",
+                "folder_id": "inbox-1",
+                "subject": "Launch plan",
+                "from": "Alice Example <alice@example.com>",
+            }
+        ]),
+    )
+    monkeypatch.setattr(email_tools, "_zoho_accounts", lambda payload: [{"id": "account-1", "email": "owner@zoho.example"}])
+    monkeypatch.setattr(email_tools, "list_accounts", lambda user_id: _async_value({}))
+    saved: list[tuple[object, ...]] = []
+    monkeypatch.setattr(email_tools, "_save_pending", lambda *args: saved.append(args))
+
+    result = asyncio.run(
+        email_tools.execute_email_tool(
+            "user-1",
+            "conversation-1",
+            "prepare_email_reply",
+            {"provider": "zoho_mail", "query": "Launch plan", "body": "The revised date is Friday."},
+            original_message="Reply to the Zoho Mail email about Launch plan with the revised date",
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["operation"] == "awaiting_confirmation"
+    assert result["sent"] is False
+    assert result["to"] == "alice@example.com"
+    assert result["subject"] == "Re: Launch plan"
+    assert len(saved) == 1
+    assert saved[0][3] == "send_reply"
+    assert saved[0][4]["message_id"] == "message-123"
+    assert saved[0][4]["from_address"] == "owner@zoho.example"
+    assert saved[0][4]["to"] == "alice@example.com"
+
+
+def test_prepare_zoho_draft_deletion_stores_only_confirmed_target(monkeypatch) -> None:
+    monkeypatch.setattr(
+        email_tools,
+        "get_integration_token_metadata",
+        lambda user_id, provider: {"provider": provider} if provider == "zoho_mail" else None,
+    )
+    monkeypatch.setattr(
+        email_tools,
+        "_list_drafts",
+        lambda *args, **kwargs: _async_value([
+            {
+                "id": "draft-123",
+                "draft_id": "draft-123",
+                "account_id": "account-1",
+                "folder_id": "drafts-1",
+                "subject": "Quarterly update",
+                "snippet": "Share the finance summary",
+            }
+        ]),
+    )
+    saved: list[tuple[object, ...]] = []
+    monkeypatch.setattr(email_tools, "_save_pending", lambda *args: saved.append(args))
+
+    result = asyncio.run(
+        email_tools.execute_email_tool(
+            "user-1",
+            "conversation-1",
+            "prepare_email_draft_deletion",
+            {"provider": "zoho_mail", "query": "Quarterly update"},
+            original_message="Delete the Zoho Mail draft named Quarterly update",
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["operation"] == "awaiting_confirmation"
+    assert result["deleted"] is False
+    assert result["count"] == 1
+    assert len(saved) == 1
+    assert saved[0][3] == "delete_drafts"
+    assert saved[0][4]["items"] == [
+        {"draft_id": "draft-123", "id": "draft-123", "account_id": "account-1", "folder_id": "drafts-1"}
+    ]
+
+
+def test_zoho_reply_confirmation_requires_verifiable_message_id(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    async def fake_reply_to_message(*args, **kwargs):
+        calls.append({"args": args, "kwargs": kwargs})
+        return {"status": {"code": 200, "description": "success"}, "data": {"subject": "Re: Launch plan"}}
+
+    monkeypatch.setattr(email_assistant, "reply_to_message", fake_reply_to_message)
+
+    with pytest.raises(RuntimeError, match="message ID"):
+        asyncio.run(
+            email_assistant._execute_pending(
+                "user-1",
+                "zoho_mail",
+                "send_reply",
+                {
+                    "account_id": "account-1",
+                    "message_id": "message-123",
+                    "from_address": "owner@zoho.example",
+                    "to": "alice@example.com",
+                    "subject": "Re: Launch plan",
+                    "body": "The revised date is Friday.",
+                },
+            )
+        )
+
+    assert calls[0]["kwargs"]["approved"] is True
+

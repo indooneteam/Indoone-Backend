@@ -195,3 +195,134 @@ async def test_expired_native_gmail_token_without_refresh_requires_reconnect(
 
     with pytest.raises(RuntimeError, match="reconnect gmail"):
         await integration_module.get_valid_access_token("gmail-native-user", "gmail")
+
+
+
+def test_gmail_auth_config_exposes_only_public_client_id(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_GOOGLE_CLIENT_ID", "public-google-client-id")
+    monkeypatch.setenv("INDOONE_GOOGLE_CLIENT_SECRET", "do-not-return-this-secret")
+    with TestClient(app) as client:
+        response = client.get("/api/integrations/gmail/auth-config")
+    assert response.status_code == 200
+    assert response.json()["server_client_id"] == "public-google-client-id"
+    assert "client_secret" not in response.json()
+    assert "do-not-return-this-secret" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_gmail_server_auth_code_stores_refreshable_tokens_encrypted(
+    monkeypatch, tmp_path
+) -> None:
+    from cryptography.fernet import Fernet
+    from app.capabilities import integrations as integration_module
+    from app.capabilities.store import get_integration_token
+
+    key = Fernet.generate_key()
+    cipher = Fernet(key)
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    monkeypatch.setenv("INDOONE_OAUTH_ENCRYPTION_KEY", key.decode("ascii"))
+    monkeypatch.setenv("INDOONE_GOOGLE_CLIENT_ID", "google-client")
+    monkeypatch.setenv("INDOONE_GOOGLE_CLIENT_SECRET", "google-secret")
+
+    class FakeResponse:
+        def __init__(self, body):
+            self.body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.body
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, *, data, headers):
+            assert url == integration_module._TOKEN_URLS["gmail"]
+            assert data["grant_type"] == "authorization_code"
+            assert data["code"] == "server-code-once"
+            return FakeResponse({
+                "access_token": "short-lived-access",
+                "refresh_token": "long-lived-refresh",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+                "scope": "https://www.googleapis.com/auth/gmail.modify",
+            })
+
+        async def get(self, url, *, headers):
+            assert url == integration_module._PROBE_URLS["gmail"]
+            assert headers["Authorization"] == "Bearer short-lived-access"
+            return FakeResponse({"emailAddress": "creator@example.com"})
+
+    monkeypatch.setattr(integration_module.httpx, "AsyncClient", FakeAsyncClient)
+
+    result = await integration_module.exchange_gmail_server_auth_code(
+        "gmail-user",
+        "server-code-once",
+        "https://www.googleapis.com/auth/gmail.modify",
+    )
+
+    row = get_integration_token("gmail-user", "gmail")
+    assert result["connected"] is True
+    assert result["summary"]["email_address"] == "creator@example.com"
+    assert result["offline_access"] is True
+    assert row is not None
+    assert cipher.decrypt(bytes(row["access_token"])) == b"short-lived-access"
+    assert cipher.decrypt(bytes(row["refresh_token"])) == b"long-lived-refresh"
+
+
+@pytest.mark.asyncio
+async def test_gmail_server_auth_code_fails_if_google_omits_initial_refresh_token(
+    monkeypatch, tmp_path
+) -> None:
+    from cryptography.fernet import Fernet
+    from app.capabilities import integrations as integration_module
+    from app.capabilities.store import get_integration_token
+
+    key = Fernet.generate_key()
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    monkeypatch.setenv("INDOONE_OAUTH_ENCRYPTION_KEY", key.decode("ascii"))
+    monkeypatch.setenv("INDOONE_GOOGLE_CLIENT_ID", "google-client")
+    monkeypatch.setenv("INDOONE_GOOGLE_CLIENT_SECRET", "google-secret")
+
+    class FakeResponse:
+        def __init__(self, body):
+            self.body = body
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.body
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def post(self, url, *, data, headers):
+            return FakeResponse({
+                "access_token": "short-lived-access",
+                "token_type": "Bearer",
+                "expires_in": 3600,
+                "scope": "https://www.googleapis.com/auth/gmail.modify",
+            })
+
+    monkeypatch.setattr(integration_module.httpx, "AsyncClient", FakeAsyncClient)
+
+    with pytest.raises(RuntimeError, match="did not issue a refresh token"):
+        await integration_module.exchange_gmail_server_auth_code("gmail-user", "server-code-once")
+
+    assert get_integration_token("gmail-user", "gmail") is None

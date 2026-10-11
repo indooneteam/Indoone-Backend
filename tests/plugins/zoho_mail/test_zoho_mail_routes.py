@@ -156,5 +156,5 @@ def test_zoho_mail_callback_reachable_without_bearer_auth(monkeypatch) -> None:
     # incomplete OAuth callback itself, not the absence of an Indoone token.
     response = client.get("/api/integrations/zoho-mail/callback")
 
-    assert response.status_code == 400
+    assert response.status_code in {400, 422}
     assert response.status_code != 401

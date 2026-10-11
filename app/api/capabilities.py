@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import base64
-import os
 from typing import Any
 from secrets import token_urlsafe
 
@@ -17,6 +16,7 @@ from app.capabilities.integrations import (
     build_oauth_authorization,
     exchange_oauth_code,
     exchange_gmail_server_auth_code,
+    gmail_server_authorization_config,
     get_integration,
     list_integrations,
     store_native_access_token,
@@ -188,11 +188,11 @@ async def connect_integration(integration_id: str, request: IntegrationConnectRe
 
 @router.get("/integrations/gmail/auth-config")
 async def gmail_auth_config() -> dict[str, object]:
-    client_id = os.getenv("INDOONE_GOOGLE_CLIENT_ID", "").strip()
-    if not client_id:
-        raise HTTPException(status_code=503, detail="Google OAuth client id is not configured")
-    # OAuth client IDs are public identifiers, not secrets; never return the client secret.
-    return {"integration": "gmail", "server_client_id": client_id, "offline_access": True}
+    try:
+        # Only the public client ID is returned; the client secret and encryption key stay server-side.
+        return gmail_server_authorization_config()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/integrations/gmail/server-auth-code")

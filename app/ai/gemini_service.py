@@ -360,6 +360,12 @@ async def generate_gemini_function_call_reply(
             # The final turn has no tools, stopping recursive tool execution.
             if round_index < max_rounds:
                 payload["tools"] = tools
+                if round_index == 0:
+                    # An email request must be grounded in a real tool result;
+                    # later turns may either call another tool or answer.
+                    payload["toolConfig"] = {
+                        "functionCallingConfig": {"mode": "ANY"}
+                    }
             response_data = await _post_generate_content(client, url, headers, payload)
             model_content, calls = _extract_function_calls(response_data)
             if not calls:

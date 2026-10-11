@@ -38,11 +38,10 @@ from app.plugins.zoho_mail.service import (
 
 MAX_EMAIL_RESULTS = 10
 EMAIL_ADDRESS_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
-EMAIL_KEYWORDS = (
-    "email", "emails", "mail", "mails", "inbox", "gmail", "zoho",
-    "draft", "unread", "finance", "send", "compose", "delete", "remove",
-    "trash", "read", "search", "recent", "latest", "ಹೊಸ ಮೇಲ್",
-    "ಇತ್ತೀಚಿನ ಮೇಲ್", "ಮೇಲ್ಸ್", "ಇಮೇಲ್", "ಡ್ರಾಫ್ಟ್", "ಕಳುಹಿಸು", "ಡಿಲೀಟ್",
+EMAIL_CONTEXT_RE = re.compile(
+    r"\\b(email|emails|mail|mails|inbox|gmail|zoho|draft|drafts|unread)\\b|"
+    r"ಮೇಲ್|ಮೇಲ್ಸ್|ಇಮೇಲ್|ಡ್ರಾಫ್ಟ್|ಜಿಮೇಲ್|ಜೋಹೋ|ಜೂಹೋ",
+    re.IGNORECASE,
 )
 CONFIRM_RE = re.compile(
     r"^(yes|yes please|confirm|confirmed|do it|go ahead|send it|delete them|"
@@ -608,7 +607,9 @@ async def handle_email_chat(user_id: str, conversation_id: str, message: str) ->
             return "Cancelled. No email was sent or deleted."
         delete_pending_email_action(user, conversation)
 
-    if not any(keyword in text.casefold() for keyword in EMAIL_KEYWORDS):
+    # Do not hijack ordinary questions containing words such as "latest"
+    # or "research". Require an explicit email/mailbox/provider reference.
+    if not EMAIL_CONTEXT_RE.search(text):
         return None
 
     connected = []

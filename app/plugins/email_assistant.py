@@ -19,14 +19,19 @@ from app.plugins.gmail.service import (
     create_gmail_draft,
     delete_gmail_message,
     get_gmail_message,
+    list_gmail_drafts,
     list_gmail_messages,
+    update_gmail_draft,
+    delete_gmail_draft,
     send_gmail_message,
 )
 from app.plugins.zoho_mail.service import (
     delete_message,
     get_message_content,
     list_accounts,
+    list_folders,
     list_messages,
+    replace_draft,
     save_draft,
     send_message,
 )
@@ -137,6 +142,7 @@ def _gmail_summary(row: dict[str, Any], detail: dict[str, Any]) -> dict[str, str
         "subject": headers.get("subject", str(row.get("subject") or "(No subject)")),
         "from": headers.get("from", str(row.get("from") or "Unknown sender")),
         "date": headers.get("date", ""),
+        "to": headers.get("to", ""),
         "snippet": str(message.get("snippet") or row.get("snippet") or ""),
         "body": _gmail_body(message.get("payload")),
     }
@@ -153,6 +159,7 @@ def _zoho_summary(row: dict[str, Any], account_id: str) -> dict[str, str]:
         "subject": str(row.get("subject") or "(No subject)").strip(),
         "from": str(sender).strip(),
         "date": str(row.get("receivedTime") or row.get("sentTime") or row.get("date") or "").strip(),
+        "to": str(row.get("toAddress") or row.get("to") or "").strip(),
         "snippet": str(row.get("summary") or row.get("snippet") or row.get("content") or "").strip(),
         "body": "",
     }
@@ -353,6 +360,151 @@ async def _draft_or_confirm_send(
     return "Draft saved in " + ("Gmail" if provider == "gmail" else "Zoho Mail") + ".\nSubject: " + subject
 
 
+def _is_edit_draft(message: str) -> bool:
+    lowered = message.casefold()
+    has_draft = "draft" in lowered or "ಡ್ರಾಫ್ಟ್" in lowered
+    has_edit = any(word in lowered for word in ("edit", "update", "revise", "modify", "change", "ಬದಲಿಸು", "ಎಡಿಟ್"))
+    return has_draft and has_edit and not _is_delete(message)
+
+
+async def _list_drafts(user_id: str, provider: str) -> list[dict[str, str]]:
+    if provider == "gmail":
+        result = await list_gmail_drafts(user_id, max_results=MAX_EMAIL_RESULTS)
+        drafts = result.get("drafts")
+        rows: list[dict[str, str]] = []
+        for item in drafts if isinstance(drafts, list) else []:
+            if not isinstance(item, dict):
+                continue
+            draft_id = str(item.get("id") or "").strip()
+            message = item.get("message")
+            message_id = str(message.get("id") or "").strip() if isinstance(message, dict) else ""
+            if not draft_id or not message_id:
+                continue
+            details = await get_gmail_message(user_id, message_id)
+            row = _gmail_summary({"id": message_id}, details)
+            row["draft_id"] = draft_id
+            rows.append(row)
+        return rows
+
+    accounts = _zoho_accounts(await list_accounts(user_id))
+    if not accounts:
+        return []
+    account = accounts[0]
+    folder_payload = await list_folders(user_id, account["id"])
+    folders = _rows(folder_payload, "folders")
+    draft_folder = next(
+        (
+            row for row in folders
+            if str(row.get("folderName") or row.get("name") or "").casefold() == "drafts"
+            or str(row.get("folderType") or "").casefold() == "drafts"
+        ),
+        None,
+    )
+    if not draft_folder:
+        return []
+    folder_id = str(draft_folder.get("folderId") or draft_folder.get("id") or "").strip()
+    if not folder_id:
+        return []
+    listed = await list_messages(user_id, account["id"], folder_id=folder_id, start=1, limit=MAX_EMAIL_RESULTS)
+    rows = []
+    for raw in _rows(listed, "messages"):
+        row = _zoho_summary(raw, account["id"])
+        row["folder_id"] = row["folder_id"] or folder_id
+        row["draft_id"] = row["id"]
+        row["from"] = str(raw.get("fromAddress") or account["email"] or "")
+        rows.append(row)
+    return rows
+
+
+def _draft_query(message: str) -> str:
+    quoted = re.search(r"""["']([^"']{1,120})["']""", message)
+    if quoted:
+        return quoted.group(1).strip()
+    value = _search_query(message)
+    value = re.sub(r"\b(edit|update|revise|modify|change|draft|drafts|email|emails|mail|mails|please|my|the|to say|as)\b", " ", value, flags=re.IGNORECASE)
+    return " ".join(value.split()).strip(" ?!.,\"'")[:120]
+
+
+async def _edit_draft(
+    user_id: str,
+    provider: str,
+    message: str,
+) -> str:
+    rows = await _list_drafts(user_id, provider)
+    if not rows:
+        return "I couldn't find any drafts in " + ("Gmail" if provider == "gmail" else "Zoho Mail") + "."
+    query = _draft_query(message)
+    matches = [
+        row for row in rows
+        if not query or query.casefold() in row.get("subject", "").casefold()
+        or query.casefold() in row.get("snippet", "").casefold()
+    ]
+    if len(matches) != 1:
+        return "Please identify the draft by subject. Available drafts:\n" + _format_results(rows[:MAX_EMAIL_RESULTS], provider)
+    row = matches[0]
+    old_body = row.get("body", "")
+    if not old_body:
+        old_body = await _read_body(user_id, provider, row)
+    recipient = row.get("to", "")
+    instructions = (
+        "Revise this existing email draft according to the user's requested changes. "
+        "Preserve details not asked to change. Return SUBJECT and BODY only.\n"
+        "Existing subject: " + row.get("subject", "") + "\n"
+        "Existing recipient: " + recipient + "\n"
+        "Existing body: " + old_body[:8000] + "\n"
+        "Requested edits: " + message[:4000]
+    )
+    subject, body = await _compose_fields(instructions, recipient)
+    if provider == "gmail":
+        await update_gmail_draft(user_id, row["draft_id"], recipient, subject, body)
+        return "Updated the Gmail draft: " + subject
+    accounts = _zoho_accounts(await list_accounts(user_id))
+    if not accounts or not accounts[0]["email"] or not row.get("folder_id") or not row.get("draft_id"):
+        return "I found the Zoho draft but could not verify the folder/account needed to safely replace it. Nothing was changed."
+    await replace_draft(
+        user_id,
+        accounts[0]["id"],
+        row["folder_id"],
+        row["draft_id"],
+        accounts[0]["email"],
+        recipient,
+        subject,
+        body,
+        approved=True,
+    )
+    return "Updated the Zoho Mail draft: " + subject
+
+
+async def _delete_drafts(
+    user_id: str,
+    conversation_id: str,
+    provider: str,
+    message: str,
+) -> str:
+    rows = await _list_drafts(user_id, provider)
+    if not rows:
+        return "No drafts were found in " + ("Gmail" if provider == "gmail" else "Zoho Mail") + "."
+    query = _draft_query(message)
+    matches = [
+        row for row in rows
+        if not query or query.casefold() in row.get("subject", "").casefold()
+        or query.casefold() in row.get("snippet", "").casefold()
+    ]
+    if not matches:
+        return "No draft matched that subject. Nothing was deleted."
+    items = []
+    for row in matches:
+        items.append({
+            "id": row.get("id", ""),
+            "draft_id": row.get("draft_id", ""),
+            "account_id": row.get("account_id", ""),
+            "folder_id": row.get("folder_id", ""),
+        })
+    _save_pending(user_id, conversation_id, provider, "delete_drafts", {"items": items})
+    preview = _format_results(matches, "Gmail drafts" if provider == "gmail" else "Zoho Mail drafts")
+    return preview + "\n\nNothing has been deleted yet. Reply CONFIRM to delete these draft(s), or CANCEL."
+
+
 async def _execute_pending(user_id: str, provider: str, action_type: str, payload: dict[str, Any]) -> str:
     if action_type == "send_email":
         if provider == "gmail":
@@ -390,6 +542,28 @@ async def _execute_pending(user_id: str, provider: str, action_type: str, payloa
                 )
             completed += 1
         return "Moved " + str(completed) + " email(s) to Trash."
+
+    if action_type == "delete_drafts":
+        items = payload.get("items")
+        if not isinstance(items, list) or not items:
+            return "No saved draft targets were available to delete."
+        completed = 0
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            if provider == "gmail":
+                await delete_gmail_draft(user_id, str(item["draft_id"]), approved=True)
+            else:
+                await delete_message(
+                    user_id,
+                    str(item["account_id"]),
+                    str(item["folder_id"]),
+                    str(item["draft_id"] or item["id"]),
+                    approved=True,
+                    permanently=False,
+                )
+            completed += 1
+        return "Deleted " + str(completed) + " draft(s)."
 
     return "This email action is no longer supported. Please ask again."
 
@@ -457,6 +631,12 @@ async def handle_email_chat(user_id: str, conversation_id: str, message: str) ->
     label = "Gmail" if provider == "gmail" else "Zoho Mail"
     recipient_match = EMAIL_ADDRESS_RE.search(text)
     recipient = recipient_match.group(0) if recipient_match else ""
+
+    if _is_delete(text) and "draft" in text.casefold():
+        return await _delete_drafts(user, conversation, provider, text)
+
+    if _is_edit_draft(text):
+        return await _edit_draft(user, provider, text)
 
     if _is_send(text) or _is_draft(text):
         sending = _is_send(text)

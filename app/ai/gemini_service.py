@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import os
 from typing import Any
+from collections.abc import Awaitable, Callable
 from urllib.parse import quote
 
 import httpx
@@ -272,3 +273,176 @@ async def generate_gemini_reply(
 
     reply = _extract_text(response_data)
     return append_sources(reply, evidence) if evidence else reply
+
+
+def _extract_function_calls(response_data: dict[str, Any]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Return the model content and its requested function calls, if any."""
+    candidates = response_data.get("candidates")
+    if not isinstance(candidates, list) or not candidates or not isinstance(candidates[0], dict):
+        return {}, []
+    content = candidates[0].get("content")
+    if not isinstance(content, dict):
+        return {}, []
+    calls: list[dict[str, Any]] = []
+    parts = content.get("parts")
+    if not isinstance(parts, list):
+        return dict(content), calls
+    for part in parts:
+        if not isinstance(part, dict) or part.get("thought") is True:
+            continue
+        call = part.get("functionCall") or part.get("function_call")
+        if not isinstance(call, dict):
+            continue
+        name = str(call.get("name") or "").strip()
+        arguments = call.get("args", {})
+        if name:
+            calls.append({
+                "name": name,
+                "args": arguments if isinstance(arguments, dict) else {},
+                "id": str(call.get("id") or "").strip(),
+                "invalid_arguments": not isinstance(arguments, dict),
+            })
+    return dict(content), calls
+
+
+async def generate_gemini_function_call_reply(
+    message: str,
+    *,
+    history: list[tuple[str, str]] | None,
+    tool_declarations: list[dict[str, Any]],
+    execute_tool: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]],
+    extra_system_instruction: str,
+    max_tool_rounds: int = 4,
+) -> str:
+    """Run a bounded Gemini function-calling loop and return its grounded final text.
+
+    Function calls are proposals only. The authenticated backend callback owns
+    allow-list enforcement, account scoping, parameter validation and confirmations.
+    """
+    cleaned = message.strip()
+    if not cleaned:
+        raise ValueError("message cannot be empty")
+    if not tool_declarations:
+        raise ValueError("at least one function declaration is required")
+
+    api_key, model = _get_config()
+    encoded_model = quote(model, safe="")
+    url = f"{_API_BASE_URL}/models/{encoded_model}:generateContent"
+    system_instruction = (
+        _SYSTEM_INSTRUCTION
+        + "\n\n"
+        + build_grounded_prompt_instruction()
+        + "\n\n"
+        + extra_system_instruction.strip()
+    )
+    contents = _build_contents(cleaned, history, "")
+    declarations = [item for item in tool_declarations if isinstance(item, dict) and item.get("name")]
+    if not declarations:
+        raise ValueError("no valid function declarations were supplied")
+    tool_names = {str(item["name"]) for item in declarations}
+    tools = [{"functionDeclarations": declarations}]
+    headers = {
+        "x-goog-api-key": api_key,
+        "Content-Type": "application/json",
+    }
+    timeout = httpx.Timeout(_TIMEOUT_SECONDS, connect=15.0)
+    max_rounds = max(1, min(int(max_tool_rounds), 6))
+    max_total_calls = 8
+    executed_calls = 0
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        for round_index in range(max_rounds + 1):
+            payload: dict[str, Any] = {
+                "systemInstruction": {"parts": [{"text": system_instruction}]},
+                "contents": contents,
+                "generationConfig": _generation_config(model),
+            }
+            # The final turn has no tools, stopping recursive tool execution.
+            if round_index < max_rounds:
+                payload["tools"] = tools
+                if round_index == 0:
+                    # An email request must be grounded in a real tool result;
+                    # later turns may either call another tool or answer.
+                    payload["toolConfig"] = {
+                        "functionCallingConfig": {"mode": "ANY"}
+                    }
+            response_data = await _post_generate_content(client, url, headers, payload)
+            model_content, calls = _extract_function_calls(response_data)
+            if not calls:
+                if executed_calls == 0:
+                    # The first email response must perform a real tool call;
+                    # never treat a plain model answer as evidence of mailbox data.
+                    return (
+                        "I couldn't verify the mailbox data because no email tool "
+                        "was executed. Please retry; I won't guess about your emails."
+                    )
+                return _extract_text(response_data)
+            if round_index >= max_rounds:
+                return (
+                    "I couldn't complete that email request safely because the tool "
+                    "sequence did not finish. No unconfirmed send or delete was performed."
+                )
+
+            model_content["role"] = "model"
+            model_parts = model_content.get("parts")
+            if isinstance(model_parts, list):
+                model_content["parts"] = [
+                    part for part in model_parts
+                    if not (isinstance(part, dict) and part.get("thought") is True)
+                ]
+            contents.append(model_content)
+            response_parts: list[dict[str, Any]] = []
+            for call in calls:
+                name = str(call["name"])
+                call_id = str(call.get("id") or "")
+                if executed_calls >= max_total_calls:
+                    result: dict[str, Any] = {
+                        "ok": False,
+                        "code": "TOOL_LIMIT_REACHED",
+                        "message": "The maximum number of tool calls for one user message was reached. Summarize only verified results already received.",
+                    }
+                elif name not in tool_names:
+                    result = {
+                        "ok": False,
+                        "code": "UNKNOWN_TOOL",
+                        "message": "That tool is not available. Choose only from the declared tools.",
+                    }
+                elif call.get("invalid_arguments"):
+                    result = {
+                        "ok": False,
+                        "code": "INVALID_TOOL_ARGUMENTS",
+                        "message": "Tool arguments were not a JSON object. Ask for clarification instead of guessing.",
+                    }
+                else:
+                    try:
+                        result = await execute_tool(name, call["args"])
+                        if not isinstance(result, dict):
+                            result = {
+                                "ok": False,
+                                "code": "INVALID_TOOL_RESULT",
+                                "message": "The backend did not return a valid tool result. Do not claim success.",
+                            }
+                    except Exception:
+                        # Exception contents can contain provider response data. Keep
+                        # them out of the model context and user response.
+                        result = {
+                            "ok": False,
+                            "code": "TOOL_EXECUTION_FAILED",
+                            "message": "The backend tool failed. Do not claim that the operation succeeded.",
+                        }
+                executed_calls += 1
+
+                function_response: dict[str, Any] = {
+                    "name": name,
+                    "response": {"result": result},
+                }
+                if call_id:
+                    function_response["id"] = call_id
+                response_parts.append({"functionResponse": function_response})
+
+            contents.append({"role": "user", "parts": response_parts})
+
+    return (
+        "I couldn't complete that email request safely. Please try again; "
+        "no action without explicit confirmation was performed."
+    )

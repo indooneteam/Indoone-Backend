@@ -147,14 +147,18 @@ def _gmail_summary(row: dict[str, Any], detail: dict[str, Any]) -> dict[str, str
     }
 
 
-def _zoho_summary(row: dict[str, Any], account_id: str) -> dict[str, str]:
+def _zoho_summary(
+    row: dict[str, Any],
+    account_id: str,
+    default_folder_id: str = "",
+) -> dict[str, str]:
     sender = row.get("sender") or row.get("fromAddress") or row.get("from") or "Unknown sender"
     if isinstance(sender, dict):
         sender = sender.get("emailAddress") or sender.get("email") or sender.get("name") or "Unknown sender"
     return {
         "id": str(row.get("messageId") or row.get("message_id") or row.get("id") or "").strip(),
         "account_id": account_id,
-        "folder_id": str(row.get("folderId") or row.get("folder_id") or "").strip(),
+        "folder_id": str(row.get("folderId") or row.get("folder_id") or default_folder_id).strip(),
         "subject": str(row.get("subject") or "(No subject)").strip(),
         "from": str(sender).strip(),
         "date": str(row.get("receivedTime") or row.get("sentTime") or row.get("date") or "").strip(),
@@ -262,12 +266,40 @@ def _search_query(message: str) -> str:
     return " ".join(cleaned.split()).strip(" ?!.,\"'")[:120]
 
 
-async def _list_mail(user_id: str, provider: str, query: str, recent: bool = False) -> list[dict[str, str]]:
+def _mail_timestamp(value: object) -> float:
+    raw = str(value or "").strip()
+    if not raw:
+        return 0.0
+    if raw.isdigit():
+        number = int(raw)
+        # Zoho may return epoch milliseconds or seconds.
+        if number > 10_000_000_000:
+            number = number / 1000
+        return float(number)
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp()
+    except ValueError:
+        return 0.0
+
+
+async def _list_mail(
+    user_id: str,
+    provider: str,
+    query: str,
+    recent: bool = False,
+    limit: int = MAX_EMAIL_RESULTS,
+) -> list[dict[str, str]]:
+    limit = max(1, min(int(limit), 100))
     if provider == "gmail":
-        gmail_query = "newer_than:7d" if recent else query.strip()
+        # A recent-mail request means newest Inbox messages, not any message
+        # from an arbitrary seven-day period.
+        gmail_query = "in:inbox" if recent else query.strip()
         if recent and "unread" in query.casefold():
-            gmail_query = "is:unread newer_than:7d"
-        listed = await list_gmail_messages(user_id, query=gmail_query, max_results=MAX_EMAIL_RESULTS)
+            gmail_query = "is:unread in:inbox"
+        listed = await list_gmail_messages(user_id, query=gmail_query, max_results=limit)
         items = listed.get("messages")
         result: list[dict[str, str]] = []
         for row in items if isinstance(items, list) else []:
@@ -281,9 +313,49 @@ async def _list_mail(user_id: str, provider: str, query: str, recent: bool = Fal
     if not accounts:
         raise RuntimeError("Zoho Mail did not return a mailbox account")
     account = accounts[0]
-    search_key = "newMails" if recent else query.strip()
-    listed = await list_messages(user_id, account["id"], search_key=search_key, start=1, limit=MAX_EMAIL_RESULTS)
-    return [_zoho_summary(row, account["id"]) for row in _rows(listed, "messages")]
+
+    if recent:
+        # Avoid Zoho's newMails search filter for "latest" requests; resolve
+        # the actual Inbox and page its messages instead.
+        folder_payload = await list_folders(user_id, account["id"])
+        folders = _rows(folder_payload, "folders")
+        inbox = next(
+            (
+                row for row in folders
+                if str(row.get("folderName") or row.get("name") or "").strip().casefold() == "inbox"
+                or str(row.get("folderType") or "").strip().casefold() == "inbox"
+            ),
+            None,
+        )
+        inbox_id = str((inbox or {}).get("folderId") or (inbox or {}).get("id") or "").strip()
+        if not inbox_id:
+            raise RuntimeError("Zoho Mail Inbox folder could not be identified; refusing an unscoped mailbox listing")
+        listed = await list_messages(
+            user_id,
+            account["id"],
+            folder_id=inbox_id,
+            start=1,
+            limit=limit,
+        )
+        rows = [
+            _zoho_summary(row, account["id"], inbox_id)
+            for row in _rows(listed, "messages")
+        ]
+    else:
+        listed = await list_messages(
+            user_id,
+            account["id"],
+            search_key=query.strip(),
+            start=1,
+            limit=limit,
+        )
+        rows = [_zoho_summary(row, account["id"]) for row in _rows(listed, "messages")]
+
+    # Providers normally return newest-first, but normalise ordering when
+    # their payload includes parseable received/sent timestamps.
+    if any(_mail_timestamp(row.get("date")) for row in rows):
+        rows.sort(key=lambda row: _mail_timestamp(row.get("date")), reverse=True)
+    return rows
 
 
 async def _read_body(user_id: str, provider: str, row: dict[str, str]) -> str:

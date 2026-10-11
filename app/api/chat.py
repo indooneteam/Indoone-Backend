@@ -18,7 +18,7 @@ from app.capabilities.document_extract import (
 from app.capabilities.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
 from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
-from app.plugins.email_assistant import handle_email_chat
+from app.plugins.email_tools import handle_email_chat_with_tools
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
@@ -228,12 +228,19 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         email_tool_reply = None
         if not attachments and not file_ids and not document_context.strip() and not media_attachments:
             try:
-                email_tool_reply = await handle_email_chat(user_id, conversation_id, body.message)
+                email_tool_reply = await handle_email_chat_with_tools(
+                    user_id,
+                    conversation_id,
+                    body.message,
+                    history=history,
+                )
             except Exception:
-                # Provider/tool errors must not leak tokens or provider response bodies.
+                # Do not conflate model/provider failures with expired mailbox tokens.
+                # The model or email tool must explicitly classify reauthorization errors.
                 email_tool_reply = (
-                    "I couldn't complete that email action. Please check the connected "
-                    "mail account or reconnect it, then try again."
+                    "I couldn't complete that email request because an internal AI or "
+                    "email service failed. Please retry shortly. I will not claim that "
+                    "an email was sent or deleted unless the operation was confirmed."
                 )
 
         if email_tool_reply is not None:

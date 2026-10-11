@@ -166,6 +166,8 @@ def _sanitize_tool_error(exc: Exception) -> dict[str, str]:
         return {"code": "PERMISSION_REQUIRED", "message": "This action needs permission or explicit user confirmation."}
     if isinstance(exc, ValueError):
         return {"code": "INVALID_REQUEST", "message": "The email request contains invalid or incomplete details. Ask the user for the missing or corrected information."}
+    if "inbox folder could not be identified" in str(exc).casefold():
+        return {"code": "INBOX_NOT_VERIFIED", "message": "The mailbox Inbox folder could not be verified, so no unscoped listing was performed. Do not claim the Inbox is empty; ask the user to reauthorize the mailbox or retry later."}
     if isinstance(exc, httpx.HTTPStatusError):
         status = exc.response.status_code
         if status in {401, 403}:

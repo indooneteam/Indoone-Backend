@@ -116,7 +116,7 @@ async def test_send_request_only_sends_after_confirmation(monkeypatch, tmp_path)
 
     async def fake_send(user_id, to, subject, body, approved=False):
         sent.append((user_id, to, subject, body, approved))
-        return {"secrets_exposed": False}
+        return {"result": {"id": "provider-message-id"}, "secrets_exposed": False}
 
     monkeypatch.setattr(email_assistant, "_compose_fields", fake_compose)
     monkeypatch.setattr(email_assistant, "send_gmail_message", fake_send)

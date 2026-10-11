@@ -12,3 +12,9 @@ data/processed/
 # The trained Indoone runtime artifacts are intentionally tracked in this deployment
 # so Render can load the model locally without downloading it from object storage.
 # Keep the checkpoint and tokenizer below GitHub's 100 MB per-file hard limit.
+
+# Runtime SQLite databases and their live WAL sidecar files are local server state.
+data/indoone_capabilities.db
+data/indoone_capabilities.db-*
+data/indoone_conversations.sqlite3
+data/indoone_conversations.sqlite3-*

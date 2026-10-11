@@ -218,7 +218,12 @@ def _is_delete(message: str) -> bool:
 
 def _is_send(message: str) -> bool:
     lowered = message.casefold()
-    return any(word in lowered for word in ("send", "ಕಳುಹಿಸು", "ಸೆಂಡ್ ಮಾಡು"))
+    # Match an actual send intent, not substrings such as "send" inside "sender".
+    english_words = set(re.findall("[a-z]+", lowered))
+    english_send_intent = bool({"send", "sending"} & english_words)
+    return english_send_intent or any(
+        phrase in lowered for phrase in ("ಕಳುಹಿಸು", "ಸೆಂಡ್ ಮಾಡು")
+    )
 
 
 def _is_draft(message: str) -> bool:

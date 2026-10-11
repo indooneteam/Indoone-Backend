@@ -264,6 +264,9 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     return _error_response_with_request_id(500, "INTERNAL_ERROR", "internal server error", request_id)
 
 
+# Register Zoho OAuth endpoints before the broader routers so their
+# exact callback path cannot be intercepted by another integration route.
+app.include_router(zoho_mail_oauth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
@@ -279,7 +282,6 @@ app.include_router(phone_router, prefix="/api")
 app.include_router(approvals_router, prefix="/api")
 app.include_router(integrations_router, prefix="/api")
 app.include_router(gmail_oauth_router, prefix="/api")
-app.include_router(zoho_mail_oauth_router, prefix="/api")
 app.include_router(zoho_mail_router, prefix="/api")
 app.include_router(telegram_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")

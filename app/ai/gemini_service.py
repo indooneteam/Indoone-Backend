@@ -369,6 +369,13 @@ async def generate_gemini_function_call_reply(
             response_data = await _post_generate_content(client, url, headers, payload)
             model_content, calls = _extract_function_calls(response_data)
             if not calls:
+                if executed_calls == 0:
+                    # The first email response must perform a real tool call;
+                    # never treat a plain model answer as evidence of mailbox data.
+                    return (
+                        "I couldn't verify the mailbox data because no email tool "
+                        "was executed. Please retry; I won't guess about your emails."
+                    )
                 return _extract_text(response_data)
             if round_index >= max_rounds:
                 return (

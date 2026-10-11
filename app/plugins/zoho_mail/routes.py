@@ -11,6 +11,7 @@ from app.plugins.zoho_mail.service import (
     list_accounts,
     list_folders,
     list_messages,
+    reply_to_message,
     send_message,
 )
 
@@ -38,6 +39,13 @@ class ZohoMailMessageRequest(ZohoMailAccountRequest):
 
 
 class ZohoMailSendRequest(ZohoMailAccountRequest):
+    from_address: str = Field(min_length=3, max_length=512)
+    to_address: str = Field(min_length=3, max_length=512)
+    subject: str = Field(min_length=1, max_length=2000)
+    content: str = Field(min_length=1, max_length=20_000)
+
+class ZohoMailReplyRequest(ZohoMailAccountRequest):
+    message_id: str = Field(min_length=1, max_length=256)
     from_address: str = Field(min_length=3, max_length=512)
     to_address: str = Field(min_length=3, max_length=512)
     subject: str = Field(min_length=1, max_length=2000)
@@ -104,6 +112,21 @@ async def zoho_mail_send(request: ZohoMailSendRequest) -> dict[str, object]:
         return await send_message(
             request.user_id,
             request.account_id,
+            request.from_address,
+            request.to_address,
+            request.subject,
+            request.content,
+        )
+    except (ValueError, RuntimeError, httpx.HTTPError) as exc:
+        _raise_provider_error(exc)
+
+@router.post("/reply")
+async def zoho_mail_reply(request: ZohoMailReplyRequest) -> dict[str, object]:
+    try:
+        return await reply_to_message(
+            request.user_id,
+            request.account_id,
+            request.message_id,
             request.from_address,
             request.to_address,
             request.subject,

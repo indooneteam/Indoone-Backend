@@ -328,6 +328,8 @@ async def _list_mail(
             None,
         )
         inbox_id = str((inbox or {}).get("folderId") or (inbox or {}).get("id") or "").strip()
+        if not inbox_id:
+            raise RuntimeError("Zoho Mail Inbox folder could not be identified; refusing an unscoped mailbox listing")
         listed = await list_messages(
             user_id,
             account["id"],

@@ -1,0 +1,183 @@
+"""Server-side Zoho Mail OAuth flow and encrypted token persistence."""
+
+from __future__ import annotations
+
+import os
+from datetime import datetime, timedelta, timezone
+from secrets import token_urlsafe
+from urllib.parse import urlencode, urlsplit
+
+import httpx
+
+from app.capabilities.integrations import _fernet
+from app.capabilities.store import (
+    consume_oauth_state,
+    create_oauth_state,
+    get_integration_token,
+    upsert_integration_token,
+)
+
+_DEFAULT_ACCOUNTS_BASE_URL = "https://accounts.zoho.in"
+_DEFAULT_MAIL_API_BASE_URL = "https://mail.zoho.in/api"
+_DEFAULT_SCOPE = ",".join((
+    "ZohoMail.accounts.READ",
+    "ZohoMail.folders.READ",
+    "ZohoMail.messages.READ",
+    "ZohoMail.messages.CREATE",
+))
+
+
+def _https_url(value: str, setting_name: str) -> str:
+    normalized = value.strip().rstrip("/")
+    parsed = urlsplit(normalized)
+    if parsed.scheme != "https" or not parsed.netloc or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        raise RuntimeError(f"{setting_name} must be a valid HTTPS URL without credentials, query, or fragment.")
+    return normalized
+
+
+def zoho_mail_auth_config() -> dict[str, object]:
+    accounts_base = _https_url(
+        os.getenv("INDOONE_ZOHO_ACCOUNTS_BASE_URL", _DEFAULT_ACCOUNTS_BASE_URL),
+        "INDOONE_ZOHO_ACCOUNTS_BASE_URL",
+    )
+    mail_base = _https_url(
+        os.getenv("INDOONE_ZOHO_MAIL_API_BASE_URL", _DEFAULT_MAIL_API_BASE_URL),
+        "INDOONE_ZOHO_MAIL_API_BASE_URL",
+    )
+    client_id = os.getenv("INDOONE_ZOHO_CLIENT_ID", "").strip()
+    client_secret = os.getenv("INDOONE_ZOHO_CLIENT_SECRET", "").strip()
+    redirect_uri = os.getenv("INDOONE_ZOHO_REDIRECT_URI", "").strip()
+    return {
+        "integration": "zoho_mail",
+        "configured": bool(client_id and client_secret and redirect_uri),
+        "client_id_configured": bool(client_id),
+        "client_secret_configured": bool(client_secret),
+        "redirect_uri_configured": bool(redirect_uri),
+        "accounts_base_url": accounts_base,
+        "mail_api_base_url": mail_base,
+        "scope": os.getenv("INDOONE_ZOHO_SCOPE", _DEFAULT_SCOPE).strip() or _DEFAULT_SCOPE,
+        "secrets_exposed": False,
+    }
+
+
+def _required_settings() -> tuple[str, str, str, str, str]:
+    client_id = os.getenv("INDOONE_ZOHO_CLIENT_ID", "").strip()
+    client_secret = os.getenv("INDOONE_ZOHO_CLIENT_SECRET", "").strip()
+    redirect_uri = os.getenv("INDOONE_ZOHO_REDIRECT_URI", "").strip()
+    accounts_base = _https_url(
+        os.getenv("INDOONE_ZOHO_ACCOUNTS_BASE_URL", _DEFAULT_ACCOUNTS_BASE_URL),
+        "INDOONE_ZOHO_ACCOUNTS_BASE_URL",
+    )
+    scope = os.getenv("INDOONE_ZOHO_SCOPE", _DEFAULT_SCOPE).strip() or _DEFAULT_SCOPE
+    if not client_id or not client_secret or not redirect_uri:
+        raise RuntimeError(
+            "Zoho Mail OAuth is not configured. Set INDOONE_ZOHO_CLIENT_ID, "
+            "INDOONE_ZOHO_CLIENT_SECRET, and INDOONE_ZOHO_REDIRECT_URI on the backend."
+        )
+    parsed_redirect = urlsplit(redirect_uri)
+    if parsed_redirect.scheme != "https" or not parsed_redirect.netloc or parsed_redirect.username or parsed_redirect.password:
+        raise RuntimeError("INDOONE_ZOHO_REDIRECT_URI must be a valid HTTPS callback URL.")
+    return client_id, client_secret, redirect_uri, accounts_base, scope
+
+
+def start_zoho_mail_authorization(user_id: str) -> dict[str, object]:
+    normalized_user_id = user_id.strip()
+    if not normalized_user_id:
+        raise ValueError("user_id is required")
+    client_id, _, redirect_uri, accounts_base, scope = _required_settings()
+    state = token_urlsafe(32)
+    create_oauth_state(state, normalized_user_id, "zoho_mail", redirect_uri)
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "scope": scope,
+        "access_type": "offline",
+        "prompt": "consent",
+        "state": state,
+    }
+    return {
+        "integration": "zoho_mail",
+        "authorization_url": f"{accounts_base}/oauth/v2/auth?{urlencode(params)}",
+        "state_required": True,
+        "token_storage": "user-scoped-encrypted-server-side",
+        "secrets_exposed": False,
+    }
+
+
+def cancel_zoho_mail_authorization(state: str) -> bool:
+    normalized_state = state.strip()
+    if not normalized_state:
+        return False
+    return consume_oauth_state(normalized_state, "zoho_mail") is not None
+
+
+async def exchange_zoho_mail_authorization_code(code: str, state: str) -> dict[str, object]:
+    normalized_code = code.strip()
+    normalized_state = state.strip()
+    if not normalized_code or not normalized_state:
+        raise ValueError("code and state are required")
+    state_data = consume_oauth_state(normalized_state, "zoho_mail")
+    if state_data is None:
+        raise ValueError("Zoho Mail authorization state is invalid or expired")
+
+    client_id, client_secret, redirect_uri, accounts_base, requested_scope = _required_settings()
+    if state_data["redirect_uri"] != redirect_uri:
+        raise ValueError("Zoho Mail callback URI does not match the authorization request")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            f"{accounts_base}/oauth/v2/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "redirect_uri": redirect_uri,
+                "code": normalized_code,
+                "scope": requested_scope,
+            },
+            headers={"Accept": "application/json"},
+        )
+        response.raise_for_status()
+        payload = response.json()
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("Zoho returned an invalid OAuth token response")
+    if payload.get("error"):
+        raise RuntimeError("Zoho rejected the authorization code")
+    access_token = payload.get("access_token")
+    if not isinstance(access_token, str) or not access_token.strip():
+        raise RuntimeError("Zoho returned no access token")
+    refresh_value = payload.get("refresh_token")
+    refresh_token = refresh_value.strip() if isinstance(refresh_value, str) and refresh_value.strip() else None
+    existing = get_integration_token(state_data["user_id"], "zoho_mail")
+    if not refresh_token and not (existing and existing.get("refresh_token")):
+        raise RuntimeError("Zoho returned no refresh token. Reconnect and grant offline access.")
+
+    expires_in = payload.get("expires_in", 3600)
+    if isinstance(expires_in, str):
+        try:
+            expires_in = int(expires_in)
+        except ValueError:
+            expires_in = 3600
+    if not isinstance(expires_in, (int, float)) or expires_in <= 0:
+        expires_in = 3600
+    expires_at = (datetime.now(timezone.utc) + timedelta(seconds=int(expires_in))).isoformat()
+    granted_scope = str(payload.get("scope") or requested_scope)
+    cipher = _fernet()
+    upsert_integration_token(
+        state_data["user_id"],
+        "zoho_mail",
+        cipher.encrypt(access_token.encode("utf-8")),
+        cipher.encrypt(refresh_token.encode("utf-8")) if refresh_token else None,
+        str(payload.get("token_type") or "Zoho-oauthtoken"),
+        granted_scope,
+        expires_at,
+    )
+    return {
+        "integration": "zoho_mail",
+        "user_id": state_data["user_id"],
+        "connected": True,
+        "scope": granted_scope,
+        "expires_at": expires_at,
+        "secrets_exposed": False,
+    }

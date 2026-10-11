@@ -27,6 +27,8 @@ from app.api.facebook import router as facebook_router
 from app.api.google_photos import router as google_photos_router
 from app.api.integrations import router as integrations_router
 from app.plugins.gmail.oauth_routes import router as gmail_oauth_router
+from app.plugins.zoho_mail.oauth_routes import router as zoho_mail_oauth_router
+from app.plugins.zoho_mail.routes import router as zoho_mail_router
 from app.instagram.api.instagram import router as instagram_router
 from app.instagram.api.instagram_comments import router as instagram_comments_router
 from app.instagram.api.instagram_insights import router as instagram_insights_router
@@ -264,6 +266,8 @@ app.include_router(phone_router, prefix="/api")
 app.include_router(approvals_router, prefix="/api")
 app.include_router(integrations_router, prefix="/api")
 app.include_router(gmail_oauth_router, prefix="/api")
+app.include_router(zoho_mail_oauth_router, prefix="/api")
+app.include_router(zoho_mail_router, prefix="/api")
 app.include_router(telegram_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
 app.include_router(youtube_router, prefix="/api")

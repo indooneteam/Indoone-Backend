@@ -23,16 +23,26 @@ router = APIRouter(tags=["chat"])
 _store = ConversationStore()
 MAX_CHAT_ATTACHMENT_BYTES = max(MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES)
 MAX_CHAT_ATTACHMENT_BASE64_CHARS = ((MAX_CHAT_ATTACHMENT_BYTES + 2) // 3) * 4
+MAX_CHAT_TOTAL_ATTACHMENT_BYTES = 24_000_000
+MAX_CHAT_ATTACHMENTS = 10
 CHAT_ATTACHMENT_MIME_TYPES = ALLOWED_IMAGE_MIMES | {PDF_MIME, DOCX_MIME}
+
+
+class ChatMediaAttachment(BaseModel):
+    filename: str = Field(min_length=1, max_length=255)
+    mime_type: str = Field(min_length=1, max_length=120)
+    content_base64: str = Field(min_length=1, max_length=MAX_CHAT_ATTACHMENT_BASE64_CHARS)
 
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     conversation_id: str | None = Field(default=None, min_length=1, max_length=128)
     file_id: str | None = Field(default=None, min_length=1, max_length=128)
+    file_ids: list[str] = Field(default_factory=list, max_length=MAX_CHAT_ATTACHMENTS)
     attachment_filename: str | None = Field(default=None, min_length=1, max_length=255)
     attachment_mime_type: str | None = Field(default=None, min_length=1, max_length=120)
     attachment_base64: str | None = Field(default=None, max_length=MAX_CHAT_ATTACHMENT_BASE64_CHARS)
+    attachments: list[ChatMediaAttachment] = Field(default_factory=list, max_length=MAX_CHAT_ATTACHMENTS)
 
 
 def _decode_chat_attachment(body: ChatRequest) -> dict[str, object] | None:
@@ -41,8 +51,8 @@ def _decode_chat_attachment(body: ChatRequest) -> dict[str, object] | None:
         return None
     if any(value is None for value in supplied):
         raise HTTPException(status_code=400, detail="attachment filename, MIME type, and content are all required")
-    if body.file_id:
-        raise HTTPException(status_code=400, detail="send either file_id or a media attachment, not both")
+    if body.file_id or body.file_ids:
+        raise HTTPException(status_code=400, detail="send file IDs separately from binary attachments")
 
     filename = Path(str(body.attachment_filename).replace("\\", "/")).name.strip()
     mime_type = str(body.attachment_mime_type).strip().lower()
@@ -61,6 +71,43 @@ def _decode_chat_attachment(body: ChatRequest) -> dict[str, object] | None:
         raise HTTPException(status_code=413, detail="attachment exceeds the 8 MB limit")
 
     return {"filename": filename, "mime_type": mime_type, "content": content}
+
+
+def _decode_chat_attachments(body: ChatRequest) -> list[dict[str, object]]:
+    legacy_fields = (body.attachment_filename, body.attachment_mime_type, body.attachment_base64)
+    media_items: list[dict[str, object]] = []
+
+    if body.attachments and any(value is not None for value in legacy_fields):
+        raise HTTPException(status_code=400, detail="use either attachments or the legacy single-attachment fields")
+
+    for item in body.attachments:
+        decoded = _decode_chat_attachment(
+            ChatRequest(
+                message=body.message,
+                attachment_filename=item.filename,
+                attachment_mime_type=item.mime_type,
+                attachment_base64=item.content_base64,
+            )
+        )
+        if decoded is not None:
+            media_items.append(decoded)
+
+    if any(value is not None for value in legacy_fields):
+        decoded = _decode_chat_attachment(body)
+        if decoded is not None:
+            media_items.append(decoded)
+
+    file_count = len(body.file_ids) + (1 if body.file_id else 0)
+    if file_count + len(media_items) > MAX_CHAT_ATTACHMENTS:
+        raise HTTPException(status_code=400, detail="You can attach up to 10 files per message.")
+
+    total_bytes = sum(len(bytes(item["content"])) for item in media_items)
+    if total_bytes > MAX_CHAT_TOTAL_ATTACHMENT_BYTES:
+        raise HTTPException(status_code=413, detail="Attachments together exceed the 24 MB upload limit.")
+
+    if any(not file_id.strip() for file_id in body.file_ids):
+        raise HTTPException(status_code=400, detail="invalid file ID")
+    return media_items
 
 
 class ChatSource(BaseModel):
@@ -104,30 +151,32 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-    document_context = ""
-    media_attachment: dict[str, object] | None = None
-    attachment = _decode_chat_attachment(body)
+    document_context_parts: list[str] = []
+    media_attachments: list[dict[str, object]] = []
+    attachments = _decode_chat_attachments(body)
+    file_ids = ([body.file_id] if body.file_id else []) + body.file_ids
 
-    if body.file_id:
+    for file_id in file_ids:
         try:
-            document_context = read_text_file(body.file_id, user_id=user_id)
+            text = read_text_file(file_id, user_id=user_id)
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if text.strip():
+            document_context_parts.append(f"Content from attached text file {file_id}:\\n{text[:100_000]}")
 
-    if attachment is not None:
+    gemini_enabled = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
+    for attachment in attachments:
         filename = str(attachment["filename"])
         mime_type = str(attachment["mime_type"])
         content = bytes(attachment["content"])
-        gemini_enabled = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
 
         if mime_type in ALLOWED_IMAGE_MIMES:
             if gemini_enabled:
-                media_attachment = attachment
+                media_attachments.append(attachment)
             else:
-                # Local text inference has no semantic vision model. It can still
-                # answer questions about readable text extracted from a photo.
+                # Local inference can only use readable text extracted from images.
                 try:
                     vision_result = analyze_image(
                         filename,
@@ -141,39 +190,57 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 if not ocr_text:
                     raise HTTPException(
                         status_code=503,
-                        detail="This server's local text model cannot understand a photo without readable text. Enable the Gemini backend for image understanding.",
+                        detail=(
+                            f"The local text model could not read text from {filename}. "
+                            "Enable the Gemini backend to understand images."
+                        ),
                     )
-                document_context = f"Readable text extracted from image {filename}:\n{ocr_text[:100_000]}"
+                document_context_parts.append(
+                    f"Readable text extracted from image {filename}:\\n{ocr_text[:100_000]}"
+                )
         elif mime_type in {PDF_MIME, DOCX_MIME}:
             try:
                 document = extract_document(filename, mime_type, content)
             except ValueError as exc:
                 raise HTTPException(status_code=400, detail=str(exc)) from exc
             if mime_type == PDF_MIME and gemini_enabled:
-                # Send the original PDF so the multimodal model can inspect charts,
-                # scans, and page layout as well as any selectable text.
-                media_attachment = attachment
+                # Keep original PDFs so Gemini can inspect scans, charts, and layout.
+                media_attachments.append(attachment)
             elif document.text.strip():
-                document_context = f"Extracted content from {filename}:\n{document.text[:100_000]}"
+                document_context_parts.append(
+                    f"Extracted content from {filename}:\\n{document.text[:100_000]}"
+                )
             else:
                 raise HTTPException(
                     status_code=422,
-                    detail="This document contains no selectable text. Use a Gemini-enabled backend for scanned PDFs.",
+                    detail=(
+                        f"{filename} contains no selectable text. "
+                        "Use a Gemini-enabled backend for scanned PDFs."
+                    ),
                 )
 
+    document_context = "\\n\\n".join(document_context_parts)[:120_000]
+
     try:
-        if media_attachment is None:
+        if not media_attachments:
             reply_with_sources = await generate_reply(
                 body.message,
                 history=history,
                 document_context=document_context,
+            )
+        elif len(media_attachments) == 1:
+            reply_with_sources = await generate_reply(
+                body.message,
+                history=history,
+                document_context=document_context,
+                media_attachment=media_attachments[0],
             )
         else:
             reply_with_sources = await generate_reply(
                 body.message,
                 history=history,
                 document_context=document_context,
-                media_attachment=media_attachment,
+                media_attachments=media_attachments,
             )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

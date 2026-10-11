@@ -82,6 +82,30 @@ def test_build_contents_attaches_media_as_inline_data() -> None:
     }
 
 
+def test_build_contents_attaches_multiple_media_as_inline_data() -> None:
+    import base64
+
+    first = {"mime_type": "image/jpeg", "content": b"first"}
+    second = {"mime_type": "image/png", "content": b"second"}
+    contents = gemini_service._build_contents(
+        "Describe both photos",
+        history=None,
+        document_context="",
+        media_attachments=[first, second],
+    )
+
+    parts = contents[-1]["parts"]
+    assert len(parts) == 3
+    assert parts[1]["inlineData"] == {
+        "mimeType": "image/jpeg",
+        "data": base64.b64encode(b"first").decode("ascii"),
+    }
+    assert parts[2]["inlineData"] == {
+        "mimeType": "image/png",
+        "data": base64.b64encode(b"second").decode("ascii"),
+    }
+
+
 def test_generate_gemini_reply_sends_thinking_config_and_returns_only_final(monkeypatch) -> None:
     captured: dict[str, object] = {}
 

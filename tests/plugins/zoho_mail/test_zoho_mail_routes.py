@@ -171,4 +171,4 @@ def test_zoho_mail_callback_missing_code_and_state_returns_clear_400(monkeypatch
     response = client.get("/api/integrations/zoho-mail/callback")
 
     assert response.status_code == 400
-    assert "authorization code or state" in response.json()["detail"]
+    assert "authorization code or state" in response.json()["message"]

@@ -28,7 +28,7 @@ INTEGRATIONS: tuple[Integration, ...] = (
     Integration("github", "GitHub", "developer", "ready", "oauth2", ("repo:read", "issues:read", "pull_requests:read"), "https://github.com/login/oauth/authorize", bool(os.getenv("INDOONE_GITHUB_CLIENT_ID"))),
     Integration("google_calendar", "Google Calendar", "productivity", "ready", "oauth2", ("calendar:read", "calendar:write"), "https://accounts.google.com/o/oauth2/v2/auth", bool(os.getenv("INDOONE_GOOGLE_CLIENT_ID"))),
     Integration("gmail", "Gmail", "communication", "ready", "oauth2", ("gmail:read", "gmail:send"), "https://accounts.google.com/o/oauth2/v2/auth", bool(os.getenv("INDOONE_GOOGLE_CLIENT_ID"))),
-    Integration("zoho_mail", "Zoho Mail", "communication", "ready", "oauth2", ("ZohoMail.accounts.READ", "ZohoMail.folders.READ", "ZohoMail.messages.READ", "ZohoMail.messages.CREATE"), f"{os.getenv('INDOONE_ZOHO_ACCOUNTS_BASE_URL', 'https://accounts.zoho.in').rstrip('/')}/oauth/v2/auth", bool(os.getenv("INDOONE_ZOHO_CLIENT_ID"))),
+    Integration("zoho_mail", "Zoho Mail", "communication", "ready", "oauth2", ("ZohoMail.accounts.READ", "ZohoMail.folders.READ", "ZohoMail.messages.READ", "ZohoMail.messages.CREATE", "ZohoMail.messages.DELETE"), f"{os.getenv('INDOONE_ZOHO_ACCOUNTS_BASE_URL', 'https://accounts.zoho.in').rstrip('/')}/oauth/v2/auth", bool(os.getenv("INDOONE_ZOHO_CLIENT_ID"))),
     Integration("slack", "Slack", "communication", "ready", "oauth2", ("channels:read", "messages:read", "messages:write"), "https://slack.com/oauth/v2/authorize", bool(os.getenv("INDOONE_SLACK_CLIENT_ID"))),
 )
 

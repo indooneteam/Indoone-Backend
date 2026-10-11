@@ -42,19 +42,28 @@ async def zoho_mail_start(request: ZohoMailStartRequest) -> dict[str, object]:
 
 @router.get("/integrations/zoho-mail/callback", response_class=HTMLResponse)
 async def zoho_mail_callback(
-    code: str = Query(default="", max_length=8_000),
-    state: str = Query(default="", max_length=512),
-    error: str = Query(default="", max_length=256),
+    code: str | None = Query(default=None, max_length=8_000),
+    state: str | None = Query(default=None, max_length=512),
+    error: str | None = Query(default=None, max_length=256),
 ) -> HTMLResponse:
-    if error:
-        cancel_zoho_mail_authorization(state)
+    normalized_state = (state or "").strip()
+    if (error or "").strip():
+        cancel_zoho_mail_authorization(normalized_state)
         return HTMLResponse(
             "<!doctype html><html><body><h2>Zoho Mail connection was not completed</h2>"
             "<p>You can return to Indoone and try again.</p></body></html>",
             status_code=400,
         )
+
+    normalized_code = (code or "").strip()
+    if not normalized_code or not normalized_state:
+        raise HTTPException(
+            status_code=400,
+            detail="Zoho Mail callback is missing an authorization code or state.",
+        )
+
     try:
-        await exchange_zoho_mail_authorization_code(code, state)
+        await exchange_zoho_mail_authorization_code(normalized_code, normalized_state)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:

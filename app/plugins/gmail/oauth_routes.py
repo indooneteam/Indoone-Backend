@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from app.capabilities.store import get_integration_token_metadata
 from app.plugins.gmail.oauth import exchange_gmail_server_auth_code, gmail_server_authorization_config, store_native_access_token
 
 
@@ -47,6 +48,38 @@ async def gmail_server_auth_code(request: GmailServerAuthCodeRequest) -> dict[st
         raise HTTPException(status_code=502, detail="Google rejected the Gmail authorization code") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+@router.get("/integrations/gmail/status")
+async def gmail_connection_status(
+    user_id: str = Query(..., min_length=1, max_length=256),
+) -> dict[str, object]:
+    """Return user-scoped Gmail connection metadata without exposing credentials."""
+    normalized_user_id = user_id.strip()
+    if not normalized_user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+
+    token_metadata = get_integration_token_metadata(normalized_user_id, "gmail")
+    if token_metadata is None:
+        return {
+            "integration": "gmail",
+            "user_id": normalized_user_id,
+            "connected": False,
+            "metadata": {},
+            "secrets_exposed": False,
+        }
+
+    return {
+        "integration": "gmail",
+        "user_id": normalized_user_id,
+        "connected": True,
+        "metadata": {
+            "scope": str(token_metadata.get("scope") or ""),
+            "expires_at": token_metadata.get("expires_at"),
+            "updated_at": token_metadata.get("updated_at"),
+        },
+        "secrets_exposed": False,
+    }
+
 
 @router.post("/integrations/gmail/native-token")
 async def gmail_native_token(request: NativeIntegrationTokenRequest) -> dict[str, object]:

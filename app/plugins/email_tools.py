@@ -516,14 +516,32 @@ async def handle_email_chat_with_tools(
 
     from app.ai.gemini_service import generate_gemini_function_call_reply
 
+    write_tools = {
+        "create_email_draft",
+        "update_email_draft",
+        "prepare_email_to_send",
+        "prepare_email_deletion",
+    }
+    write_action_completed = False
+
     async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        return await execute_email_tool(
+        nonlocal write_action_completed
+        if name in write_tools and write_action_completed:
+            return {
+                "ok": False,
+                "code": "MULTIPLE_WRITES_BLOCKED",
+                "message": "One email-changing operation has already been prepared/completed for this user message. Ask the user before starting another one.",
+            }
+        result = await execute_email_tool(
             user,
             conversation,
             name,
             arguments,
             original_message=text,
         )
+        if name in write_tools and result.get("ok") is True:
+            write_action_completed = True
+        return result
 
     return await generate_gemini_function_call_reply(
         text,

@@ -75,6 +75,8 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
             "properties": {
                 "query": {"type": "STRING", "description": "Specific subject or sender phrase to identify the email."},
                 "message_id": {"type": "STRING", "description": "Exact message id from a prior email tool result, if known."},
+                "account_id": {"type": "STRING", "description": "Account id returned by an earlier result; required with folder_id for reading a Zoho message by id."},
+                "folder_id": {"type": "STRING", "description": "Folder id returned by an earlier result; required with account_id for reading a Zoho message by id."},
                 "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
             },
         },
@@ -209,13 +211,30 @@ def _row_for_model(row: dict[str, Any], *, include_body: bool = False) -> dict[s
     return output
 
 
-async def _read_by_id(user_id: str, provider: str, message_id: str) -> dict[str, Any]:
+async def _read_by_id(
+    user_id: str,
+    provider: str,
+    message_id: str,
+    account_id: str = "",
+    folder_id: str = "",
+) -> dict[str, Any]:
     if not message_id or len(message_id) > 256:
         return {"ok": False, "code": "INVALID_REQUEST", "message": "A valid message id is required."}
+    if provider == "gmail":
+        from app.plugins.gmail.service import get_gmail_message
+        from app.plugins.email_assistant import _gmail_summary
+
+        details = await get_gmail_message(user_id, message_id)
+        row = _gmail_summary({"id": message_id}, details)
+        return {"ok": True, "provider": provider, "email": _row_for_model(row, include_body=True)}
+    if account_id and folder_id:
+        row = {"id": message_id, "account_id": account_id, "folder_id": folder_id}
+        body = await _read_body(user_id, provider, row)
+        return {"ok": True, "provider": provider, "email": {**row, "body": body[:5000]}}
     rows = await _list_mail(user_id, provider, "", recent=True, limit=50)
     matches = [row for row in rows if row.get("id") == message_id]
     if not matches:
-        return {"ok": False, "code": "MESSAGE_NOT_FOUND", "message": "That message is not in the recent Inbox results. Ask for its subject or sender so the mailbox can be searched."}
+        return {"ok": False, "code": "MESSAGE_LOCATION_REQUIRED", "message": "The exact folder for this message could not be verified. Search for the email again rather than guessing its location."}
     row = matches[0]
     body = await _read_body(user_id, provider, row)
     return {"ok": True, "provider": provider, "email": _row_for_model({**row, "body": body}, include_body=True)}
@@ -253,7 +272,13 @@ async def execute_email_tool(
         if name == "read_email":
             message_id = str(arguments.get("message_id") or "").strip()
             if message_id:
-                return await _read_by_id(user_id, provider, message_id)
+                return await _read_by_id(
+                    user_id,
+                    provider,
+                    message_id,
+                    str(arguments.get("account_id") or "").strip(),
+                    str(arguments.get("folder_id") or "").strip(),
+                )
             query = str(arguments.get("query") or "").strip()
             if not query:
                 return {"ok": False, "code": "EMAIL_IDENTIFIER_REQUIRED", "message": "Ask the user for the subject or sender of the email to read."}
@@ -393,7 +418,7 @@ async def handle_email_chat_with_tools(
     text = message.strip()
     user = user_id.strip()
     conversation = conversation_id.strip()
-    if not user or not conversation or not text or not EMAIL_CONTEXT_RE.search(text):
+    if not user or not conversation or not text:
         return None
 
     pending = get_pending_email_action(user, conversation)
@@ -402,6 +427,13 @@ async def handle_email_chat_with_tools(
         if action_type == "await_recipient" or CONFIRM_RE.fullmatch(text) or CANCEL_RE.fullmatch(text):
             return await handle_email_chat(user, conversation, text)
         return "There is a pending email action awaiting your decision. Reply CONFIRM to approve it or CANCEL to stop it before starting another email action."
+
+    has_recent_email_context = any(
+        EMAIL_CONTEXT_RE.search(str(item or ""))
+        for _, item in (history or [])[-6:]
+    )
+    if not EMAIL_CONTEXT_RE.search(text) and not has_recent_email_context:
+        return None
 
     # Keep the local-model fallback available; Gemini is used only when explicitly selected.
     import os

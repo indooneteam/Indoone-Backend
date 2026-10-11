@@ -177,6 +177,13 @@ async def get_valid_access_token(user_id: str, integration_id: str) -> str:
     return refreshed_access
 
 
+def gmail_server_authorization_config() -> dict[str, object]:
+    """Validate server-side OAuth prerequisites and expose only the public client ID."""
+    client_id, _ = _secret("gmail")
+    _fernet()
+    return {"integration": "gmail", "server_client_id": client_id, "offline_access": True}
+
+
 def _secret(integration_id: str) -> tuple[str, str]:
     client_id = os.getenv(_CLIENT_ID_ENV[integration_id], "")
     client_secret = os.getenv(_CLIENT_SECRET_ENV[integration_id], "")
@@ -245,6 +252,7 @@ async def exchange_gmail_server_auth_code(
         raise ValueError("server_auth_code is required")
 
     client_id, client_secret = _secret("gmail")
+    cipher = _fernet()
     async with httpx.AsyncClient(timeout=20.0) as client:
         token_response = await client.post(
             _TOKEN_URLS["gmail"],
@@ -265,7 +273,6 @@ async def exchange_gmail_server_auth_code(
     if not expires_at:
         raise RuntimeError("Google did not return an access-token expiry")
 
-    cipher = _fernet()
     existing = get_integration_token(normalized_user, "gmail")
     existing_refresh: str | None = None
     if existing and existing.get("refresh_token"):

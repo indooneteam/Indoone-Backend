@@ -151,8 +151,22 @@ def test_generate_gemini_reply_sends_thinking_config_and_returns_only_final(monk
     reply = asyncio.run(gemini_service.generate_gemini_reply("Hi"))
 
     assert reply == "Hello! How can I help?"
+    assert captured["url"] == (
+        "https://generativelanguage.googleapis.com/v1beta/"
+        "models/gemma-4-26b-a4b-it:generateContent"
+    )
+    assert captured["headers"] == {
+        "x-goog-api-key": "test-key",
+        "Content-Type": "application/json",
+    }
     payload = captured["payload"]
     assert isinstance(payload, dict)
+    assert payload["systemInstruction"]["parts"][0]["text"] == (
+        gemini_service._SYSTEM_INSTRUCTION
+        + "\n\n"
+        + gemini_service.build_grounded_prompt_instruction()
+    )
+    assert payload["tools"][0]["functionDeclarations"][0]["name"] == "search_web"
     generation_config = payload["generationConfig"]
     assert isinstance(generation_config, dict)
     assert generation_config["thinkingConfig"] == {"thinkingLevel": "minimal"}

@@ -572,3 +572,23 @@ def test_zoho_reply_confirmation_requires_verifiable_message_id(monkeypatch) -> 
 
     assert calls[0]["kwargs"]["approved"] is True
 
+def test_zoho_summary_prefers_actual_sender_address_and_provider_timestamps() -> None:
+    result = email_assistant._zoho_summary(
+        {
+            "id": "message-1",
+            "sender": "Alice Example",
+            "fromAddress": "alice@example.com",
+            "subject": "Launch plan",
+            "receivedtime": "2026-10-11T09:30:00Z",
+            "folderId": "inbox-1",
+            "toAddress": "owner@zoho.example",
+        },
+        account_id="account-1",
+    )
+
+    assert result["from"] == "alice@example.com"
+    assert result["date"] == "2026-10-11T09:30:00Z"
+    assert result["account_id"] == "account-1"
+    assert result["folder_id"] == "inbox-1"
+    assert result["to"] == "owner@zoho.example"
+

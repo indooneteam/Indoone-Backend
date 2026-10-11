@@ -125,7 +125,10 @@ async def send_message(
     to_address: str,
     subject: str,
     content: str,
+    approved: bool = False,
 ) -> dict[str, Any]:
+    if not approved:
+        raise PermissionError("explicit approval is required for Zoho Mail send operations")
     account = _identifier(account_id, "account_id")
     sender = from_address.strip()
     recipient = to_address.strip()
@@ -156,7 +159,10 @@ async def reply_to_message(
     to_address: str,
     subject: str,
     content: str,
+    approved: bool = False,
 ) -> dict[str, Any]:
+    if not approved:
+        raise PermissionError("explicit approval is required for Zoho Mail reply operations")
     account = _identifier(account_id, "account_id")
     message = _identifier(message_id, "message_id")
     sender = from_address.strip()
@@ -184,3 +190,94 @@ async def reply_to_message(
         f"accounts/{account}/messages/{message}",
         payload=payload,
     )
+
+
+
+async def delete_message(
+    user_id: str,
+    account_id: str,
+    folder_id: str,
+    message_id: str,
+    *,
+    approved: bool = False,
+    permanently: bool = False,
+) -> dict[str, Any]:
+    if not approved:
+        raise PermissionError("explicit approval is required for Zoho Mail delete operations")
+    account = _identifier(account_id, "account_id")
+    folder = _identifier(folder_id, "folder_id")
+    message = _identifier(message_id, "message_id")
+    return await _request(
+        user_id,
+        "DELETE",
+        f"accounts/{account}/folders/{folder}/messages/{message}",
+        params={"expunge": permanently},
+    )
+
+
+async def save_draft(
+    user_id: str,
+    account_id: str,
+    from_address: str,
+    to_address: str,
+    subject: str,
+    content: str,
+) -> dict[str, Any]:
+    account = _identifier(account_id, "account_id")
+    sender = from_address.strip()
+    recipient = to_address.strip()
+    normalized_subject = subject.strip()
+    if not sender or len(sender) > 512 or "@" not in sender:
+        raise ValueError("from_address must be a valid email address")
+    if recipient and (len(recipient) > 512 or "@" not in recipient):
+        raise ValueError("to_address must be a valid email address when provided")
+    if len(normalized_subject) > 2_000:
+        raise ValueError("subject must not exceed 2000 characters")
+    if len(content) > 20_000:
+        raise ValueError("content must not exceed 20000 characters")
+    payload = {
+        "mode": "draft",
+        "fromAddress": sender,
+        "toAddress": recipient,
+        "subject": normalized_subject,
+        "content": content,
+        "mailFormat": "plaintext",
+    }
+    return await _request(user_id, "POST", f"accounts/{account}/messages", payload=payload)
+
+
+async def replace_draft(
+    user_id: str,
+    account_id: str,
+    folder_id: str,
+    draft_id: str,
+    from_address: str,
+    to_address: str,
+    subject: str,
+    content: str,
+    *,
+    approved: bool = False,
+) -> dict[str, Any]:
+    if not approved:
+        raise PermissionError("explicit approval is required to replace a Zoho Mail draft")
+    # Zoho Mail's documented message API exposes draft creation and message deletion.
+    # Replacing a draft creates the new copy first, then removes the old draft; this
+    # avoids losing the original if draft creation fails.
+    created = await save_draft(
+        user_id, account_id, from_address, to_address, subject, content
+    )
+    await delete_message(
+        user_id,
+        account_id,
+        folder_id,
+        draft_id,
+        approved=True,
+        permanently=False,
+    )
+    return {
+        "integration": "zoho_mail",
+        "operation": "replace_draft",
+        "created": created,
+        "replaced_message_id": draft_id,
+        "secrets_exposed": False,
+    }

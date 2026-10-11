@@ -411,7 +411,7 @@ async def generate_gemini_function_call_reply(
                             "code": "TOOL_EXECUTION_FAILED",
                             "message": "The backend tool failed. Do not claim that the operation succeeded.",
                         }
-                    executed_calls += 1
+                executed_calls += 1
 
                 function_response: dict[str, Any] = {
                     "name": name,

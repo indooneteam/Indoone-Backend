@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import logging
 import os
 from datetime import datetime, timedelta, timezone
 from secrets import token_urlsafe
@@ -12,6 +14,7 @@ import httpx
 from app.capabilities.integrations import _fernet
 from app.capabilities.store import (
     consume_oauth_state,
+    delete_integration_token,
     create_oauth_state,
     get_integration_token,
     upsert_integration_token,
@@ -78,6 +81,74 @@ def _required_settings() -> tuple[str, str, str, str, str]:
     if parsed_redirect.scheme != "https" or not parsed_redirect.netloc or parsed_redirect.username or parsed_redirect.password:
         raise RuntimeError("INDOONE_ZOHO_REDIRECT_URI must be a valid HTTPS callback URL.")
     return client_id, client_secret, redirect_uri, accounts_base, scope
+
+
+async def disconnect_zoho_mail(user_id: str) -> dict[str, object]:
+    """Revoke the user's Zoho grant when possible, then remove local credentials."""
+    normalized_user_id = user_id.strip()
+    if not normalized_user_id:
+        raise ValueError("user_id is required")
+
+    row = get_integration_token(normalized_user_id, "zoho_mail")
+    if row is None:
+        return {
+            "integration": "zoho_mail",
+            "user_id": normalized_user_id,
+            "connected": False,
+            "remote_revoked": True,
+            "secrets_exposed": False,
+        }
+
+    remote_revoked = False
+    token_value = ""
+    token_type = "refresh_token"
+    try:
+        cipher = _fernet()
+        encrypted_refresh = row.get("refresh_token")
+        if encrypted_refresh:
+            token_value = cipher.decrypt(bytes(encrypted_refresh)).decode("utf-8")
+        else:
+            token_type = "access_token"
+            token_value = cipher.decrypt(bytes(row["access_token"])).decode("utf-8")
+    except Exception:
+        # Even if an old token cannot be decrypted, local access must be removed.
+        token_value = ""
+
+    client_id = os.getenv("INDOONE_ZOHO_CLIENT_ID", "").strip()
+    client_secret = os.getenv("INDOONE_ZOHO_CLIENT_SECRET", "").strip()
+    if token_value and client_id and client_secret:
+        accounts_base = _https_url(
+            os.getenv("INDOONE_ZOHO_ACCOUNTS_BASE_URL", _DEFAULT_ACCOUNTS_BASE_URL),
+            "INDOONE_ZOHO_ACCOUNTS_BASE_URL",
+        )
+        credentials = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(
+                    f"{accounts_base}/oauth/v2/revoke/token",
+                    data={"token": token_value, "token_type": token_type},
+                    headers={
+                        "Authorization": f"Basic {credentials}",
+                        "Accept": "application/json",
+                    },
+                )
+                response.raise_for_status()
+                remote_revoked = True
+        except httpx.HTTPError:
+            # Local disconnect should still complete if Zoho is unavailable or
+            # reports a token that has already expired/revoked. Never log tokens.
+            logging.getLogger("indoone.zoho_mail").warning(
+                "Zoho token revocation failed; local credentials will still be removed"
+            )
+
+    delete_integration_token(normalized_user_id, "zoho_mail")
+    return {
+        "integration": "zoho_mail",
+        "user_id": normalized_user_id,
+        "connected": False,
+        "remote_revoked": remote_revoked,
+        "secrets_exposed": False,
+    }
 
 
 def start_zoho_mail_authorization(user_id: str) -> dict[str, object]:

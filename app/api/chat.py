@@ -23,7 +23,7 @@ router = APIRouter(tags=["chat"])
 _store = ConversationStore()
 MAX_CHAT_ATTACHMENT_BYTES = max(MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES)
 MAX_CHAT_ATTACHMENT_BASE64_CHARS = ((MAX_CHAT_ATTACHMENT_BYTES + 2) // 3) * 4
-MAX_CHAT_TOTAL_ATTACHMENT_BYTES = 24_000_000
+MAX_CHAT_TOTAL_ATTACHMENT_BYTES = 20_000_000
 MAX_CHAT_ATTACHMENTS = 10
 CHAT_ATTACHMENT_MIME_TYPES = ALLOWED_IMAGE_MIMES | {PDF_MIME, DOCX_MIME}
 
@@ -67,6 +67,8 @@ def _decode_chat_attachment(body: ChatRequest) -> dict[str, object] | None:
         raise HTTPException(status_code=400, detail="attachment content is invalid base64") from exc
     if not content:
         raise HTTPException(status_code=400, detail="attachment content is empty")
+    if mime_type in ALLOWED_IMAGE_MIMES and len(content) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="image exceeds the 5 MB limit")
     if len(content) > MAX_CHAT_ATTACHMENT_BYTES:
         raise HTTPException(status_code=413, detail="attachment exceeds the 8 MB limit")
 
@@ -103,7 +105,7 @@ def _decode_chat_attachments(body: ChatRequest) -> list[dict[str, object]]:
 
     total_bytes = sum(len(bytes(item["content"])) for item in media_items)
     if total_bytes > MAX_CHAT_TOTAL_ATTACHMENT_BYTES:
-        raise HTTPException(status_code=413, detail="Attachments together exceed the 24 MB upload limit.")
+        raise HTTPException(status_code=413, detail="Attachments together exceed the 20 MB upload limit.")
 
     if any(not file_id.strip() for file_id in body.file_ids):
         raise HTTPException(status_code=400, detail="invalid file ID")

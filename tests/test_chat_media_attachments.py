@@ -26,6 +26,24 @@ def test_decode_chat_image_attachment() -> None:
     }
 
 
+def test_chat_rejects_images_over_five_mb(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api import chat as chat_api
+
+    monkeypatch.setattr(chat_api, "MAX_IMAGE_BYTES", 5)
+    body = ChatRequest(
+        message="Describe this image",
+        attachment_filename="photo.jpg",
+        attachment_mime_type="image/jpeg",
+        attachment_base64=base64.b64encode(b"123456").decode("ascii"),
+    )
+
+    with pytest.raises(HTTPException) as error:
+        _decode_chat_attachment(body)
+
+    assert error.value.status_code == 413
+    assert "5 MB" in error.value.detail
+
+
 def test_chat_attachment_requires_all_fields() -> None:
     body = ChatRequest(
         message="Describe this image",

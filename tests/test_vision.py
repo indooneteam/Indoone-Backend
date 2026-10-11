@@ -16,7 +16,7 @@ PNG_1X1 = bytes.fromhex(
 def test_image_analysis_returns_metadata_and_ocr_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.capabilities.vision._run_tesseract",
-        lambda content, suffix: ("Hello Indoone", None),
+        lambda content: ("Hello Indoone", None),
     )
 
     result = analyze_image("test.png", "image/png", base64.b64encode(PNG_1X1).decode())
@@ -32,7 +32,7 @@ def test_image_analysis_returns_metadata_and_ocr_contract(monkeypatch: pytest.Mo
 def test_image_analysis_reports_missing_ocr_runtime(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.capabilities.vision._run_tesseract",
-        lambda content, suffix: ("", "tesseract executable is not installed"),
+        lambda content: ("", "tesseract executable is not installed"),
     )
 
     result = analyze_image("test.png", "image/png", base64.b64encode(PNG_1X1).decode())
@@ -44,3 +44,29 @@ def test_image_analysis_reports_missing_ocr_runtime(monkeypatch: pytest.MonkeyPa
 def test_image_analysis_rejects_unsupported_mime() -> None:
     with pytest.raises(ValueError, match="unsupported image type"):
         analyze_image("test.txt", "text/plain", base64.b64encode(b"hello").decode())
+
+
+
+def test_tesseract_uses_stdin_without_writing_image_to_disk(monkeypatch: pytest.MonkeyPatch) -> None:
+    from types import SimpleNamespace
+
+    import app.capabilities.vision as vision
+
+    image_bytes = b"image-bytes"
+    observed: dict[str, object] = {}
+
+    monkeypatch.setattr(vision.shutil, "which", lambda _name: "/usr/bin/tesseract")
+
+    def fake_run(command, **kwargs):
+        observed["command"] = command
+        observed.update(kwargs)
+        return SimpleNamespace(returncode=0, stdout=b"Recognized text\n", stderr=b"")
+
+    monkeypatch.setattr(vision.subprocess, "run", fake_run)
+
+    text, error = vision._run_tesseract(image_bytes)
+
+    assert (text, error) == ("Recognized text", None)
+    assert observed["command"][1:3] == ["stdin", "stdout"]
+    assert observed["input"] == image_bytes
+    assert "text" not in observed

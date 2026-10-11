@@ -54,7 +54,7 @@ from app.capabilities.store import initialize as initialize_capability_store
 logger = logging.getLogger("indoone.api")
 ai_service._detect_response_language = detect_response_language
 
-_DEFAULT_MAX_REQUEST_BYTES = 50 * 1024 * 1024
+_DEFAULT_MAX_REQUEST_BYTES = 40 * 1024 * 1024
 _PROCESS_STARTED = time.monotonic()
 _REQUEST_COUNT = 0
 _STATUS_COUNTS: dict[str, int] = {}

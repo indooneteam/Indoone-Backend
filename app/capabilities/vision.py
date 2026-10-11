@@ -4,10 +4,9 @@ import base64
 import io
 import shutil
 import subprocess
-import tempfile
 from pathlib import Path
 
-MAX_IMAGE_BYTES = 8_000_000
+MAX_IMAGE_BYTES = 5_000_000
 ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
 
 
@@ -44,32 +43,26 @@ def _image_dimensions(content: bytes, mime_type: str) -> tuple[int | None, int |
     return None, None
 
 
-def _run_tesseract(content: bytes, suffix: str) -> tuple[str, str | None]:
+def _run_tesseract(content: bytes) -> tuple[str, str | None]:
+    """Run OCR through stdin/stdout so the uploaded image is not written to disk."""
+
     executable = shutil.which("tesseract")
     if executable is None:
         return "", "tesseract executable is not installed"
-    with tempfile.TemporaryDirectory() as directory:
-        image_path = Path(directory) / f"input{suffix}"
-        image_path.write_bytes(content)
-        output_base = Path(directory) / "ocr"
-        try:
-            completed = subprocess.run(
-                [executable, str(image_path), str(output_base), "--psm", "6"],
-                check=False,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            return "", f"tesseract failed: {exc}"
-        if completed.returncode != 0:
-            detail = completed.stderr.strip() or "unknown OCR error"
-            return "", detail
-        text_path = output_base.with_suffix(".txt")
-        if not text_path.exists():
-            return "", "tesseract produced no text output"
-        return text_path.read_text(encoding="utf-8", errors="replace").strip(), None
-
+    try:
+        completed = subprocess.run(
+            [executable, "stdin", "stdout", "--psm", "6"],
+            input=content,
+            check=False,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return "", f"tesseract failed: {exc}"
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", errors="replace").strip() or "unknown OCR error"
+        return "", detail
+    return completed.stdout.decode("utf-8", errors="replace").strip(), None
 
 def analyze_image(filename: str, mime_type: str, content_base64: str) -> dict[str, object]:
     filename = Path(filename).name.strip()
@@ -85,11 +78,10 @@ def analyze_image(filename: str, mime_type: str, content_base64: str) -> dict[st
     if not content:
         raise ValueError("image content cannot be empty")
     if len(content) > MAX_IMAGE_BYTES:
-        raise ValueError("image exceeds 8 MB limit")
+        raise ValueError("image exceeds 5 MB limit")
 
     width, height = _image_dimensions(content, mime_type)
-    suffix = Path(filename).suffix or ".img"
-    text, ocr_error = _run_tesseract(content, suffix)
+    text, ocr_error = _run_tesseract(content)
     return {
         "filename": filename,
         "mime_type": mime_type,

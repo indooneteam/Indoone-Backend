@@ -117,7 +117,7 @@ def test_prepare_delete_rejects_unfiltered_delete_request(monkeypatch) -> None:
             "user-1",
             "conversation-1",
             "prepare_email_deletion",
-            {"query": "all emails"},
+            {"provider": "gmail", "query": "all emails"},
         )
     )
 

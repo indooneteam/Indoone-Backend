@@ -143,8 +143,9 @@ async def zoho_mail_send(request: ZohoMailSendRequest) -> dict[str, object]:
             request.to_address,
             request.subject,
             request.content,
+            approved=request.approved,
         )
-    except (ValueError, RuntimeError, httpx.HTTPError) as exc:
+    except (PermissionError, ValueError, RuntimeError, httpx.HTTPError) as exc:
         _raise_provider_error(exc)
 
 @router.post("/reply")
@@ -158,8 +159,9 @@ async def zoho_mail_reply(request: ZohoMailReplyRequest) -> dict[str, object]:
             request.to_address,
             request.subject,
             request.content,
+            approved=request.approved,
         )
-    except (ValueError, RuntimeError, httpx.HTTPError) as exc:
+    except (PermissionError, ValueError, RuntimeError, httpx.HTTPError) as exc:
         _raise_provider_error(exc)
 
 

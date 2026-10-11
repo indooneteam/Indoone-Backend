@@ -13,7 +13,7 @@ import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.auth import extract_principal
-from app.capabilities.gmail import get_gmail_message, list_gmail_messages
+from app.plugins.gmail.service import get_gmail_message, list_gmail_messages
 
 logger = logging.getLogger("indoone.vibe")
 

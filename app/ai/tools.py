@@ -15,10 +15,10 @@ from app.ai.code_sandbox import sandbox_execution_tool
 from app.ai.connector_authorization import authorize_tool
 from app.ai.tool_registry import get_tool_spec
 from app.capabilities.contacts import parse_contacts, resolve_contact, search_contacts
-from app.capabilities.gmail import get_gmail_message, list_gmail_messages, send_gmail_message
+from app.plugins.gmail.service import get_gmail_message, list_gmail_messages, send_gmail_message
 from app.capabilities.email_safety import analyze_gmail_email_safety
 from app.capabilities.email_actions import compose_gmail_email
-from app.capabilities.gmail import reply_gmail_message
+from app.plugins.gmail.service import reply_gmail_message
 from app.capabilities.phone import build_call_action
 
 MAX_CALCULATOR_ABS_VALUE = 10**100

@@ -323,3 +323,25 @@ def test_only_one_write_operation_is_allowed_in_a_single_chat_turn(monkeypatch) 
 
     assert result == "A single draft was saved."
     assert created == [("a@example.com", "First", "First body")]
+
+
+
+def test_model_cannot_guess_between_two_connected_mailboxes(monkeypatch) -> None:
+    monkeypatch.setattr(
+        email_tools,
+        "get_integration_token_metadata",
+        lambda user_id, provider: {"provider": provider},
+    )
+
+    result = asyncio.run(
+        email_tools.execute_email_tool(
+            "user-1",
+            "conversation-1",
+            "list_recent_emails",
+            {"provider": "gmail"},
+            original_message="Check my email",
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["code"] == "PROVIDER_REQUIRED"

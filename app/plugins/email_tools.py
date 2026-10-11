@@ -317,7 +317,22 @@ async def execute_email_tool(
     if name == "update_email_draft" and not _explicit_draft_edit_intent(original_message):
         return {"ok": False, "code": "ACTION_NOT_REQUESTED", "message": "The user did not explicitly ask to edit a draft in the current message. Ask a clarifying question instead."}
     user_named_provider = _provider_named_by_user(original_message)
-    requested_provider = user_named_provider or arguments.get("provider")
+    connected_providers = {
+        name for name in ("gmail", "zoho_mail")
+        if get_integration_token_metadata(user_id, name) is not None
+    }
+    if user_named_provider:
+        requested_provider = user_named_provider
+    elif len(connected_providers) > 1:
+        return {
+            "ok": False,
+            "code": "PROVIDER_REQUIRED",
+            "message": "Both Gmail and Zoho Mail are connected. Ask the user which mailbox to use; do not choose based on the model's preference.",
+        }
+    elif len(connected_providers) == 1:
+        requested_provider = next(iter(connected_providers))
+    else:
+        requested_provider = arguments.get("provider")
     provider, provider_error = _resolve_provider(user_id, requested_provider)
     if provider_error:
         return {"ok": False, **provider_error}

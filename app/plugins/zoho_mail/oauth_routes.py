@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -41,29 +41,33 @@ async def zoho_mail_start(request: ZohoMailStartRequest) -> dict[str, object]:
 
 
 @router.get("/integrations/zoho-mail/callback", response_class=HTMLResponse)
-async def zoho_mail_callback(
-    code: str | None = Query(default=None, max_length=8_000),
-    state: str | None = Query(default=None, max_length=512),
-    error: str | None = Query(default=None, max_length=256),
-) -> HTMLResponse:
-    normalized_state = (state or "").strip()
-    if (error or "").strip():
-        cancel_zoho_mail_authorization(normalized_state)
+async def zoho_mail_callback(request: Request) -> HTMLResponse:
+    # Read provider callback fields explicitly so OAuth denial callbacks can omit
+    # the authorization code without being rejected during request validation.
+    params = request.query_params
+    code = params.get("code", "").strip()
+    state = params.get("state", "").strip()
+    error = params.get("error", "").strip()
+
+    if len(code) > 8_000 or len(state) > 512 or len(error) > 256:
+        raise HTTPException(status_code=400, detail="Zoho Mail callback parameters exceed allowed limits.")
+
+    if error:
+        cancel_zoho_mail_authorization(state)
         return HTMLResponse(
             "<!doctype html><html><body><h2>Zoho Mail connection was not completed</h2>"
             "<p>You can return to Indoone and try again.</p></body></html>",
             status_code=400,
         )
 
-    normalized_code = (code or "").strip()
-    if not normalized_code or not normalized_state:
+    if not code or not state:
         raise HTTPException(
             status_code=400,
             detail="Zoho Mail callback is missing an authorization code or state.",
         )
 
     try:
-        await exchange_zoho_mail_authorization_code(normalized_code, normalized_state)
+        await exchange_zoho_mail_authorization_code(code, state)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:

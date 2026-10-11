@@ -51,29 +51,20 @@ CANCEL_RE = re.compile(
 
 
 def _rows(payload: object, *keys: str) -> list[dict[str, Any]]:
-    current = payload
-    if isinstance(current, dict):
-        nested = current.get("data")
-        if isinstance(nested, (dict, list)):
-            current = nested
-    if isinstance(current, dict):
-        for key in keys:
-            nested = current.get(key)
-            if isinstance(nested, list):
-                current = nested
-                break
-            if isinstance(nested, dict):
-                current = nested
-                break
-    if isinstance(current, dict):
-        for key in keys:
-            nested = current.get(key)
-            if isinstance(nested, list):
-                current = nested
-                break
-    if not isinstance(current, list):
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if not isinstance(payload, dict):
         return []
-    return [item for item in current if isinstance(item, dict)]
+    candidate_keys = tuple(dict.fromkeys(("data", *keys, "accounts", "messages", "folders", "drafts")))
+    for key in candidate_keys:
+        nested = payload.get(key)
+        if isinstance(nested, list):
+            return [item for item in nested if isinstance(item, dict)]
+        if isinstance(nested, dict):
+            rows = _rows(nested, *keys)
+            if rows:
+                return rows
+    return []
 
 
 def _zoho_accounts(payload: dict[str, Any]) -> list[dict[str, str]]:

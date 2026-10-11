@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import os
 from typing import Any
 from secrets import token_urlsafe
 
@@ -15,6 +16,7 @@ from app.capabilities.image_generation import generate_image
 from app.capabilities.integrations import (
     build_oauth_authorization,
     exchange_oauth_code,
+    exchange_gmail_server_auth_code,
     get_integration,
     list_integrations,
     store_native_access_token,
@@ -147,6 +149,12 @@ class NativeIntegrationTokenRequest(BaseModel):
     expires_at: str | None = Field(default=None, max_length=128)
 
 
+class GmailServerAuthCodeRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    server_auth_code: str = Field(min_length=1, max_length=8_000)
+    scope: str = Field(default="", max_length=4_000)
+
+
 @router.get("/capabilities")
 async def capabilities() -> dict[str, object]:
     return {"capabilities": list_capabilities()}
@@ -174,6 +182,31 @@ async def connect_integration(integration_id: str, request: IntegrationConnectRe
         return {**result, "state": state}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@router.get("/integrations/gmail/auth-config")
+async def gmail_auth_config() -> dict[str, object]:
+    client_id = os.getenv("INDOONE_GOOGLE_CLIENT_ID", "").strip()
+    if not client_id:
+        raise HTTPException(status_code=503, detail="Google OAuth client id is not configured")
+    # OAuth client IDs are public identifiers, not secrets; never return the client secret.
+    return {"integration": "gmail", "server_client_id": client_id, "offline_access": True}
+
+
+@router.post("/integrations/gmail/server-auth-code")
+async def gmail_server_auth_code(request: GmailServerAuthCodeRequest) -> dict[str, object]:
+    try:
+        return await exchange_gmail_server_auth_code(
+            request.user_id,
+            request.server_auth_code,
+            request.scope,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Google rejected the Gmail authorization code") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

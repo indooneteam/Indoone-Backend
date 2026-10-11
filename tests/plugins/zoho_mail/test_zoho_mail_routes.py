@@ -77,7 +77,7 @@ def test_zoho_mail_status_does_not_expose_saved_tokens(monkeypatch) -> None:
     )
     client = _client(monkeypatch)
 
-    response = client.get("/api/integrations/zoho-mail/status", params={"user_id": "test-user"})
+    response = client.get("/api/integrations/zoho-mail/connection", params={"user_id": "test-user"})
 
     assert response.status_code == 200
     payload = response.json()
@@ -92,7 +92,7 @@ def test_zoho_mail_status_does_not_expose_saved_tokens(monkeypatch) -> None:
 
 def test_zoho_mail_oauth_routes_are_mounted(monkeypatch) -> None:
     client = _client(monkeypatch)
-    response = client.get("/api/integrations/zoho-mail/status", params={"user_id": "test-user"})
+    response = client.get("/api/integrations/zoho-mail/connection", params={"user_id": "test-user"})
     assert response.status_code == 200
     assert response.json()["integration"] == "zoho_mail"
     assert response.json()["secrets_exposed"] is False

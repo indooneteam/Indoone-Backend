@@ -69,6 +69,14 @@ _PROVIDER_WEBHOOK_PATHS = frozenset(
         "/api/telegram/webhook/incoming",
     }
 )
+# Zoho redirects the user's browser to this HTTPS callback without an Indoone
+# Bearer token. Access is constrained by the short-lived, single-use OAuth state
+# validated by the callback handler.
+_PUBLIC_OAUTH_CALLBACK_PATHS = frozenset(
+    {
+        "/api/integrations/zoho-mail/callback",
+    }
+)
 
 
 class RequestBodyTooLarge(Exception):
@@ -166,8 +174,13 @@ async def request_context_middleware(request: Request, call_next):
     request.state.principal_id = ""
     authorization = request.headers.get("authorization", "")
     provider_webhook = request.url.path in _PROVIDER_WEBHOOK_PATHS and request.method.upper() in {"GET", "POST"}
+    public_oauth_callback = (
+        request.url.path in _PUBLIC_OAUTH_CALLBACK_PATHS
+        and request.method.upper() == "GET"
+    )
+    authentication_exempt = provider_webhook or public_oauth_callback
     principal = ""
-    if authorization and not provider_webhook:
+    if authorization and not authentication_exempt:
         try:
             principal = extract_principal(authorization)
             set_principal_id(principal)
@@ -175,7 +188,7 @@ async def request_context_middleware(request: Request, call_next):
             response = _error_response_with_request_id(401, "AUTH_INVALID", str(exc), request_id)
             _log_request(request, request_id, started, response.status_code)
             return response
-    elif not provider_webhook and os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
+    elif not authentication_exempt and os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
         response = _error_response_with_request_id(401, "AUTH_REQUIRED", "bearer authentication required", request_id)
         _log_request(request, request_id, started, response.status_code)
         return response

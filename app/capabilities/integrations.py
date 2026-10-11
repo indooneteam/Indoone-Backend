@@ -231,6 +231,89 @@ async def exchange_oauth_code(integration_id: str, state: str, code: str) -> dic
     )
     return {"integration": normalized, "user_id": state_data["user_id"], "connected": True, "scope": scope, "expires_at": expires_at, "secrets_exposed": False}
 
+async def exchange_gmail_server_auth_code(
+    user_id: str,
+    server_auth_code: str,
+    requested_scope: str = "",
+) -> dict[str, object]:
+    """Exchange an Android server authorization code for encrypted, refreshable Gmail credentials."""
+    normalized_user = user_id.strip()
+    code = server_auth_code.strip()
+    if not normalized_user:
+        raise ValueError("user_id is required")
+    if not code:
+        raise ValueError("server_auth_code is required")
+
+    client_id, client_secret = _secret("gmail")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        token_response = await client.post(
+            _TOKEN_URLS["gmail"],
+            data={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "code": code,
+                "grant_type": "authorization_code",
+            },
+            headers={"Accept": "application/json"},
+        )
+        token_response.raise_for_status()
+        payload = token_response.json()
+
+    if not isinstance(payload, dict):
+        raise RuntimeError("Google returned an invalid authorization-code response")
+    access_token, refresh_token, token_type, granted_scope, expires_at = _token_fields("gmail", payload)
+    if not expires_at:
+        raise RuntimeError("Google did not return an access-token expiry")
+
+    cipher = _fernet()
+    existing = get_integration_token(normalized_user, "gmail")
+    existing_refresh: str | None = None
+    if existing and existing.get("refresh_token"):
+        try:
+            existing_refresh = cipher.decrypt(bytes(existing["refresh_token"])).decode("utf-8")
+        except Exception as exc:
+            raise RuntimeError("stored oauth refresh token cannot be decrypted") from exc
+    if not refresh_token and not existing_refresh:
+        raise RuntimeError(
+            "Google did not issue a refresh token; reconnect Gmail and approve offline access"
+        )
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        profile_response = await client.get(
+            _PROBE_URLS["gmail"],
+            headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"},
+        )
+        profile_response.raise_for_status()
+        profile = profile_response.json()
+    if not isinstance(profile, dict):
+        raise RuntimeError("Google returned an invalid Gmail profile response")
+    email_address = str(profile.get("emailAddress") or "").strip()
+    if not email_address:
+        raise RuntimeError("Google returned no Gmail account identity")
+
+    final_scope = granted_scope or requested_scope.strip() or "https://www.googleapis.com/auth/gmail.modify"
+    upsert_integration_token(
+        normalized_user,
+        "gmail",
+        cipher.encrypt(access_token.encode("utf-8")),
+        cipher.encrypt(refresh_token.encode("utf-8")) if refresh_token else None,
+        token_type,
+        final_scope,
+        expires_at,
+    )
+    return {
+        "integration": "gmail",
+        "user_id": normalized_user,
+        "connected": True,
+        "provider_ok": True,
+        "scope": final_scope,
+        "expires_at": expires_at,
+        "summary": {"email_address": email_address},
+        "offline_access": True,
+        "secrets_exposed": False,
+    }
+
+
 
 
 async def store_native_access_token(

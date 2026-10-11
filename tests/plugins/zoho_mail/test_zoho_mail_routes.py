@@ -111,15 +111,22 @@ def test_zoho_mail_generic_integration_registry_supports_oauth() -> None:
 def test_zoho_mail_reply_endpoint_calls_provider_service(monkeypatch) -> None:
     from app.plugins.zoho_mail import routes as zoho_routes
 
-    monkeypatch.setattr(
-        zoho_routes,
-        "reply_to_message",
-        lambda user_id, account_id, message_id, from_address, to_address, subject, content: {
+    async def fake_reply(
+        user_id: str,
+        account_id: str,
+        message_id: str,
+        from_address: str,
+        to_address: str,
+        subject: str,
+        content: str,
+    ) -> dict[str, object]:
+        return {
             "status": {"code": 200, "description": "success"},
             "secrets_exposed": False,
             "message_id": message_id,
-        },
-    )
+        }
+
+    monkeypatch.setattr(zoho_routes, "reply_to_message", fake_reply)
     client = _client(monkeypatch)
     response = client.post(
         "/api/integrations/zoho-mail/reply",

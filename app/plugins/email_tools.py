@@ -152,6 +152,49 @@ _ALLOWED_TOOLS = {item["name"] for item in EMAIL_TOOL_DECLARATIONS}
 _MAIL_LABEL = {"gmail": "Gmail", "zoho_mail": "Zoho Mail"}
 
 
+def _explicit_send_intent(message: str) -> bool:
+    value = message.casefold()
+    if re.search(r"\b(don't|do not|never|not)\b.{0,24}\b(send|email|mail)\b", value):
+        return False
+    if any(term in value for term in ("ಕಳುಹಿಸಬೇಡ", "ಕಳುಹಿಸಬೇಡಿ", "ಸೆಂಡ್ ಮಾಡಬೇಡ", "ಸೆಂಡ್ ಮಾಡಬೇಡಿ")):
+        return False
+    return bool(
+        re.search(r"\b(send|sending|dispatch|send out|mail it)\b", value)
+        or re.search(r"\b(kalisu|kalisi|kalisbeku|kalsu|mail maadi kalisu)\b", value)
+        or any(term in value for term in ("ಕಳುಹಿಸು", "ಕಳುಹಿಸಿ", "ಸೆಂಡ್ ಮಾಡು"))
+    )
+
+
+def _explicit_delete_intent(message: str) -> bool:
+    value = message.casefold()
+    if re.search(r"\b(don't|do not|never|not)\b.{0,24}\b(delete|remove|trash)\b", value):
+        return False
+    if any(term in value for term in ("ಅಳಿಸಬೇಡ", "ಅಳಿಸಬೇಡಿ", "ಡಿಲೀಟ್ ಮಾಡಬೇಡ", "ತೆಗೆದು ಹಾಕಬೇಡ")):
+        return False
+    return bool(
+        re.search(r"\b(delete|remove|trash|erase)\b", value)
+        or any(term in value for term in ("ಡಿಲೀಟ್ ಮಾಡು", "ಅಳಿಸು", "ತೆಗೆದು ಹಾಕು"))
+    )
+
+
+def _explicit_draft_intent(message: str) -> bool:
+    value = message.casefold()
+    return bool(
+        re.search(r"\b(draft|compose|write|create|prepare)\b.{0,60}\b(email|mail)\b", value)
+        or re.search(r"\b(email|mail)\b.{0,60}\b(draft|compose)\b", value)
+        or any(term in value for term in ("ಡ್ರಾಫ್ಟ್", "ಮೇಲ್ ಬರೆಯು", "ಇಮೇಲ್ ಬರೆಯು"))
+    )
+
+
+def _explicit_draft_edit_intent(message: str) -> bool:
+    value = message.casefold()
+    return bool(
+        re.search(r"\b(edit|update|revise|modify|change)\b.{0,60}\bdraft\b", value)
+        or re.search(r"\bdraft\b.{0,60}\b(edit|update|revise|modify|change)\b", value)
+        or any(term in value for term in ("ಡ್ರಾಫ್ಟ್ ಬದಲಿಸು", "ಡ್ರಾಫ್ಟ್ ಎಡಿಟ್"))
+    )
+
+
 def _limit(value: object, default: int = MAX_EMAIL_RESULTS) -> int:
     try:
         number = int(value) if value is not None else default
@@ -247,10 +290,20 @@ async def execute_email_tool(
     conversation_id: str,
     name: str,
     arguments: dict[str, Any],
+    *,
+    original_message: str = "",
 ) -> dict[str, Any]:
     """Execute exactly one allow-listed tool with the authenticated user's identity."""
     if name not in _ALLOWED_TOOLS:
         return {"ok": False, "code": "UNKNOWN_TOOL", "message": "This email tool is not allowed."}
+    if name == "prepare_email_to_send" and not _explicit_send_intent(original_message):
+        return {"ok": False, "code": "ACTION_NOT_REQUESTED", "message": "The user did not explicitly ask to send an email in the current message. Do not prepare or send one."}
+    if name == "prepare_email_deletion" and not _explicit_delete_intent(original_message):
+        return {"ok": False, "code": "ACTION_NOT_REQUESTED", "message": "The user did not explicitly ask to delete email in the current message. Do not prepare or delete anything."}
+    if name == "create_email_draft" and not _explicit_draft_intent(original_message):
+        return {"ok": False, "code": "ACTION_NOT_REQUESTED", "message": "The user did not explicitly ask to create a draft in the current message. Ask a clarifying question instead."}
+    if name == "update_email_draft" and not _explicit_draft_edit_intent(original_message):
+        return {"ok": False, "code": "ACTION_NOT_REQUESTED", "message": "The user did not explicitly ask to edit a draft in the current message. Ask a clarifying question instead."}
     provider, provider_error = _resolve_provider(user_id, arguments.get("provider"))
     if provider_error:
         return {"ok": False, **provider_error}
@@ -450,7 +503,13 @@ async def handle_email_chat_with_tools(
     from app.ai.gemini_service import generate_gemini_function_call_reply
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        return await execute_email_tool(user, conversation, name, arguments)
+        return await execute_email_tool(
+            user,
+            conversation,
+            name,
+            arguments,
+            original_message=text,
+        )
 
     return await generate_gemini_function_call_reply(
         text,

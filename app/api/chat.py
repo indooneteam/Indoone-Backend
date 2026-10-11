@@ -18,6 +18,7 @@ from app.capabilities.document_extract import (
 from app.capabilities.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
 from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
+from app.plugins.email_assistant import handle_email_chat
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
@@ -224,7 +225,20 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     document_context = "\\n\\n".join(document_context_parts)[:120_000]
 
     try:
-        if not media_attachments:
+        email_tool_reply = None
+        if not attachments and not file_ids and not document_context.strip() and not media_attachments:
+            try:
+                email_tool_reply = await handle_email_chat(user_id, conversation_id, body.message)
+            except Exception:
+                # Provider/tool errors must not leak tokens or provider response bodies.
+                email_tool_reply = (
+                    "I couldn't complete that email action. Please check the connected "
+                    "mail account or reconnect it, then try again."
+                )
+
+        if email_tool_reply is not None:
+            reply_with_sources = email_tool_reply
+        elif not media_attachments:
             reply_with_sources = await generate_reply(
                 body.message,
                 history=history,

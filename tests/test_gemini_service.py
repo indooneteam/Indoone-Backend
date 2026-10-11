@@ -45,7 +45,7 @@ def test_gemma4_generation_config_disables_thinking() -> None:
     config = gemini_service._generation_config("gemma-4-26b-a4b-it")
 
     assert config["thinkingConfig"] == {"thinkingLevel": "minimal"}
-    assert config["maxOutputTokens"] == 512
+    assert "maxOutputTokens" not in config
 
 
 def test_non_gemma4_generation_config_does_not_set_gemma_thinking_options() -> None:

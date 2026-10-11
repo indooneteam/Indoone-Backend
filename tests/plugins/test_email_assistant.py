@@ -140,3 +140,12 @@ async def test_send_request_only_sends_after_confirmation(monkeypatch, tmp_path)
         "Hi friend, hope you are doing well.",
         True,
     )]
+
+
+def test_sender_word_does_not_trigger_send_intent() -> None:
+    assert email_assistant._is_send(
+        "List my recent Zoho Mail emails and show sender, subject and date"
+    ) is False
+    assert email_assistant._is_send("Send an email to friend@example.com") is True
+    assert email_assistant._is_send("I'm sending an email to friend@example.com") is True
+

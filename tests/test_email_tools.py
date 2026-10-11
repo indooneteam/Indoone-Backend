@@ -55,6 +55,7 @@ def test_prepare_send_only_stores_pending_confirmation(monkeypatch) -> None:
                 "subject": "Invoice update",
                 "body": "The invoice is ready.",
             },
+            original_message="Please send this email to customer@example.com",
         )
     )
 
@@ -89,6 +90,7 @@ def test_prepare_delete_only_stores_verified_targets_and_never_deletes(monkeypat
             "conversation-1",
             "prepare_email_deletion",
             {"provider": "gmail", "query": "Finance", "limit": 5},
+            original_message="Delete matching Finance emails",
         )
     )
 
@@ -118,6 +120,7 @@ def test_prepare_delete_rejects_unfiltered_delete_request(monkeypatch) -> None:
             "conversation-1",
             "prepare_email_deletion",
             {"provider": "gmail", "query": "all emails"},
+            original_message="Delete all emails",
         )
     )
 
@@ -213,3 +216,33 @@ def test_confirmation_message_is_processed_even_without_email_keyword(monkeypatc
 
     assert result == "Email sent successfully."
     assert called == [("user-1", "conversation-1", "CONFIRM")]
+
+
+
+def test_send_tool_is_rejected_without_explicit_send_intent(monkeypatch) -> None:
+    monkeypatch.setattr(
+        email_tools,
+        "get_integration_token_metadata",
+        lambda user_id, provider: {"provider": provider},
+    )
+    saved: list[tuple[object, ...]] = []
+    monkeypatch.setattr(email_tools, "_save_pending", lambda *args: saved.append(args))
+
+    result = asyncio.run(
+        email_tools.execute_email_tool(
+            "user-1",
+            "conversation-1",
+            "prepare_email_to_send",
+            {
+                "provider": "gmail",
+                "to": "customer@example.com",
+                "subject": "Unexpected",
+                "body": "This must not be sent.",
+            },
+            original_message="Check my emails for the latest invoice",
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["code"] == "ACTION_NOT_REQUESTED"
+    assert saved == []

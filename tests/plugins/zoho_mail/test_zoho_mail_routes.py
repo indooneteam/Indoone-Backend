@@ -144,3 +144,17 @@ def test_zoho_mail_reply_endpoint_calls_provider_service(monkeypatch) -> None:
     assert response.status_code == 200
     assert response.json()["message_id"] == "message-1"
     assert response.json()["secrets_exposed"] is False
+
+
+
+def test_zoho_mail_callback_reachable_without_bearer_auth(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
+    client = TestClient(app, raise_server_exceptions=False)
+
+    # No code/state is intentionally supplied; the route should reject the
+    # incomplete OAuth callback itself, not the absence of an Indoone token.
+    response = client.get("/api/integrations/zoho-mail/callback")
+
+    assert response.status_code == 400
+    assert response.status_code != 401

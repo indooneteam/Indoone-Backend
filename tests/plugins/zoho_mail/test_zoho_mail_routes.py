@@ -204,7 +204,7 @@ def test_zoho_mail_send_requires_explicit_approval(monkeypatch) -> None:
 
 def test_zoho_mail_disconnect_when_already_disconnected(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "false")
-    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "false)
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "false")
     monkeypatch.setattr(zoho_oauth, "get_integration_token", lambda user_id, integration_id: None)
     client = TestClient(app, raise_server_exceptions=False)
 

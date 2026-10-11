@@ -22,13 +22,14 @@ from app.capabilities.store import (
 
 _DEFAULT_ACCOUNTS_BASE_URL = "https://accounts.zoho.in"
 _DEFAULT_MAIL_API_BASE_URL = "https://mail.zoho.in/api"
-_DEFAULT_SCOPE = ",".join((
+ZOHO_MAIL_REQUIRED_SCOPES = (
     "ZohoMail.accounts.READ",
     "ZohoMail.folders.READ",
     "ZohoMail.messages.READ",
     "ZohoMail.messages.CREATE",
     "ZohoMail.messages.DELETE",
-))
+)
+_DEFAULT_SCOPE = ",".join(ZOHO_MAIL_REQUIRED_SCOPES)
 
 
 def _https_url(value: str, setting_name: str) -> str:

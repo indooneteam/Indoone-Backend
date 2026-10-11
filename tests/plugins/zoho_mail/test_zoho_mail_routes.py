@@ -84,6 +84,9 @@ def test_zoho_mail_status_does_not_expose_saved_tokens(monkeypatch) -> None:
     payload = response.json()
     assert payload["connected"] is True
     assert payload["scope"] == "ZohoMail.accounts.READ"
+    assert payload["permissions_complete"] is False
+    assert payload["reauthorization_required"] is True
+    assert "ZohoMail.messages.DELETE" in payload["missing_scopes"]
     assert payload["secrets_exposed"] is False
     assert "access_token" not in payload
     assert "refresh_token" not in payload
@@ -223,4 +226,28 @@ def test_zoho_default_scope_includes_delete_permission() -> None:
 
     example_env = Path(__file__).resolve().parents[3] / ".env.example"
     assert required_scope in example_env.read_text(encoding="utf-8")
+
+def test_zoho_connection_status_reports_complete_permissions(monkeypatch) -> None:
+    complete_scope = ",".join(zoho_oauth.ZOHO_MAIL_REQUIRED_SCOPES)
+    monkeypatch.setattr(
+        oauth_routes,
+        "get_integration_token_metadata",
+        lambda user_id, integration_id: {
+            "user_id": user_id,
+            "integration_id": integration_id,
+            "scope": complete_scope,
+            "updated_at": "2026-10-11T12:00:00+00:00",
+        },
+    )
+    response = _client(monkeypatch).get(
+        "/api/integrations/zoho-mail/connection",
+        params={"user_id": "test-user"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["connected"] is True
+    assert payload["permissions_complete"] is True
+    assert payload["missing_scopes"] == []
+    assert payload["reauthorization_required"] is False
 

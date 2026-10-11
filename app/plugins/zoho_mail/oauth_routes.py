@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import httpx
+import re
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -14,6 +15,7 @@ from app.plugins.zoho_mail.oauth import (
     exchange_zoho_mail_authorization_code,
     start_zoho_mail_authorization,
     zoho_mail_auth_config,
+    ZOHO_MAIL_REQUIRED_SCOPES,
 )
 
 router = APIRouter(tags=["zoho-mail-oauth"])
@@ -108,14 +110,28 @@ async def zoho_mail_connection_status(
             "user_id": normalized_user_id,
             "connected": False,
             "scope": "",
+            "permissions_complete": False,
+            "missing_scopes": list(ZOHO_MAIL_REQUIRED_SCOPES),
+            "reauthorization_required": False,
             "updated_at": None,
             "secrets_exposed": False,
         }
+    scope = str(metadata.get("scope") or "").strip()
+    granted_scopes = {
+        item for item in re.split(r"[,\s]+", scope) if item
+    }
+    missing_scopes = [
+        required for required in ZOHO_MAIL_REQUIRED_SCOPES
+        if required not in granted_scopes
+    ]
     return {
         "integration": "zoho_mail",
         "user_id": normalized_user_id,
         "connected": True,
-        "scope": str(metadata.get("scope") or ""),
+        "scope": scope,
+        "permissions_complete": not missing_scopes,
+        "missing_scopes": missing_scopes,
+        "reauthorization_required": bool(missing_scopes),
         "updated_at": metadata.get("updated_at"),
         "secrets_exposed": False,
     }

@@ -27,6 +27,7 @@ _DEFAULT_SCOPE = ",".join((
     "ZohoMail.folders.READ",
     "ZohoMail.messages.READ",
     "ZohoMail.messages.CREATE",
+    "ZohoMail.messages.DELETE",
 ))
 
 

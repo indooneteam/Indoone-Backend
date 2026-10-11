@@ -70,6 +70,7 @@ async def zoho_mail_callback(
 
 
 @router.get("/integrations/zoho-mail/status")
+@router.get("/integrations/zoho-mail/connection")
 async def zoho_mail_connection_status(
     user_id: str = Query(..., min_length=1, max_length=256),
 ) -> dict[str, object]:

@@ -184,3 +184,32 @@ def test_zoho_recent_mail_fails_closed_if_inbox_folder_is_unavailable(monkeypatc
 
     with pytest.raises(RuntimeError, match="Inbox folder could not be identified"):
         asyncio.run(email_assistant._list_mail("user-1", "zoho_mail", "", recent=True))
+
+
+
+def test_confirmation_message_is_processed_even_without_email_keyword(monkeypatch) -> None:
+    called: list[tuple[str, str, str]] = []
+
+    monkeypatch.setattr(
+        email_tools,
+        "get_pending_email_action",
+        lambda user_id, conversation_id: {"action_type": "send_email"},
+    )
+
+    async def fake_handle(user_id: str, conversation_id: str, message: str) -> str:
+        called.append((user_id, conversation_id, message))
+        return "Email sent successfully."
+
+    monkeypatch.setattr(email_tools, "handle_email_chat", fake_handle)
+
+    result = asyncio.run(
+        email_tools.handle_email_chat_with_tools(
+            "user-1",
+            "conversation-1",
+            "CONFIRM",
+            history=None,
+        )
+    )
+
+    assert result == "Email sent successfully."
+    assert called == [("user-1", "conversation-1", "CONFIRM")]

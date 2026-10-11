@@ -53,6 +53,10 @@ class GmailDraftActionRequest(BaseModel):
     approved: bool = False
 
 
+class GmailDraftUpdateRequest(GmailDraftRequest):
+    draft_id: str = Field(min_length=1, max_length=256)
+
+
 class GmailMessageActionRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=256)
     message_id: str = Field(min_length=1, max_length=256)
@@ -125,7 +129,7 @@ async def gmail_create_draft(request: GmailDraftRequest) -> dict[str, object]:
 
 
 @router.put("/drafts")
-async def gmail_update_draft(request: GmailDraftRequest & GmailDraftActionRequest) -> dict[str, object]:
+async def gmail_update_draft(request: GmailDraftUpdateRequest) -> dict[str, object]:
     try:
         return await update_gmail_draft(
             request.user_id,

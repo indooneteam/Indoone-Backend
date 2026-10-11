@@ -119,7 +119,9 @@ def test_zoho_mail_reply_endpoint_calls_provider_service(monkeypatch) -> None:
         to_address: str,
         subject: str,
         content: str,
+        approved: bool = False,
     ) -> dict[str, object]:
+        assert approved is True
         return {
             "status": {"code": 200, "description": "success"},
             "secrets_exposed": False,
@@ -138,6 +140,7 @@ def test_zoho_mail_reply_endpoint_calls_provider_service(monkeypatch) -> None:
             "to_address": "sender@example.com",
             "subject": "Re: Hello",
             "content": "Thanks for your email.",
+            "approved": True,
         },
     )
 
@@ -172,3 +175,43 @@ def test_zoho_mail_callback_missing_code_and_state_returns_clear_400(monkeypatch
 
     assert response.status_code == 400
     assert "authorization code or state" in response.json()["message"]
+
+
+
+def test_zoho_mail_send_requires_explicit_approval(monkeypatch) -> None:
+    from app.plugins.zoho_mail import routes as zoho_routes
+
+    async def fake_send(*args, approved=False, **kwargs):
+        if not approved:
+            raise PermissionError("explicit approval is required for Zoho Mail send operations")
+        return {"status": {"code": 200, "description": "success"}}
+
+    monkeypatch.setattr(zoho_routes, "send_message", fake_send)
+    client = _client(monkeypatch)
+    response = client.post(
+        "/api/integrations/zoho-mail/send",
+        json={
+            "user_id": "test-user",
+            "account_id": "account-1",
+            "from_address": "user@example.com",
+            "to_address": "friend@example.com",
+            "subject": "Hello",
+            "content": "Hi",
+        },
+    )
+    assert response.status_code == 403
+
+
+def test_zoho_mail_disconnect_when_already_disconnected(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "false)
+    monkeypatch.setattr(zoho_oauth, "get_integration_token", lambda user_id, integration_id: None)
+    client = TestClient(app, raise_server_exceptions=False)
+
+    response = client.post(
+        "/api/integrations/zoho-mail/disconnect",
+        json={"user_id": "test-user"},
+    )
+    assert response.status_code == 200
+    assert response.json()["connected"] is False
+    assert response.json()["secrets_exposed"] is False

@@ -247,6 +247,7 @@ def test_generate_gemini_function_call_reply_executes_tool_and_returns_final_ans
     assert reply == "I found 3 recent emails in Zoho Mail."
     assert executed == [("list_recent_emails", {"provider": "zoho_mail", "limit": 3})]
     assert captured_payloads[0]["tools"][0]["functionDeclarations"][0]["name"] == "list_recent_emails"
+    assert captured_payloads[0]["toolConfig"]["functionCallingConfig"]["mode"] == "ANY"
     followup_contents = captured_payloads[1]["contents"]
     assert followup_contents[-2]["role"] == "model"
     assert followup_contents[-1]["role"] == "user"

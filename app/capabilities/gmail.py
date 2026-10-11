@@ -2,27 +2,15 @@ from __future__ import annotations
 
 import base64
 from email.message import EmailMessage
-import os
 
 import httpx
-from cryptography.fernet import Fernet
-
-from app.capabilities.store import get_integration_token
+from app.capabilities.integrations import get_valid_access_token
 
 _GMAIL_BASE_URL = "https://gmail.googleapis.com/gmail/v1/users/me"
 
 
-def _token(user_id: str) -> str:
-    row = get_integration_token(user_id.strip(), "gmail")
-    if row is None:
-        raise ValueError("integration is not connected for user")
-    key = os.getenv("INDOONE_OAUTH_ENCRYPTION_KEY", "")
-    if not key:
-        raise RuntimeError("oauth encryption key is not configured")
-    try:
-        return Fernet(key.encode("ascii")).decrypt(bytes(row["access_token"])).decode("utf-8")
-    except Exception as exc:
-        raise RuntimeError("stored oauth token cannot be decrypted") from exc
+async def _token(user_id: str) -> str:
+    return await get_valid_access_token(user_id, "gmail")
 
 
 def _headers(token: str) -> dict[str, str]:
@@ -36,7 +24,7 @@ async def list_gmail_messages(user_id: str, query: str = "", page_token: str = "
         raise ValueError("query exceeds maximum length of 500")
     if not 1 <= max_results <= 100:
         raise ValueError("max_results must be between 1 and 100")
-    token = _token(user_id)
+    token = await _token(user_id)
     params: dict[str, object] = {"maxResults": max_results}
     if query.strip():
         params["q"] = query.strip()
@@ -67,7 +55,7 @@ async def get_gmail_message(user_id: str, message_id: str) -> dict[str, object]:
     message_id = message_id.strip()
     if not message_id or len(message_id) > 256:
         raise ValueError("message_id is required and must be at most 256 characters")
-    token = _token(user_id)
+    token = await _token(user_id)
     params = {"format": "full"}
     async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.get(f"{_GMAIL_BASE_URL}/messages/{message_id}", headers=_headers(token), params=params)
@@ -121,7 +109,7 @@ async def _send_raw_message(
     message.set_content(content)
 
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode("ascii").rstrip("=")
-    token = _token(user)
+    token = await _token(user)
     payload: dict[str, object] = {"raw": raw}
     if thread_id:
         payload["threadId"] = thread_id

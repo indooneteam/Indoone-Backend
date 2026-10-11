@@ -103,3 +103,21 @@ Until a trained checkpoint exists, the API returns a clear local-model-unavailab
 ## Important
 
 The current starter corpus is only for validating the data, training, and inference pipeline. A production-quality model requires a much larger, carefully licensed and curated dataset, stronger evaluation, safety testing, and substantially more training compute.
+
+
+## Gmail mobile OAuth and token lifecycle
+
+The Android Gmail plugin requests offline access from Google using the backend's **server OAuth client ID**. It sends the one-time server authorization code to the backend; it does not send or persist an access token in the Indoone profile.
+
+Required backend environment values:
+
+- `INDOONE_GOOGLE_CLIENT_ID`: the Google OAuth **Web application/server** client ID used for the authorization-code exchange.
+- `INDOONE_GOOGLE_CLIENT_SECRET`: the matching server-side client secret. Never expose it in Android configuration, Firebase profile data, or API responses.
+- `INDOONE_OAUTH_ENCRYPTION_KEY`: a valid Fernet key used to encrypt OAuth access and refresh tokens.
+- `INDOONE_CAPABILITY_DB`: path to the SQLite capability database. In production, point this at a durable volume so encrypted integration tokens survive restarts and redeploys.
+
+The app first calls `GET /api/integrations/gmail/auth-config`; this endpoint returns only the public client ID after the server validates that OAuth credentials and the encryption key are configured. Then the app requests Google offline access and posts the one-time code to `POST /api/integrations/gmail/server-auth-code`. The backend exchanges the code, verifies the Gmail profile, and stores encrypted credentials and their expiry in SQLite. Gmail API operations refresh expired tokens when a refresh token is present. The Firebase user profile stores connection display metadata only, never provider tokens.
+
+The older `POST /api/integrations/gmail/native-token` endpoint remains for compatibility. That flow only receives a short-lived access token; if it expires without a refresh token, the user must reconnect through the offline-access flow.
+
+A green CI run verifies the code and tests, not the production Google OAuth consent configuration or the runtime database volume. Confirm those values and exercise a real Gmail connection only during the server verification stage.

@@ -538,9 +538,10 @@ async def handle_email_chat_with_tools(
         "prepare_email_deletion",
     }
     write_action_completed = False
+    pending_send: dict[str, str] | None = None
 
     async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-        nonlocal write_action_completed
+        nonlocal write_action_completed, pending_send
         if name in write_tools and write_action_completed:
             return {
                 "ok": False,
@@ -556,9 +557,23 @@ async def handle_email_chat_with_tools(
         )
         if name in write_tools and result.get("ok") is True:
             write_action_completed = True
+        if (
+            name == "prepare_email_to_send"
+            and result.get("ok") is True
+            and result.get("operation") == "awaiting_confirmation"
+        ):
+            # Hard-code the confirmation response in the backend. Do not let a
+            # model-generated final turn claim that an email was sent when this
+            # tool only created a pending action.
+            pending_send = {
+                "provider": str(result.get("provider") or "email"),
+                "to": str(result.get("to") or ""),
+                "subject": str(result.get("subject") or ""),
+                "body": str(result.get("body") or ""),
+            }
         return result
 
-    return await generate_gemini_function_call_reply(
+    model_reply = await generate_gemini_function_call_reply(
         text,
         history=history,
         tool_declarations=EMAIL_TOOL_DECLARATIONS,
@@ -574,3 +589,12 @@ async def handle_email_chat_with_tools(
             "If a tool returns an error, explain its message honestly and ask for only the needed next step."
         ),
     )
+    if pending_send is not None:
+        return (
+            f"Email prepared in {pending_send['provider']}, but it has NOT been sent.\n"
+            f"To: {pending_send['to']}\n"
+            f"Subject: {pending_send['subject']}\n\n"
+            f"Message:\n{pending_send['body']}\n\n"
+            "Reply CONFIRM to send this exact email, or CANCEL to stop. No email has been sent yet."
+        )
+    return model_reply

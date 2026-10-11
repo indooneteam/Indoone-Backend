@@ -276,3 +276,50 @@ def test_tool_uses_mailbox_named_by_user_over_model_argument(monkeypatch) -> Non
     assert result["ok"] is True
     assert result["provider"] == "Zoho Mail"
     assert result["emails"][0]["id"] == "zoho-message"
+
+
+
+def test_only_one_write_operation_is_allowed_in_a_single_chat_turn(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "gemini")
+    monkeypatch.setattr(email_tools, "get_pending_email_action", lambda user_id, conversation_id: None)
+    monkeypatch.setattr(
+        email_tools,
+        "get_integration_token_metadata",
+        lambda user_id, provider: {"provider": provider} if provider == "gmail" else None,
+    )
+    created: list[tuple[str, str, str]] = []
+
+    async def fake_create_draft(user_id: str, to: str = "", subject: str = "", body: str = ""):
+        created.append((to, subject, body))
+        return {"operation": "draft_saved"}
+
+    monkeypatch.setattr(email_tools, "create_gmail_draft", fake_create_draft)
+
+    async def fake_model(message, *, history, tool_declarations, execute_tool, extra_system_instruction):
+        first = await execute_tool(
+            "create_email_draft",
+            {"provider": "gmail", "to": "a@example.com", "subject": "First", "body": "First body"},
+        )
+        second = await execute_tool(
+            "create_email_draft",
+            {"provider": "gmail", "to": "b@example.com", "subject": "Second", "body": "Second body"},
+        )
+        assert first["ok"] is True
+        assert second["code"] == "MULTIPLE_WRITES_BLOCKED"
+        return "A single draft was saved."
+
+    import app.ai.gemini_service
+
+    monkeypatch.setattr(app.ai.gemini_service, "generate_gemini_function_call_reply", fake_model)
+
+    result = asyncio.run(
+        email_tools.handle_email_chat_with_tools(
+            "user-1",
+            "conversation-1",
+            "Please draft an email for a@example.com",
+            history=None,
+        )
+    )
+
+    assert result == "A single draft was saved."
+    assert created == [("a@example.com", "First", "First body")]

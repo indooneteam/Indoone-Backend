@@ -621,3 +621,63 @@ def test_zoho_summary_formats_epoch_milliseconds_as_utc() -> None:
 
     assert result["date"] == "2024-03-08T08:37:33.409Z"
 
+def test_verified_zoho_reply_can_be_reported_successful(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    async def fake_reply_to_message(*args, **kwargs):
+        calls.append({"args": args, "kwargs": kwargs})
+        return {
+            "status": {"code": 200, "description": "success"},
+            "data": {"messageId": "provider-reply-id"},
+        }
+
+    monkeypatch.setattr(email_assistant, "reply_to_message", fake_reply_to_message)
+    result = asyncio.run(
+        email_assistant._execute_pending(
+            "user-1",
+            "zoho_mail",
+            "send_reply",
+            {
+                "account_id": "account-1",
+                "message_id": "original-message-id",
+                "from_address": "owner@zoho.example",
+                "to": "alice@example.com",
+                "subject": "Re: Launch plan",
+                "body": "The revised date is Friday.",
+            },
+        )
+    )
+
+    assert result == "Reply sent successfully through Zoho Mail."
+    assert len(calls) == 1
+    assert calls[0]["kwargs"]["approved"] is True
+    assert calls[0]["args"][2] == "original-message-id"
+    assert calls[0]["args"][4] == "alice@example.com"
+
+
+def test_zoho_reply_rejects_provider_failure_status(monkeypatch) -> None:
+    async def fake_reply_to_message(*args, **kwargs):
+        return {
+            "status": {"code": 400, "description": "invalid target"},
+            "data": {"messageId": "not-a-success"},
+        }
+
+    monkeypatch.setattr(email_assistant, "reply_to_message", fake_reply_to_message)
+
+    with pytest.raises(RuntimeError, match="verified successful reply status"):
+        asyncio.run(
+            email_assistant._execute_pending(
+                "user-1",
+                "zoho_mail",
+                "send_reply",
+                {
+                    "account_id": "account-1",
+                    "message_id": "original-message-id",
+                    "from_address": "owner@zoho.example",
+                    "to": "alice@example.com",
+                    "subject": "Re: Launch plan",
+                    "body": "The revised date is Friday.",
+                },
+            )
+        )
+

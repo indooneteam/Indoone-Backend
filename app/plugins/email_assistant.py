@@ -156,21 +156,47 @@ def _zoho_summary(
     account_id: str,
     default_folder_id: str = "",
 ) -> dict[str, str]:
-    sender = row.get("sender") or row.get("fromAddress") or row.get("from") or "Unknown sender"
+    # Prefer the actual address field over a display-name-only "sender" field;
+    # replies need a verified recipient and user summaries should be unambiguous.
+    sender = (
+        row.get("fromAddress")
+        or row.get("from_address")
+        or row.get("from")
+        or row.get("sender")
+        or "Unknown sender"
+    )
     if isinstance(sender, dict):
-        sender = sender.get("emailAddress") or sender.get("email") or sender.get("name") or "Unknown sender"
+        sender = (
+            sender.get("emailAddress")
+            or sender.get("email")
+            or sender.get("address")
+            or sender.get("name")
+            or "Unknown sender"
+        )
+    received_time = (
+        row.get("receivedTime")
+        or row.get("receivedtime")
+        or row.get("receivedTimeInGMT")
+        or row.get("receivedtimeingmt")
+    )
+    sent_time = (
+        row.get("sentTime")
+        or row.get("senttime")
+        or row.get("sentDateInGMT")
+        or row.get("sentdateingmt")
+        or row.get("sentDate")
+    )
     return {
         "id": str(row.get("messageId") or row.get("message_id") or row.get("id") or "").strip(),
         "account_id": account_id,
         "folder_id": str(row.get("folderId") or row.get("folder_id") or default_folder_id).strip(),
         "subject": str(row.get("subject") or "(No subject)").strip(),
         "from": str(sender).strip(),
-        "date": str(row.get("receivedTime") or row.get("sentTime") or row.get("date") or "").strip(),
-        "to": str(row.get("toAddress") or row.get("to") or "").strip(),
+        "date": str(received_time or sent_time or row.get("date") or "").strip(),
+        "to": str(row.get("toAddress") or row.get("to_address") or row.get("to") or "").strip(),
         "snippet": str(row.get("summary") or row.get("snippet") or row.get("content") or "").strip(),
         "body": "",
     }
-
 
 def _encrypt_payload(payload: dict[str, Any]) -> bytes:
     raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")

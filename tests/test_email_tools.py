@@ -111,7 +111,7 @@ def test_prepare_delete_rejects_unfiltered_delete_request(monkeypatch) -> None:
     monkeypatch.setattr(
         email_tools,
         "get_integration_token_metadata",
-        lambda user_id, provider: {"provider": provider},
+        lambda user_id, provider: {"provider": provider} if provider == "gmail" else None,
     )
 
     result = asyncio.run(

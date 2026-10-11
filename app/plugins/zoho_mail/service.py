@@ -279,6 +279,25 @@ async def replace_draft(
     created = await save_draft(
         user_id, account_id, from_address, to_address, subject, content
     )
+    created_data = created.get("data") if isinstance(created, dict) else None
+    if isinstance(created_data, list):
+        created_data = created_data[0] if created_data and isinstance(created_data[0], dict) else None
+    new_draft_id = (
+        str(
+            created_data.get("messageId")
+            or created_data.get("message_id")
+            or created_data.get("id")
+            or ""
+        ).strip()
+        if isinstance(created_data, dict)
+        else ""
+    )
+    if not new_draft_id:
+        # Never remove the original unless Zoho confirms the replacement draft
+        # with an ID that can be inspected or cleaned up if necessary.
+        raise RuntimeError(
+            "Zoho Mail did not return a verifiable new draft message ID; the original draft was kept"
+        )
     await delete_message(
         user_id,
         account_id,
@@ -291,6 +310,7 @@ async def replace_draft(
         "integration": "zoho_mail",
         "operation": "replace_draft",
         "created": created,
+        "new_draft_id": new_draft_id,
         "replaced_message_id": draft_id,
         "secrets_exposed": False,
     }

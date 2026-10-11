@@ -377,6 +377,12 @@ async def generate_gemini_function_call_reply(
                 )
 
             model_content["role"] = "model"
+            model_parts = model_content.get("parts")
+            if isinstance(model_parts, list):
+                model_content["parts"] = [
+                    part for part in model_parts
+                    if not (isinstance(part, dict) and part.get("thought") is True)
+                ]
             contents.append(model_content)
             response_parts: list[dict[str, Any]] = []
             for call in calls:

@@ -9,7 +9,13 @@ from urllib.parse import urlencode
 import httpx
 from cryptography.fernet import Fernet
 
-from app.capabilities.store import consume_oauth_state, get_integration_token, upsert_integration_token
+from app.capabilities.store import (
+    consume_oauth_state,
+    get_completed_oauth_state,
+    get_integration_token,
+    record_oauth_state_success,
+    upsert_integration_token,
+)
 
 
 @dataclass(frozen=True)
@@ -212,6 +218,15 @@ async def exchange_oauth_code(integration_id: str, state: str, code: str) -> dic
         raise ValueError("code and state are required")
     state_data = consume_oauth_state(state.strip(), normalized)
     if state_data is None:
+        completed = get_completed_oauth_state(state.strip(), normalized, code.strip())
+        if completed is not None:
+            return {
+                "integration": normalized,
+                "user_id": completed["user_id"],
+                "connected": True,
+                "already_completed": True,
+                "secrets_exposed": False,
+            }
         raise ValueError("invalid or expired oauth state")
     client_id, client_secret = _secret(normalized)
     payload = {"client_id": client_id, "client_secret": client_secret, "code": code.strip(), "redirect_uri": state_data["redirect_uri"]}
@@ -231,6 +246,7 @@ async def exchange_oauth_code(integration_id: str, state: str, code: str) -> dic
         cipher.encrypt(refresh_token.encode()) if refresh_token else None,
         token_type, scope, expires_at,
     )
+    record_oauth_state_success(state.strip(), normalized, state_data["user_id"], code.strip())
     return {"integration": normalized, "user_id": state_data["user_id"], "connected": True, "scope": scope, "expires_at": expires_at, "secrets_exposed": False}
 
 def _provider_probe_summary(integration_id: str, payload: dict[str, object]) -> dict[str, object]:

@@ -24,6 +24,11 @@ from app.plugins.github.service import (
     list_github_issues as fetch_github_issues,
     list_github_pull_requests as fetch_github_pull_requests,
     list_github_repositories as fetch_github_repositories,
+    list_github_repository_contents as fetch_github_repository_contents,
+    read_github_repository_file as fetch_github_repository_file,
+    search_github_repository_code as fetch_github_repository_code,
+    list_github_repository_commits as fetch_github_repository_commits,
+    compare_github_repository_commits as fetch_github_repository_compare,
 )
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
@@ -245,6 +250,97 @@ async def _github_list_pull_requests(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
+async def _github_list_repository_contents(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_list_repository_contents payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    repository = str(data.get("repository", "")).strip()
+    if not user_id or not repository:
+        raise ValueError("user_id and repository owner/name are required")
+    spec = get_tool_spec("github_list_repository_contents")
+    result = await _run_async(
+        fetch_github_repository_contents(
+            user_id, repository, str(data.get("path", "")), str(data.get("ref", ""))
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_read_repository_file(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_read_repository_file payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    repository = str(data.get("repository", "")).strip()
+    path = str(data.get("path", "")).strip()
+    if not user_id or not repository or not path:
+        raise ValueError("user_id, repository and file path are required")
+    spec = get_tool_spec("github_read_repository_file")
+    result = await _run_async(
+        fetch_github_repository_file(user_id, repository, path, str(data.get("ref", ""))),
+        spec.timeout_seconds if spec else 30.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_search_repository_code(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_search_repository_code payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    repository = str(data.get("repository", "")).strip()
+    query = str(data.get("query", "")).strip()
+    if not user_id or not repository or not query:
+        raise ValueError("user_id, repository and search query are required")
+    spec = get_tool_spec("github_search_repository_code")
+    result = await _run_async(
+        fetch_github_repository_code(
+            user_id, repository, query, max(1, min(int(data.get("per_page", 10)), 30))
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_list_repository_commits(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_list_repository_commits payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    repository = str(data.get("repository", "")).strip()
+    if not user_id or not repository:
+        raise ValueError("user_id and repository owner/name are required")
+    spec = get_tool_spec("github_list_repository_commits")
+    result = await _run_async(
+        fetch_github_repository_commits(
+            user_id, repository, str(data.get("path", "")),
+            max(1, min(int(data.get("per_page", 10)), 30)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_compare_repository_commits(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_compare_repository_commits payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    repository = str(data.get("repository", "")).strip()
+    base = str(data.get("base", "")).strip()
+    head = str(data.get("head", "")).strip()
+    if not user_id or not repository or not base or not head:
+        raise ValueError("user_id, repository, base and head references are required")
+    spec = get_tool_spec("github_compare_repository_commits")
+    result = await _run_async(
+        fetch_github_repository_compare(user_id, repository, base, head),
+        spec.timeout_seconds if spec else 30.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
 async def _gmail_search(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
@@ -362,6 +458,11 @@ TOOLS: dict[str, ToolCallable] = {
     "github_list_repositories": _github_list_repositories,
     "github_list_assigned_issues": _github_list_assigned_issues,
     "github_list_pull_requests": _github_list_pull_requests,
+    "github_list_repository_contents": _github_list_repository_contents,
+    "github_read_repository_file": _github_read_repository_file,
+    "github_search_repository_code": _github_search_repository_code,
+    "github_list_repository_commits": _github_list_repository_commits,
+    "github_compare_repository_commits": _github_compare_repository_commits,
     "gmail_read": _gmail_read,
     "gmail_compose": _gmail_compose,
     "gmail_email_safety": _gmail_email_safety,

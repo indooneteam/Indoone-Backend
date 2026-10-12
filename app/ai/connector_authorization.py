@@ -25,7 +25,18 @@ _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
     "github": {
         # The configured classic OAuth scope exposes these read capabilities.
         # Write actions remain separately approval-gated.
-        "public_repo": frozenset(("repos.read", "issues.read", "pull_requests.read")),
+        "public_repo": frozenset((
+            "repos.read", "issues.read", "pull_requests.read",
+            "repo.contents.read", "repo.files.read", "repo.code.search",
+            "repo.history.read", "repo.compare.read",
+        )),
+        # The classic repo scope can reach private repository data too; only the
+        # read-only capabilities are authorized by this chat integration.
+        "repo": frozenset((
+            "repos.read", "issues.read", "pull_requests.read",
+            "repo.contents.read", "repo.files.read", "repo.code.search",
+            "repo.history.read", "repo.compare.read",
+        )),
     },
     "gmail": {
         "gmail.modify": frozenset(("messages.search", "messages.read", "messages.send")),

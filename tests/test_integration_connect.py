@@ -45,6 +45,8 @@ async def test_oauth_code_exchange_is_user_scoped_and_redacted(monkeypatch, tmp_
             return {"access_token": "access-secret", "token_type": "Bearer", "scope": "repo:read", "expires_in": 3600}
 
     class Client:
+        post_calls = 0
+
         def __init__(self, *args, **kwargs) -> None:
             pass
 
@@ -55,13 +57,19 @@ async def test_oauth_code_exchange_is_user_scoped_and_redacted(monkeypatch, tmp_
             return None
 
         async def post(self, *args, **kwargs):
+            type(self).post_calls += 1
             assert kwargs["data"]["client_id"] == "client-123"
             assert kwargs["data"]["client_secret"] == "secret-123"
             return Response()
 
     monkeypatch.setattr("app.capabilities.integrations.httpx.AsyncClient", Client)
+    Client.post_calls = 0
     result = await exchange_oauth_code("github", state, "auth-code")
     assert result["connected"] is True
+    repeated = await exchange_oauth_code("github", state, "auth-code")
+    assert repeated["connected"] is True
+    assert repeated["already_completed"] is True
+    assert Client.post_calls == 1
     assert result["user_id"] == "user-123"
     assert result["secrets_exposed"] is False
     assert "access-secret" not in str(result)

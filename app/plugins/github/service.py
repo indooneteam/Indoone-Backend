@@ -6,9 +6,11 @@ GitHub provider calls and response normalization live in this plugin package.
 
 from __future__ import annotations
 
+import base64
 import re
 
 import httpx
+from urllib.parse import quote
 
 from app.capabilities.integrations import _fernet
 from app.capabilities.store import get_integration_token
@@ -158,4 +160,281 @@ async def list_github_pull_requests(
         "integration": "github", "user_id": user, "repository": repo,
         "page": page, "per_page": per_page, "pull_requests": pull_requests,
         "secrets_exposed": False,
+    }
+
+
+_GITHUB_REPOS_BASE_URL = f"{_GITHUB_BASE}/repos"
+_GITHUB_CODE_SEARCH_URL = f"{_GITHUB_BASE}/search/code"
+MAX_REPOSITORY_FILE_BYTES = 50_000
+MAX_REPOSITORY_FILE_CHARS = 20_000
+_PRIVATE_KEY_RE = re.compile(
+    r"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----.*?"
+    r"-----END (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----",
+    re.DOTALL,
+)
+_TOKEN_REDACTIONS = (
+    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{20,}\b"), "[REDACTED_GITHUB_TOKEN]"),
+    (re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"), "[REDACTED_GITHUB_TOKEN]"),
+    (re.compile(r"\bAKIA[0-9A-Z]{16}\b"), "[REDACTED_AWS_ACCESS_KEY]"),
+    (re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"), "[REDACTED_API_KEY]"),
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{24,}\b"), "[REDACTED_API_KEY]"),
+)
+
+
+def _validated_repository(repository: str) -> str:
+    normalized = repository.strip()
+    if not _GITHUB_REPO_PATTERN.fullmatch(normalized):
+        raise ValueError("repository must use owner/name format")
+    return normalized
+
+
+def _validated_repository_path(path: str) -> str:
+    normalized = path.strip().strip("/")
+    if len(normalized) > 1024 or chr(0) in normalized or chr(92) in normalized:
+        raise ValueError("repository path is invalid")
+    if any(segment in {".", ".."} for segment in normalized.split("/") if segment):
+        raise ValueError("repository path cannot contain dot or parent segments")
+    return normalized
+
+
+def _validated_repository_ref(ref: str) -> str:
+    normalized = ref.strip()
+    if not normalized:
+        return ""
+    if (
+        len(normalized) > 128
+        or not re.fullmatch(r"[A-Za-z0-9_./-]+", normalized)
+        or normalized.startswith("/")
+        or normalized.endswith("/")
+        or ".." in normalized
+    ):
+        raise ValueError("branch or commit reference is invalid")
+    return normalized
+
+
+def _redact_repository_secrets(text: str) -> str:
+    redacted = _PRIVATE_KEY_RE.sub("[REDACTED_PRIVATE_KEY]", text)
+    for pattern, replacement in _TOKEN_REDACTIONS:
+        redacted = pattern.sub(replacement, redacted)
+    return redacted
+
+
+async def list_github_repository_contents(
+    user_id: str, repository: str, path: str = "", ref: str = ""
+) -> dict[str, object]:
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    repo = _validated_repository(repository)
+    normalized_path = _validated_repository_path(path)
+    normalized_ref = _validated_repository_ref(ref)
+    path_suffix = f"/{quote(normalized_path, safe='/')}" if normalized_path else ""
+    params = {"ref": normalized_ref} if normalized_ref else {}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_GITHUB_REPOS_BASE_URL}/{repo}/contents{path_suffix}",
+            headers=_github_headers(_github_token(user)),
+            params=params,
+        )
+        response.raise_for_status()
+        body = response.json()
+    if isinstance(body, dict):
+        if body.get("type") == "file":
+            raise ValueError("the selected path is a file; use the GitHub file-read action")
+        raise RuntimeError("GitHub returned an invalid repository-contents response")
+    if not isinstance(body, list):
+        raise RuntimeError("GitHub returned an invalid repository-contents response")
+    contents: list[dict[str, object]] = []
+    for item in body[:1000]:
+        if not isinstance(item, dict):
+            continue
+        item_type = str(item.get("type") or "")
+        if item_type not in {"file", "dir", "symlink", "submodule"}:
+            continue
+        contents.append({
+            "name": str(item.get("name") or ""),
+            "path": str(item.get("path") or ""),
+            "type": item_type,
+            "size": int(item.get("size") or 0),
+            "html_url": str(item.get("html_url") or ""),
+        })
+    return {
+        "integration": "github", "repository": repo, "path": normalized_path,
+        "ref": normalized_ref, "contents": contents, "count": len(contents),
+        "secrets_exposed": False,
+    }
+
+
+async def read_github_repository_file(
+    user_id: str, repository: str, path: str, ref: str = ""
+) -> dict[str, object]:
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    repo = _validated_repository(repository)
+    normalized_path = _validated_repository_path(path)
+    if not normalized_path:
+        raise ValueError("path must identify a file")
+    normalized_ref = _validated_repository_ref(ref)
+    params = {"ref": normalized_ref} if normalized_ref else {}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_GITHUB_REPOS_BASE_URL}/{repo}/contents/{quote(normalized_path, safe='/')}",
+            headers=_github_headers(_github_token(user)),
+            params=params,
+        )
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict) or body.get("type") != "file":
+        raise ValueError("the selected path is not a readable file")
+    size = int(body.get("size") or 0)
+    if size > MAX_REPOSITORY_FILE_BYTES:
+        raise ValueError(
+            f"file is {size} bytes; the AI file-read limit is {MAX_REPOSITORY_FILE_BYTES} bytes."
+        )
+    encoded = str(body.get("content") or "").strip()
+    if not encoded:
+        raise ValueError("GitHub did not return text content for this file")
+    try:
+        decoded = base64.b64decode(encoded, validate=False).decode("utf-8", errors="replace")
+    except (ValueError, UnicodeError) as exc:
+        raise ValueError("GitHub returned an unreadable file encoding") from exc
+    decoded = _redact_repository_secrets(decoded)
+    truncated = len(decoded) > MAX_REPOSITORY_FILE_CHARS
+    if truncated:
+        decoded = decoded[:MAX_REPOSITORY_FILE_CHARS] + "\n[File output truncated by safety limit.]"
+    return {
+        "integration": "github", "repository": repo,
+        "path": str(body.get("path") or normalized_path), "ref": normalized_ref,
+        "size": size, "sha": str(body.get("sha") or ""),
+        "html_url": str(body.get("html_url") or ""), "content": decoded,
+        "truncated": truncated, "secrets_exposed": False,
+    }
+
+
+async def search_github_repository_code(
+    user_id: str, repository: str, query: str, per_page: int = 10
+) -> dict[str, object]:
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    repo = _validated_repository(repository)
+    normalized_query = query.strip()
+    if not normalized_query or len(normalized_query) > 256:
+        raise ValueError("search query must contain 1 through 256 characters")
+    if per_page < 1 or per_page > 30:
+        raise ValueError("per_page must be between 1 and 30")
+    headers = _github_headers(_github_token(user))
+    headers["Accept"] = "application/vnd.github.text-match+json"
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            _GITHUB_CODE_SEARCH_URL, headers=headers,
+            params={"q": f"{normalized_query} repo:{repo}", "per_page": per_page},
+        )
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict) or not isinstance(body.get("items"), list):
+        raise RuntimeError("GitHub returned an invalid code-search response")
+    results: list[dict[str, object]] = []
+    for item in body["items"][:30]:
+        if not isinstance(item, dict):
+            continue
+        matches = item.get("text_matches")
+        snippets: list[str] = []
+        if isinstance(matches, list):
+            for match in matches[:3]:
+                if isinstance(match, dict) and isinstance(match.get("fragment"), str):
+                    snippets.append(_redact_repository_secrets(str(match["fragment"]))[:800])
+        results.append({
+            "name": str(item.get("name") or ""), "path": str(item.get("path") or ""),
+            "html_url": str(item.get("html_url") or ""), "snippets": snippets,
+        })
+    return {
+        "integration": "github", "repository": repo, "query": normalized_query,
+        "results": results, "count": len(results), "secrets_exposed": False,
+    }
+
+
+async def list_github_repository_commits(
+    user_id: str, repository: str, path: str = "", per_page: int = 10
+) -> dict[str, object]:
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    repo = _validated_repository(repository)
+    normalized_path = _validated_repository_path(path)
+    if per_page < 1 or per_page > 30:
+        raise ValueError("per_page must be between 1 and 30")
+    params: dict[str, object] = {"per_page": per_page}
+    if normalized_path:
+        params["path"] = normalized_path
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_GITHUB_REPOS_BASE_URL}/{repo}/commits",
+            headers=_github_headers(_github_token(user)), params=params,
+        )
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, list):
+        raise RuntimeError("GitHub returned an invalid commit-history response")
+    commits: list[dict[str, object]] = []
+    for item in body[:30]:
+        if not isinstance(item, dict):
+            continue
+        commit = item.get("commit")
+        commit = commit if isinstance(commit, dict) else {}
+        author = commit.get("author")
+        author = author if isinstance(author, dict) else {}
+        commits.append({
+            "sha": str(item.get("sha") or ""),
+            "message": str(commit.get("message") or "").splitlines()[0][:300],
+            "author": str(author.get("name") or ""), "date": str(author.get("date") or ""),
+            "html_url": str(item.get("html_url") or ""),
+        })
+    return {
+        "integration": "github", "repository": repo, "path": normalized_path,
+        "commits": commits, "count": len(commits), "secrets_exposed": False,
+    }
+
+
+async def compare_github_repository_commits(
+    user_id: str, repository: str, base: str, head: str
+) -> dict[str, object]:
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    repo = _validated_repository(repository)
+    base_ref = _validated_repository_ref(base)
+    head_ref = _validated_repository_ref(head)
+    if not base_ref or not head_ref:
+        raise ValueError("base and head references are required")
+    compare_path = (
+        f"{_GITHUB_REPOS_BASE_URL}/{repo}/compare/"
+        f"{quote(base_ref, safe='/-._')}...{quote(head_ref, safe='/-._')}"
+    )
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(compare_path, headers=_github_headers(_github_token(user)))
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict):
+        raise RuntimeError("GitHub returned an invalid commit-comparison response")
+    files: list[dict[str, object]] = []
+    items = body.get("files")
+    if isinstance(items, list):
+        for item in items[:100]:
+            if not isinstance(item, dict):
+                continue
+            files.append({
+                "filename": str(item.get("filename") or ""),
+                "status": str(item.get("status") or ""),
+                "additions": int(item.get("additions") or 0),
+                "deletions": int(item.get("deletions") or 0),
+                "changes": int(item.get("changes") or 0),
+                "html_url": str(item.get("blob_url") or ""),
+            })
+    return {
+        "integration": "github", "repository": repo, "base": base_ref, "head": head_ref,
+        "status": str(body.get("status") or ""), "ahead_by": int(body.get("ahead_by") or 0),
+        "behind_by": int(body.get("behind_by") or 0), "total_commits": int(body.get("total_commits") or 0),
+        "files": files, "secrets_exposed": False,
     }

@@ -107,3 +107,72 @@ def test_github_ai_tools_are_read_only_connector_tools() -> None:
         assert spec.connector_id == "github"
         assert spec.capability == capability
         assert requires_approval(name) is False
+
+
+
+@pytest.mark.asyncio
+async def test_repository_inside_request_lists_actual_contents(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "local")
+    calls = []
+
+    async def fake_run_tool_async(name, payload, **kwargs):
+        data = json.loads(payload)
+        calls.append((name, data))
+        if name == "github_list_repositories":
+            return ToolResult(name=name, output=json.dumps({
+                "repositories": [{"full_name": "indooneteam/indoone", "name": "indoone", "private": False, "default_branch": "main"}]
+            }), safe=True)
+        return ToolResult(name=name, output=json.dumps({
+            "repository": "indooneteam/indoone", "path": "",
+            "contents": [
+                {"name": "app", "path": "app", "type": "dir", "size": 0},
+                {"name": "README.md", "path": "README.md", "type": "file", "size": 50},
+            ],
+        }), safe=True)
+
+    monkeypatch.setattr(chat_tools, "run_tool_async", fake_run_tool_async)
+    reply = await chat_tools.handle_github_chat_with_tools(
+        "user-123", "What files are inside my GitHub repository indoone?"
+    )
+    assert reply is not None
+    assert "README.md" in reply
+    assert any(name == "github_list_repository_contents" for name, _ in calls)
+
+
+@pytest.mark.asyncio
+async def test_repository_file_request_routes_to_file_reader(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "local")
+    calls = []
+
+    async def fake_run_tool_async(name, payload, **kwargs):
+        data = json.loads(payload)
+        calls.append((name, data))
+        if name == "github_list_repositories":
+            return ToolResult(name=name, output=json.dumps({
+                "repositories": [{"full_name": "indooneteam/indoone", "name": "indoone"}]
+            }), safe=True)
+        return ToolResult(name=name, output=json.dumps({
+            "repository": "indooneteam/indoone", "path": "README.md",
+            "content": "# Indoone\\nRead-only GitHub integration", "truncated": False,
+        }), safe=True)
+
+    monkeypatch.setattr(chat_tools, "run_tool_async", fake_run_tool_async)
+    reply = await chat_tools.handle_github_chat_with_tools(
+        "user-123", "Read README.md in my GitHub repo indoone"
+    )
+    assert reply is not None
+    assert "# Indoone" in reply
+    assert any(name == "github_read_repository_file" and data.get("path") == "README.md" for name, data in calls)
+
+
+@pytest.mark.asyncio
+async def test_file_request_without_path_asks_for_clarification(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "local")
+
+    async def unused_tool(*_args, **_kwargs):
+        raise AssertionError("No file tool should execute without a requested path.")
+
+    monkeypatch.setattr(chat_tools, "run_tool_async", unused_tool)
+    reply = await chat_tools.handle_github_chat_with_tools("user-123", "Read a file in my GitHub repo")
+    assert reply is not None
+    assert "which file" in reply.lower()

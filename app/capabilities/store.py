@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import sqlite3
@@ -83,6 +85,15 @@ def initialize() -> None:
                 created_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at);
+            CREATE TABLE IF NOT EXISTS oauth_state_results (
+                state_hash TEXT NOT NULL,
+                integration_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                code_hash TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (state_hash, integration_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_oauth_state_results_created ON oauth_state_results(created_at);
             CREATE TABLE IF NOT EXISTS integration_tokens (
                 user_id TEXT NOT NULL,
                 integration_id TEXT NOT NULL,
@@ -158,6 +169,64 @@ def consume_oauth_state(state: str, integration_id: str, max_age_seconds: int = 
     if age > max_age_seconds:
         return None
     return {"user_id": str(row["user_id"]), "integration_id": str(row["integration_id"]), "redirect_uri": str(row["redirect_uri"])}
+
+
+def record_oauth_state_success(state: str, integration_id: str, user_id: str, provider_code: str) -> None:
+    """Store a short-lived hash-only OAuth completion receipt for safe browser retries."""
+    normalized_state = state.strip()
+    normalized_integration = integration_id.strip().lower()
+    normalized_user = user_id.strip()
+    normalized_code = provider_code.strip()
+    if not normalized_state or not normalized_integration or not normalized_user or not normalized_code:
+        raise ValueError("OAuth completion receipt fields are required")
+    initialize()
+    state_hash = hashlib.sha256(normalized_state.encode("utf-8")).hexdigest()
+    code_hash = hashlib.sha256(normalized_code.encode("utf-8")).hexdigest()
+    now = datetime.now(timezone.utc)
+    with closing(_connect()) as db:
+        cutoff = now.timestamp() - 24 * 60 * 60
+        db.execute(
+            "DELETE FROM oauth_state_results WHERE created_at < ?",
+            (datetime.fromtimestamp(cutoff, timezone.utc).isoformat(),),
+        )
+        db.execute(
+            """
+            INSERT OR REPLACE INTO oauth_state_results
+                (state_hash, integration_id, user_id, code_hash, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (state_hash, normalized_integration, normalized_user, code_hash, now.isoformat()),
+        )
+        db.commit()
+
+
+def get_completed_oauth_state(
+    state: str, integration_id: str, provider_code: str, max_age_seconds: int = 600
+) -> dict[str, str] | None:
+    """Recognize only the exact same state+code after a successful exchange."""
+    normalized_state = state.strip()
+    normalized_integration = integration_id.strip().lower()
+    normalized_code = provider_code.strip()
+    if not normalized_state or not normalized_integration or not normalized_code:
+        return None
+    state_hash = hashlib.sha256(normalized_state.encode("utf-8")).hexdigest()
+    code_hash = hashlib.sha256(normalized_code.encode("utf-8")).hexdigest()
+    initialize()
+    with closing(_connect()) as db:
+        row = db.execute(
+            "SELECT user_id, code_hash, created_at FROM oauth_state_results WHERE state_hash = ? AND integration_id = ?",
+            (state_hash, normalized_integration),
+        ).fetchone()
+    if row is None or not hmac.compare_digest(str(row["code_hash"]), code_hash):
+        return None
+    try:
+        created = datetime.fromisoformat(str(row["created_at"]))
+        age = (datetime.now(timezone.utc) - created).total_seconds()
+    except (TypeError, ValueError):
+        return None
+    if age < 0 or age > max_age_seconds:
+        return None
+    return {"user_id": str(row["user_id"]), "integration_id": normalized_integration}
 
 
 def upsert_integration_token(

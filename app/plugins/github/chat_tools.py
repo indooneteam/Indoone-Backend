@@ -13,11 +13,15 @@ from typing import Any
 from app.ai.tools import ToolResult, run_tool_async
 
 _GITHUB_TARGET_RE = re.compile(
-    r"\b(repositories|repository|repos|pull\s+requests?|prs?|issues?|assigned\s+issues)\b",
+    r"\b(repositories|repository|repos|repo|pull\s+requests?|prs?|issues?|assigned\s+issues)\b"
+    r"|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಗಳು|ಗಳನ್ನು|ಯನ್ನು)?"
+    r"|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್",
     re.IGNORECASE,
 )
 _ACTION_RE = re.compile(
-    r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see)\b",
+    r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see|tell|please|bring)\b"
+    r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi)\b"
+    r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್",
     re.IGNORECASE,
 )
 _REPOSITORY_NAME_RE = re.compile(r"\b([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\b")
@@ -130,27 +134,27 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
         re.search(r"\bgithub\b", text, re.IGNORECASE)
         or re.search(r"\bgithub\b", recent_context, re.IGNORECASE)
         or re.search(r"\bassigned\s+issues\b", text, re.IGNORECASE)
+        or re.search(r"(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ", text, re.IGNORECASE)
         or _REPOSITORY_NAME_RE.search(text)
     )
     if not has_github_context:
         return None
 
-    if re.search(r"\b(pull\s+requests?|prs?)\b", text, re.IGNORECASE):
-        repository = re.search(r"github\\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", text, re.IGNORECASE)
+    if re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", text, re.IGNORECASE):
+        repository = re.search(r"github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", text, re.IGNORECASE)
         if repository is None:
             repository = _REPOSITORY_NAME_RE.search(text)
         if not repository:
             return "Which GitHub repository should I check? Please provide its full owner/name, for example owner/repository."
         return "github_list_pull_requests", {"repository": repository.group(1), "page": 1, "per_page": 10}
 
-    if re.search(r"\b(assigned\s+issues|issues?)\b", text, re.IGNORECASE):
+    if re.search(r"\b(assigned\s+issues|issues?)\b|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?", text, re.IGNORECASE):
         return "github_list_assigned_issues", {"page": 1, "per_page": 10}
 
-    if re.search(r"\b(repositories|repository|repos)\b", text, re.IGNORECASE):
+    if re.search(r"\b(repositories|repository|repos|repo)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಗಳು|ಗಳನ್ನು|ಯನ್ನು)?", text, re.IGNORECASE):
         return "github_list_repositories", {"page": 1, "per_page": 10}
 
     return None
-
 
 def _format_github_result(name: str, result: dict[str, Any]) -> str:
     if not result.get("ok"):

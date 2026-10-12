@@ -238,6 +238,8 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     repository_hint = _repository_hint_from_message(text)
 
     if re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", text, re.IGNORECASE):
+        if not repository and not repository_hint:
+            return "Which GitHub repository should I check? Please provide its full owner/name, for example owner/repository."
         return "github_list_pull_requests", {"repository": repository, "repository_hint": repository_hint, "page": 1, "per_page": 10}
     if re.search(r"\b(assigned\s+issues|issues?)\b|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?", text, re.IGNORECASE):
         return "github_list_assigned_issues", {"page": 1, "per_page": 10}

@@ -21,7 +21,7 @@ class FakeClient:
     calls = []
 
     def __init__(self, *args, **kwargs):
-        self.responses = list(type(self).responses)
+        self.responses = type(self).responses
         type(self).calls = []
 
     async def __aenter__(self):

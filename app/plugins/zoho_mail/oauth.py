@@ -60,7 +60,7 @@ def zoho_mail_auth_config() -> dict[str, object]:
         "redirect_uri_configured": bool(redirect_uri),
         "accounts_base_url": accounts_base,
         "mail_api_base_url": mail_base,
-        "scope": os.getenv("INDOONE_ZOHO_SCOPE", _DEFAULT_SCOPE).strip() or _DEFAULT_SCOPE,
+        "scope": _DEFAULT_SCOPE,
         "secrets_exposed": False,
     }
 
@@ -73,7 +73,10 @@ def _required_settings() -> tuple[str, str, str, str, str]:
         os.getenv("INDOONE_ZOHO_ACCOUNTS_BASE_URL", _DEFAULT_ACCOUNTS_BASE_URL),
         "INDOONE_ZOHO_ACCOUNTS_BASE_URL",
     )
-    scope = os.getenv("INDOONE_ZOHO_SCOPE", _DEFAULT_SCOPE).strip() or _DEFAULT_SCOPE
+    # Always request the least-privilege set needed for mailbox/folder reads,
+    # draft/send, and deletion. A stale environment override must not silently
+    # omit a permission required by the integration.
+    scope = _DEFAULT_SCOPE
     if not client_id or not client_secret or not redirect_uri:
         raise RuntimeError(
             "Zoho Mail OAuth is not configured. Set INDOONE_ZOHO_CLIENT_ID, "

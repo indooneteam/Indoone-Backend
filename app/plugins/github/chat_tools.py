@@ -16,16 +16,151 @@ _GITHUB_TARGET_RE = re.compile(
     r"\b(repositories|repository|repos|repo|pull\s+requests?|prs?|issues?|assigned\s+issues|files?|folders?|directories|contents|code|commits?|history|compare|readme)\b"
     r"|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಗಳು|ಗಳನ್ನು|ಯನ್ನು)?"
     r"|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್"
-    r"|ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಕೋಡ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|ಕಮಿಟ್|ಹೋಲಿಸು",
+    r"|ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಕೋಡ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|ಕಮಿಟ್|ಹೋಲಿಸು"
+    r"|(?:repo|repository|repositories|repositry|रिपोजिटरी|रिपॉजिटरी|రిపోజిటరీ|رِپُوستری|repository)(?:s)?",
     re.IGNORECASE,
 )
 _ACTION_RE = re.compile(
     r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see|tell|please|bring|read|open|browse|analyze|explain|search|compare|inspect|inside)\b"
-    r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi|h?olag(?:e|ade)|en\s+(?:ide|ede)|enu\s+(?:ide|ede)|enella\s+(?:ide|ede))\b"
-    r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್|ಓದು|ತೆರೆ|ವಿವರಿಸು|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|ಹೋಲಿಸು|ಏನು|ಏನೆಲ್ಲಾ|ಏನೇನು|ಏನಿದೆ|ಇವೆ|ಇದೆ",
+    r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi|h?olag(?:e|ade)|en\s+(?:ide|ede)|enu\s+(?:ide|ede)|enella\s+(?:ide|ede)|holage|olage|olagade)\b"
+    r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|देखो|देखिए|शो|देखें|सर्च|खोजें|पढ़ें|तस्वीर|list|show|find|open|read",
     re.IGNORECASE,
 )
 _REPOSITORY_NAME_RE = re.compile(r"\b([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\b")
+
+
+def _normalize_text_for_matching(text: str) -> str:
+    normalized = text.casefold().strip()
+    normalized = normalized.replace("_", " ").replace("-", " ")
+    normalized = re.sub(r"\s+", " ", normalized)
+    return normalized
+
+
+def _repository_hint_variants() -> tuple[str, ...]:
+    return (
+        "repo",
+        "repository",
+        "repositories",
+        "repositry",
+        "ರಿಪೊಸಿಟರಿ",
+        "ರೆಪೊಸಿಟರಿ",
+        "रिपोजिटरी",
+        "रिपॉजिटरी",
+        "రిపోజిటరీ",
+        "റിപ്പോസിറ്ററി",
+        "repoz",
+    )
+
+
+def _repository_hint_from_message(text: str) -> str:
+    cleaned = _normalize_text_for_matching(text)
+    ignored = {
+        "github", "my", "the", "a", "an", "this", "that",
+        "repo", "repository", "repositories", "repositry", "inside",
+        "olage", "holage", "olagade", "en", "ide", "ede", "enu", "yenu",
+        "yavudu", "yaavudu", "yavdu", "nanna",
+        "files", "folders", "contents", "readme",
+        "please", "show", "list", "tell", "what", "is", "there", "in",
+        "please", "tell", "show", "find", "read", "open", "watch",
+        "मेरा", "मेरी", "रिपोजिटरी", "रिपॉजिटरी", "रेपो",
+        "ನನ್ನ", "ಇದು", "ಒಳಗೆ", "ಹೀಗ", "ಇದರಲ್ಲಿ", "ಏನು",
+        "னினது", "என்", "கள்", "களில்", "ரெப்போ",
+        "ನಮ್ಮ", "ನನ್ನ" ,
+    }
+
+    noun_pattern = "|".join(re.escape(part) for part in _repository_hint_variants())
+    patterns = [
+        rf"\b([A-Za-z0-9_.-]+)\s+(?:{noun_pattern})\b",
+        rf"(?:{noun_pattern})\s+(?:named|called|for)?\s+([A-Za-z0-9_.-]+)",
+        rf"\b([A-Za-z0-9_.-]+)\s+(?:holage|olage|olagade|en\s+(?:ide|ede)|enu\s+(?:ide|ede)|enella\s+(?:ide|ede))\b",
+    ]
+    matches: list[str] = []
+    for pattern in patterns:
+        matches.extend(re.findall(pattern, cleaned, flags=re.IGNORECASE))
+
+    for item in reversed(matches):
+        candidate = str(item).strip()
+        if candidate and candidate.casefold() not in ignored:
+            return candidate
+    return ""
+
+
+def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple[str, dict[str, Any]] | str | None:
+    text = message.strip()
+    if not text or not _ACTION_RE.search(text) or not _GITHUB_TARGET_RE.search(text):
+        return None
+    recent_context = " ".join(str(item or "") for role, item in (history or [])[-6:] if role == "user")
+    has_context = bool(
+        re.search(r"\bgithub\b", text, re.IGNORECASE)
+        or re.search(r"\bgithub\b", recent_context, re.IGNORECASE)
+        or re.search(r"\b(repo|repository|repositories)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)", text, re.IGNORECASE)
+        or re.search(r"(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ", text, re.IGNORECASE)
+        or _REPOSITORY_NAME_RE.search(text)
+    )
+    if not has_context:
+        return None
+
+    repo_match = re.search(r"github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", text, re.IGNORECASE)
+    if repo_match is None:
+        repo_match = _REPOSITORY_NAME_RE.search(text)
+    repository = repo_match.group(1) if repo_match else ""
+    repository_hint = _repository_hint_from_message(text)
+
+    if re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್|प्र pull request|पुल रिक्वेस्ट", text, re.IGNORECASE):
+        if not repository and not repository_hint:
+            return "Which GitHub repository should I check? Please provide its full owner/name, for example owner/repository."
+        return "github_list_pull_requests", {"repository": repository, "repository_hint": repository_hint, "page": 1, "per_page": 10}
+    if re.search(r"\b(assigned\s+issues|issues?)\b|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?|issue|issues|इश्यू|ஐச்யூ|ఇష్యూ", text, re.IGNORECASE):
+        return "github_list_assigned_issues", {"page": 1, "per_page": 10}
+
+    file_match = re.search(
+        r"(?:`([^`]{1,256})`|\b((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:md|py|kt|java|js|jsx|ts|tsx|json|ya?ml|toml|xml|gradle|txt|sh|sql|html|css|properties|kts|lock))\b)",
+        text, re.IGNORECASE,
+    )
+    path = (file_match.group(1) or file_match.group(2)).strip() if file_match else ""
+    search_intent = bool(
+        re.search(r"\b(search|find|locate)\b.{0,60}\b(code|function|symbol|identifier|text)\b|\b(code|function|symbol)\b.{0,40}\b(search|find|locate)\b", text, re.IGNORECASE)
+        or re.search(r"ಕೋಡ್.{0,20}(ಹುಡುಕು|ಹುಡುಕಿ)|खोज|सर्च|தேடு|தேட|search|find", text, re.IGNORECASE)
+    )
+    history_intent = bool(re.search(r"\b(commit\s+history|recent\s+commits|history\s+of)\b|ಕಮಿಟ್\s*ಇತಿಹಾಸ|कमिट हिस्ट्री|கமிட் வரலாறு|commit history", text, re.IGNORECASE))
+    compare_intent = bool(re.search(r"\b(compare|diff|changes\s+between)\b|ಹೋಲಿಸು|तुलना|ஒப்பீடு|compare|diff", text, re.IGNORECASE))
+    file_read_intent = bool(path) or bool(
+        re.search(r"\b(read|open|explain|summari[sz]e|inspect)\b.{0,60}\b(file|source|code|readme)\b|\bwhat\s+does\b", text, re.IGNORECASE)
+        or re.search(r"(ಫೈಲ್|ಕೋಡ್).{0,25}(ಓದು|ವಿವರಿಸು)|पढ़|फाइल|कोड|readme|फ़ाइल|கோப்பு|படிக்க|வாசிக்க", text, re.IGNORECASE)
+    )
+    file_list_intent = bool(
+        re.search(r"\b(files?|folders?|directories|directory|contents|inside|tree|structure)\b|\bwhat'?s?\s+inside\b|\bwhat\s+is\s+in\b", text, re.IGNORECASE)
+        or re.search(r"(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|फ़ाइल|फाइल|கோப்பு|கோப்புகள்|உள்ள|உள்ளடக்கம்|inside|tree|contents).{0,80}(?:ಏನು|ಏನೆಲ್ಲಾ?|ಏನೇನು|ಏನಿದೆ|இது|क्या|क्या|என்ன|உள்ளது)", text, re.IGNORECASE)
+        or re.search(r"\bh?olag(?:e|ade)\b|\ben\s+(?:ide|ede)\b|\benu\s+(?:ide|ede)\b|\benella\s+(?:ide|ede)\b", text, re.IGNORECASE)
+    )
+
+    if search_intent:
+        quoted = re.search(r'["\']([^"\']{1,256})["\']', text)
+        query = quoted.group(1).strip() if quoted else ""
+        if not query:
+            m = re.search(r"\b(?:search|find|locate)\s+(?:for\s+)?(.+?)(?:\s+in\s+(?:the\s+)?(?:repo|repository|code))?$", text, re.IGNORECASE)
+            query = m.group(1).strip() if m else ""
+            query = re.sub(r"\b(my|github|repo|repository|code|please)\b", "", query, flags=re.IGNORECASE).strip()
+        if not query:
+            return "What function name or text should I search for in the repository?"
+        return "github_search_repository_code", {"repository": repository, "repository_hint": repository_hint, "query": query, "per_page": 10}
+    if compare_intent:
+        refs = re.search(r"\b(?:between|from)\s+([A-Za-z0-9_./-]+)\s+(?:and|to|\.\.\.)\s+([A-Za-z0-9_./-]+)", text, re.IGNORECASE)
+        if not refs:
+            return "Which two branches or commits should I compare? For example, compare main and develop."
+        return "github_compare_repository_commits", {"repository": repository, "repository_hint": repository_hint, "base": refs.group(1), "head": refs.group(2)}
+    if history_intent:
+        return "github_list_repository_commits", {"repository": repository, "repository_hint": repository_hint, "path": path, "per_page": 10}
+    if file_read_intent:
+        if not path:
+            return "Which file should I read? Provide its path, for example README.md."
+        return "github_read_repository_file", {"repository": repository, "repository_hint": repository_hint, "path": path, "ref": ""}
+    if file_list_intent:
+        return "github_list_repository_contents", {"repository": repository, "repository_hint": repository_hint, "path": "", "ref": ""}
+    if re.search(r"\b(repositories|repository|repos|repo)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಗಳು|ಗಳನ್ನು|ಯನ್ನು)?|रिपॉजिटरी|रिपोजिटरी|రిపోజిటరీ|repo|repository", text, re.IGNORECASE):
+        return "github_list_repositories", {"page": 1, "per_page": 10}
+    return None
+
 
 GITHUB_TOOL_DECLARATIONS: list[dict[str, Any]] = [
     {
@@ -105,6 +240,7 @@ GITHUB_TOOL_DECLARATIONS: list[dict[str, Any]] = [
         }, "required": ["base", "head"]},
     },
 ]
+
 
 def _safe_tool_error(result: ToolResult) -> str:
     message = result.output.casefold()
@@ -214,100 +350,6 @@ async def _execute_github_tool(
         return {"ok": False, "code": "INVALID_TOOL_RESULT", "message": "GitHub returned an invalid result."}
     return {"ok": True, "result": data}
 
-def _repository_hint_from_message(text: str) -> str:
-    ignored = {
-        "github", "my", "the", "a", "an", "this", "that",
-        "repo", "repository", "repositories", "inside",
-        "olage", "holage", "olagade", "en", "ide", "enu", "yenu",
-        "yavudu", "yaavudu", "yavdu", "nanna",
-        "files", "folders", "contents", "readme",
-        "please", "show", "list", "tell", "what", "is", "there", "in",
-    }
-    repository_noun = r"(?:repo|repository|repositories|ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಯೊಳಗೆ|ಯಲ್ಲಿ|ಯನ್ನು|ಗಳನ್ನು|ಗಳು|ಯ)?"
-    after = re.findall(rf"\b{repository_noun}(?:\s+named)?\s+([A-Za-z0-9_.-]+)\b", text, re.IGNORECASE)
-    before = re.findall(rf"\b([A-Za-z0-9_.-]+)\s+{repository_noun}\b", text, re.IGNORECASE)
-    for item in reversed(after + before):
-        if item.casefold() not in ignored:
-            return item
-    return ""
-
-
-def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple[str, dict[str, Any]] | str | None:
-    text = message.strip()
-    if not text or not _ACTION_RE.search(text) or not _GITHUB_TARGET_RE.search(text):
-        return None
-    recent_context = " ".join(str(item or "") for role, item in (history or [])[-6:] if role == "user")
-    has_context = bool(
-        re.search(r"\bgithub\b", text, re.IGNORECASE)
-        or re.search(r"\bgithub\b", recent_context, re.IGNORECASE)
-        or re.search(r"\b(repo|repository|repositories)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)", text, re.IGNORECASE)
-        or re.search(r"(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ", text, re.IGNORECASE)
-        or _REPOSITORY_NAME_RE.search(text)
-    )
-    if not has_context:
-        return None
-
-    repo_match = re.search(r"github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", text, re.IGNORECASE)
-    if repo_match is None:
-        repo_match = _REPOSITORY_NAME_RE.search(text)
-    repository = repo_match.group(1) if repo_match else ""
-    repository_hint = _repository_hint_from_message(text)
-
-    if re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", text, re.IGNORECASE):
-        if not repository and not repository_hint:
-            return "Which GitHub repository should I check? Please provide its full owner/name, for example owner/repository."
-        return "github_list_pull_requests", {"repository": repository, "repository_hint": repository_hint, "page": 1, "per_page": 10}
-    if re.search(r"\b(assigned\s+issues|issues?)\b|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?", text, re.IGNORECASE):
-        return "github_list_assigned_issues", {"page": 1, "per_page": 10}
-
-    file_match = re.search(
-        r"(?:`([^`]{1,256})`|\b((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+\.(?:md|py|kt|java|js|jsx|ts|tsx|json|ya?ml|toml|xml|gradle|txt|sh|sql|html|css|properties|kts|lock))\b)",
-        text, re.IGNORECASE,
-    )
-    path = (file_match.group(1) or file_match.group(2)).strip() if file_match else ""
-    search_intent = bool(
-        re.search(r"\b(search|find|locate)\b.{0,60}\b(code|function|symbol|identifier|text)\b|\b(code|function|symbol)\b.{0,40}\b(search|find|locate)\b", text, re.IGNORECASE)
-        or re.search(r"ಕೋಡ್.{0,20}(ಹುಡುಕು|ಹುಡುಕಿ)", text)
-    )
-    history_intent = bool(re.search(r"\b(commit\s+history|recent\s+commits|history\s+of)\b|ಕಮಿಟ್\s*ಇತಿಹಾಸ", text, re.IGNORECASE))
-    compare_intent = bool(re.search(r"\b(compare|diff|changes\s+between)\b|ಹೋಲಿಸು", text, re.IGNORECASE))
-    file_read_intent = bool(path) or bool(
-        re.search(r"\b(read|open|explain|summari[sz]e|inspect)\b.{0,60}\b(file|source|code|readme)\b|\bwhat\s+does\b", text, re.IGNORECASE)
-        or re.search(r"(ಫೈಲ್|ಕೋಡ್).{0,25}(ಓದು|ವಿವರಿಸು)", text)
-    )
-    file_list_intent = bool(
-        re.search(r"\b(files?|folders?|directories|directory|contents|inside|tree|structure)\b|\bwhat'?s?\s+inside\b|\bwhat\s+is\s+in\b", text, re.IGNORECASE)
-        or re.search(r"(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)).{0,80}(?:ಏನು|ಏನೆಲ್ಲಾ?|ಏನೇನು|ಏನಿದೆ|ಇದೆ|ಇವೆ|ತೋರಿಸು|ಪಟ್ಟಿ|ವಿವರ)", text)
-        or re.search(r"(?:ಏನು|ಏನೆಲ್ಲಾ?|ಏನೇನು|ಏನಿದೆ|ಇದೆ|ಇವೆ).{0,80}(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ))", text)
-        or re.search(r"\bh?olag(?:e|ade)\b|\ben\s+(?:ide|ede)\b|\benu\s+(?:ide|ede)\b|\benella\s+(?:ide|ede)\b", text, re.IGNORECASE)
-    )
-
-    if search_intent:
-        quoted = re.search(r'["\']([^"\']{1,256})["\']', text)
-        query = quoted.group(1).strip() if quoted else ""
-        if not query:
-            m = re.search(r"\b(?:search|find|locate)\s+(?:for\s+)?(.+?)(?:\s+in\s+(?:the\s+)?(?:repo|repository|code))?$", text, re.IGNORECASE)
-            query = m.group(1).strip() if m else ""
-            query = re.sub(r"\b(my|github|repo|repository|code|please)\b", "", query, flags=re.IGNORECASE).strip()
-        if not query:
-            return "What function name or text should I search for in the repository?"
-        return "github_search_repository_code", {"repository": repository, "repository_hint": repository_hint, "query": query, "per_page": 10}
-    if compare_intent:
-        refs = re.search(r"\b(?:between|from)\s+([A-Za-z0-9_./-]+)\s+(?:and|to|\.\.\.)\s+([A-Za-z0-9_./-]+)", text, re.IGNORECASE)
-        if not refs:
-            return "Which two branches or commits should I compare? For example, compare main and develop."
-        return "github_compare_repository_commits", {"repository": repository, "repository_hint": repository_hint, "base": refs.group(1), "head": refs.group(2)}
-    if history_intent:
-        return "github_list_repository_commits", {"repository": repository, "repository_hint": repository_hint, "path": path, "per_page": 10}
-    if file_read_intent:
-        if not path:
-            return "Which file should I read? Provide its path, for example README.md."
-        return "github_read_repository_file", {"repository": repository, "repository_hint": repository_hint, "path": path, "ref": ""}
-    if file_list_intent:
-        return "github_list_repository_contents", {"repository": repository, "repository_hint": repository_hint, "path": "", "ref": ""}
-    if re.search(r"\b(repositories|repository|repos|repo)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಗಳು|ಗಳನ್ನು|ಯನ್ನು)?", text, re.IGNORECASE):
-        return "github_list_repositories", {"page": 1, "per_page": 10}
-    return None
 
 def _format_github_result(name: str, result: dict[str, Any]) -> str:
     if not result.get("ok"):

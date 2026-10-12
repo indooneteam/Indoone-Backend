@@ -23,6 +23,7 @@ from app.ai.tool_registry import (
     GITHUB_TOOL_DECLARATIONS,
     TOOL_SPECS,
     get_tool_spec,
+    tool_declaration,
 )
 from app.ai.tools import run_tool_async
 
@@ -92,9 +93,7 @@ def model_tool_declarations() -> list[dict[str, Any]]:
     # local tools, GitHub (read and write) and the connector tools are all here.
     # Approval for the write ones is enforced at dispatch, not by hiding them.
     declarations = [
-        {"name": spec.name, "description": spec.description, "parameters": dict(spec.parameters)}
-        for spec in TOOL_SPECS
-        if "gmail" not in spec.categories
+        tool_declaration(spec) for spec in TOOL_SPECS if "gmail" not in spec.categories
     ]
     declarations += EMAIL_TOOL_DECLARATIONS
     declarations.append(dict(_SEARCH_WEB_DECLARATION))
@@ -189,6 +188,9 @@ async def dispatch_tool(
             }
 
     payload_arguments = dict(arguments)
+    # The authenticated identity is injected by the backend, never by the model.
+    if user_id.strip():
+        payload_arguments.setdefault("user_id", user_id)
     if name in _TOKEN_IN_PAYLOAD:
         token = _first_token(approval_tokens)
         if token:

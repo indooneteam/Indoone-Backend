@@ -624,6 +624,186 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         connector_id="google_photos",
         capability="media.search",
     ),
+    # ---- YouTube ---------------------------------------------------------- #
+    ToolSpec(
+        "youtube_search",
+        "Search public YouTube videos, channels, or playlists.",
+        parameters=_object(
+            {
+                "query": {"type": "STRING", "description": "Search query."},
+                "resource_type": {"type": "STRING", "enum": ["video", "channel", "playlist"]},
+                "max_results": {"type": "INTEGER", "description": "Number of results, 1 through 50."},
+                "page_token": {"type": "STRING"},
+            },
+            ("query",),
+        ),
+        categories=("youtube", "external"),
+        connector_id="youtube",
+        capability="search.read",
+    ),
+    ToolSpec(
+        "youtube_get_videos",
+        "Read details for specific YouTube videos.",
+        parameters=_object(
+            {"video_ids": {"type": "ARRAY", "description": "YouTube video ids.", "items": {"type": "STRING"}}},
+            ("video_ids",),
+        ),
+        categories=("youtube", "external"),
+        connector_id="youtube",
+        capability="videos.read",
+    ),
+    ToolSpec(
+        "youtube_get_my_channel",
+        "Read the authenticated user's YouTube channel.",
+        parameters={},
+        categories=("youtube", "external"),
+        connector_id="youtube",
+        capability="videos.read",
+    ),
+    ToolSpec(
+        "youtube_list_my_videos",
+        "List videos from the authenticated channel's uploads.",
+        parameters=_object(
+            {
+                "max_results": {"type": "INTEGER", "description": "Number of videos, 1 through 50."},
+                "page_token": {"type": "STRING"},
+            },
+        ),
+        categories=("youtube", "external"),
+        connector_id="youtube",
+        capability="videos.read",
+    ),
+    # ---- Instagram -------------------------------------------------------- #
+    ToolSpec(
+        "instagram_get_profile",
+        "Read the authenticated Instagram profile.",
+        parameters={},
+        categories=("instagram", "external"),
+        connector_id="instagram",
+        capability="profile.read",
+    ),
+    ToolSpec(
+        "instagram_list_media",
+        "List the authenticated Instagram account's media.",
+        parameters=_object(
+            {
+                "limit": {"type": "INTEGER", "description": "Number of items, 1 through 100."},
+                "after": {"type": "STRING", "description": "Pagination cursor from a prior result."},
+            },
+        ),
+        categories=("instagram", "external"),
+        connector_id="instagram",
+        capability="media.read",
+    ),
+    ToolSpec(
+        "instagram_get_media_details",
+        "Read details for one Instagram media item.",
+        parameters=_object({"media_id": {"type": "STRING", "description": "Instagram media id."}}, ("media_id",)),
+        categories=("instagram", "external"),
+        connector_id="instagram",
+        capability="media.read",
+    ),
+    # ---- Facebook --------------------------------------------------------- #
+    ToolSpec(
+        "facebook_list_pages",
+        "List the Facebook Pages the authenticated user manages.",
+        parameters={},
+        categories=("facebook", "external"),
+        connector_id="facebook",
+        capability="pages.read",
+    ),
+    ToolSpec(
+        "facebook_list_page_posts",
+        "List posts on a Facebook Page.",
+        parameters=_object(
+            {
+                "page_id": {"type": "STRING", "description": "Facebook Page id."},
+                "limit": {"type": "INTEGER", "description": "Number of posts, 1 through 100."},
+                "after": {"type": "STRING", "description": "Pagination cursor from a prior result."},
+            },
+            ("page_id",),
+        ),
+        categories=("facebook", "external"),
+        connector_id="facebook",
+        capability="pages.read",
+    ),
+    # ---- Canva ------------------------------------------------------------ #
+    ToolSpec(
+        "canva_list_designs",
+        "List the authenticated user's Canva designs.",
+        parameters=_object(
+            {
+                "query": {"type": "STRING", "description": "Optional name search."},
+                "continuation": {"type": "STRING", "description": "Pagination token from a prior result."},
+            },
+        ),
+        categories=("canva", "external"),
+        connector_id="canva",
+        capability="designs.read",
+    ),
+    ToolSpec(
+        "canva_get_design",
+        "Read one Canva design.",
+        parameters=_object({"design_id": {"type": "STRING"}}, ("design_id",)),
+        categories=("canva", "external"),
+        connector_id="canva",
+        capability="designs.read",
+    ),
+    ToolSpec(
+        "canva_get_export_formats",
+        "List the export formats available for a Canva design.",
+        parameters=_object({"design_id": {"type": "STRING"}}, ("design_id",)),
+        categories=("canva", "external"),
+        connector_id="canva",
+        capability="designs.read",
+    ),
+    ToolSpec(
+        "canva_create_export_job",
+        "Start an export job for a Canva design. Requires the user's explicit approval.",
+        parameters=_object(
+            {
+                "design_id": {"type": "STRING"},
+                "format": {
+                    "type": "OBJECT",
+                    "description": "Export format payload, e.g. {\"type\": \"PDF\"}.",
+                    "properties": {"type": {"type": "STRING"}},
+                },
+            },
+            ("design_id",),
+        ),
+        risk="external",
+        requires_approval=True,
+        categories=("canva", "external", "write"),
+        connector_id="canva",
+        capability="exports.create",
+    ),
+    # ---- Local helpers ---------------------------------------------------- #
+    ToolSpec(
+        "data_analysis",
+        "Summarize CSV, JSON, or TSV data: row count, numeric statistics, duplicates.",
+        parameters=_object(
+            {
+                "content": {"type": "STRING", "description": "The CSV/JSON/TSV text."},
+                "filename": {"type": "STRING", "description": "File name; its extension selects the parser (e.g. data.csv)."},
+            },
+            ("content",),
+        ),
+        categories=("data",),
+    ),
+    ToolSpec(
+        "task_schedule_build",
+        "Validate and normalize a schedule specification before it is stored.",
+        parameters=_object(
+            {
+                "schedule": {"type": "STRING", "description": "Schedule expression or description."},
+                "timezone": {"type": "STRING", "description": "IANA timezone; defaults to UTC."},
+                "retry_limit": {"type": "INTEGER", "description": "Retries, 0 through 20."},
+                "misfire_policy": {"type": "STRING", "enum": ["skip", "run_once"]},
+            },
+            ("schedule",),
+        ),
+        categories=("productivity",),
+    ),
 )
 
 
@@ -673,6 +853,14 @@ def describe_tools() -> list[dict[str, Any]]:
 # Model-facing function declarations
 # --------------------------------------------------------------------------- #
 
+def tool_declaration(spec: ToolSpec) -> dict[str, Any]:
+    """One model-facing declaration for a tool (parameters omitted when empty)."""
+    declaration: dict[str, Any] = {"name": spec.name, "description": spec.description}
+    if spec.parameters:
+        declaration["parameters"] = dict(spec.parameters)
+    return declaration
+
+
 def function_declarations(
     names: tuple[str, ...] | None = None,
     *,
@@ -694,13 +882,7 @@ def function_declarations(
             continue
         if read_only and spec.requires_approval:
             continue
-        declarations.append(
-            {
-                "name": spec.name,
-                "description": spec.description,
-                "parameters": dict(spec.parameters),
-            }
-        )
+        declarations.append(tool_declaration(spec))
     return declarations
 
 

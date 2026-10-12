@@ -34,8 +34,8 @@ def test_every_tool_is_fully_described() -> None:
     for spec in TOOL_SPECS:
         if not spec.description.strip():
             problems.append(f"{spec.name}: missing description")
-        if not isinstance(spec.parameters, dict) or not spec.parameters:
-            problems.append(f"{spec.name}: missing parameters schema")
+        if not isinstance(spec.parameters, dict):
+            problems.append(f"{spec.name}: parameters must be a schema object")
         if spec.payload_style not in ("json", "text"):
             problems.append(f"{spec.name}: bad payload_style {spec.payload_style!r}")
         if not spec.module.strip():

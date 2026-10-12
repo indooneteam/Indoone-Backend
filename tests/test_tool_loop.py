@@ -32,12 +32,19 @@ def test_declarations_are_one_list_without_the_legacy_gmail_family() -> None:
     assert "google_drive_list_files" in names
     assert "google_drive_upload_file" in names
     assert "google_photos_search_media" in names
+    assert "youtube_search" in names
+    assert "instagram_list_media" in names
+    assert "facebook_list_pages" in names
+    assert "canva_list_designs" in names
+    assert "data_analysis" in names
+    assert "task_schedule_build" in names
 
-    # No duplicates, and every entry is fully described.
+    # No duplicates, and every entry is fully described. No-argument tools
+    # legitimately omit the parameter schema.
     assert len(names) == len(set(names))
     for item in declarations:
         assert item["description"]
-        assert item["parameters"]
+        assert isinstance(item.get("parameters", {}), dict)
 
 
 @pytest.mark.asyncio

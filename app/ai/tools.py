@@ -51,6 +51,29 @@ from app.capabilities.google_photos import (
     list_media as list_google_photos_media,
     search_media as search_google_photos_media,
 )
+from app.capabilities.youtube import (
+    get_my_channel as get_youtube_channel,
+    get_videos as get_youtube_videos,
+    list_my_videos as list_youtube_my_videos,
+    search_youtube,
+)
+from app.instagram.capabilities.instagram import (
+    get_profile as get_instagram_profile,
+    list_media as list_instagram_media,
+)
+from app.instagram.capabilities.instagram_advanced import get_media_details as get_instagram_media_details
+from app.capabilities.facebook import (
+    list_page_posts as list_facebook_page_posts,
+    list_pages as list_facebook_pages,
+)
+from app.capabilities.canva import (
+    create_export_job as create_canva_export_job,
+    get_design as get_canva_design,
+    get_export_formats as get_canva_export_formats,
+    list_designs as list_canva_designs,
+)
+from app.capabilities.data_analysis import analyze_payload
+from app.capabilities.task_scheduler import build_schedule as build_task_schedule
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
@@ -764,6 +787,266 @@ async def _google_photos_list_albums(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
+async def _youtube_search(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("youtube_search payload must be an object")
+    query = str(data.get("query", "")).strip()
+    if not query:
+        raise ValueError("query is required")
+    spec = get_tool_spec("youtube_search")
+    result = await _run_async(
+        search_youtube(
+            query,
+            resource_type=str(data.get("resource_type", "video")) or "video",
+            max_results=max(1, min(int(data.get("max_results", 10)), 50)),
+            page_token=str(data.get("page_token", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _youtube_get_videos(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("youtube_get_videos payload must be an object")
+    ids = data.get("video_ids")
+    if not isinstance(ids, list) or not ids:
+        raise ValueError("video_ids is required")
+    user_id = str(data.get("user_id", "")).strip()
+    spec = get_tool_spec("youtube_get_videos")
+    result = await _run_async(
+        get_youtube_videos([str(item) for item in ids], user_id=user_id),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _youtube_get_my_channel(payload: str) -> str:
+    data = json.loads(payload) if payload.strip() else {}
+    if not isinstance(data, dict):
+        data = {}
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("youtube_get_my_channel")
+    result = await _run_async(get_youtube_channel(user_id), spec.timeout_seconds if spec else 20.0)
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _youtube_list_my_videos(payload: str) -> str:
+    data = json.loads(payload) if payload.strip() else {}
+    if not isinstance(data, dict):
+        data = {}
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("youtube_list_my_videos")
+    result = await _run_async(
+        list_youtube_my_videos(
+            user_id,
+            max_results=max(1, min(int(data.get("max_results", 20)), 50)),
+            page_token=str(data.get("page_token", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _instagram_get_profile(payload: str) -> str:
+    data = json.loads(payload) if payload.strip() else {}
+    if not isinstance(data, dict):
+        data = {}
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("instagram_get_profile")
+    result = await _run_async(get_instagram_profile(user_id), spec.timeout_seconds if spec else 20.0)
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _instagram_list_media(payload: str) -> str:
+    data = json.loads(payload) if payload.strip() else {}
+    if not isinstance(data, dict):
+        data = {}
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("instagram_list_media")
+    result = await _run_async(
+        list_instagram_media(
+            user_id,
+            limit=max(1, min(int(data.get("limit", 25)), 100)),
+            after=str(data.get("after", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _instagram_get_media_details(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("instagram_get_media_details payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    media_id = str(data.get("media_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not media_id:
+        raise ValueError("media_id is required")
+    spec = get_tool_spec("instagram_get_media_details")
+    result = await _run_async(
+        get_instagram_media_details(user_id, media_id), spec.timeout_seconds if spec else 20.0
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _facebook_list_pages(payload: str) -> str:
+    data = json.loads(payload) if payload.strip() else {}
+    if not isinstance(data, dict):
+        data = {}
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("facebook_list_pages")
+    result = await _run_async(list_facebook_pages(user_id), spec.timeout_seconds if spec else 20.0)
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _facebook_list_page_posts(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("facebook_list_page_posts payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    page_id = str(data.get("page_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not page_id:
+        raise ValueError("page_id is required")
+    spec = get_tool_spec("facebook_list_page_posts")
+    result = await _run_async(
+        list_facebook_page_posts(
+            user_id,
+            page_id,
+            limit=max(1, min(int(data.get("limit", 25)), 100)),
+            after=str(data.get("after", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _canva_list_designs(payload: str) -> str:
+    data = json.loads(payload) if payload.strip() else {}
+    if not isinstance(data, dict):
+        data = {}
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("canva_list_designs")
+    result = await _run_async(
+        list_canva_designs(
+            user_id,
+            query=str(data.get("query", "")),
+            continuation=str(data.get("continuation", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _canva_get_design(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("canva_get_design payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    design_id = str(data.get("design_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not design_id:
+        raise ValueError("design_id is required")
+    spec = get_tool_spec("canva_get_design")
+    result = await _run_async(get_canva_design(user_id, design_id), spec.timeout_seconds if spec else 20.0)
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _canva_get_export_formats(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("canva_get_export_formats payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    design_id = str(data.get("design_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not design_id:
+        raise ValueError("design_id is required")
+    spec = get_tool_spec("canva_get_export_formats")
+    result = await _run_async(
+        get_canva_export_formats(user_id, design_id), spec.timeout_seconds if spec else 20.0
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _canva_create_export_job(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("canva_create_export_job payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    design_id = str(data.get("design_id", "")).strip()
+    format_payload = data.get("format")
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not design_id:
+        raise ValueError("design_id is required")
+    if not isinstance(format_payload, dict):
+        raise ValueError("format is required")
+    spec = get_tool_spec("canva_create_export_job")
+    result = await _run_async(
+        create_canva_export_job(user_id, design_id, format_payload, approved=True),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _data_analysis(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("data_analysis payload must be an object")
+    content = str(data.get("content", ""))
+    if not content.strip():
+        raise ValueError("content is required")
+    filename = str(data.get("filename", "data.csv")).strip() or "data.csv"
+    result = analyze_payload(filename, content.encode("utf-8"))
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _task_schedule_build(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("task_schedule_build payload must be an object")
+    schedule = str(data.get("schedule", "")).strip()
+    if not schedule:
+        raise ValueError("schedule is required")
+    decision = build_task_schedule(
+        schedule,
+        timezone=str(data.get("timezone", "UTC")) or "UTC",
+        retry_limit=int(data.get("retry_limit", 3)),
+        misfire_policy=str(data.get("misfire_policy", "skip")) or "skip",
+    )
+    return json.dumps(
+        {
+            "enabled": decision.enabled,
+            "schedule": decision.schedule,
+            "timezone": decision.timezone,
+            "misfire_policy": decision.misfire_policy,
+            "retry_limit": decision.retry_limit,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
 TOOLS: dict[str, ToolCallable] = {
     "calculator": _calculate,
     "text_stats": _text_stats,
@@ -804,6 +1087,21 @@ TOOLS: dict[str, ToolCallable] = {
     "google_photos_search_media": _google_photos_search_media,
     "google_photos_get_media_item": _google_photos_get_media_item,
     "google_photos_list_albums": _google_photos_list_albums,
+    "youtube_search": _youtube_search,
+    "youtube_get_videos": _youtube_get_videos,
+    "youtube_get_my_channel": _youtube_get_my_channel,
+    "youtube_list_my_videos": _youtube_list_my_videos,
+    "instagram_get_profile": _instagram_get_profile,
+    "instagram_list_media": _instagram_list_media,
+    "instagram_get_media_details": _instagram_get_media_details,
+    "facebook_list_pages": _facebook_list_pages,
+    "facebook_list_page_posts": _facebook_list_page_posts,
+    "canva_list_designs": _canva_list_designs,
+    "canva_get_design": _canva_get_design,
+    "canva_get_export_formats": _canva_get_export_formats,
+    "canva_create_export_job": _canva_create_export_job,
+    "data_analysis": _data_analysis,
+    "task_schedule_build": _task_schedule_build,
 }
 
 

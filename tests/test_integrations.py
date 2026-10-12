@@ -25,7 +25,7 @@ def test_integration_lookup_and_missing_provider() -> None:
         missing = client.get("/api/integrations/not-configured")
     assert response.status_code == 200
     assert response.json()["integration"]["auth_type"] == "oauth2"
-    assert "repo:read" in response.json()["integration"]["permissions"]
+    assert "public_repo" in response.json()["integration"]["permissions"]
     assert missing.status_code == 404
 
 
@@ -329,3 +329,25 @@ async def test_gmail_server_auth_code_fails_if_google_omits_initial_refresh_toke
         await gmail_oauth_module.exchange_gmail_server_auth_code("gmail-user", "server-code-once")
 
     assert get_integration_token("gmail-user", "gmail") is None
+
+
+def test_github_oauth_uses_supported_least_privilege_scopes(monkeypatch) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    monkeypatch.setenv("INDOONE_GITHUB_CLIENT_ID", "github-public-client-id")
+    result = build_oauth_authorization(
+        "github", "github-test-state", "https://indoone.example/api/integrations/github/callback"
+    )
+    query = parse_qs(urlsplit(str(result["authorization_url"])).query)
+
+    assert set(query["scope"][0].split()) == {"read:user", "public_repo"}
+    assert result["secrets_exposed"] is False
+
+
+def test_github_plugin_routes_keep_existing_api_paths() -> None:
+    paths = {route.path for route in app.routes}
+    assert "/api/integrations/github/repositories" in paths
+    assert "/api/integrations/github/issues" in paths
+    assert "/api/integrations/github/pull-requests" in paths
+    assert "/api/integrations/github/create-issue" in paths
+    assert "/api/integrations/github/comment" in paths

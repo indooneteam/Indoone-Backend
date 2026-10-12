@@ -45,6 +45,12 @@ from app.capabilities.google_drive import (
     list_drive_files as list_google_drive_files,
     upload_drive_file as upload_google_drive_file,
 )
+from app.capabilities.google_photos import (
+    get_media_item as get_google_photos_media_item,
+    list_albums as list_google_photos_albums,
+    list_media as list_google_photos_media,
+    search_media as search_google_photos_media,
+)
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
@@ -680,6 +686,84 @@ async def _google_drive_upload_file(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
+async def _google_photos_list_media(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_photos_list_media payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("google_photos_list_media")
+    result = await _run_async(
+        list_google_photos_media(
+            user_id,
+            page_size=max(1, min(int(data.get("page_size", 25)), 100)),
+            page_token=str(data.get("page_token", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_photos_search_media(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_photos_search_media payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("google_photos_search_media")
+    result = await _run_async(
+        search_google_photos_media(
+            user_id,
+            page_size=max(1, min(int(data.get("page_size", 25)), 100)),
+            page_token=str(data.get("page_token", "")),
+            album_id=str(data.get("album_id", "")),
+            media_type=str(data.get("media_type", "")),
+            order=str(data.get("order", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_photos_get_media_item(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_photos_get_media_item payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    media_item_id = str(data.get("media_item_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not media_item_id:
+        raise ValueError("media_item_id is required")
+    spec = get_tool_spec("google_photos_get_media_item")
+    result = await _run_async(
+        get_google_photos_media_item(user_id, media_item_id),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_photos_list_albums(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_photos_list_albums payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("google_photos_list_albums")
+    result = await _run_async(
+        list_google_photos_albums(
+            user_id,
+            page_size=max(1, min(int(data.get("page_size", 20)), 50)),
+            page_token=str(data.get("page_token", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
 TOOLS: dict[str, ToolCallable] = {
     "calculator": _calculate,
     "text_stats": _text_stats,
@@ -716,6 +800,10 @@ TOOLS: dict[str, ToolCallable] = {
     "google_drive_list_files": _google_drive_list_files,
     "google_drive_get_file": _google_drive_get_file,
     "google_drive_upload_file": _google_drive_upload_file,
+    "google_photos_list_media": _google_photos_list_media,
+    "google_photos_search_media": _google_photos_search_media,
+    "google_photos_get_media_item": _google_photos_get_media_item,
+    "google_photos_list_albums": _google_photos_list_albums,
 }
 
 

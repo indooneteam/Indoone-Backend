@@ -570,6 +570,60 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         connector_id="google_drive",
         capability="files.upload",
     ),
+    # ---- Google Photos ---------------------------------------------------- #
+    ToolSpec(
+        "google_photos_list_media",
+        "List the authenticated user's Google Photos media items.",
+        parameters=_object(
+            {
+                "page_size": {"type": "INTEGER", "description": "Number of items, 1 through 100."},
+                "page_token": {"type": "STRING", "description": "Pagination token from a prior result."},
+            },
+        ),
+        categories=("google_photos", "external"),
+        connector_id="google_photos",
+        capability="media.search",
+    ),
+    ToolSpec(
+        "google_photos_search_media",
+        "Search Google Photos media, optionally filtered by album, type, or order.",
+        parameters=_object(
+            {
+                "page_size": {"type": "INTEGER", "description": "Number of items, 1 through 100."},
+                "page_token": {"type": "STRING", "description": "Pagination token from a prior result."},
+                "album_id": {"type": "STRING", "description": "Restrict to one album id."},
+                "media_type": {"type": "STRING", "enum": ["ALL_MEDIA", "PHOTO", "VIDEO"]},
+                "order": {"type": "STRING", "enum": ["MEDIA_ITEM_DATE_DESC", "MEDIA_ITEM_DATE_ASC"]},
+            },
+        ),
+        categories=("google_photos", "external"),
+        connector_id="google_photos",
+        capability="media.search",
+    ),
+    ToolSpec(
+        "google_photos_get_media_item",
+        "Read one Google Photos media item by id.",
+        parameters=_object(
+            {"media_item_id": {"type": "STRING", "description": "Media item id."}},
+            ("media_item_id",),
+        ),
+        categories=("google_photos", "external"),
+        connector_id="google_photos",
+        capability="media.read",
+    ),
+    ToolSpec(
+        "google_photos_list_albums",
+        "List the authenticated user's Google Photos albums.",
+        parameters=_object(
+            {
+                "page_size": {"type": "INTEGER", "description": "Number of albums, 1 through 50."},
+                "page_token": {"type": "STRING", "description": "Pagination token from a prior result."},
+            },
+        ),
+        categories=("google_photos", "external"),
+        connector_id="google_photos",
+        capability="media.search",
+    ),
 )
 
 

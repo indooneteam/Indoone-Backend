@@ -31,6 +31,7 @@ def test_declarations_are_one_list_without_the_legacy_gmail_family() -> None:
     assert "google_calendar_create_event" in names
     assert "google_drive_list_files" in names
     assert "google_drive_upload_file" in names
+    assert "google_photos_search_media" in names
 
     # No duplicates, and every entry is fully described.
     assert len(names) == len(set(names))

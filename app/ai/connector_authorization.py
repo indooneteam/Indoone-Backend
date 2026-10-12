@@ -22,6 +22,11 @@ def _scope_tokens(scope: str) -> tuple[str, ...]:
 
 
 _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
+    "github": {
+        # The configured classic OAuth scope exposes these read capabilities.
+        # Write actions remain separately approval-gated.
+        "public_repo": frozenset(("repos.read", "issues.read", "pull_requests.read")),
+    },
     "gmail": {
         "gmail.modify": frozenset(("messages.search", "messages.read", "messages.send")),
         "gmail.readonly": frozenset(("messages.search", "messages.read")),

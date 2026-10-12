@@ -93,6 +93,28 @@ def test_integration_callback_requires_code_and_state() -> None:
     assert response.status_code == 422
 
 
+def test_github_disconnect_removes_only_the_current_users_token(tmp_path, monkeypatch) -> None:
+    from cryptography.fernet import Fernet
+    from app.capabilities.store import get_integration_token_metadata, upsert_integration_token
+
+    monkeypatch.setenv("INDOONE_ENV", "development")
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "false")
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    cipher = Fernet(Fernet.generate_key())
+    upsert_integration_token("user-one", "github", cipher.encrypt(b"one-token"), None, "Bearer", "public_repo read:user", None)
+    upsert_integration_token("user-two", "github", cipher.encrypt(b"two-token"), None, "Bearer", "public_repo read:user", None)
+
+    with TestClient(app) as client:
+        response = client.post("/api/integrations/github/disconnect", json={"user_id": "user-one"})
+
+    assert response.status_code == 200
+    assert response.json()["disconnected"] is True
+    assert response.json()["was_connected"] is True
+    assert get_integration_token_metadata("user-one", "github") is None
+    assert get_integration_token_metadata("user-two", "github") is not None
+
+
 def test_integration_status_is_user_scoped(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     with TestClient(app) as client:

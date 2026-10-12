@@ -23,12 +23,12 @@ from app.ai.tools import ToolResult, run_tool_async
 from app.capabilities.store import create_agent_run, update_agent_run
 
 
-async def _run_with_retry_async(tool: str, payload: str, deadline: float) -> tuple[ToolResult, int]:
+async def _run_with_retry_async(tool: str, payload: str, deadline: float, user_id: str = "") -> tuple[ToolResult, int]:
     remaining = remaining_budget(deadline)
     if remaining <= 0:
         return deadline_failure(tool), 0
 
-    result = await run_tool_async(tool, payload, max_runtime_seconds=remaining)
+    result = await run_tool_async(tool, payload, max_runtime_seconds=remaining, user_id=user_id)
     retry_count = 0
     while should_retry(result, retry_count, MAX_AGENT_RETRIES):
         remaining = remaining_budget(deadline)
@@ -90,7 +90,7 @@ async def execute_agent_async(
             retry_count = 0
         else:
             executable.append(step)
-            result, retry_count = await _run_with_retry_async(step.tool, chained_payload, deadline)
+            result, retry_count = await _run_with_retry_async(step.tool, chained_payload, deadline, user_id=user_id)
 
         results.append(result)
         retry_counts.append(retry_count)

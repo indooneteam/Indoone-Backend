@@ -22,6 +22,7 @@ from app.capabilities.media import save_media
 from app.capabilities.registry import list_capabilities
 from app.capabilities.store import (
     create_oauth_state,
+    delete_integration_token,
     create_project,
     create_task,
     delete_memory,
@@ -158,6 +159,26 @@ async def integration(integration_id: str) -> dict[str, object]:
     if item is None:
         raise HTTPException(status_code=404, detail="integration not found")
     return {"integration": item}
+
+
+class GitHubDisconnectRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+
+
+@router.post("/integrations/github/disconnect")
+async def disconnect_github_integration(request: GitHubDisconnectRequest) -> dict[str, object]:
+    user_id = request.user_id.strip()
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id is required")
+    removed = delete_integration_token(user_id, "github")
+    return {
+        "integration": "github",
+        "user_id": user_id,
+        "disconnected": True,
+        "was_connected": removed,
+        "connected": False,
+        "secrets_exposed": False,
+    }
 
 
 @router.post("/integrations/{integration_id}/connect")

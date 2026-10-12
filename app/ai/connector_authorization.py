@@ -23,15 +23,15 @@ def _scope_tokens(scope: str) -> tuple[str, ...]:
 
 _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
     "github": {
-        # The configured classic OAuth scope exposes these read capabilities.
-        # Write actions remain separately approval-gated.
+        # public_repo grants writes to public repositories; repository writes
+        # remain separately gated by a short-lived, server-issued approval token.
         "public_repo": frozenset((
             "repos.read", "issues.read", "pull_requests.read",
             "repo.contents.read", "repo.files.read", "repo.code.search",
             "repo.history.read", "repo.compare.read", "repo.files.write",
         )),
-        # The classic repo scope can reach private repository data too; only the
-        # read-only capabilities are authorized by this chat integration.
+        # The classic repo scope also reaches private repositories. File writes
+        # remain available only through the explicitly approved commit workflow.
         "repo": frozenset((
             "repos.read", "issues.read", "pull_requests.read",
             "repo.contents.read", "repo.files.read", "repo.code.search",

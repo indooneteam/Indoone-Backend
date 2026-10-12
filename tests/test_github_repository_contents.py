@@ -173,3 +173,22 @@ def test_github_file_edit_tool_requires_approval():
     assert requires_approval("github_update_repository_file") is True
     assert scope_allows("github", "public_repo", "repo.files.write")
     assert scope_allows("github", "repo", "repo.files.write")
+
+
+@pytest.mark.asyncio
+async def test_github_update_tool_rejects_invalid_approval_token(monkeypatch):
+    import json
+    from app.ai.tools import _github_update_repository_file
+
+    monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "a" * 32)
+    payload = {
+        "user_id": "user-1",
+        "repository": "owner/repo",
+        "path": "src/app.py",
+        "content": "print('safe')",
+        "message": "Update source",
+        "sha": "a" * 40,
+        "approval_token": "not-a-valid-signed-token",
+    }
+    with pytest.raises(PermissionError, match="approval"):
+        await _github_update_repository_file(json.dumps(payload))

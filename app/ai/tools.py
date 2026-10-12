@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable
 
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
+from app.ai.approval import validate_approval_token
 from app.ai.code_sandbox import sandbox_execution_tool
 from app.ai.connector_authorization import authorize_tool
 from app.ai.tool_registry import get_tool_spec
@@ -30,6 +31,7 @@ from app.plugins.github.service import (
     list_github_repository_commits as fetch_github_repository_commits,
     compare_github_repository_commits as fetch_github_repository_compare,
 )
+from app.plugins.github.writes import github_update_repository_file as commit_github_repository_file
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
@@ -341,6 +343,38 @@ async def _github_compare_repository_commits(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
+async def _github_update_repository_file(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_update_repository_file payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    repository = str(data.get("repository", "")).strip()
+    path = str(data.get("path", "")).strip()
+    content = data.get("content")
+    message = str(data.get("message", "")).strip()
+    expected_sha = str(data.get("sha", "")).strip()
+    approval_token = str(data.get("approval_token", "")).strip()
+    if not user_id or not repository or not path or not isinstance(content, str) or not message or not expected_sha:
+        raise ValueError("user_id, repository, path, content, commit message and file SHA are required")
+    if not validate_approval_token(approval_token, user_id, "github_update_repository_file"):
+        raise PermissionError("a valid, current, server-issued GitHub file-update approval is required")
+    spec = get_tool_spec("github_update_repository_file")
+    result = await _run_async(
+        commit_github_repository_file(
+            user_id=user_id,
+            repository=repository,
+            path=path,
+            content=content,
+            message=message,
+            expected_sha=expected_sha,
+            approval_verified=True,
+            branch=str(data.get("branch", "")),
+        ),
+        spec.timeout_seconds if spec else 30.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
 async def _gmail_search(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
@@ -463,6 +497,7 @@ TOOLS: dict[str, ToolCallable] = {
     "github_search_repository_code": _github_search_repository_code,
     "github_list_repository_commits": _github_list_repository_commits,
     "github_compare_repository_commits": _github_compare_repository_commits,
+    "github_update_repository_file": _github_update_repository_file,
     "gmail_read": _gmail_read,
     "gmail_compose": _gmail_compose,
     "gmail_email_safety": _gmail_email_safety,

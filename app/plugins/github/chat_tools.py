@@ -21,7 +21,7 @@ _GITHUB_TARGET_RE = re.compile(
 )
 _ACTION_RE = re.compile(
     r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see|tell|please|bring|read|open|browse|analyze|explain|search|compare|inspect|inside)\b"
-    r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi|olage|en\s+ide)\b"
+    r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi|h?olag(?:e|ade)|en\s+(?:ide|ede)|enu\s+(?:ide|ede)|enella\s+(?:ide|ede))\b"
     r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್|ಓದು|ತೆರೆ|ವಿವರಿಸು|ಒಳಗೆ|ಹೋಲಿಸು",
     re.IGNORECASE,
 )
@@ -269,7 +269,7 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     file_list_intent = bool(
         re.search(r"\b(files?|folders?|directories|directory|contents|inside|tree|structure)\b|\bwhat'?s?\s+inside\b|\bwhat\s+is\s+in\b", text, re.IGNORECASE)
         or re.search(r"(ಫೈಲ್|ಫೋಲ್ಡರ್|ಒಳಗೆ).{0,40}(ಏನು|ಏನೆಲ್ಲ|ಇದೆ|ತೋರಿಸು|ಪಟ್ಟಿ)", text)
-        or re.search(r"\bolage\b|\ben\s+ide\b", text, re.IGNORECASE)
+        or re.search(r"\bh?olag(?:e|ade)\b|\ben\s+(?:ide|ede)\b|\benu\s+(?:ide|ede)\b|\benella\s+(?:ide|ede)\b", text, re.IGNORECASE)
     )
 
     if search_intent:

@@ -209,3 +209,19 @@ def test_romanized_kannada_repo_contents_request_uses_github_reader(
     assert tool_name == "github_list_repository_contents"
     assert arguments["repository_hint"] == expected_hint
 
+@pytest.mark.parametrize(
+    ("message", "expected_hint"),
+    [
+        ("Nanna Indoone repo holage en ede", "Indoone"),
+        ("Nanna Indoone repo olage en ide", "Indoone"),
+        ("Indoone repository holagade en ide", "Indoone"),
+        ("Indoone repo en ede", "Indoone"),
+    ],
+)
+def test_romanized_kannada_repository_contents_variants_are_routed(
+    message: str, expected_hint: str,
+) -> None:
+    action = chat_tools._github_action(message, [])
+    assert isinstance(action, tuple)
+    assert action[0] == "github_list_repository_contents"
+    assert action[1]["repository_hint"] == expected_hint

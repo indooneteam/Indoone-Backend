@@ -346,7 +346,9 @@ async def _list_mail(
     recent: bool = False,
     limit: int = MAX_EMAIL_RESULTS,
 ) -> list[dict[str, str]]:
-    limit = max(1, min(int(limit), 100))
+    # Zoho Mail allows up to 200 messages per request; Gmail caps at 100.
+    max_limit = 200 if provider == "zoho_mail" else 100
+    limit = max(1, min(int(limit), max_limit))
     if provider == "gmail":
         # A recent-mail request means newest Inbox messages, not any message
         # from an arbitrary seven-day period.

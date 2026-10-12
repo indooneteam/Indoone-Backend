@@ -251,3 +251,52 @@ def test_zoho_connection_status_reports_complete_permissions(monkeypatch) -> Non
     assert payload["missing_scopes"] == []
     assert payload["reauthorization_required"] is False
 
+
+
+def test_zoho_authorization_always_requests_all_required_scopes(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_ZOHO_CLIENT_ID", "zoho-public-client-id")
+    monkeypatch.setenv("INDOONE_ZOHO_CLIENT_SECRET", "server-only-client-secret")
+    monkeypatch.setenv(
+        "INDOONE_ZOHO_REDIRECT_URI",
+        "https://indoone.example/api/integrations/zoho-mail/callback",
+    )
+    # Simulate an old deployment override that included only a subset of permissions.
+    monkeypatch.setenv(
+        "INDOONE_ZOHO_SCOPE",
+        "ZohoMail.accounts.READ,ZohoMail.messages.READ",
+    )
+    monkeypatch.setattr(zoho_oauth, "create_oauth_state", lambda *_args: None)
+
+    result = zoho_oauth.start_zoho_mail_authorization("test-user")
+    query = parse_qs(urlparse(str(result["authorization_url"])).query)
+    requested_scopes = set(query["scope"][0].split(","))
+
+    assert requested_scopes == set(zoho_oauth.ZOHO_MAIL_REQUIRED_SCOPES)
+    assert zoho_oauth.zoho_mail_auth_config()["scope"] == zoho_oauth._DEFAULT_SCOPE
+
+
+def test_zoho_connection_status_flags_each_missing_required_permission(monkeypatch) -> None:
+    monkeypatch.setattr(
+        oauth_routes,
+        "get_integration_token_metadata",
+        lambda user_id, integration_id: {
+            "user_id": user_id,
+            "integration_id": integration_id,
+            "scope": "ZohoMail.accounts.READ,ZohoMail.messages.READ",
+            "updated_at": "2026-10-11T12:00:00+00:00",
+        },
+    )
+    response = _client(monkeypatch).get(
+        "/api/integrations/zoho-mail/connection",
+        params={"user_id": "test-user"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["permissions_complete"] is False
+    assert set(payload["missing_scopes"]) == {
+        "ZohoMail.folders.READ",
+        "ZohoMail.messages.CREATE",
+        "ZohoMail.messages.DELETE",
+    }
+    assert payload["reauthorization_required"] is True

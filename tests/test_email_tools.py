@@ -681,3 +681,114 @@ def test_zoho_reply_rejects_provider_failure_status(monkeypatch) -> None:
             )
         )
 
+
+
+def test_email_tool_fetch_limit_defaults_to_200_and_caps_at_200() -> None:
+    assert email_tools._limit(None) == 200
+    assert email_tools._limit(25) == 25
+    assert email_tools._limit(200) == 200
+    assert email_tools._limit(999) == 200
+    assert email_tools._limit(None, default=20, maximum=20) == 20
+
+
+def test_zoho_inbox_count_paginates_without_counting_only_the_first_page(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    async def fake_accounts(user_id: str) -> dict[str, object]:
+        return {"data": [{"accountId": "account-1", "primaryEmailAddress": "me@example.com"}]}
+
+    async def fake_folders(user_id: str, account_id: str) -> dict[str, object]:
+        return {"data": [{"folderName": "Inbox", "folderId": "inbox-1"}]}
+
+    async def fake_messages(
+        user_id: str,
+        account_id: str,
+        *,
+        folder_id: str = "",
+        search_key: str = "",
+        start: int = 1,
+        limit: int = 20,
+    ) -> dict[str, object]:
+        calls.append({"start": start, "limit": limit, "folder_id": folder_id})
+        size = 200 if start == 1 else 37
+        return {"data": [{"messageId": f"m-{start + i}"} for i in range(size)]}
+
+    monkeypatch.setattr(email_tools, "list_accounts", fake_accounts)
+    monkeypatch.setattr(email_tools, "list_folders", fake_folders)
+    monkeypatch.setattr(email_tools, "list_messages", fake_messages)
+    monkeypatch.setattr(
+        email_tools, "_zoho_accounts",
+        lambda _payload: [{"id": "account-1", "email": "me@example.com"}],
+    )
+
+    result = asyncio.run(email_tools._count_inbox_emails("user-1", "zoho_mail"))
+
+    assert result == {"folder": "Inbox", "count": 237, "exact": True}
+    assert calls == [
+        {"start": 1, "limit": 200, "folder_id": "inbox-1"},
+        {"start": 201, "limit": 200, "folder_id": "inbox-1"},
+    ]
+
+
+def test_count_inbox_emails_is_an_explicit_live_tool(monkeypatch) -> None:
+    monkeypatch.setattr(
+        email_tools,
+        "get_integration_token_metadata",
+        lambda user_id, provider: {"provider": provider} if provider == "zoho_mail" else None,
+    )
+    monkeypatch.setattr(
+        email_tools,
+        "_count_inbox_emails",
+        lambda user_id, provider: _async_value({"folder": "Inbox", "count": 237, "exact": True}),
+    )
+
+    result = asyncio.run(
+        email_tools.execute_email_tool(
+            "user-1",
+            "conversation-1",
+            "count_inbox_emails",
+            {"provider": "zoho_mail"},
+            original_message="How many emails are in Zoho Mail Inbox?",
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["count"] == 237
+    assert result["exact"] is True
+
+
+def test_zoho_recent_fetch_uses_provider_maximum_of_200(monkeypatch) -> None:
+    calls: list[int] = []
+
+    async def fake_accounts(user_id: str) -> dict[str, object]:
+        return {"data": [{"accountId": "account-1", "primaryEmailAddress": "me@example.com"}]}
+
+    async def fake_folders(user_id: str, account_id: str) -> dict[str, object]:
+        return {"data": [{"folderName": "Inbox", "folderId": "inbox-1"}]}
+
+    async def fake_messages(
+        user_id: str,
+        account_id: str,
+        *,
+        folder_id: str = "",
+        search_key: str = "",
+        start: int = 1,
+        limit: int = 20,
+    ) -> dict[str, object]:
+        calls.append(limit)
+        return {"data": [{"messageId": "m-1", "folderId": folder_id, "subject": "Hello"}]}
+
+    monkeypatch.setattr(email_assistant, "list_accounts", fake_accounts)
+    monkeypatch.setattr(email_assistant, "list_folders", fake_folders)
+    monkeypatch.setattr(email_assistant, "list_messages", fake_messages)
+    monkeypatch.setattr(
+        email_assistant, "_zoho_accounts",
+        lambda _payload: [{"id": "account-1", "email": "me@example.com"}],
+    )
+
+    rows = asyncio.run(
+        email_assistant._list_mail("user-1", "zoho_mail", "", recent=True, limit=200)
+    )
+
+    assert len(rows) == 1
+    assert calls == [200]

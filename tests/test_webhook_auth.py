@@ -71,3 +71,31 @@ def test_health_and_readiness_probes_are_public_but_details_remain_authenticated
     assert ready.json() == {"status": "ready"}
     assert details.status_code == 401
     assert connector.status_code == 401
+
+
+def test_github_browser_oauth_callback_is_public_but_exchanges_state(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_ENV", "development")
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
+    captured: dict[str, str] = {}
+
+    async def fake_exchange_oauth_code(integration_id: str, state: str, code: str) -> dict[str, object]:
+        captured.update({"integration_id": integration_id, "state": state, "code": code})
+        return {"integration": integration_id, "connected": True}
+
+    monkeypatch.setattr("app.api.capabilities.exchange_oauth_code", fake_exchange_oauth_code)
+
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/integrations/github/callback",
+            params={"state": "github-state-token-123456", "code": "github-auth-code"},
+        )
+
+    assert response.status_code == 200
+    assert "GitHub connected to Indoone" in response.text
+    assert "bearer authentication required" not in response.text.lower()
+    assert captured == {
+        "integration_id": "github",
+        "state": "github-state-token-123456",
+        "code": "github-auth-code",
+    }

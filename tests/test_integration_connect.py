@@ -21,7 +21,7 @@ def test_oauth_authorization_contains_state_and_redirect(monkeypatch) -> None:
     assert "client_id=client-123" in result["authorization_url"]
     assert "state=state-1234567890123456" in result["authorization_url"]
     assert "redirect_uri=https%3A%2F%2Fexample.com%2Fcallback" in result["authorization_url"]
-    assert parse_qs(urlparse(result["authorization_url"]).query)["scope"] == ["read:user repo"]
+    assert parse_qs(urlparse(result["authorization_url"]).query)["scope"] == ["read:user public_repo"]
 
 
 def test_oauth_authorization_rejects_unknown_provider() -> None:

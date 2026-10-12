@@ -176,3 +176,36 @@ async def test_file_request_without_path_asks_for_clarification(monkeypatch) -> 
     reply = await chat_tools.handle_github_chat_with_tools("user-123", "Read a file in my GitHub repo")
     assert reply is not None
     assert "which file" in reply.lower()
+
+@pytest.mark.parametrize(
+    ("message", "expected_hint"),
+    [
+        ("GitHub repo holage en ide", ""),
+        ("nanna GitHub repo holage en ide", ""),
+        ("Indoone repo holage en ide", "Indoone"),
+        ("Indoone repo olage en ide", "Indoone"),
+    ],
+)
+def test_romanized_kannada_repository_hint_ignores_intent_words(
+    message: str, expected_hint: str
+) -> None:
+    assert chat_tools._repository_hint_from_message(message) == expected_hint
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_hint"),
+    [
+        ("GitHub repo holage en ide", ""),
+        ("nanna GitHub repo holage en ide", ""),
+        ("Indoone repo holage en ide", "Indoone"),
+    ],
+)
+def test_romanized_kannada_repo_contents_request_uses_github_reader(
+    message: str, expected_hint: str
+) -> None:
+    request = chat_tools._github_action(message, None)
+    assert isinstance(request, tuple)
+    tool_name, arguments = request
+    assert tool_name == "github_list_repository_contents"
+    assert arguments["repository_hint"] == expected_hint
+

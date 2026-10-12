@@ -207,7 +207,14 @@ async def _execute_github_tool(
     return {"ok": True, "result": data}
 
 def _repository_hint_from_message(text: str) -> str:
-    ignored = {"github", "my", "the", "a", "an", "this", "that", "repo", "repository", "inside", "olage", "files", "folders", "contents", "en", "ide"}
+    ignored = {
+        "github", "my", "the", "a", "an", "this", "that",
+        "repo", "repository", "repositories", "inside",
+        "olage", "holage", "olagade", "en", "ide", "enu", "yenu",
+        "yavudu", "yaavudu", "yavdu", "nanna",
+        "files", "folders", "contents", "readme",
+        "please", "show", "list", "tell", "what", "is", "there", "in",
+    }
     after = re.findall(r"\b(?:repo|repository)(?:\s+named)?\s+([A-Za-z0-9_.-]+)\b", text, re.IGNORECASE)
     before = re.findall(r"\b([A-Za-z0-9_.-]+)\s+(?:repo|repository)\b", text, re.IGNORECASE)
     for item in reversed(after + before):

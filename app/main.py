@@ -69,12 +69,13 @@ _PROVIDER_WEBHOOK_PATHS = frozenset(
         "/api/telegram/webhook/incoming",
     }
 )
-# Zoho redirects the user's browser to this HTTPS callback without an Indoone
-# Bearer token. Access is constrained by the short-lived, single-use OAuth state
-# validated by the callback handler.
+# OAuth providers redirect the user's browser to these HTTPS callbacks
+# without an Indoone Bearer token. Each callback handler must validate its
+# short-lived, single-use OAuth state before exchanging the provider code.
 _PUBLIC_OAUTH_CALLBACK_PATHS = frozenset(
     {
         "/api/integrations/zoho-mail/callback",
+        "/api/integrations/github/callback",
     }
 )
 

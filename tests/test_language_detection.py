@@ -6,6 +6,7 @@ from app.ai.language_detection import detect_response_language
 @pytest.mark.parametrize(
     ("message", "language"),
     [
+        # Indian languages (native script, romanized, explicit names)
         ("ಕನ್ನಡ ಬಗ್ಗೆ ಹೇಳು", "Kannada"),
         ("kannada bagge helu", "Kannada"),
         ("Hindi me batao", "Hindi"),
@@ -30,8 +31,25 @@ from app.ai.language_detection import detect_response_language
         ("ଓଡ଼ିଆରେ କହନ୍ତୁ", "Odia"),
         ("urdu mein batao", "Urdu"),
         ("اردو میں بتائیں", "Urdu"),
+        # Other languages Google supports (explicit names and native scripts)
         ("What is Indoone?", "English"),
+        ("Answer in French please", "French"),
+        ("en español por favor", "Spanish"),
+        ("auf Deutsch bitte", "German"),
+        ("日本語で答えて", "Japanese"),
+        ("请用中文回答", "Chinese"),
+        ("한국어로 답해줘", "Korean"),
+        ("Ответь на русском", "Russian"),
+        ("Γεια σου", "Greek"),
+        ("שלום", "Hebrew"),
+        ("สวัสดี", "Thai"),
+        ("नमस्ते", "Hindi"),
     ],
 )
 def test_detect_response_language(message: str, language: str) -> None:
     assert detect_response_language(message) == language
+
+
+def test_detect_response_language_always_returns_a_name() -> None:
+    for message in ("", "   ", "12345", "!!!"):
+        assert detect_response_language(message) == "English"

@@ -22,7 +22,7 @@ _GITHUB_TARGET_RE = re.compile(
 _ACTION_RE = re.compile(
     r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see|tell|please|bring|read|open|browse|analyze|explain|search|compare|inspect|inside)\b"
     r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi|h?olag(?:e|ade)|en\s+(?:ide|ede)|enu\s+(?:ide|ede)|enella\s+(?:ide|ede))\b"
-    r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್|ಓದು|ತೆರೆ|ವಿವರಿಸು|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|ಹೋಲಿಸು",
+    r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್|ಓದು|ತೆರೆ|ವಿವರಿಸು|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|ಹೋಲಿಸು|ಏನು|ಏನೆಲ್ಲಾ|ಏನೇನು|ಏನಿದೆ|ಇವೆ|ಇದೆ",
     re.IGNORECASE,
 )
 _REPOSITORY_NAME_RE = re.compile(r"\b([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\b")
@@ -272,12 +272,13 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     history_intent = bool(re.search(r"\b(commit\s+history|recent\s+commits|history\s+of)\b|ಕಮಿಟ್\s*ಇತಿಹಾಸ", text, re.IGNORECASE))
     compare_intent = bool(re.search(r"\b(compare|diff|changes\s+between)\b|ಹೋಲಿಸು", text, re.IGNORECASE))
     file_read_intent = bool(path) or bool(
-        re.search(r"\b(read|open|explain|show|summari[sz]e|inspect)\b.{0,60}\b(file|source|code|readme)\b|\bwhat\s+does\b", text, re.IGNORECASE)
-        or re.search(r"(ಫೈಲ್|ಕೋಡ್).{0,25}(ಓದು|ವಿವರಿಸು|ತೋರಿಸು)", text)
+        re.search(r"\b(read|open|explain|summari[sz]e|inspect)\b.{0,60}\b(file|source|code|readme)\b|\bwhat\s+does\b", text, re.IGNORECASE)
+        or re.search(r"(ಫೈಲ್|ಕೋಡ್).{0,25}(ಓದು|ವಿವರಿಸು)", text)
     )
     file_list_intent = bool(
         re.search(r"\b(files?|folders?|directories|directory|contents|inside|tree|structure)\b|\bwhat'?s?\s+inside\b|\bwhat\s+is\s+in\b", text, re.IGNORECASE)
-        or re.search(r"(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)).{0,80}(?:ಏನು|ಏನೆಲ್ಲ|ಏನಿದೆ|ಇದೆ|ತೋರಿಸು|ಪಟ್ಟಿ|ವಿವರ)", text)
+        or re.search(r"(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)).{0,80}(?:ಏನು|ಏನೆಲ್ಲಾ?|ಏನೇನು|ಏನಿದೆ|ಇದೆ|ಇವೆ|ತೋರಿಸು|ಪಟ್ಟಿ|ವಿವರ)", text)
+        or re.search(r"(?:ಏನು|ಏನೆಲ್ಲಾ?|ಏನೇನು|ಏನಿದೆ|ಇದೆ|ಇವೆ).{0,80}(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ))", text)
         or re.search(r"\bh?olag(?:e|ade)\b|\ben\s+(?:ide|ede)\b|\benu\s+(?:ide|ede)\b|\benella\s+(?:ide|ede)\b", text, re.IGNORECASE)
     )
 

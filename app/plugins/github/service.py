@@ -375,6 +375,8 @@ async def list_github_repository_commits(
         )
         response.raise_for_status()
         body = response.json()
+    if isinstance(body, dict) and isinstance(body.get("items"), list):
+        body = body["items"]
     if not isinstance(body, list):
         raise RuntimeError("GitHub returned an invalid commit-history response")
     commits: list[dict[str, object]] = []
@@ -438,3 +440,7 @@ async def compare_github_repository_commits(
         "behind_by": int(body.get("behind_by") or 0), "total_commits": int(body.get("total_commits") or 0),
         "files": files, "secrets_exposed": False,
     }
+
+
+path = "app/plugins/github/service.py"
+message = "Fix GitHub API response robustness and commit-history fallback handling"

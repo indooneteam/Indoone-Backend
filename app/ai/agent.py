@@ -128,6 +128,38 @@ def _extract_gmail_request(message: str, user_id: str) -> tuple[str, dict[str, A
                 return tool, {"user_id": user_id, "message_id": value}
     return None
 
+def _extract_github_request(message: str, user_id: str) -> tuple[str, dict[str, Any]] | None:
+    """Turn explicit, read-only GitHub requests into user-scoped tool calls."""
+    user = user_id.strip()
+    text = message.strip()
+    lower = text.casefold()
+    if not user or not text or not re.search(r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see)\b", lower):
+        return None
+
+    repository = re.search(r"\b([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\b", text)
+    if re.search(r"\b(pull\s+requests?|prs?)\b", lower):
+        if not repository:
+            return None
+        return "github_list_pull_requests", {
+            "user_id": user,
+            "repository": repository.group(1),
+            "page": 1,
+            "per_page": 10,
+        }
+
+    if re.search(r"\b(assigned\s+issues|issues?)\b", lower):
+        if "github" not in lower and not re.search(r"\bassigned\s+issues\b", lower) and not repository:
+            return None
+        return "github_list_assigned_issues", {"user_id": user, "page": 1, "per_page": 10}
+
+    if re.search(r"\b(repositories|repository|repos)\b", lower):
+        if "github" not in lower and not repository:
+            return None
+        return "github_list_repositories", {"user_id": user, "page": 1, "per_page": 10}
+
+    return None
+
+
 def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tuple[str, dict[str, Any]] | None:
     text = message.strip()
     patterns = (
@@ -157,6 +189,10 @@ def build_agent_steps(message: str, user_id: str = "", contacts: list[dict[str, 
         tool, payload = gmail_request
         return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
     if _gmail_request_matches(normalized): return ()
+    github_request = _extract_github_request(normalized, user_id)
+    if github_request is not None:
+        tool, payload = github_request
+        return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
     contact_request = _extract_contact_request(normalized, contacts or [])
     if contact_request is not None:
         tool, payload = contact_request

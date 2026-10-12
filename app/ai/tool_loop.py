@@ -44,6 +44,19 @@ _EMAIL_WRITE_TOOLS = frozenset(
 _TOKEN_IN_PAYLOAD = frozenset({"github_update_repository_file"})
 _TEXT_ARG_KEYS = ("expression", "text", "json", "code")
 
+
+def email_read_tool_declarations() -> list[dict[str, Any]]:
+    """Email tools that change no data, so a voice session may call them.
+
+    Voice has no approval flow, so only the read-only email tools are
+    offered there. The write set lives here, once, and is reused.
+    """
+    return [
+        dict(declaration)
+        for declaration in EMAIL_TOOL_DECLARATIONS
+        if declaration.get("name") not in _EMAIL_WRITE_TOOLS
+    ]
+
 # Web search is not a registry tool (it returns evidence, not a resource), so it
 # is declared here and dispatched to the keyless public-research provider.
 _SEARCH_WEB_DECLARATION: dict[str, Any] = {

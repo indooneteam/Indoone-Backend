@@ -346,12 +346,33 @@ def test_github_oauth_uses_supported_least_privilege_scopes(monkeypatch) -> None
 
 
 def test_github_plugin_routes_keep_existing_api_paths() -> None:
-    paths = set(app.openapi()["paths"])
-    assert "/api/integrations/github/repositories" in paths
-    assert "/api/integrations/github/issues" in paths
-    assert "/api/integrations/github/pull-requests" in paths
-    assert "/api/integrations/github/create-issue" in paths
-    assert "/api/integrations/github/comment" in paths
+    with TestClient(app) as client:
+        repositories = client.post(
+            "/api/integrations/github/repositories", json={"user_id": "route-check-user"}
+        )
+        issues = client.post(
+            "/api/integrations/github/issues", json={"user_id": "route-check-user"}
+        )
+        pull_requests = client.post(
+            "/api/integrations/github/pull-requests",
+            json={"user_id": "route-check-user", "repository": "owner/repo"},
+        )
+        create_issue = client.post(
+            "/api/integrations/github/create-issue",
+            json={"user_id": "route-check-user", "repository": "owner/repo", "title": "test"},
+        )
+        comment = client.post(
+            "/api/integrations/github/comment",
+            json={"user_id": "route-check-user", "repository": "owner/repo", "number": 1, "body": "test"},
+        )
+
+    # The expected API-level validation/auth responses prove these plugin routes
+    # are mounted without requiring a live GitHub OAuth token.
+    assert repositories.status_code == 400
+    assert issues.status_code == 400
+    assert pull_requests.status_code == 400
+    assert create_issue.status_code == 403
+    assert comment.status_code == 403
 
 
 def test_github_browser_oauth_callback_shows_github_success(monkeypatch) -> None:

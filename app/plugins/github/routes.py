@@ -159,7 +159,8 @@ class GithubUpdateFileRequest(BaseModel):
     path: str = Field(min_length=1, max_length=1024)
     content: str = Field(min_length=1, max_length=50_000)
     message: str = Field(min_length=1, max_length=200)
-    sha: str = Field(min_length=40, max_length=40)
+    sha: str = Field(default="", max_length=40)
+    create: bool = False
     branch: str = Field(default="", max_length=128)
     approval_token: str = Field(min_length=16, max_length=2048)
 
@@ -241,6 +242,7 @@ async def github_repository_commit_file(request: GithubUpdateFileRequest) -> dic
             expected_sha=request.sha,
             approval_verified=True,
             branch=request.branch,
+            create=request.create,
         )
     except GitHubRepositoryWriteConflict as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

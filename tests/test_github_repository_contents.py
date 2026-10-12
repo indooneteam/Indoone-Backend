@@ -192,3 +192,42 @@ async def test_github_update_tool_rejects_invalid_approval_token(monkeypatch):
     }
     with pytest.raises(PermissionError, match="approval"):
         await _github_update_repository_file(json.dumps(payload))
+
+
+@pytest.mark.asyncio
+async def test_github_repository_file_create_omits_existing_sha(monkeypatch):
+    from app.plugins.github import writes
+
+    FakeClient.responses = [FakeResponse({
+        "content": {
+            "path": "src/new_module.py",
+            "sha": "d" * 40,
+            "html_url": "https://github.com/owner/repo/blob/main/src/new_module.py",
+        },
+        "commit": {
+            "sha": "e" * 40,
+            "html_url": "https://github.com/owner/repo/commit/" + "e" * 40,
+        },
+    })]
+    monkeypatch.setattr(writes, "_github_token", lambda user_id: "access-token")
+    monkeypatch.setattr(writes.httpx, "AsyncClient", FakeClient)
+    result = await writes.github_update_repository_file(
+        "user-1", "owner/repo", "src/new_module.py", "VALUE = 42\n",
+        "Create module", "", approval_verified=True, branch="main", create=True,
+    )
+    _method, _url, kwargs = FakeClient.calls[0]
+    assert "sha" not in kwargs["json"]
+    assert result["operation"] == "create_file"
+    assert result["path"] == "src/new_module.py"
+
+
+@pytest.mark.asyncio
+async def test_github_repository_file_create_refuses_existing_sha(monkeypatch):
+    from app.plugins.github import writes
+
+    monkeypatch.setattr(writes, "_github_token", lambda user_id: "access-token")
+    with pytest.raises(ValueError, match="must not specify"):
+        await writes.github_update_repository_file(
+            "user-1", "owner/repo", "src/new_module.py", "VALUE = 42",
+            "Create module", "a" * 40, approval_verified=True, create=True,
+        )

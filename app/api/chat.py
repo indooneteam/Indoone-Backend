@@ -48,7 +48,7 @@ class CodeEditSuggestionRequest(BaseModel):
     repository: str = Field(min_length=3, max_length=200)
     path: str = Field(min_length=1, max_length=1024)
     instruction: str = Field(min_length=1, max_length=2_000)
-    content: str = Field(min_length=1, max_length=50_000)
+    content: str = Field(default="", max_length=50_000)
 
 
 class ChatRequest(BaseModel):

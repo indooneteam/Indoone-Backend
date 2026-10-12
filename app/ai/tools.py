@@ -353,9 +353,12 @@ async def _github_update_repository_file(payload: str) -> str:
     content = data.get("content")
     message = str(data.get("message", "")).strip()
     expected_sha = str(data.get("sha", "")).strip()
+    create = bool(data.get("create", False))
     approval_token = str(data.get("approval_token", "")).strip()
-    if not user_id or not repository or not path or not isinstance(content, str) or not message or not expected_sha:
-        raise ValueError("user_id, repository, path, content, commit message and file SHA are required")
+    if not user_id or not repository or not path or not isinstance(content, str) or not message:
+        raise ValueError("user_id, repository, path, content and commit message are required")
+    if not create and not expected_sha:
+        raise ValueError("the current file SHA is required when updating an existing file")
     if not validate_approval_token(approval_token, user_id, "github_update_repository_file"):
         raise PermissionError("a valid, current, server-issued GitHub file-update approval is required")
     spec = get_tool_spec("github_update_repository_file")
@@ -369,6 +372,7 @@ async def _github_update_repository_file(payload: str) -> str:
             expected_sha=expected_sha,
             approval_verified=True,
             branch=str(data.get("branch", "")),
+            create=create,
         ),
         spec.timeout_seconds if spec else 30.0,
     )

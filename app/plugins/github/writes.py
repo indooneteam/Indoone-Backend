@@ -109,8 +109,9 @@ async def github_update_repository_file(
     expected_sha: str,
     approval_verified: bool = False,
     branch: str = "",
+    create: bool = False,
 ) -> dict[str, object]:
-    """Commit an explicitly approved text-file update without overwriting a newer version."""
+    """Commit an approved text-file create/update without overwriting newer content."""
     user = user_id.strip()
     if not user:
         raise ValueError("user_id is required")
@@ -122,8 +123,11 @@ async def github_update_repository_file(
         raise PermissionError("a valid, server-issued file-update approval is required")
 
     normalized_sha = expected_sha.strip().lower()
-    if not re.fullmatch(r"[0-9a-f]{40}", normalized_sha):
-        raise ValueError("expected file SHA must be a 40-character Git object SHA")
+    if create:
+        if normalized_sha:
+            raise ValueError("new files must not specify an existing file SHA")
+    elif not re.fullmatch(r"[0-9a-f]{40}", normalized_sha):
+        raise ValueError("updating an existing file requires its current 40-character Git object SHA")
     normalized_branch = _validated_repository_ref(branch)
     cleaned_message = _text(message, "commit message", 200)
     if not isinstance(content, str) or not content:
@@ -147,8 +151,9 @@ async def github_update_repository_file(
     payload: dict[str, str] = {
         "message": cleaned_message,
         "content": base64.b64encode(content_bytes).decode("ascii"),
-        "sha": normalized_sha,
     }
+    if not create:
+        payload["sha"] = normalized_sha
     if normalized_branch:
         payload["branch"] = normalized_branch
 
@@ -162,9 +167,12 @@ async def github_update_repository_file(
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code in {409, 422}:
-                raise GitHubRepositoryWriteConflict(
-                    "This file changed on GitHub after it was opened. Refresh the file and review the new version before committing."
-                ) from exc
+                message = (
+                    "That file path already exists or GitHub rejected the new path. Refresh the folder and choose a new file name."
+                    if create
+                    else "This file changed on GitHub after it was opened. Refresh the file and review the new version before committing."
+                )
+                raise GitHubRepositoryWriteConflict(message) from exc
             raise
         body = response.json()
 
@@ -188,6 +196,6 @@ async def github_update_repository_file(
         "commit_sha": commit_sha,
         "commit_url": str(commit_data.get("html_url") or ""),
         "commit_message": cleaned_message,
-        "operation": "update_file",
+        "operation": "create_file" if create else "update_file",
         "secrets_exposed": False,
     }

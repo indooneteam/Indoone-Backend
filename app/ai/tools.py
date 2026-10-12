@@ -20,6 +20,11 @@ from app.capabilities.email_safety import analyze_gmail_email_safety
 from app.capabilities.email_actions import compose_gmail_email
 from app.plugins.gmail.service import reply_gmail_message
 from app.capabilities.phone import build_call_action
+from app.plugins.github.service import (
+    list_github_issues as fetch_github_issues,
+    list_github_pull_requests as fetch_github_pull_requests,
+    list_github_repositories as fetch_github_repositories,
+)
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
@@ -179,6 +184,67 @@ def _run_sync_with_timeout(tool: ToolCallable, payload: str, timeout_seconds: fl
     return output
 
 
+async def _github_list_repositories(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_list_repositories payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_list_repositories")
+    result = await _run_async(
+        fetch_github_repositories(
+            user_id=user_id,
+            page=int(data.get("page", 1)),
+            per_page=max(1, min(int(data.get("per_page", 10)), 100)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_list_assigned_issues(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_list_assigned_issues payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_list_assigned_issues")
+    result = await _run_async(
+        fetch_github_issues(
+            user_id=user_id,
+            page=int(data.get("page", 1)),
+            per_page=max(1, min(int(data.get("per_page", 10)), 100)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_list_pull_requests(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_list_pull_requests payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    repository = str(data.get("repository", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not repository:
+        raise ValueError("repository owner/name is required")
+    spec = get_tool_spec("github_list_pull_requests")
+    result = await _run_async(
+        fetch_github_pull_requests(
+            user_id=user_id,
+            repository=repository,
+            page=int(data.get("page", 1)),
+            per_page=max(1, min(int(data.get("per_page", 10)), 100)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
 async def _gmail_search(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
@@ -293,6 +359,9 @@ TOOLS: dict[str, ToolCallable] = {
     "phone_call": _phone_call,
     "phone_call_contact": _phone_call_contact,
     "gmail_search": _gmail_search,
+    "github_list_repositories": _github_list_repositories,
+    "github_list_assigned_issues": _github_list_assigned_issues,
+    "github_list_pull_requests": _github_list_pull_requests,
     "gmail_read": _gmail_read,
     "gmail_compose": _gmail_compose,
     "gmail_email_safety": _gmail_email_safety,

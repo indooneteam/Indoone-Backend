@@ -5,11 +5,12 @@ import base64
 import json
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.ai.answer_quality import assess_answer
+from app.ai.tool_loop import run_tool_loop
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file, save_text_file
 from app.ai.memory import extract_memory_candidates
@@ -52,37 +53,49 @@ class StreamChatRequest(BaseModel):
     file_id: str | None = Field(default=None, max_length=128)
 
 
+# The Control Center gateway expects /api/platform/chat/stream; both paths map
+# to this one handler.
+@router.post("/platform/chat/stream")
 @router.post("/chat/stream")
-async def stream_chat(request: StreamChatRequest) -> StreamingResponse:
-    conversation_id = request.conversation_id or str(uuid4())
+async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingResponse:
+    user_id = str(getattr(request.state, "principal_id", "")).strip()
+    conversation_id = body.conversation_id or str(uuid4())
     if _stream_store.is_closed(conversation_id):
         conversation_id = str(uuid4())
 
     history = _stream_store.recent(conversation_id)
     document_context = ""
-    if request.file_id:
+    if body.file_id:
         try:
-            document_context = read_text_file(request.file_id)
+            document_context = read_text_file(body.file_id)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     try:
-        reply = await generate_reply(
-            request.message,
+        # Use the same unified tool loop as /api/chat so streaming answers get
+        # the user's tools too. It only runs for a signed-in user.
+        tool_reply: str | None = None
+        if user_id:
+            try:
+                tool_reply = await run_tool_loop(user_id, conversation_id, body.message, history=history)
+            except Exception:
+                tool_reply = None
+        reply = tool_reply if tool_reply is not None else await generate_reply(
+            body.message,
             history=history,
             document_context=document_context,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    quality = assess_answer(request.message, reply)
+    quality = assess_answer(body.message, reply)
     if not quality.passed:
         raise HTTPException(status_code=503, detail=f"model answer failed quality checks: {quality.reason}")
 
     try:
         _stream_store.append(
             conversation_id,
-            [("user", request.message), ("assistant", reply)],
+            [("user", body.message), ("assistant", reply)],
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

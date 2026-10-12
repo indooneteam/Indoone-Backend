@@ -13,6 +13,8 @@ import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.auth import extract_principal
+from app.ai.tool_loop import dispatch_tool
+from app.ai.tool_registry import function_declarations
 from app.plugins.gmail.service import get_gmail_message, list_gmail_messages
 
 logger = logging.getLogger("indoone.vibe")
@@ -117,7 +119,7 @@ def _setup_message(model: str, voice: str, thinking_level: str = _DEFAULT_THINKI
                     )
                 }],
             },
-            "tools": [{"functionDeclarations": [_GMAIL_SEARCH_TOOL]}],
+            "tools": [{"functionDeclarations": _voice_tool_declarations()}],
             "inputAudioTranscription": {},
             "outputAudioTranscription": {},
         },
@@ -193,12 +195,33 @@ async def _search_gmail_for_voice(user_id: str, args: dict[str, Any]) -> dict[st
     return {"ok": True, "query": query, "count": len(emails), "emails": emails}
 
 
+_VOICE_CONNECTOR_PREFIXES = ("github_", "google_", "youtube_", "instagram_", "facebook_", "canva_")
+
+
+def _voice_tool_declarations() -> list[dict[str, object]]:
+    """Indoone Vibe tools: the Gmail search tool plus the read-only plugins.
+
+    Vibe reuses the same registry as chat, so any read-only plugin tool (GitHub,
+    Google Calendar/Drive/Photos, YouTube, Instagram, Facebook, Canva) works by
+    voice too. Data-changing tools are deliberately left out: voice has no
+    approval flow.
+    """
+    declarations: list[dict[str, object]] = [dict(_GMAIL_SEARCH_TOOL)]
+    for declaration in function_declarations(read_only=True):
+        if str(declaration.get("name", "")).startswith(_VOICE_CONNECTOR_PREFIXES):
+            declarations.append(dict(declaration))
+    return declarations
+
+
 async def _execute_voice_tool(user_id: str, name: str, args: object) -> dict[str, object]:
-    if name != "search_gmail_messages":
-        return {"ok": False, "error": "This voice action is not available."}
-    if not isinstance(args, dict):
-        return {"ok": False, "error": "Invalid email-search arguments."}
-    return await _search_gmail_for_voice(user_id, args)
+    if name == "search_gmail_messages":
+        if not isinstance(args, dict):
+            return {"ok": False, "error": "Invalid email-search arguments."}
+        return await _search_gmail_for_voice(user_id, args)
+    if not user_id.strip() or not name.strip():
+        return {"ok": False, "error": "This voice action needs a signed-in Indoone user."}
+    # Read-only plugin tools are dispatched through the shared chat tool loop.
+    return await dispatch_tool(user_id, "", name, args if isinstance(args, dict) else {})
 
 
 def _google_error_detail(message: dict[str, object], api_key: str) -> str:
@@ -581,4 +604,10 @@ async def vibe_session(websocket: WebSocket) -> None:
 @router.websocket("/live/session")
 async def legacy_live_session(websocket: WebSocket) -> None:
     # Compatibility alias for clients that still use the earlier live-session path.
+    await _vibe_live_session(websocket)
+
+
+@router.websocket("/assistant/session")
+async def assistant_session(websocket: WebSocket) -> None:
+    # Compatibility alias for the Android assistant overlay, which connects here.
     await _vibe_live_session(websocket)

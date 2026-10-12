@@ -26,6 +26,7 @@ def test_declarations_are_one_list_without_the_legacy_gmail_family() -> None:
     assert "sandbox_execution" in names
     assert "github_update_repository_file" in names
     assert "phone_call" in names
+    assert "search_web" in names
 
     # No duplicates, and every entry is fully described.
     assert len(names) == len(set(names))
@@ -80,6 +81,38 @@ async def test_dispatch_routes_core_text_tools(monkeypatch) -> None:
     result = await tool_loop.dispatch_tool("u1", "c1", "calculator", {"expression": "6*7"})
     assert result == {"ok": True, "result": 42}
     assert seen["call"] == ("calculator", "6*7")
+
+
+@pytest.mark.asyncio
+async def test_dispatch_routes_search_web(monkeypatch) -> None:
+    from app.web_research.research import ResearchResult
+    from app.web_research.tools import SearchWebToolResult
+
+    async def fake_search(call):
+        assert call.query == "latest Indoone news"
+        return SearchWebToolResult(
+            status="ok", results=(ResearchResult(title="T", url="http://x", snippet="s"),)
+        )
+
+    monkeypatch.setattr("app.web_research.tools.execute_search_web_call", fake_search)
+
+    result = await tool_loop.dispatch_tool("u1", "c1", "search_web", {"query": "latest Indoone news"})
+    assert result["ok"] is True
+    assert result["result"]["results"][0]["title"] == "T"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_reports_unavailable_search(monkeypatch) -> None:
+    from app.web_research.tools import SearchWebToolResult
+
+    async def fake_search(call):
+        return SearchWebToolResult(status="unavailable")
+
+    monkeypatch.setattr("app.web_research.tools.execute_search_web_call", fake_search)
+
+    result = await tool_loop.dispatch_tool("u1", "c1", "search_web", {"query": "x"})
+    assert result["ok"] is False
+    assert result["code"] == "SEARCH_UNAVAILABLE"
 
 
 @pytest.mark.asyncio

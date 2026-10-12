@@ -43,6 +43,23 @@ _EMAIL_WRITE_TOOLS = frozenset(
 _TOKEN_IN_PAYLOAD = frozenset({"github_update_repository_file"})
 _TEXT_ARG_KEYS = ("expression", "text", "json", "code")
 
+# Web search is not a registry tool (it returns evidence, not a resource), so it
+# is declared here and dispatched to the keyless public-research provider.
+_SEARCH_WEB_DECLARATION: dict[str, Any] = {
+    "name": "search_web",
+    "description": (
+        "Search public web sources only when the user needs current or recent facts, "
+        "latest news, prices, or availability, or explicitly asks for online research. "
+        "Do not use it for stable evergreen questions. Never search private data such as "
+        "email addresses, passwords, API keys, access tokens, or secrets."
+    ),
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"query": {"type": "STRING", "description": "A concise public web query."}},
+        "required": ["query"],
+    },
+}
+
 _UNIFIED_SYSTEM_INSTRUCTION = (
     "You are Indoone AI and you have tools available. Decide for yourself whether the "
     "user's request needs a tool; if it does, choose the single best tool and give it "
@@ -87,6 +104,7 @@ def model_tool_declarations() -> list[dict[str, Any]]:
         and "gmail" not in spec.categories
     ]
     declarations += EMAIL_TOOL_DECLARATIONS
+    declarations.append(dict(_SEARCH_WEB_DECLARATION))
     return declarations
 
 
@@ -131,6 +149,29 @@ async def dispatch_tool(
         from app.plugins.github.chat_tools import _execute_github_tool
 
         return await _execute_github_tool(user_id, name, arguments)
+
+    if name == "search_web":
+        from app.web_research.tools import SearchWebToolCall, execute_search_web_call
+
+        call = SearchWebToolCall(query=str(arguments.get("query") or "").strip(), model_content={})
+        result = await execute_search_web_call(call)
+        if result.status == "ok":
+            return {
+                "ok": True,
+                "result": {
+                    "status": result.status,
+                    "results": [
+                        {"title": item.title, "url": item.url, "snippet": item.snippet}
+                        for item in result.results
+                    ],
+                },
+            }
+        message = {
+            "unavailable": "Public web search was unavailable. Do not claim current facts were verified.",
+            "no_results": "No relevant public sources were found. Do not invent sources.",
+            "invalid_query": "The query was invalid or contained private data, so it was not searched.",
+        }.get(result.status, "The web search could not be completed.")
+        return {"ok": False, "code": f"SEARCH_{result.status.upper()}", "message": message}
 
     spec = get_tool_spec(name)
     if spec is None:

@@ -93,8 +93,8 @@ async def test_github_tool_error_does_not_claim_live_data(monkeypatch) -> None:
     )
 
     assert reply is not None
-    assert "not connected" in reply
-    assert "no GitHub changes" not in reply or "no GitHub changes" in reply
+    assert "not connected" in reply.lower()
+    assert "repository" not in reply.lower()
 
 
 def test_agent_planner_routes_github_read_requests_with_user_scope() -> None:

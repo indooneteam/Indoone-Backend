@@ -26,7 +26,14 @@ from app.capabilities.document_extract import (
 from app.capabilities.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
 from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
-from app.plugins.email_tools import handle_email_chat_with_tools
+from app.ai.tool_loop import run_tool_loop
+from app.capabilities.store import get_pending_email_action
+from app.plugins.email_tools import (
+    CANCEL_RE,
+    CONFIRM_RE,
+    handle_email_chat,
+    handle_email_chat_with_tools,
+)
 from app.plugins.github.chat_tools import handle_github_chat_with_tools
 
 router = APIRouter(tags=["chat"])
@@ -241,36 +248,61 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     document_context = "\\n\\n".join(document_context_parts)[:120_000]
 
     try:
-        email_tool_reply = None
-        github_tool_reply = None
+        tool_reply = None
         if not attachments and not file_ids and not document_context.strip() and not media_attachments:
-            try:
-                email_tool_reply = await handle_email_chat_with_tools(
-                    user_id,
-                    conversation_id,
-                    body.message,
-                    history=history,
-                )
-            except Exception:
-                # Do not conflate model/provider failures with expired mailbox tokens.
-                # The model or email tool must explicitly classify reauthorization errors.
-                email_tool_reply = (
-                    "I couldn't complete that email request because an internal AI or "
-                    "email service failed. Please retry shortly. I will not claim that "
-                    "an email was sent or deleted unless the operation was confirmed."
-                )
+            if gemini_enabled:
+                # A pending email confirmation must be resolved before anything else.
+                pending = get_pending_email_action(user_id, conversation_id)
+                if pending:
+                    action_type = str(pending.get("action_type") or "")
+                    if (
+                        action_type == "await_recipient"
+                        or CONFIRM_RE.fullmatch(body.message)
+                        or CANCEL_RE.fullmatch(body.message)
+                    ):
+                        tool_reply = await handle_email_chat(user_id, conversation_id, body.message)
+                    else:
+                        tool_reply = (
+                            "There is a pending email action awaiting your decision. "
+                            "Reply CONFIRM to approve it or CANCEL to stop it before "
+                            "starting another email action."
+                        )
+                if tool_reply is None:
+                    # One loop, every tool: the model chooses whether and which to call.
+                    try:
+                        tool_reply = await run_tool_loop(
+                            user_id,
+                            conversation_id,
+                            body.message,
+                            history=history,
+                        )
+                    except Exception:
+                        tool_reply = None
+            else:
+                # Local backend keeps the deterministic plugin path.
+                try:
+                    tool_reply = await handle_email_chat_with_tools(
+                        user_id,
+                        conversation_id,
+                        body.message,
+                        history=history,
+                    )
+                except Exception:
+                    # Do not conflate model/provider failures with expired mailbox tokens.
+                    tool_reply = (
+                        "I couldn't complete that email request because an internal AI or "
+                        "email service failed. Please retry shortly. I will not claim that "
+                        "an email was sent or deleted unless the operation was confirmed."
+                    )
+                if tool_reply is None:
+                    tool_reply = await handle_github_chat_with_tools(
+                        user_id,
+                        body.message,
+                        history=history,
+                    )
 
-            if email_tool_reply is None:
-                github_tool_reply = await handle_github_chat_with_tools(
-                    user_id,
-                    body.message,
-                    history=history,
-                )
-
-        if email_tool_reply is not None:
-            reply_with_sources = email_tool_reply
-        elif github_tool_reply is not None:
-            reply_with_sources = github_tool_reply
+        if tool_reply is not None:
+            reply_with_sources = tool_reply
         elif not media_attachments:
             reply_with_sources = await generate_reply(
                 body.message,

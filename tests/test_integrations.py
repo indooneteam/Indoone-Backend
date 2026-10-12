@@ -346,7 +346,7 @@ def test_github_oauth_uses_supported_least_privilege_scopes(monkeypatch) -> None
 
 
 def test_github_plugin_routes_keep_existing_api_paths() -> None:
-    paths = {route.path for route in app.routes}
+    paths = set(app.openapi()["paths"])
     assert "/api/integrations/github/repositories" in paths
     assert "/api/integrations/github/issues" in paths
     assert "/api/integrations/github/pull-requests" in paths

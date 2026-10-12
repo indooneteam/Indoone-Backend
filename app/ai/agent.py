@@ -133,11 +133,26 @@ def _extract_github_request(message: str, user_id: str) -> tuple[str, dict[str, 
     user = user_id.strip()
     text = message.strip()
     lower = text.casefold()
-    if not user or not text or not re.search(r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see)\b", lower):
+    action = re.search(
+        r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see|tell|please|bring)\b"
+        r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi)\b"
+        r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್",
+        lower,
+        re.IGNORECASE,
+    )
+    if not user or not text or action is None:
         return None
 
     repository = re.search(r"\b([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\b", text)
-    if re.search(r"\b(pull\s+requests?|prs?)\b", lower):
+    pull_request = re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", lower, re.IGNORECASE)
+    issue_request = re.search(r"\b(assigned\s+issues|issues?)\b|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?", lower, re.IGNORECASE)
+    repository_request = re.search(
+        r"\b(repositories|repository|repos|repo)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಗಳು|ಗಳನ್ನು|ಯನ್ನು)?",
+        lower,
+        re.IGNORECASE,
+    )
+
+    if pull_request:
         if not repository:
             return None
         return "github_list_pull_requests", {
@@ -147,18 +162,17 @@ def _extract_github_request(message: str, user_id: str) -> tuple[str, dict[str, 
             "per_page": 10,
         }
 
-    if re.search(r"\b(assigned\s+issues|issues?)\b", lower):
-        if "github" not in lower and not re.search(r"\bassigned\s+issues\b", lower) and not repository:
+    if issue_request:
+        if "github" not in lower and not re.search(r"\bassigned\s+issues\b|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ", lower) and not repository:
             return None
         return "github_list_assigned_issues", {"user_id": user, "page": 1, "per_page": 10}
 
-    if re.search(r"\b(repositories|repository|repos)\b", lower):
+    if repository_request:
         if "github" not in lower and not repository:
             return None
         return "github_list_repositories", {"user_id": user, "page": 1, "per_page": 10}
 
     return None
-
 
 def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tuple[str, dict[str, Any]] | None:
     text = message.strip()

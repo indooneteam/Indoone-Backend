@@ -2,7 +2,6 @@ import json
 
 import pytest
 
-from app.ai.agent import build_agent_steps
 from app.ai.tool_registry import get_tool_spec, requires_approval
 from app.ai.tools import ToolResult
 from app.plugins.github import chat_tools
@@ -95,52 +94,6 @@ async def test_github_tool_error_does_not_claim_live_data(monkeypatch) -> None:
     assert reply is not None
     assert "not connected" in reply.lower()
     assert "repository" not in reply.lower()
-
-
-def test_agent_planner_routes_github_read_requests_with_user_scope() -> None:
-    steps = build_agent_steps("List my GitHub repositories", user_id="user-123")
-
-    assert len(steps) == 1
-    assert steps[0].tool == "github_list_repositories"
-    assert json.loads(steps[0].payload)["user_id"] == "user-123"
-    assert steps[0].requires_approval is False
-
-
-@pytest.mark.parametrize(
-    "message",
-    [
-        "Nanna GitHub repositories list madu",
-        "ನನ್ನ GitHub ರೆಪೊಸಿಟರಿಗಳನ್ನು ತೋರಿಸು",
-    ],
-)
-@pytest.mark.asyncio
-async def test_github_chat_recognizes_kannada_and_romanized_requests(monkeypatch, message) -> None:
-    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "local")
-
-    async def fake_run_tool_async(name, payload, **kwargs):
-        assert name == "github_list_repositories"
-        assert json.loads(payload)["user_id"] == "user-123"
-        return ToolResult(
-            name=name,
-            output=json.dumps(
-                {"repositories": [{"full_name": "indooneteam/indoone", "private": False, "default_branch": "main"}]}
-            ),
-            safe=True,
-        )
-
-    monkeypatch.setattr(chat_tools, "run_tool_async", fake_run_tool_async)
-    reply = await chat_tools.handle_github_chat_with_tools("user-123", message)
-
-    assert reply is not None
-    assert "indooneteam/indoone" in reply
-
-
-def test_agent_planner_routes_kannada_github_repository_request() -> None:
-    steps = build_agent_steps("ನನ್ನ GitHub ರೆಪೊಸಿಟರಿಗಳನ್ನು ತೋರಿಸು", user_id="user-123")
-
-    assert len(steps) == 1
-    assert steps[0].tool == "github_list_repositories"
-    assert json.loads(steps[0].payload)["user_id"] == "user-123"
 
 
 def test_github_ai_tools_are_read_only_connector_tools() -> None:

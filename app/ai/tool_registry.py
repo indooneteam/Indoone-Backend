@@ -522,6 +522,54 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         connector_id="google_calendar",
         capability="events.delete",
     ),
+    # ---- Google Drive ----------------------------------------------------- #
+    ToolSpec(
+        "google_drive_list_files",
+        "List or search the authenticated user's Google Drive files.",
+        parameters=_object(
+            {
+                "query": {"type": "STRING", "description": "File name text to search for."},
+                "page_token": {"type": "STRING", "description": "Pagination token from a prior result."},
+                "page_size": {"type": "INTEGER", "description": "Number of files, 1 through 1000."},
+            },
+        ),
+        categories=("google_drive", "external"),
+        connector_id="google_drive",
+        capability="files.search",
+    ),
+    ToolSpec(
+        "google_drive_get_file",
+        "Read metadata, and optionally the text, of a Google Drive file.",
+        parameters=_object(
+            {
+                "file_id": {"type": "STRING", "description": "Drive file id."},
+                "download": {"type": "BOOLEAN", "description": "Download the file content when true."},
+                "export_mime_type": {"type": "STRING", "description": "Export type for Google Docs files, e.g. text/plain."},
+            },
+            ("file_id",),
+        ),
+        categories=("google_drive", "external"),
+        connector_id="google_drive",
+        capability="files.read",
+    ),
+    ToolSpec(
+        "google_drive_upload_file",
+        "Upload a text file to the authenticated user's Google Drive. Requires the user's explicit approval.",
+        parameters=_object(
+            {
+                "filename": {"type": "STRING", "description": "File name to create."},
+                "mime_type": {"type": "STRING", "description": "MIME type, e.g. text/plain."},
+                "content": {"type": "STRING", "description": "File text content."},
+                "parent_id": {"type": "STRING", "description": "Optional parent folder id."},
+            },
+            ("filename", "mime_type", "content"),
+        ),
+        risk="external",
+        requires_approval=True,
+        categories=("google_drive", "external", "write"),
+        connector_id="google_drive",
+        capability="files.upload",
+    ),
 )
 
 

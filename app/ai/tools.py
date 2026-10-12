@@ -40,6 +40,11 @@ from app.capabilities.google_calendar import (
     list_events as list_google_calendar_events,
     update_event as update_google_calendar_event,
 )
+from app.capabilities.google_drive import (
+    get_drive_file as get_google_drive_file,
+    list_drive_files as list_google_drive_files,
+    upload_drive_file as upload_google_drive_file,
+)
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
@@ -605,6 +610,76 @@ async def _google_calendar_delete_event(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
+async def _google_drive_list_files(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_drive_list_files payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("google_drive_list_files")
+    result = await _run_async(
+        list_google_drive_files(
+            user_id,
+            query=str(data.get("query", "")),
+            page_token=str(data.get("page_token", "")),
+            page_size=max(1, min(int(data.get("page_size", 50)), 1000)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_drive_get_file(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_drive_get_file payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    file_id = str(data.get("file_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not file_id:
+        raise ValueError("file_id is required")
+    spec = get_tool_spec("google_drive_get_file")
+    result = await _run_async(
+        get_google_drive_file(
+            user_id,
+            file_id,
+            download=bool(data.get("download", False)),
+            export_mime_type=str(data.get("export_mime_type", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_drive_upload_file(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_drive_upload_file payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    filename = str(data.get("filename", "")).strip()
+    mime_type = str(data.get("mime_type", "")).strip()
+    content = str(data.get("content", ""))
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not filename or not mime_type:
+        raise ValueError("filename and mime_type are required")
+    spec = get_tool_spec("google_drive_upload_file")
+    result = await _run_async(
+        upload_google_drive_file(
+            user_id,
+            filename,
+            mime_type,
+            content.encode("utf-8"),
+            parent_id=str(data.get("parent_id", "")),
+            approved=True,
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
 TOOLS: dict[str, ToolCallable] = {
     "calculator": _calculate,
     "text_stats": _text_stats,
@@ -638,6 +713,9 @@ TOOLS: dict[str, ToolCallable] = {
     "google_calendar_create_event": _google_calendar_create_event,
     "google_calendar_update_event": _google_calendar_update_event,
     "google_calendar_delete_event": _google_calendar_delete_event,
+    "google_drive_list_files": _google_drive_list_files,
+    "google_drive_get_file": _google_drive_get_file,
+    "google_drive_upload_file": _google_drive_upload_file,
 }
 
 

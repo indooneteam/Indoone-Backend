@@ -61,3 +61,33 @@ def test_email_declarations_are_complete() -> None:
         assert declaration["name"]
         assert declaration["description"]
         assert declaration["parameters"]
+
+
+def _array_params_without_items(schema, path: str) -> list[str]:
+    """Return the paths of ARRAY schemas that do not declare `items`."""
+    problems: list[str] = []
+    if isinstance(schema, dict):
+        if str(schema.get("type", "")).upper() == "ARRAY" and "items" not in schema:
+            problems.append(path)
+        for key, value in schema.items():
+            problems.extend(_array_params_without_items(value, f"{path}.{key}"))
+    elif isinstance(schema, list):
+        for index, value in enumerate(schema):
+            problems.extend(_array_params_without_items(value, f"{path}[{index}]"))
+    return problems
+
+
+def test_every_declared_array_parameter_has_items() -> None:
+    """Gemini rejects a declaration whose ARRAY parameter omits `items`.
+
+    The check runs on the exact declarations sent to the model, because a
+    rejected request makes the whole tool loop fail and the app silently falls
+    back to a plain answer with no tools.
+    """
+    from app.ai.tool_loop import model_tool_declarations
+
+    problems: list[str] = []
+    for declaration in model_tool_declarations():
+        name = str(declaration.get("name"))
+        problems.extend(_array_params_without_items(declaration.get("parameters"), name))
+    assert problems == []

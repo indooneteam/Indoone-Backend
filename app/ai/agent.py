@@ -128,52 +128,6 @@ def _extract_gmail_request(message: str, user_id: str) -> tuple[str, dict[str, A
                 return tool, {"user_id": user_id, "message_id": value}
     return None
 
-def _extract_github_request(message: str, user_id: str) -> tuple[str, dict[str, Any]] | None:
-    """Turn explicit, read-only GitHub requests into user-scoped tool calls."""
-    user = user_id.strip()
-    text = message.strip()
-    lower = text.casefold()
-    action = re.search(
-        r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see|tell|please|bring)\b"
-        r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi)\b"
-        r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್",
-        lower,
-        re.IGNORECASE,
-    )
-    if not user or not text or action is None:
-        return None
-
-    repository = re.search(r"\b([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\b", text)
-    pull_request = re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", lower, re.IGNORECASE)
-    issue_request = re.search(r"\b(assigned\s+issues|issues?)\b|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?", lower, re.IGNORECASE)
-    repository_request = re.search(
-        r"\b(repositories|repository|repos|repo)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಗಳು|ಗಳನ್ನು|ಯನ್ನು)?",
-        lower,
-        re.IGNORECASE,
-    )
-
-    if pull_request:
-        if not repository:
-            return None
-        return "github_list_pull_requests", {
-            "user_id": user,
-            "repository": repository.group(1),
-            "page": 1,
-            "per_page": 10,
-        }
-
-    if issue_request:
-        if "github" not in lower and not re.search(r"\bassigned\s+issues\b|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ", lower) and not repository:
-            return None
-        return "github_list_assigned_issues", {"user_id": user, "page": 1, "per_page": 10}
-
-    if repository_request:
-        if "github" not in lower and not repository:
-            return None
-        return "github_list_repositories", {"user_id": user, "page": 1, "per_page": 10}
-
-    return None
-
 def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tuple[str, dict[str, Any]] | None:
     text = message.strip()
     patterns = (
@@ -203,10 +157,6 @@ def build_agent_steps(message: str, user_id: str = "", contacts: list[dict[str, 
         tool, payload = gmail_request
         return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
     if _gmail_request_matches(normalized): return ()
-    github_request = _extract_github_request(normalized, user_id)
-    if github_request is not None:
-        tool, payload = github_request
-        return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
     contact_request = _extract_contact_request(normalized, contacts or [])
     if contact_request is not None:
         tool, payload = contact_request

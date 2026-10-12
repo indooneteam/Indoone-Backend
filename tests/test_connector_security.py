@@ -112,3 +112,12 @@ def test_connector_user_scope_requires_auth_when_enabled(monkeypatch) -> None:
     assert payload["code"] == "HTTP_401"
     assert payload["message"] == "authenticated connector user required"
     assert "request_id" in payload
+
+
+
+def test_github_public_repo_scope_allows_read_only_capabilities() -> None:
+    assert scope_allows("github", "public_repo read:user", "repos.read") is True
+    assert scope_allows("github", "public_repo read:user", "issues.read") is True
+    assert scope_allows("github", "public_repo read:user", "pull_requests.read") is True
+    assert scope_allows("github", "public_repo read:user", "issues.write") is False
+    assert scope_allows("github", "public_repo read:user", "comments.write") is False

@@ -1,6 +1,9 @@
+import json
+
 import pytest
 
 from app.ai import tool_loop
+from app.ai.approval import issue_approval_token
 from app.ai.tools import ToolResult
 
 
@@ -19,9 +22,10 @@ def test_declarations_are_one_list_without_the_legacy_gmail_family() -> None:
     assert "prepare_email_to_send" in names
     assert "calculator" in names
 
-    # Approval-required tools are not handed to the model yet.
-    assert "sandbox_execution" not in names
-    assert "github_update_repository_file" not in names
+    # Data-changing tools are offered too; approval is enforced at dispatch.
+    assert "sandbox_execution" in names
+    assert "github_update_repository_file" in names
+    assert "phone_call" in names
 
     # No duplicates, and every entry is fully described.
     assert len(names) == len(set(names))
@@ -79,9 +83,60 @@ async def test_dispatch_routes_core_text_tools(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_dispatch_rejects_unknown_and_approval_tools() -> None:
-    approval = await tool_loop.dispatch_tool("u1", "c1", "sandbox_execution", {"code": "x"})
-    assert approval["ok"] is False
+async def test_dispatch_blocks_write_tools_without_approval() -> None:
+    result = await tool_loop.dispatch_tool("u1", "c1", "sandbox_execution", {"code": "print(1)"})
+    assert result["ok"] is False
+    assert result["code"] == "APPROVAL_REQUIRED"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_runs_write_tool_with_valid_approval(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "s" * 40)
+    token = issue_approval_token("u1", "sandbox_execution")
+
+    async def fake_run_tool_async(name, payload, **kwargs):
+        return ToolResult(name=name, output=json.dumps({"ran": True}), safe=True)
+
+    monkeypatch.setattr(tool_loop, "run_tool_async", fake_run_tool_async)
+
+    result = await tool_loop.dispatch_tool(
+        "u1", "c1", "sandbox_execution", {"code": "print(1)"}, approval_tokens=[token]
+    )
+    assert result == {"ok": True, "result": {"ran": True}}
+
+
+@pytest.mark.asyncio
+async def test_write_tool_token_is_passed_into_the_payload(monkeypatch) -> None:
+    from types import SimpleNamespace
+
+    monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "s" * 40)
+    # Pretend the GitHub connector is connected and authorized for the write.
+    monkeypatch.setattr(
+        "app.ai.approval.authorize_tool",
+        lambda *args, **kwargs: SimpleNamespace(allowed=True, reason=""),
+    )
+    token = issue_approval_token("u1", "github_update_repository_file")
+    seen = {}
+
+    async def fake_run_tool_async(name, payload, **kwargs):
+        seen["payload"] = json.loads(payload)
+        return ToolResult(name=name, output="{}", safe=True)
+
+    monkeypatch.setattr(tool_loop, "run_tool_async", fake_run_tool_async)
+
+    result = await tool_loop.dispatch_tool(
+        "u1",
+        "c1",
+        "github_update_repository_file",
+        {"repository": "o/r", "path": "a.py", "content": "x", "message": "m"},
+        approval_tokens=[token],
+    )
+    assert result["ok"] is True
+    assert seen["payload"]["approval_token"] == token
+
+
+@pytest.mark.asyncio
+async def test_dispatch_rejects_unknown_tools() -> None:
     unknown = await tool_loop.dispatch_tool("u1", "c1", "does_not_exist", {})
     assert unknown["ok"] is False
 

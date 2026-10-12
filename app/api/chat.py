@@ -67,6 +67,8 @@ class ChatRequest(BaseModel):
     attachment_mime_type: str | None = Field(default=None, min_length=1, max_length=120)
     attachment_base64: str | None = Field(default=None, max_length=MAX_CHAT_ATTACHMENT_BASE64_CHARS)
     attachments: list[ChatMediaAttachment] = Field(default_factory=list, max_length=MAX_CHAT_ATTACHMENTS)
+    # Server-issued approval tokens for data-changing tools the user has confirmed.
+    approval_tokens: list[str] = Field(default_factory=list, max_length=32)
 
 
 def _decode_chat_attachment(body: ChatRequest) -> dict[str, object] | None:
@@ -275,6 +277,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                             conversation_id,
                             body.message,
                             history=history,
+                            approval_tokens=body.approval_tokens,
                         )
                     except Exception:
                         tool_reply = None

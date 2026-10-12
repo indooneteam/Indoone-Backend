@@ -19,6 +19,7 @@ from app.capabilities.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyz
 from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
 from app.plugins.email_tools import handle_email_chat_with_tools
+from app.plugins.github.chat_tools import handle_github_chat_with_tools
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
@@ -226,6 +227,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
 
     try:
         email_tool_reply = None
+        github_tool_reply = None
         if not attachments and not file_ids and not document_context.strip() and not media_attachments:
             try:
                 email_tool_reply = await handle_email_chat_with_tools(
@@ -243,8 +245,17 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                     "an email was sent or deleted unless the operation was confirmed."
                 )
 
+            if email_tool_reply is None:
+                github_tool_reply = await handle_github_chat_with_tools(
+                    user_id,
+                    body.message,
+                    history=history,
+                )
+
         if email_tool_reply is not None:
             reply_with_sources = email_tool_reply
+        elif github_tool_reply is not None:
+            reply_with_sources = github_tool_reply
         elif not media_attachments:
             reply_with_sources = await generate_reply(
                 body.message,

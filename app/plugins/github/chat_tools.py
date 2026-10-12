@@ -16,13 +16,13 @@ _GITHUB_TARGET_RE = re.compile(
     r"\b(repositories|repository|repos|repo|pull\s+requests?|prs?|issues?|assigned\s+issues|files?|folders?|directories|contents|code|commits?|history|compare|readme)\b"
     r"|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಗಳು|ಗಳನ್ನು|ಯನ್ನು)?"
     r"|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್"
-    r"|ಫೈಲ್|ಫೋಲ್ಡರ್|ಕೋಡ್|ಒಳಗೆ|ಕಮಿಟ್|ಹೋಲಿಸು",
+    r"|ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಕೋಡ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|ಕಮಿಟ್|ಹೋಲಿಸು",
     re.IGNORECASE,
 )
 _ACTION_RE = re.compile(
     r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see|tell|please|bring|read|open|browse|analyze|explain|search|compare|inspect|inside)\b"
     r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi|h?olag(?:e|ade)|en\s+(?:ide|ede)|enu\s+(?:ide|ede)|enella\s+(?:ide|ede))\b"
-    r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್|ಓದು|ತೆರೆ|ವಿವರಿಸು|ಒಳಗೆ|ಹೋಲಿಸು",
+    r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್|ಓದು|ತೆರೆ|ವಿವರಿಸು|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|ಹೋಲಿಸು",
     re.IGNORECASE,
 )
 _REPOSITORY_NAME_RE = re.compile(r"\b([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\b")
@@ -223,8 +223,9 @@ def _repository_hint_from_message(text: str) -> str:
         "files", "folders", "contents", "readme",
         "please", "show", "list", "tell", "what", "is", "there", "in",
     }
-    after = re.findall(r"\b(?:repo|repository)(?:\s+named)?\s+([A-Za-z0-9_.-]+)\b", text, re.IGNORECASE)
-    before = re.findall(r"\b([A-Za-z0-9_.-]+)\s+(?:repo|repository)\b", text, re.IGNORECASE)
+    repository_noun = r"(?:repo|repository|repositories|ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಯೊಳಗೆ|ಯಲ್ಲಿ|ಯನ್ನು|ಗಳನ್ನು|ಗಳು|ಯ)?"
+    after = re.findall(rf"\b{repository_noun}(?:\s+named)?\s+([A-Za-z0-9_.-]+)\b", text, re.IGNORECASE)
+    before = re.findall(rf"\b([A-Za-z0-9_.-]+)\s+{repository_noun}\b", text, re.IGNORECASE)
     for item in reversed(after + before):
         if item.casefold() not in ignored:
             return item
@@ -276,7 +277,7 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     )
     file_list_intent = bool(
         re.search(r"\b(files?|folders?|directories|directory|contents|inside|tree|structure)\b|\bwhat'?s?\s+inside\b|\bwhat\s+is\s+in\b", text, re.IGNORECASE)
-        or re.search(r"(ಫೈಲ್|ಫೋಲ್ಡರ್|ಒಳಗೆ).{0,40}(ಏನು|ಏನೆಲ್ಲ|ಇದೆ|ತೋರಿಸು|ಪಟ್ಟಿ)", text)
+        or re.search(r"(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)).{0,80}(?:ಏನು|ಏನೆಲ್ಲ|ಏನಿದೆ|ಇದೆ|ತೋರಿಸು|ಪಟ್ಟಿ|ವಿವರ)", text)
         or re.search(r"\bh?olag(?:e|ade)\b|\ben\s+(?:ide|ede)\b|\benu\s+(?:ide|ede)\b|\benella\s+(?:ide|ede)\b", text, re.IGNORECASE)
     )
 

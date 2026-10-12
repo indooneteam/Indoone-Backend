@@ -226,6 +226,24 @@ def test_romanized_kannada_repository_contents_variants_are_routed(
     assert action[0] == "github_list_repository_contents"
     assert action[1]["repository_hint"] == expected_hint
 
+
+@pytest.mark.parametrize(
+    ("message", "expected_hint"),
+    [
+        ("ನನ್ನ GitHub ರೆಪೊಸಿಟರಿಯ ಒಳಗಿರುವ ಫೈಲ್‌ಗಳ ಪಟ್ಟಿ ತೋರಿಸು", ""),
+        ("ನನ್ನ Indoone ರೆಪೊಸಿಟರಿಯ ಒಳಗಿರುವ ಫೈಲ್‌ಗಳ ಪಟ್ಟಿ ತೋರಿಸು", "Indoone"),
+        ("GitHub Indoone repository ಒಳಗೆ ಏನೆಲ್ಲಾ ಇದೆ ತೋರಿಸು", "Indoone"),
+        ("ನನ್ನ Indoone ರೆಪೊಸಿಟರಿಯಲ್ಲಿ ಏನೇನು ಫೈಲ್‌ಗಳಿವೆ", "Indoone"),
+    ],
+)
+def test_kannada_repository_contents_requests_route_to_github_reader(
+    message: str, expected_hint: str,
+) -> None:
+    action = chat_tools._github_action(message, [])
+    assert isinstance(action, tuple)
+    assert action[0] == "github_list_repository_contents"
+    assert action[1]["repository_hint"] == expected_hint
+
 @pytest.mark.asyncio
 async def test_repository_hint_prefers_exact_name_over_substring(monkeypatch) -> None:
     calls = []

@@ -158,10 +158,18 @@ async def _execute_github_tool(
                 items = []
             repos = [item for item in items if isinstance(item, dict) and isinstance(item.get("full_name"), str)] if isinstance(items, list) else []
             hint = repository_hint.casefold()
-            matches = [
+            exact_matches = [
                 item for item in repos
-                if not hint or hint in str(item.get("full_name", "")).casefold()
-                or hint == str(item.get("name", "")).casefold()
+                if hint and (
+                    hint == str(item.get("full_name", "")).casefold()
+                    or hint == str(item.get("name", "")).casefold()
+                )
+            ]
+            matches = exact_matches or [
+                item for item in repos
+                if not hint
+                or hint in str(item.get("full_name", "")).casefold()
+                or hint in str(item.get("name", "")).casefold()
             ]
             if len(matches) == 1:
                 repository = str(matches[0]["full_name"])

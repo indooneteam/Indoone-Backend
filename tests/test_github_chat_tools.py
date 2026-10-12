@@ -225,3 +225,35 @@ def test_romanized_kannada_repository_contents_variants_are_routed(
     assert isinstance(action, tuple)
     assert action[0] == "github_list_repository_contents"
     assert action[1]["repository_hint"] == expected_hint
+
+@pytest.mark.asyncio
+async def test_repository_hint_prefers_exact_name_over_substring(monkeypatch) -> None:
+    calls = []
+
+    async def fake_run_tool_async(name, payload, **kwargs):
+        data = json.loads(payload)
+        calls.append((name, data))
+        if name == "github_list_repositories":
+            return ToolResult(name=name, output=json.dumps({
+                "repositories": [
+                    {"full_name": "indooneteam/Indoone-Backend", "name": "Indoone-Backend"},
+                    {"full_name": "indooneteam/indoone", "name": "indoone"},
+                ]
+            }), safe=True)
+        return ToolResult(name=name, output=json.dumps({
+            "repository": data.get("repository"), "path": data.get("path", ""),
+            "contents": [], "count": 0, "secrets_exposed": False,
+        }), safe=True)
+
+    monkeypatch.setattr(chat_tools, "run_tool_async", fake_run_tool_async)
+    result = await chat_tools._execute_github_tool(
+        "user-123", "github_list_repository_contents",
+        {"repository_hint": "Indoone", "path": ""},
+    )
+
+    assert result["ok"] is True
+    assert result["result"]["repository"] == "indooneteam/indoone"
+    assert any(
+        name == "github_list_repository_contents" and data.get("repository") == "indooneteam/indoone"
+        for name, data in calls
+    )

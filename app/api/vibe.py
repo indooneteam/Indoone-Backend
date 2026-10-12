@@ -13,7 +13,7 @@ import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.auth import extract_principal
-from app.ai.tool_loop import dispatch_tool
+from app.ai.tool_loop import dispatch_tool, email_read_tool_declarations
 from app.ai.tool_registry import function_declarations
 from app.plugins.gmail.service import get_gmail_message, list_gmail_messages
 
@@ -199,14 +199,16 @@ _VOICE_CONNECTOR_PREFIXES = ("github_", "google_", "youtube_", "instagram_", "fa
 
 
 def _voice_tool_declarations() -> list[dict[str, object]]:
-    """Indoone Vibe tools: the Gmail search tool plus the read-only plugins.
+    """Indoone Vibe tools: the read-only plugins and the read-only email tools.
 
     Vibe reuses the same registry as chat, so any read-only plugin tool (GitHub,
     Google Calendar/Drive/Photos, YouTube, Instagram, Facebook, Canva) works by
-    voice too. Data-changing tools are deliberately left out: voice has no
-    approval flow.
+    voice too, and so do the read-only email tools (list, count, search, read,
+    drafts) for Gmail and Zoho Mail. Data-changing tools are deliberately left
+    out: voice has no approval flow.
     """
     declarations: list[dict[str, object]] = [dict(_GMAIL_SEARCH_TOOL)]
+    declarations.extend(email_read_tool_declarations())
     for declaration in function_declarations(read_only=True):
         if str(declaration.get("name", "")).startswith(_VOICE_CONNECTOR_PREFIXES):
             declarations.append(dict(declaration))

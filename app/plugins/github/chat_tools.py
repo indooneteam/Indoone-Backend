@@ -23,65 +23,27 @@ _GITHUB_TARGET_RE = re.compile(
 _ACTION_RE = re.compile(
     r"\b(list|show|find|get|fetch|load|check|review|display|refresh|what|which|give|see|tell|please|bring|read|open|browse|analyze|explain|search|compare|inspect|inside)\b"
     r"|\b(madu|maadu|maadi|torisu|torisi|helu|heli|kodu|kodi|h?olag(?:e|ade)|en\s+(?:ide|ede)|enu\s+(?:ide|ede)|enella\s+(?:ide|ede)|holage|olage|olagade)\b"
-    r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|देखो|देखिए|शो|देखें|सर्च|खोजें|पढ़ें|तस्वीर|list|show|find|open|read",
+    r"|ತೋರಿಸು|ತೋರಿಸಿ|ಪಟ್ಟಿ|ಕೊಡು|ಕೊಡಿ|ಹೇಳು|ಹೇಳಿ|ನೋಡು|ನೋಡಿ|ಹುಡುಕು|ಹುಡುಕಿ|ಮಾಡು|ಮಾಡಿ|ಚೆಕ್|ಓದು|ತೆರೆ|ವಿವರಿಸು|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|ಹೋಲಿಸು|ಏನು|ಏನೆಲ್ಲಾ|ಏನೇನು|ಏನಿದೆ|ಇವೆ|ಇದೆ|देखो|देखिए|शो|देखें|सर्च|खोजें|पढ़ें|तस्वीर|list|show|find|open|read",
     re.IGNORECASE,
 )
 _REPOSITORY_NAME_RE = re.compile(r"\b([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\b")
 
 
-def _normalize_text_for_matching(text: str) -> str:
-    normalized = text.casefold().strip()
-    normalized = normalized.replace("_", " ").replace("-", " ")
-    normalized = re.sub(r"\s+", " ", normalized)
-    return normalized
-
-
-def _repository_hint_variants() -> tuple[str, ...]:
-    return (
-        "repo",
-        "repository",
-        "repositories",
-        "repositry",
-        "ರಿಪೊಸಿಟರಿ",
-        "ರೆಪೊಸಿಟರಿ",
-        "रिपोजिटरी",
-        "रिपॉजिटरी",
-        "రిపోజిటరీ",
-        "റിപ്പോസിറ്ററി",
-        "repoz",
-    )
-
-
 def _repository_hint_from_message(text: str) -> str:
-    cleaned = _normalize_text_for_matching(text)
     ignored = {
         "github", "my", "the", "a", "an", "this", "that",
-        "repo", "repository", "repositories", "repositry", "inside",
-        "olage", "holage", "olagade", "en", "ide", "ede", "enu", "yenu",
+        "repo", "repository", "repositories", "inside",
+        "olage", "holage", "olagade", "en", "ide", "enu", "yenu",
         "yavudu", "yaavudu", "yavdu", "nanna",
         "files", "folders", "contents", "readme",
         "please", "show", "list", "tell", "what", "is", "there", "in",
-        "please", "tell", "show", "find", "read", "open", "watch",
-        "मेरा", "मेरी", "रिपोजिटरी", "रिपॉजिटरी", "रेपो",
-        "ನನ್ನ", "ಇದು", "ಒಳಗೆ", "ಹೀಗ", "ಇದರಲ್ಲಿ", "ಏನು",
-        "னினது", "என்", "கள்", "களில்", "ரெப்போ",
-        "ನಮ್ಮ", "ನನ್ನ" ,
     }
-
-    noun_pattern = "|".join(re.escape(part) for part in _repository_hint_variants())
-    patterns = [
-        rf"\b([A-Za-z0-9_.-]+)\s+(?:{noun_pattern})\b",
-        rf"(?:{noun_pattern})\s+(?:named|called|for)?\s+([A-Za-z0-9_.-]+)",
-        rf"\b([A-Za-z0-9_.-]+)\s+(?:holage|olage|olagade|en\s+(?:ide|ede)|enu\s+(?:ide|ede)|enella\s+(?:ide|ede))\b",
-    ]
-    matches: list[str] = []
-    for pattern in patterns:
-        matches.extend(re.findall(pattern, cleaned, flags=re.IGNORECASE))
-
-    for item in reversed(matches):
-        candidate = str(item).strip()
-        if candidate and candidate.casefold() not in ignored:
-            return candidate
+    repository_noun = r"(?:repo|repository|repositories|ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಯೊಳಗೆ|ಯಲ್ಲಿ|ಯನ್ನು|ಗಳನ್ನು|ಗಳು|ಯ)?"
+    after = re.findall(rf"\b{repository_noun}(?:\s+named)?\s+([A-Za-z0-9_.-]+)\b", text, re.IGNORECASE)
+    before = re.findall(rf"\b([A-Za-z0-9_.-]+)\s+{repository_noun}\b", text, re.IGNORECASE)
+    for item in reversed(after + before):
+        if item.casefold() not in ignored:
+            return item
     return ""
 
 
@@ -130,7 +92,9 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     )
     file_list_intent = bool(
         re.search(r"\b(files?|folders?|directories|directory|contents|inside|tree|structure)\b|\bwhat'?s?\s+inside\b|\bwhat\s+is\s+in\b", text, re.IGNORECASE)
-        or re.search(r"(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|फ़ाइल|फाइल|கோப்பு|கோப்புகள்|உள்ள|உள்ளடக்கம்|inside|tree|contents).{0,80}(?:ಏನು|ಏನೆಲ್ಲಾ?|ಏನೇನು|ಏನಿದೆ|இது|क्या|क्या|என்ன|உள்ளது)", text, re.IGNORECASE)
+        or re.search(r"(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)).{0,80}(?:ಏನು|ಏನೆಲ್ಲಾ?|ಏನೇನು|ಏನಿದೆ|ಇದೆ|ಇವೆ|ತೋರಿಸು|ಪಟ್ಟಿ|ವಿವರ)", text)
+        or re.search(r"(?:ಏನು|ಏನೆಲ್ಲಾ?|ಏನೇನು|ಏನಿದೆ|ಇದೆ|ಇವೆ).{0,80}(?:ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ))", text)
+        or re.search(r"(?:फ़ाइल|फाइल|கோப்பு|கோப்புகள்|உள்ள|உள்ளடக்கம்|inside|tree|contents).{0,80}(?:क्या|என்ன|உள்ளது|இது)", text, re.IGNORECASE)
         or re.search(r"\bh?olag(?:e|ade)\b|\ben\s+(?:ide|ede)\b|\benu\s+(?:ide|ede)\b|\benella\s+(?:ide|ede)\b", text, re.IGNORECASE)
     )
 

@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.capabilities.integrations import build_oauth_authorization
+from app.api import capabilities as capabilities_api
 from app.main import app
 from app.plugins.gmail import oauth as gmail_oauth_module
 
@@ -351,3 +352,22 @@ def test_github_plugin_routes_keep_existing_api_paths() -> None:
     assert "/api/integrations/github/pull-requests" in paths
     assert "/api/integrations/github/create-issue" in paths
     assert "/api/integrations/github/comment" in paths
+
+
+def test_github_browser_oauth_callback_shows_github_success(monkeypatch) -> None:
+    async def fake_exchange(integration_id: str, state: str, code: str) -> dict[str, object]:
+        assert integration_id == "github"
+        assert state == "github-test-state-123456"
+        assert code == "sample-code"
+        return {"integration": integration_id, "connected": True}
+
+    monkeypatch.setattr(capabilities_api, "exchange_oauth_code", fake_exchange)
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/integrations/github/callback",
+            params={"state": "github-test-state-123456", "code": "sample-code"},
+        )
+
+    assert response.status_code == 200
+    assert "GitHub connected to Indoone" in response.text
+    assert "Gmail connected to Indoone" not in response.text

@@ -6,6 +6,8 @@ and side-effect confirmation stays in the authenticated backend.
 from __future__ import annotations
 
 import logging
+
+from app.ai.tool_registry import EMAIL_TOOL_DECLARATIONS
 import re
 from typing import Any
 
@@ -43,146 +45,6 @@ from app.plugins.zoho_mail.service import (
 
 logger = logging.getLogger(__name__)
 
-EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
-    {
-        "name": "list_recent_emails",
-        "description": "Get the newest messages in the selected mailbox Inbox. Use for requests such as check my mail, show latest/recent emails, or what arrived recently. This is read-only.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"], "description": "Mailbox to use when clear from the user's request; omit if not specified."},
-                "limit": {"type": "INTEGER", "description": "Number of messages to return, between 1 and 200. Defaults to 200 unless the user asks for fewer."},
-            },
-        },
-    },
-    {
-        "name": "count_inbox_emails",
-        "description": "Count the messages in the selected mailbox Inbox independently of the displayed list limit. Use whenever the user asks how many emails/messages are in the Inbox. Return the exact count only when exact is true; if exact is false, report the count as a lower bound and say the mailbox is larger than the checked range. This is read-only.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"], "description": "Mailbox to count when clear from the user's request; omit if not specified."},
-            },
-        },
-    },
-    {
-        "name": "search_emails",
-        "description": "Search a connected mailbox for emails matching a subject, sender, topic, or keyword. Use the user's specific search words. This is read-only.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "query": {"type": "STRING", "description": "A concise search phrase, subject, sender, or topic."},
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
-                "limit": {"type": "INTEGER", "description": "Number of matching messages, between 1 and 200. Defaults to 200 unless the user asks for fewer."},
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "read_email",
-        "description": "Read the full body of a particular email. Prefer message_id from prior tool results; otherwise search by a specific subject/sender phrase. If multiple matches exist, ask the user to disambiguate instead of choosing arbitrarily.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "query": {"type": "STRING", "description": "Specific subject or sender phrase to identify the email."},
-                "message_id": {"type": "STRING", "description": "Exact message id from a prior email tool result, if known."},
-                "account_id": {"type": "STRING", "description": "Account id returned by an earlier result; required with folder_id for reading a Zoho message by id."},
-                "folder_id": {"type": "STRING", "description": "Folder id returned by an earlier result; required with account_id for reading a Zoho message by id."},
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
-            },
-        },
-    },
-    {
-        "name": "prepare_email_reply",
-        "description": "Prepare a reply to one specific Zoho Mail message and wait for the user's explicit CONFIRM. Search by a specific subject, sender, or topic. Never send without confirmation.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "provider": {"type": "STRING", "enum": ["zoho_mail"]},
-                "query": {"type": "STRING", "description": "Specific subject, sender, or phrase identifying exactly one email to reply to."},
-                "body": {"type": "STRING", "description": "The reply body to show the user before confirmation."},
-            },
-            "required": ["query", "body"],
-        },
-    },
-    {
-        "name": "list_email_drafts",
-        "description": "List saved drafts in the selected Gmail or Zoho Mail account. This is read-only.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
-                "limit": {"type": "INTEGER", "description": "Number of drafts to return, between 1 and 20."},
-            },
-        },
-    },
-    {
-        "name": "create_email_draft",
-        "description": "Save a new email draft. This does not send an email. Use the user's requested recipient, subject, and message, and ask for missing details in the final answer when needed.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
-                "to": {"type": "STRING", "description": "Recipient email address, if provided."},
-                "subject": {"type": "STRING", "description": "Email subject."},
-                "body": {"type": "STRING", "description": "Draft email body."},
-            },
-            "required": ["body"],
-        },
-    },
-    {
-        "name": "update_email_draft",
-        "description": "Update an existing draft matching a specific subject or phrase. Use only when the user asks to edit/change a draft. If the match is ambiguous, do not modify anything and ask which draft.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
-                "query": {"type": "STRING", "description": "Specific subject or phrase to find the existing draft."},
-                "instructions": {"type": "STRING", "description": "Requested changes to the existing draft."},
-            },
-            "required": ["query", "instructions"],
-        },
-    },
-    {
-        "name": "prepare_email_to_send",
-        "description": "Prepare an email and ask for explicit confirmation. This tool must never send directly. Use only when the user explicitly asks to send an email; show recipient, subject, and full body and wait for CONFIRM.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
-                "to": {"type": "STRING", "description": "One recipient email address."},
-                "subject": {"type": "STRING", "description": "Email subject."},
-                "body": {"type": "STRING", "description": "Email body."},
-            },
-            "required": ["to", "subject", "body"],
-        },
-    },
-    {
-        "name": "prepare_email_deletion",
-        "description": "Find matching emails and prepare a deletion-to-Trash confirmation preview. Never delete directly. Use only when the user explicitly asks to delete/remove email; ask for a filter if their request is broad.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
-                "query": {"type": "STRING", "description": "Specific subject, sender, topic, or other limiting search phrase. Must not be empty or a broad all-mail request."},
-                "limit": {"type": "INTEGER", "description": "Maximum number of matching messages to include in the preview, between 1 and 20."},
-            },
-            "required": ["query"],
-        },
-    },
-    {
-        "name": "prepare_email_draft_deletion",
-        "description": "Find one saved draft by a specific subject or phrase and prepare deletion. Never delete directly; the user must confirm.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
-                "query": {"type": "STRING", "description": "Specific draft subject or phrase. Broad all-drafts requests are not allowed."},
-            },
-            "required": ["query"],
-        },
-    },
-]
 
 _ALLOWED_TOOLS = {item["name"] for item in EMAIL_TOOL_DECLARATIONS}
 _MAIL_LABEL = {"gmail": "Gmail", "zoho_mail": "Zoho Mail"}

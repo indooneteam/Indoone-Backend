@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse
 
 from app.ai import service as ai_service
 from app.ai.conversation_store import ConversationStore
-from app.ai.language_detection import detect_response_language
 from app.api.approvals import router as approvals_router
 from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
@@ -55,7 +54,6 @@ from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime
 from app.capabilities.store import initialize as initialize_capability_store
 
 logger = logging.getLogger("indoone.api")
-ai_service._detect_response_language = detect_response_language
 
 _DEFAULT_MAX_REQUEST_BYTES = 40 * 1024 * 1024
 _PROCESS_STARTED = time.monotonic()

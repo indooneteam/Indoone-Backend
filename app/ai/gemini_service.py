@@ -313,7 +313,9 @@ async def generate_gemini_function_call_reply(
     execute_tool: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]],
     extra_system_instruction: str,
     max_tool_rounds: int = 4,
-) -> str:
+    tool_mode: str = "ANY",
+    return_none_when_no_tool: bool = False,
+) -> str | None:
     """Run a bounded Gemini function-calling loop and return its grounded final text.
 
     Function calls are proposals only. The authenticated backend callback owns
@@ -361,15 +363,20 @@ async def generate_gemini_function_call_reply(
             if round_index < max_rounds:
                 payload["tools"] = tools
                 if round_index == 0:
-                    # An email request must be grounded in a real tool result;
-                    # later turns may either call another tool or answer.
+                    # "ANY" forces a tool call on the first turn (used when the
+                    # request must be grounded in live data). "AUTO" lets the
+                    # model decide whether any tool is needed at all.
                     payload["toolConfig"] = {
-                        "functionCallingConfig": {"mode": "ANY"}
+                        "functionCallingConfig": {"mode": tool_mode}
                     }
             response_data = await _post_generate_content(client, url, headers, payload)
             model_content, calls = _extract_function_calls(response_data)
             if not calls:
                 if executed_calls == 0:
+                    if return_none_when_no_tool:
+                        # The caller decides what to do when the model chose no
+                        # tool (for example, fall back to a plain answer).
+                        return None
                     # The first email response must perform a real tool call;
                     # never treat a plain model answer as evidence of mailbox data.
                     return (

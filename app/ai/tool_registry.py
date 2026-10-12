@@ -66,7 +66,17 @@ def _object(properties: dict[str, Any], required: tuple[str, ...] = ()) -> dict[
 
 _STRING = {"type": "STRING"}
 _INTEGER = {"type": "INTEGER"}
-_ARRAY = {"type": "ARRAY"}
+# Contact records are client-supplied objects. Gemini requires `items` on every
+# ARRAY parameter, so the element schema is declared once and reused.
+_CONTACT_ITEM = {
+    "type": "OBJECT",
+    "properties": {
+        "name": {"type": "STRING", "description": "Contact name."},
+        "phone": {"type": "STRING", "description": "Contact phone number."},
+        "email": {"type": "STRING", "description": "Contact email address."},
+        "contact_id": {"type": "STRING", "description": "Optional client contact id."},
+    },
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -136,7 +146,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         "Search a client-authorized contact snapshot.",
         parameters=_object(
             {
-                "contacts": {"type": "ARRAY", "description": "Contact records supplied by the client."},
+                "contacts": {"type": "ARRAY", "description": "Contact records supplied by the client.", "items": _CONTACT_ITEM},
                 "query": {"type": "STRING", "description": "Name or phrase to search for."},
                 "limit": {"type": "INTEGER", "description": "Maximum matches to return."},
             },
@@ -149,7 +159,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         "Resolve a client-authorized contact.",
         parameters=_object(
             {
-                "contacts": {"type": "ARRAY", "description": "Contact records supplied by the client."},
+                "contacts": {"type": "ARRAY", "description": "Contact records supplied by the client.", "items": _CONTACT_ITEM},
                 "query": {"type": "STRING", "description": "Name or phrase to resolve."},
             },
             ("query",),
@@ -175,7 +185,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         "Prepare a phone call action for a contact.",
         parameters=_object(
             {
-                "contacts": {"type": "ARRAY", "description": "Contact records supplied by the client."},
+                "contacts": {"type": "ARRAY", "description": "Contact records supplied by the client.", "items": _CONTACT_ITEM},
                 "query": {"type": "STRING", "description": "Contact name to call."},
             },
             ("query",),

@@ -27,6 +27,8 @@ def test_declarations_are_one_list_without_the_legacy_gmail_family() -> None:
     assert "github_update_repository_file" in names
     assert "phone_call" in names
     assert "search_web" in names
+    assert "google_calendar_list_events" in names
+    assert "google_calendar_create_event" in names
 
     # No duplicates, and every entry is fully described.
     assert len(names) == len(set(names))

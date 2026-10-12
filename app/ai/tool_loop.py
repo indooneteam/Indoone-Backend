@@ -88,20 +88,13 @@ def model_tool_declarations() -> list[dict[str, Any]]:
     declarations. The legacy ``gmail_*`` specs are intentionally left out: the
     email plugin's tools are the ones the model should use.
     """
+    # Every registry tool except the legacy gmail_* family, in catalogue order:
+    # local tools, GitHub (read and write) and the connector tools are all here.
+    # Approval for the write ones is enforced at dispatch, not by hiding them.
     declarations = [
         {"name": spec.name, "description": spec.description, "parameters": dict(spec.parameters)}
         for spec in TOOL_SPECS
-        if spec.connector_id is None and "gmail" not in spec.categories
-    ]
-    declarations += GITHUB_TOOL_DECLARATIONS
-    # Connector tools that change data (the GitHub write tool) are offered too;
-    # approval is enforced at dispatch.
-    declarations += [
-        {"name": spec.name, "description": spec.description, "parameters": dict(spec.parameters)}
-        for spec in TOOL_SPECS
-        if spec.connector_id is not None
-        and spec.requires_approval
-        and "gmail" not in spec.categories
+        if "gmail" not in spec.categories
     ]
     declarations += EMAIL_TOOL_DECLARATIONS
     declarations.append(dict(_SEARCH_WEB_DECLARATION))

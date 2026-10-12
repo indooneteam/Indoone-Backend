@@ -32,6 +32,14 @@ from app.plugins.github.service import (
     compare_github_repository_commits as fetch_github_repository_compare,
 )
 from app.plugins.github.writes import github_update_repository_file as commit_github_repository_file
+from app.capabilities.google_calendar import (
+    create_event as create_google_calendar_event,
+    delete_event as delete_google_calendar_event,
+    get_event as get_google_calendar_event,
+    list_calendars as list_google_calendars,
+    list_events as list_google_calendar_events,
+    update_event as update_google_calendar_event,
+)
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
@@ -480,6 +488,123 @@ async def _gmail_send(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
+async def _google_calendar_list_calendars(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_calendar_list_calendars payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("google_calendar_list_calendars")
+    result = await _run_async(
+        list_google_calendars(
+            user_id,
+            page_token=str(data.get("page_token", "")),
+            max_results=max(1, min(int(data.get("max_results", 100)), 250)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_calendar_list_events(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_calendar_list_events payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("google_calendar_list_events")
+    result = await _run_async(
+        list_google_calendar_events(
+            user_id,
+            calendar_id=str(data.get("calendar_id", "primary")) or "primary",
+            time_min=str(data.get("time_min", "")),
+            time_max=str(data.get("time_max", "")),
+            query=str(data.get("query", "")),
+            page_token=str(data.get("page_token", "")),
+            max_results=max(1, min(int(data.get("max_results", 100)), 250)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_calendar_get_event(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_calendar_get_event payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    event_id = str(data.get("event_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not event_id:
+        raise ValueError("event_id is required")
+    spec = get_tool_spec("google_calendar_get_event")
+    result = await _run_async(
+        get_google_calendar_event(user_id, str(data.get("calendar_id", "primary")) or "primary", event_id),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_calendar_create_event(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_calendar_create_event payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    event = data.get("event")
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not isinstance(event, dict):
+        raise ValueError("event is required")
+    spec = get_tool_spec("google_calendar_create_event")
+    result = await _run_async(
+        create_google_calendar_event(user_id, str(data.get("calendar_id", "primary")) or "primary", event, approved=True),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_calendar_update_event(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_calendar_update_event payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    event_id = str(data.get("event_id", "")).strip()
+    event = data.get("event")
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not event_id:
+        raise ValueError("event_id is required")
+    if not isinstance(event, dict):
+        raise ValueError("event is required")
+    spec = get_tool_spec("google_calendar_update_event")
+    result = await _run_async(
+        update_google_calendar_event(user_id, str(data.get("calendar_id", "primary")) or "primary", event_id, event, approved=True),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _google_calendar_delete_event(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("google_calendar_delete_event payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    event_id = str(data.get("event_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    if not event_id:
+        raise ValueError("event_id is required")
+    spec = get_tool_spec("google_calendar_delete_event")
+    result = await _run_async(
+        delete_google_calendar_event(user_id, str(data.get("calendar_id", "primary")) or "primary", event_id, approved=True),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
 TOOLS: dict[str, ToolCallable] = {
     "calculator": _calculate,
     "text_stats": _text_stats,
@@ -507,6 +632,12 @@ TOOLS: dict[str, ToolCallable] = {
     "gmail_email_safety": _gmail_email_safety,
     "gmail_reply": _gmail_reply,
     "gmail_send": _gmail_send,
+    "google_calendar_list_calendars": _google_calendar_list_calendars,
+    "google_calendar_list_events": _google_calendar_list_events,
+    "google_calendar_get_event": _google_calendar_get_event,
+    "google_calendar_create_event": _google_calendar_create_event,
+    "google_calendar_update_event": _google_calendar_update_event,
+    "google_calendar_delete_event": _google_calendar_delete_event,
 }
 
 

@@ -408,6 +408,120 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         connector_id="github",
         capability="repo.files.write",
     ),
+    # ---- Google Calendar -------------------------------------------------- #
+    ToolSpec(
+        "google_calendar_list_calendars",
+        "List the authenticated user's Google calendars.",
+        parameters=_object(
+            {
+                "page_token": {"type": "STRING", "description": "Pagination token from a prior result."},
+                "max_results": {"type": "INTEGER", "description": "Maximum calendars to return."},
+            },
+        ),
+        categories=("google_calendar", "external"),
+        connector_id="google_calendar",
+        capability="events.read",
+    ),
+    ToolSpec(
+        "google_calendar_list_events",
+        "List events from a Google calendar, optionally filtered by time range or query.",
+        parameters=_object(
+            {
+                "calendar_id": {"type": "STRING", "description": "Calendar id; defaults to primary."},
+                "time_min": {"type": "STRING", "description": "RFC3339 lower time bound."},
+                "time_max": {"type": "STRING", "description": "RFC3339 upper time bound."},
+                "query": {"type": "STRING", "description": "Free-text search over events."},
+                "page_token": {"type": "STRING", "description": "Pagination token from a prior result."},
+                "max_results": {"type": "INTEGER", "description": "Maximum events to return."},
+            },
+        ),
+        categories=("google_calendar", "external"),
+        connector_id="google_calendar",
+        capability="events.read",
+    ),
+    ToolSpec(
+        "google_calendar_get_event",
+        "Read one Google calendar event by id.",
+        parameters=_object(
+            {
+                "calendar_id": {"type": "STRING", "description": "Calendar id; defaults to primary."},
+                "event_id": {"type": "STRING", "description": "Event id."},
+            },
+            ("event_id",),
+        ),
+        categories=("google_calendar", "external"),
+        connector_id="google_calendar",
+        capability="events.read",
+    ),
+    ToolSpec(
+        "google_calendar_create_event",
+        "Create a Google calendar event. Requires the user's explicit approval.",
+        parameters=_object(
+            {
+                "calendar_id": {"type": "STRING", "description": "Calendar id; defaults to primary."},
+                "event": {
+                    "type": "OBJECT",
+                    "description": "Google Calendar event resource.",
+                    "properties": {
+                        "summary": {"type": "STRING", "description": "Event title."},
+                        "start": {"type": "STRING", "description": "RFC3339 start date-time."},
+                        "end": {"type": "STRING", "description": "RFC3339 end date-time."},
+                        "location": {"type": "STRING"},
+                        "description": {"type": "STRING"},
+                    },
+                },
+            },
+            ("event",),
+        ),
+        risk="external",
+        requires_approval=True,
+        categories=("google_calendar", "external", "write"),
+        connector_id="google_calendar",
+        capability="events.create",
+    ),
+    ToolSpec(
+        "google_calendar_update_event",
+        "Update an existing Google calendar event. Requires the user's explicit approval.",
+        parameters=_object(
+            {
+                "calendar_id": {"type": "STRING", "description": "Calendar id; defaults to primary."},
+                "event_id": {"type": "STRING", "description": "Event id to update."},
+                "event": {
+                    "type": "OBJECT",
+                    "description": "Fields to change on the event.",
+                    "properties": {
+                        "summary": {"type": "STRING"},
+                        "start": {"type": "STRING", "description": "RFC3339 start date-time."},
+                        "end": {"type": "STRING", "description": "RFC3339 end date-time."},
+                        "location": {"type": "STRING"},
+                        "description": {"type": "STRING"},
+                    },
+                },
+            },
+            ("event_id", "event"),
+        ),
+        risk="external",
+        requires_approval=True,
+        categories=("google_calendar", "external", "write"),
+        connector_id="google_calendar",
+        capability="events.update",
+    ),
+    ToolSpec(
+        "google_calendar_delete_event",
+        "Delete a Google calendar event. Requires the user's explicit approval.",
+        parameters=_object(
+            {
+                "calendar_id": {"type": "STRING", "description": "Calendar id; defaults to primary."},
+                "event_id": {"type": "STRING", "description": "Event id to delete."},
+            },
+            ("event_id",),
+        ),
+        risk="external",
+        requires_approval=True,
+        categories=("google_calendar", "external", "write"),
+        connector_id="google_calendar",
+        capability="events.delete",
+    ),
 )
 
 

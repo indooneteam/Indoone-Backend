@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import httpx
 from fastapi import APIRouter, HTTPException
+
+from app.ai.approval import validate_approval_token
+from app.ai.connector_authorization import authorize_tool
 from pydantic import BaseModel, Field
 
 from app.plugins.github.service import (
@@ -16,7 +19,12 @@ from app.plugins.github.service import (
     list_github_repository_commits,
     compare_github_repository_commits,
 )
-from app.plugins.github.writes import github_comment_issue_or_pr, github_create_issue
+from app.plugins.github.writes import (
+    GitHubRepositoryWriteConflict,
+    github_comment_issue_or_pr,
+    github_create_issue,
+    github_update_repository_file,
+)
 
 router = APIRouter(prefix="/github", tags=["github"])
 
@@ -144,6 +152,18 @@ async def github_comment_endpoint(request: GithubCommentRequest) -> dict[str, ob
 
 
 
+
+class GithubUpdateFileRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=256)
+    repository: str = Field(min_length=3, max_length=200)
+    path: str = Field(min_length=1, max_length=1024)
+    content: str = Field(min_length=1, max_length=50_000)
+    message: str = Field(min_length=1, max_length=200)
+    sha: str = Field(min_length=40, max_length=40)
+    branch: str = Field(default="", max_length=128)
+    approval_token: str = Field(min_length=16, max_length=2048)
+
+
 @router.post("/contents")
 async def github_repository_contents(request: GithubRepositoryPathRequest) -> dict[str, object]:
     try:
@@ -200,5 +220,39 @@ async def github_repository_compare(request: GithubCompareCommitsRequest) -> dic
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail="GitHub commit comparison request failed") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+@router.post("/commit-file")
+async def github_repository_commit_file(request: GithubUpdateFileRequest) -> dict[str, object]:
+    tool_name = "github_update_repository_file"
+    decision = authorize_tool(request.user_id, tool_name)
+    if not decision.allowed:
+        raise HTTPException(status_code=403, detail=decision.reason)
+    if not validate_approval_token(request.approval_token, request.user_id, tool_name):
+        raise HTTPException(status_code=403, detail="A current approval is required before committing this file.")
+    try:
+        return await github_update_repository_file(
+            user_id=request.user_id,
+            repository=request.repository,
+            path=request.path,
+            content=request.content,
+            message=request.message,
+            expected_sha=request.sha,
+            approval_verified=True,
+            branch=request.branch,
+        )
+    except GitHubRepositoryWriteConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code == 403:
+            raise HTTPException(status_code=403, detail="GitHub refused the write. Check the linked account's repository permissions.") from exc
+        raise HTTPException(status_code=502, detail="GitHub could not commit the file update.") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="GitHub file commit request failed.") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

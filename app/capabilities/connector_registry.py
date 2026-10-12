@@ -30,7 +30,7 @@ CONNECTORS: tuple[ConnectorSpec, ...] = (
     ConnectorSpec("instagram", "Instagram", "social", "oauth2", ("profile.read", "media.read"), ("media.publish", "messages.send")),
     ConnectorSpec("facebook", "Facebook", "social", "oauth2", ("profile.read", "pages.read"), ("posts.publish", "messages.send")),
     ConnectorSpec("canva", "Canva", "productivity", "oauth2", ("designs.read",), ("designs.write", "exports.create")),
-    ConnectorSpec("github", "GitHub", "developer", "oauth2", ("repos.read", "issues.read", "pull_requests.read", "repo.contents.read", "repo.files.read", "repo.code.search", "repo.history.read", "repo.compare.read"), ("issues.write", "comments.write")),
+    ConnectorSpec("github", "GitHub", "developer", "oauth2", ("repos.read", "issues.read", "pull_requests.read", "repo.contents.read", "repo.files.read", "repo.code.search", "repo.history.read", "repo.compare.read"), ("issues.write", "comments.write", "repo.files.write")),
 )
 
 

@@ -34,6 +34,10 @@ class FakeClient:
         type(self).calls.append((url, kwargs))
         return self.responses.pop(0)
 
+    async def put(self, url, **kwargs):
+        type(self).calls.append(("PUT", url, kwargs))
+        return self.responses.pop(0)
+
 
 @pytest.mark.asyncio
 async def test_repository_contents_returns_only_safe_entry_fields(monkeypatch):
@@ -98,3 +102,74 @@ async def test_search_history_and_compare_are_read_only(monkeypatch):
     assert history["commits"][0]["message"] == "fix: auth"
     assert compare["ahead_by"] == 1
     assert compare["files"][0]["filename"] == "app/auth.py"
+
+
+@pytest.mark.asyncio
+async def test_github_repository_file_commit_requires_approval():
+    from app.plugins.github.writes import github_update_repository_file
+
+    with pytest.raises(PermissionError, match="approval"):
+        await github_update_repository_file(
+            "user-1", "owner/repo", "src/app.py", "print('ok')",
+            "Update app", "a" * 40, approval_verified=False,
+        )
+
+
+@pytest.mark.asyncio
+async def test_github_repository_file_commit_uses_expected_sha_and_redacts_no_secrets(monkeypatch):
+    from app.plugins.github import writes
+
+    FakeClient.responses = [FakeResponse({
+        "content": {
+            "path": "src/app.py",
+            "sha": "b" * 40,
+            "html_url": "https://github.com/owner/repo/blob/main/src/app.py",
+        },
+        "commit": {
+            "sha": "c" * 40,
+            "html_url": "https://github.com/owner/repo/commit/" + "c" * 40,
+        },
+    })]
+    monkeypatch.setattr(writes, "_github_token", lambda user_id: "access-token")
+    monkeypatch.setattr(writes.httpx, "AsyncClient", FakeClient)
+    content = "print('hello')\n"
+    result = await writes.github_update_repository_file(
+        "user-1", "owner/repo", "src/app.py", content,
+        "Update source file", "a" * 40, approval_verified=True, branch="main",
+    )
+    method, url, kwargs = FakeClient.calls[0]
+    assert method == "PUT"
+    assert url == "https://api.github.com/repos/owner/repo/contents/src/app.py"
+    assert kwargs["json"]["sha"] == "a" * 40
+    assert kwargs["json"]["branch"] == "main"
+    assert base64.b64decode(kwargs["json"]["content"]).decode("utf-8") == content
+    assert kwargs["headers"]["Authorization"] == "Bearer access-token"
+    assert result["file_sha"] == "b" * 40
+    assert result["commit_sha"] == "c" * 40
+    assert result["secrets_exposed"] is False
+
+
+@pytest.mark.asyncio
+async def test_github_repository_file_commit_rejects_embedded_credentials(monkeypatch):
+    from app.plugins.github import writes
+
+    monkeypatch.setattr(writes, "_github_token", lambda user_id: "access-token")
+    with pytest.raises(ValueError, match="credential or private key"):
+        await writes.github_update_repository_file(
+            "user-1", "owner/repo", "src/app.py",
+            "TOKEN = 'ghp_" + ("A" * 36) + "'",
+            "Update source file", "a" * 40, approval_verified=True,
+        )
+
+
+def test_github_file_edit_tool_requires_approval():
+    from app.ai.tool_registry import get_tool_spec, requires_approval
+    from app.ai.connector_authorization import scope_allows
+
+    spec = get_tool_spec("github_update_repository_file")
+    assert spec is not None
+    assert spec.connector_id == "github"
+    assert spec.capability == "repo.files.write"
+    assert requires_approval("github_update_repository_file") is True
+    assert scope_allows("github", "public_repo", "repo.files.write")
+    assert scope_allows("github", "repo", "repo.files.write")

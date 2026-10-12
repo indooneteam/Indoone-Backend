@@ -38,6 +38,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec("github_search_repository_code", "Search code in a selected accessible GitHub repository.", max_output_chars=24000, categories=("github", "external"), connector_id="github", capability="repo.code.search"),
     ToolSpec("github_list_repository_commits", "List recent commits, optionally filtered by repository path.", categories=("github", "external"), connector_id="github", capability="repo.history.read"),
     ToolSpec("github_compare_repository_commits", "Compare two branches or commits and list changed files.", max_output_chars=24000, categories=("github", "external"), connector_id="github", capability="repo.compare.read"),
+    ToolSpec("github_update_repository_file", "Commit a user-confirmed text-file update to an accessible GitHub repository.", risk="external", requires_approval=True, max_output_chars=4000, categories=("github", "external", "write"), connector_id="github", capability="repo.files.write"),
     ToolSpec("gmail_read", "Read one message from the authenticated user\'s Gmail mailbox.", categories=("gmail", "external"), connector_id="gmail", capability="messages.read"),
     ToolSpec("gmail_compose", "Create an email draft with the local Indoone AI without sending it.", categories=("gmail", "email", "external")),
     ToolSpec("gmail_email_safety", "Read and analyze authenticated Gmail messages with the local Indoone Email Safety behavior.", categories=("gmail", "email_safety", "external"), connector_id="gmail", capability="messages.read"),

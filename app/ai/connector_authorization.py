@@ -28,14 +28,14 @@ _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
         "public_repo": frozenset((
             "repos.read", "issues.read", "pull_requests.read",
             "repo.contents.read", "repo.files.read", "repo.code.search",
-            "repo.history.read", "repo.compare.read",
+            "repo.history.read", "repo.compare.read", "repo.files.write",
         )),
         # The classic repo scope can reach private repository data too; only the
         # read-only capabilities are authorized by this chat integration.
         "repo": frozenset((
             "repos.read", "issues.read", "pull_requests.read",
             "repo.contents.read", "repo.files.read", "repo.code.search",
-            "repo.history.read", "repo.compare.read",
+            "repo.history.read", "repo.compare.read", "repo.files.write",
         )),
     },
     "gmail": {

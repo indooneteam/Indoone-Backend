@@ -9,6 +9,14 @@ from pydantic import BaseModel, Field
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
 from app.ai.service import generate_reply
+from app.ai.connector_authorization import authorize_connector
+from app.plugins.github.service import (
+    MAX_REPOSITORY_FILE_BYTES,
+    _redact_repository_secrets,
+    _validated_repository,
+    _validated_repository_path,
+)
+from app.plugins.github.edit_suggestions import build_code_edit_prompt, parse_code_edit_suggestion
 from app.capabilities.document_extract import (
     DOCX_MIME,
     MAX_DOCUMENT_BYTES,
@@ -34,6 +42,13 @@ class ChatMediaAttachment(BaseModel):
     filename: str = Field(min_length=1, max_length=255)
     mime_type: str = Field(min_length=1, max_length=120)
     content_base64: str = Field(min_length=1, max_length=MAX_CHAT_ATTACHMENT_BASE64_CHARS)
+
+
+class CodeEditSuggestionRequest(BaseModel):
+    repository: str = Field(min_length=3, max_length=200)
+    path: str = Field(min_length=1, max_length=1024)
+    instruction: str = Field(min_length=1, max_length=2_000)
+    content: str = Field(min_length=1, max_length=50_000)
 
 
 class ChatRequest(BaseModel):
@@ -296,3 +311,45 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         reply=reply,
         sources=[ChatSource(title=source.title, url=source.url) for source in web_sources],
     )
+
+@router.post("/code-edit-suggestion")
+async def code_edit_suggestion(request: Request, body: CodeEditSuggestionRequest) -> dict[str, object]:
+    """Return an AI proposal only; never write or commit the suggested code here."""
+    user_id = _principal(request)
+    authorization = authorize_connector(user_id, "github", "repo.files.read")
+    if not authorization.allowed:
+        raise HTTPException(status_code=403, detail=authorization.reason)
+
+    try:
+        repository = _validated_repository(body.repository)
+        path = _validated_repository_path(body.path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not path:
+        raise HTTPException(status_code=400, detail="path must identify a file")
+    current_content = body.content
+    if len(current_content.encode("utf-8")) > MAX_REPOSITORY_FILE_BYTES:
+        raise HTTPException(status_code=413, detail="The source file exceeds the file-edit limit.")
+    if current_content != _redact_repository_secrets(current_content):
+        raise HTTPException(
+            status_code=400,
+            detail="The source contains a credential or private key. Redact it before requesting an AI edit.",
+        )
+
+    prompt = build_code_edit_prompt(repository, path, body.instruction.strip(), current_content)
+    try:
+        raw_suggestion = await generate_reply(prompt, history=[], document_context="")
+        suggestion = parse_code_edit_suggestion(raw_suggestion)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="AI could not prepare the code proposal. No file was changed.") from exc
+
+    return {
+        "repository": repository,
+        "path": path,
+        "content": suggestion,
+        "proposal_only": True,
+        "secrets_exposed": False,
+    }

@@ -31,36 +31,6 @@ class IntegrationProbeRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=256)
 
 
-class GithubRepositoriesRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    page: int = Field(default=1, ge=1, le=1000)
-    per_page: int = Field(default=30, ge=1, le=100)
-
-
-class GithubIssuesRequest(GithubRepositoriesRequest):
-    pass
-
-
-class GithubPullRequestsRequest(GithubRepositoriesRequest):
-    repository: str = Field(min_length=3, max_length=200)
-
-
-class GithubCreateIssueRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    repository: str = Field(min_length=3, max_length=200)
-    title: str = Field(min_length=1, max_length=2000)
-    body: str = Field(default="", max_length=12000)
-    approved: bool = False
-
-
-class GithubCommentRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    repository: str = Field(min_length=3, max_length=200)
-    number: int = Field(ge=1, le=100000000)
-    body: str = Field(min_length=1, max_length=12000)
-    approved: bool = False
-
-
 class GoogleCalendarListRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=256)
     page_token: str = Field(default="", max_length=2048)

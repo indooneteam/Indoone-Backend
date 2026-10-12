@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.capabilities.integrations import build_oauth_authorization
+from app.api import capabilities as capabilities_api
 from app.main import app
 from app.plugins.gmail import oauth as gmail_oauth_module
 
@@ -25,7 +26,7 @@ def test_integration_lookup_and_missing_provider() -> None:
         missing = client.get("/api/integrations/not-configured")
     assert response.status_code == 200
     assert response.json()["integration"]["auth_type"] == "oauth2"
-    assert "repo:read" in response.json()["integration"]["permissions"]
+    assert "public_repo" in response.json()["integration"]["permissions"]
     assert missing.status_code == 404
 
 
@@ -329,3 +330,65 @@ async def test_gmail_server_auth_code_fails_if_google_omits_initial_refresh_toke
         await gmail_oauth_module.exchange_gmail_server_auth_code("gmail-user", "server-code-once")
 
     assert get_integration_token("gmail-user", "gmail") is None
+
+
+def test_github_oauth_uses_supported_least_privilege_scopes(monkeypatch) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    monkeypatch.setenv("INDOONE_GITHUB_CLIENT_ID", "github-public-client-id")
+    result = build_oauth_authorization(
+        "github", "github-test-state", "https://indoone.example/api/integrations/github/callback"
+    )
+    query = parse_qs(urlsplit(str(result["authorization_url"])).query)
+
+    assert set(query["scope"][0].split()) == {"read:user", "public_repo"}
+    assert result["secrets_exposed"] is False
+
+
+def test_github_plugin_routes_keep_existing_api_paths() -> None:
+    with TestClient(app) as client:
+        repositories = client.post(
+            "/api/integrations/github/repositories", json={"user_id": "route-check-user"}
+        )
+        issues = client.post(
+            "/api/integrations/github/issues", json={"user_id": "route-check-user"}
+        )
+        pull_requests = client.post(
+            "/api/integrations/github/pull-requests",
+            json={"user_id": "route-check-user", "repository": "owner/repo"},
+        )
+        create_issue = client.post(
+            "/api/integrations/github/create-issue",
+            json={"user_id": "route-check-user", "repository": "owner/repo", "title": "test"},
+        )
+        comment = client.post(
+            "/api/integrations/github/comment",
+            json={"user_id": "route-check-user", "repository": "owner/repo", "number": 1, "body": "test"},
+        )
+
+    # The expected API-level validation/auth responses prove these plugin routes
+    # are mounted without requiring a live GitHub OAuth token.
+    assert repositories.status_code == 400
+    assert issues.status_code == 400
+    assert pull_requests.status_code == 400
+    assert create_issue.status_code == 403
+    assert comment.status_code == 403
+
+
+def test_github_browser_oauth_callback_shows_github_success(monkeypatch) -> None:
+    async def fake_exchange(integration_id: str, state: str, code: str) -> dict[str, object]:
+        assert integration_id == "github"
+        assert state == "github-test-state-123456"
+        assert code == "sample-code"
+        return {"integration": integration_id, "connected": True}
+
+    monkeypatch.setattr(capabilities_api, "exchange_oauth_code", fake_exchange)
+    with TestClient(app) as client:
+        response = client.get(
+            "/api/integrations/github/callback",
+            params={"state": "github-test-state-123456", "code": "sample-code"},
+        )
+
+    assert response.status_code == 200
+    assert "GitHub connected to Indoone" in response.text
+    assert "Gmail connected to Indoone" not in response.text

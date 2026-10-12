@@ -201,8 +201,16 @@ async def integration_callback_browser(
             "<html><body><h2>Indoone connection failed</h2><p>The authorization service could not complete the connection.</p><p>Return to Indoone and try again.</p></body></html>",
             status_code=502,
         )
+    integration_name = {
+        "github": "GitHub",
+        "gmail": "Gmail",
+        "google_calendar": "Google Calendar",
+        "google_drive": "Google Drive",
+        "zoho_mail": "Zoho Mail",
+        "slack": "Slack",
+    }.get(integration_id.strip().lower(), "Service")
     return HTMLResponse(
-        "<html><body><h2>Gmail connected to Indoone</h2><p>You can return to the Indoone app now.</p></body></html>",
+        f"<html><body><h2>{integration_name} connected to Indoone</h2><p>You can return to the Indoone app now.</p></body></html>",
         status_code=200,
     )
 

@@ -5,8 +5,8 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.capabilities.github_writes import github_comment_issue_or_pr, github_create_issue
 from app.plugins.gmail.routes import router as gmail_router
+from app.plugins.github.routes import router as github_router
 from app.capabilities.google_calendar import create_event as create_calendar_event, delete_event as delete_calendar_event, get_event as get_calendar_event, list_calendars, list_events, update_event as update_calendar_event
 from app.capabilities.google_drive import (
     build_google_drive_authorization,
@@ -17,9 +17,6 @@ from app.capabilities.google_drive import (
     upload_drive_file,
 )
 from app.capabilities.integrations import (
-    list_github_issues,
-    list_github_pull_requests,
-    list_github_repositories,
     probe_integration,
 )
 from app.capabilities.store import create_oauth_state
@@ -27,40 +24,11 @@ from secrets import token_urlsafe
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 router.include_router(gmail_router)
+router.include_router(github_router)
 
 
 class IntegrationProbeRequest(BaseModel):
     user_id: str = Field(min_length=1, max_length=256)
-
-
-class GithubRepositoriesRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    page: int = Field(default=1, ge=1, le=1000)
-    per_page: int = Field(default=30, ge=1, le=100)
-
-
-class GithubIssuesRequest(GithubRepositoriesRequest):
-    pass
-
-
-class GithubPullRequestsRequest(GithubRepositoriesRequest):
-    repository: str = Field(min_length=3, max_length=200)
-
-
-class GithubCreateIssueRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    repository: str = Field(min_length=3, max_length=200)
-    title: str = Field(min_length=1, max_length=2000)
-    body: str = Field(default="", max_length=12000)
-    approved: bool = False
-
-
-class GithubCommentRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    repository: str = Field(min_length=3, max_length=200)
-    number: int = Field(ge=1, le=100000000)
-    body: str = Field(min_length=1, max_length=12000)
-    approved: bool = False
 
 
 class GoogleCalendarListRequest(BaseModel):
@@ -286,65 +254,3 @@ async def google_drive_upload(request: GoogleDriveUploadRequest) -> dict[str, ob
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-@router.post("/github/repositories")
-async def github_repositories(request: GithubRepositoriesRequest) -> dict[str, object]:
-    try:
-        return await list_github_repositories(request.user_id, request.page, request.per_page)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"github provider failed: {exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@router.post("/github/issues")
-async def github_issues(request: GithubIssuesRequest) -> dict[str, object]:
-    try:
-        return await list_github_issues(request.user_id, request.page, request.per_page)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"github provider failed: {exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@router.post("/github/pull-requests")
-async def github_pull_requests(request: GithubPullRequestsRequest) -> dict[str, object]:
-    try:
-        return await list_github_pull_requests(request.user_id, request.repository, request.page, request.per_page)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"github provider failed: {exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@router.post("/github/create-issue")
-async def github_create_issue_endpoint(request: GithubCreateIssueRequest) -> dict[str, object]:
-    try:
-        return await github_create_issue(request.user_id, request.repository, request.title, request.body, request.approved)
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"github provider failed: {exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-
-@router.post("/github/comment")
-async def github_comment_endpoint(request: GithubCommentRequest) -> dict[str, object]:
-    try:
-        return await github_comment_issue_or_pr(request.user_id, request.repository, request.number, request.body, request.approved)
-    except PermissionError as exc:
-        raise HTTPException(status_code=403, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"github provider failed: {exc}") from exc
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -25,7 +25,7 @@ class Integration:
 
 
 INTEGRATIONS: tuple[Integration, ...] = (
-    Integration("github", "GitHub", "developer", "ready", "oauth2", ("repo:read", "issues:read", "pull_requests:read"), "https://github.com/login/oauth/authorize", bool(os.getenv("INDOONE_GITHUB_CLIENT_ID"))),
+    Integration("github", "GitHub", "developer", "ready", "oauth2", ("read:user", "public_repo"), "https://github.com/login/oauth/authorize", bool(os.getenv("INDOONE_GITHUB_CLIENT_ID"))),
     Integration("google_calendar", "Google Calendar", "productivity", "ready", "oauth2", ("calendar:read", "calendar:write"), "https://accounts.google.com/o/oauth2/v2/auth", bool(os.getenv("INDOONE_GOOGLE_CLIENT_ID"))),
     Integration("gmail", "Gmail", "communication", "ready", "oauth2", ("gmail:read", "gmail:send"), "https://accounts.google.com/o/oauth2/v2/auth", bool(os.getenv("INDOONE_GOOGLE_CLIENT_ID"))),
     Integration("zoho_mail", "Zoho Mail", "communication", "ready", "oauth2", ("ZohoMail.accounts.READ", "ZohoMail.folders.READ", "ZohoMail.messages.READ", "ZohoMail.messages.CREATE", "ZohoMail.messages.DELETE"), f"{os.getenv('INDOONE_ZOHO_ACCOUNTS_BASE_URL', 'https://accounts.zoho.in').rstrip('/')}/oauth/v2/auth", bool(os.getenv("INDOONE_ZOHO_CLIENT_ID"))),
@@ -36,10 +36,6 @@ _CLIENT_ID_ENV = {"github": "INDOONE_GITHUB_CLIENT_ID", "google_calendar": "INDO
 _CLIENT_SECRET_ENV = {"github": "INDOONE_GITHUB_CLIENT_SECRET", "google_calendar": "INDOONE_GOOGLE_CLIENT_SECRET", "gmail": "INDOONE_GOOGLE_CLIENT_SECRET", "zoho_mail": "INDOONE_ZOHO_CLIENT_SECRET", "slack": "INDOONE_SLACK_CLIENT_SECRET"}
 _TOKEN_URLS = {"github": "https://github.com/login/oauth/access_token", "google_calendar": "https://oauth2.googleapis.com/token", "gmail": "https://oauth2.googleapis.com/token", "zoho_mail": f"{os.getenv('INDOONE_ZOHO_ACCOUNTS_BASE_URL', 'https://accounts.zoho.in').rstrip('/')}/oauth/v2/token", "slack": "https://slack.com/api/oauth.v2.access"}
 _PROBE_URLS = {"github": "https://api.github.com/user", "google_calendar": "https://www.googleapis.com/calendar/v3/users/me/calendarList", "gmail": "https://gmail.googleapis.com/gmail/v1/users/me/profile", "zoho_mail": f"{os.getenv('INDOONE_ZOHO_MAIL_API_BASE_URL', 'https://mail.zoho.in/api').rstrip('/')}/accounts", "slack": "https://slack.com/api/auth.test"}
-_GITHUB_REPOSITORIES_URL = "https://api.github.com/user/repos"
-_GITHUB_ISSUES_URL = "https://api.github.com/issues"
-_GITHUB_PULLS_BASE_URL = "https://api.github.com/repos"
-_GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
 def list_integrations() -> list[dict[str, object]]:
@@ -280,92 +276,18 @@ async def probe_integration(user_id: str, integration_id: str) -> dict[str, obje
     return {"integration": normalized, "user_id": user_id.strip(), "connected": True, "provider_ok": True, "summary": _provider_probe_summary(normalized, body), "secrets_exposed": False}
 
 
-def _github_headers(access_token: str) -> dict[str, str]:
-    return {"Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
 
-
-def _github_token(user_id: str) -> str:
-    token_row = get_integration_token(user_id.strip(), "github")
-    if token_row is None:
-        raise ValueError("integration is not connected for user")
-    cipher = _fernet()
-    try:
-        return cipher.decrypt(bytes(token_row["access_token"])).decode("utf-8")
-    except Exception as exc:
-        raise RuntimeError("stored oauth token cannot be decrypted") from exc
-
-
+# Backward-compatible exports: provider-specific implementations live in app.plugins.github.
 async def list_github_repositories(user_id: str, page: int = 1, per_page: int = 30) -> dict[str, object]:
-    normalized_user = user_id.strip()
-    if not normalized_user:
-        raise ValueError("user_id is required")
-    if page < 1 or page > 1000:
-        raise ValueError("page must be between 1 and 1000")
-    if per_page < 1 or per_page > 100:
-        raise ValueError("per_page must be between 1 and 100")
-    access_token = _github_token(normalized_user)
-    params = {"page": page, "per_page": per_page, "sort": "updated", "direction": "desc"}
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(_GITHUB_REPOSITORIES_URL, headers=_github_headers(access_token), params=params)
-        response.raise_for_status()
-        body = response.json()
-    if not isinstance(body, list):
-        raise RuntimeError("github provider returned invalid repository response")
-    repositories: list[dict[str, object]] = []
-    for item in body:
-        if not isinstance(item, dict):
-            continue
-        repositories.append({"id": item.get("id"), "name": item.get("name"), "full_name": item.get("full_name"), "private": item.get("private"), "html_url": item.get("html_url"), "default_branch": item.get("default_branch"), "description": item.get("description")})
-    return {"integration": "github", "user_id": normalized_user, "page": page, "per_page": per_page, "repositories": repositories, "secrets_exposed": False}
+    from app.plugins.github.service import list_github_repositories as implementation
+    return await implementation(user_id, page, per_page)
 
 
 async def list_github_issues(user_id: str, page: int = 1, per_page: int = 30) -> dict[str, object]:
-    normalized_user = user_id.strip()
-    if not normalized_user:
-        raise ValueError("user_id is required")
-    if page < 1 or page > 1000:
-        raise ValueError("page must be between 1 and 1000")
-    if per_page < 1 or per_page > 100:
-        raise ValueError("per_page must be between 1 and 100")
-    access_token = _github_token(normalized_user)
-    params = {"page": page, "per_page": per_page, "state": "open", "filter": "assigned"}
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(_GITHUB_ISSUES_URL, headers=_github_headers(access_token), params=params)
-        response.raise_for_status()
-        body = response.json()
-    if not isinstance(body, list):
-        raise RuntimeError("github provider returned invalid issues response")
-    issues: list[dict[str, object]] = []
-    for item in body:
-        if not isinstance(item, dict):
-            continue
-        issues.append({"id": item.get("id"), "number": item.get("number"), "title": item.get("title"), "state": item.get("state"), "html_url": item.get("html_url"), "repository_url": item.get("repository_url"), "labels": [label.get("name") for label in item.get("labels", []) if isinstance(label, dict)], "pull_request": item.get("pull_request")})
-    return {"integration": "github", "user_id": normalized_user, "page": page, "per_page": per_page, "issues": issues, "secrets_exposed": False}
+    from app.plugins.github.service import list_github_issues as implementation
+    return await implementation(user_id, page, per_page)
 
 
 async def list_github_pull_requests(user_id: str, repository: str, page: int = 1, per_page: int = 30) -> dict[str, object]:
-    normalized_user = user_id.strip()
-    repo = repository.strip()
-    if not normalized_user:
-        raise ValueError("user_id is required")
-    if not _GITHUB_REPO_PATTERN.fullmatch(repo):
-        raise ValueError("repository must use owner/name format")
-    if page < 1 or page > 1000:
-        raise ValueError("page must be between 1 and 1000")
-    if per_page < 1 or per_page > 100:
-        raise ValueError("per_page must be between 1 and 100")
-    access_token = _github_token(normalized_user)
-    url = f"{_GITHUB_PULLS_BASE_URL}/{repo}/pulls"
-    params = {"page": page, "per_page": per_page, "state": "open", "sort": "updated", "direction": "desc"}
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(url, headers=_github_headers(access_token), params=params)
-        response.raise_for_status()
-        body = response.json()
-    if not isinstance(body, list):
-        raise RuntimeError("github provider returned invalid pull request response")
-    pull_requests: list[dict[str, object]] = []
-    for item in body:
-        if not isinstance(item, dict):
-            continue
-        pull_requests.append({"id": item.get("id"), "number": item.get("number"), "title": item.get("title"), "state": item.get("state"), "html_url": item.get("html_url"), "draft": item.get("draft"), "head": item.get("head"), "base": item.get("base")})
-    return {"integration": "github", "user_id": normalized_user, "repository": repo, "page": page, "per_page": per_page, "pull_requests": pull_requests, "secrets_exposed": False}
+    from app.plugins.github.service import list_github_pull_requests as implementation
+    return await implementation(user_id, repository, page, per_page)

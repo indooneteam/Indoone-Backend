@@ -29,6 +29,9 @@ from app.api.dependencies import current_user_id
 from app.ai.gemini_service import ModelBusyError
 from app.ai.tool_loop import needs_tools, run_tool_loop
 from app.capabilities.store import get_pending_email_action, list_memories
+from datetime import datetime, timedelta, timezone
+
+_IST = timezone(timedelta(hours=5, minutes=30))
 from app.plugins.email_tools import (
     CANCEL_RE,
     CONFIRM_RE,
@@ -252,9 +255,11 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
 
     try:
         tool_reply = None
-        # One short line naming the user, so a reply can address them by name. It
-        # costs a few tokens, and nothing at all when no name is known.
-        name_line = _user_name_line(user_id)
+        # Two short lines: the user's name, and today's date and time. Together they
+        # cost about 16 tokens; the date line is what stops the model answering a
+        # date question from its training memory.
+        extra_lines = [line for line in (_user_name_line(user_id), _now_line()) if line]
+        extra_instruction = " ".join(extra_lines)
         if not attachments and not file_ids and not document_context.strip() and not media_attachments:
             if gemini_enabled:
                 # A pending email confirmation must be resolved before anything else.
@@ -282,7 +287,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                             body.message,
                             history=history,
                             approval_tokens=body.approval_tokens,
-                            extra_system_instruction=name_line,
+                            extra_system_instruction=extra_instruction,
                         )
                     except Exception:
                         tool_reply = None
@@ -316,7 +321,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 body.message,
                 history=history,
                 document_context=document_context,
-                extra_system_instruction=name_line,
+                extra_system_instruction=extra_instruction,
             )
         elif len(media_attachments) == 1:
             reply_with_sources = await generate_reply(
@@ -324,7 +329,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 history=history,
                 document_context=document_context,
                 media_attachment=media_attachments[0],
-                extra_system_instruction=name_line,
+                extra_system_instruction=extra_instruction,
             )
         else:
             reply_with_sources = await generate_reply(
@@ -332,7 +337,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 history=history,
                 document_context=document_context,
                 media_attachments=media_attachments,
-                extra_system_instruction=name_line,
+                extra_system_instruction=extra_instruction,
             )
     except ModelBusyError as exc:
         raise HTTPException(
@@ -425,3 +430,13 @@ def _user_name_line(user_id: str) -> str:
             if value:
                 return f"The user's name is {value[:60]}."
     return ""
+
+
+def _now_line() -> str:
+    """Return one short line giving today's date and time in IST.
+
+    Without it the model answers a date question from its training memory, which
+    is years out of date. The line is built per request from the server clock.
+    """
+    now = datetime.now(_IST)
+    return f"Today is {now:%Y-%m-%d} ({now:%A}), {now:%H:%M} IST."

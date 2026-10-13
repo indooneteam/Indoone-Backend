@@ -218,3 +218,14 @@ def test_user_name_line_uses_the_stored_name_only(monkeypatch) -> None:
     assert chat._user_name_line("u1") == "The user's name is Chinni."
 
     assert chat._user_name_line("") == ""
+
+
+def test_now_line_gives_today_in_ist() -> None:
+    """The model must be told today's date, or it answers from training memory."""
+    from app.api import chat
+
+    line = chat._now_line()
+    assert line.startswith("Today is ")
+    assert line.endswith(" IST.")
+    today = chat.datetime.now(chat._IST).strftime("%Y-%m-%d")
+    assert today in line

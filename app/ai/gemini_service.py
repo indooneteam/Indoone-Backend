@@ -7,12 +7,15 @@ The API key stays server-side in GEMINI_API_KEY and is never sent to the Android
 from __future__ import annotations
 
 import base64
+import logging
 import os
 from typing import Any
 from collections.abc import Awaitable, Callable
 from urllib.parse import quote
 
 import httpx
+
+logger = logging.getLogger("indoone.gemini")
 
 from app.web_research.grounding import (
     GroundedEvidence,
@@ -202,6 +205,9 @@ async def _post_generate_content(
     if response.status_code != 200:
         detail = response.text[:500].replace("\n", " ").strip()
         if response.status_code == 429:
+            # The provider names the quota that ran out (requests or tokens,
+            # per minute or per day). Log it so the real limit is known.
+            logger.warning("Gemini rate limit reached: %s", detail[:400])
             raise RuntimeError("Gemini rate limit reached")
         if response.status_code in {401, 403}:
             raise RuntimeError("Gemini API authentication failed")
@@ -315,6 +321,7 @@ async def generate_gemini_function_call_reply(
     max_tool_rounds: int = 4,
     tool_mode: str = "ANY",
     return_none_when_no_tool: bool = False,
+    reuse_first_text_when_no_tool: bool = False,
 ) -> str | None:
     """Run a bounded Gemini function-calling loop and return its grounded final text.
 
@@ -374,9 +381,17 @@ async def generate_gemini_function_call_reply(
             if not calls:
                 if executed_calls == 0:
                     if return_none_when_no_tool:
-                        # The caller decides what to do when the model chose no
-                        # tool (for example, fall back to a plain answer).
-                        return None
+                        if not reuse_first_text_when_no_tool:
+                            # The caller decides what to do when the model chose
+                            # no tool (for example, fall back to a plain answer).
+                            return None
+                        # The model answered without a tool; that text is the
+                        # answer, so reuse it rather than asking again.
+                        try:
+                            text = _extract_text(response_data)
+                        except RuntimeError:
+                            return None
+                        return text or None
                     # The first email response must perform a real tool call;
                     # never treat a plain model answer as evidence of mailbox data.
                     return (

@@ -26,6 +26,7 @@ from app.ai.tool_registry import (
     tool_declaration,
 )
 from app.ai.tools import run_tool_async
+from app.capabilities.store import get_integration_token_metadata
 
 _EMAIL_TOOL_NAMES = frozenset(item["name"] for item in EMAIL_TOOL_DECLARATIONS)
 _GITHUB_TOOL_NAMES = frozenset(item["name"] for item in GITHUB_TOOL_DECLARATIONS)
@@ -94,20 +95,41 @@ def _gemini_backend_enabled() -> bool:
     return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
 
 
-def model_tool_declarations() -> list[dict[str, Any]]:
-    """Every tool the model may choose, in one list.
+_CONNECTOR_IDS = tuple(
+    sorted({spec.connector_id for spec in TOOL_SPECS if getattr(spec, "connector_id", None)})
+)
+
+
+def model_tool_declarations(user_id: str = "") -> list[dict[str, Any]]:
+    """Every tool the model may choose for this user, in one list.
 
     Local tools (including the approval-required ones) come from the registry;
     the GitHub read tools and the email tools come from their (registry-owned)
     declarations. The legacy ``gmail_*`` specs are intentionally left out: the
     email plugin's tools are the ones the model should use.
+
+    Tools for a connector the user has not connected are left out: they could
+    only fail, and every declaration is re-sent on every model call, so an
+    unused connector costs tokens on each request. Without a ``user_id`` the
+    full list is returned, so callers with no user context keep working.
     """
-    # Every registry tool except the legacy gmail_* family, in catalogue order:
-    # local tools, GitHub (read and write) and the connector tools are all here.
-    # Approval for the write ones is enforced at dispatch, not by hiding them.
-    declarations = [
-        tool_declaration(spec) for spec in TOOL_SPECS if "gmail" not in spec.categories
-    ]
+    normalized_user = user_id.strip()
+    connected: set[str] = set()
+    if normalized_user:
+        for connector_id in _CONNECTOR_IDS:
+            if get_integration_token_metadata(normalized_user, connector_id) is not None:
+                connected.add(connector_id)
+
+    def wanted(spec: Any) -> bool:
+        if "gmail" in spec.categories:
+            return False
+        connector_id = getattr(spec, "connector_id", None)
+        if not connector_id or not normalized_user:
+            return True
+        # Approval for the write tools is enforced at dispatch, not by hiding them.
+        return connector_id in connected
+
+    declarations = [tool_declaration(spec) for spec in TOOL_SPECS if wanted(spec)]
     declarations += EMAIL_TOOL_DECLARATIONS
     declarations.append(dict(_SEARCH_WEB_DECLARATION))
     return declarations
@@ -262,9 +284,10 @@ async def run_tool_loop(
     return await generate_gemini_function_call_reply(
         message,
         history=history,
-        tool_declarations=model_tool_declarations(),
+        tool_declarations=model_tool_declarations(user_id),
         execute_tool=execute_tool,
         extra_system_instruction=_UNIFIED_SYSTEM_INSTRUCTION,
         tool_mode="AUTO",
         return_none_when_no_tool=True,
+        reuse_first_text_when_no_tool=True,
     )

@@ -193,7 +193,7 @@ async def test_run_tool_loop_is_a_no_op_without_gemini(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_tool_loop_uses_auto_mode_and_all_declarations(monkeypatch) -> None:
+async def test_run_tool_loop_uses_auto_mode_and_the_users_declarations(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_MODEL_BACKEND", "gemini")
     captured = {}
 
@@ -207,10 +207,12 @@ async def test_run_tool_loop_uses_auto_mode_and_all_declarations(monkeypatch) ->
         tool_mode="ANY",
         return_none_when_no_tool=False,
         max_tool_rounds=4,
+        reuse_first_text_when_no_tool=False,
     ):
         captured["mode"] = tool_mode
         captured["count"] = len(tool_declarations)
         captured["return_none"] = return_none_when_no_tool
+        captured["reuse_text"] = reuse_first_text_when_no_tool
         return "done"
 
     monkeypatch.setattr(
@@ -221,4 +223,20 @@ async def test_run_tool_loop_uses_auto_mode_and_all_declarations(monkeypatch) ->
     assert out == "done"
     assert captured["mode"] == "AUTO"
     assert captured["return_none"] is True
-    assert captured["count"] == len(tool_loop.model_tool_declarations())
+    assert captured["reuse_text"] is True
+    assert captured["count"] == len(tool_loop.model_tool_declarations("u1"))
+
+
+def test_tool_declarations_skip_connectors_the_user_has_not_connected(monkeypatch) -> None:
+    """A connector the user never connected can only fail, so it is not offered."""
+    monkeypatch.setattr(
+        tool_loop,
+        "get_integration_token_metadata",
+        lambda user_id, integration_id: {} if integration_id == "github" else None,
+    )
+
+    names = [item["name"] for item in tool_loop.model_tool_declarations("u1")]
+    assert "github_list_repositories" in names
+    assert "canva_list_designs" not in names
+    # Without a user context the whole catalogue is returned.
+    assert len(tool_loop.model_tool_declarations()) > len(names)

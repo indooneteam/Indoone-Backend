@@ -81,6 +81,21 @@ Published: Tue, 29 Sep 2026 14:00:00 +0000
 URL: https://www.nasa.gov/?post_type=image-article&p=1050868
 Photos taken using a microscope reveal the colorful, kaleidoscope-like crystal structure of a new NASA-made material that could be used for manufacturing during future space missions. Developed at NASA’s Glenn Research Center in Cleveland, the material could be created directly on the Moon or Mars, allowing NASA to pack fewer supplies — saving weight and […]
 
+[NASA News] NASA Names Astronaut Christina Koch Acting Deputy Chief Engineer
+Published: Tue, 13 Oct 2026 20:41:11 +0000
+URL: https://www.nasa.gov/?post_type=press-release&p=1056041
+NASA engineer and astronaut Christina Koch will serve as the agency’s acting deputy chief engineer beginning on Sunday, Nov. 1, following the retirement of Katherine Van Hooser, who will conclude more than 35 years of distinguished service to the agency on Wednesday, Oct. 21. In her new role, Koch will help lead NASA’s engineering community, […]
+
+[NASA News] Transporter-18 SmallSats Encapsulation
+Published: Tue, 13 Oct 2026 17:38:37 +0000
+URL: https://www.nasa.gov/?post_type=image-article&p=1055919
+Three NASA-supported small spacecraft, along with many commercial payloads, are shown before being encapsulated in a SpaceX Falcon 9 ahead of launch on Oct. 1, 2026. The ASCENT Propulsion Dual Mode CubeSat, the Supernova Remnants and Proxies for ReIonization Testbed Experiment (SPRITE) CubeSat, and the Small Spacecraft Propulsion and Inspection Capability (SSPICY) mission will demonstrate […]
+
+[NASA News] TB 26-08 Complex Modes in Lightly Damped Structural Systems: A Two-Mode Interaction Perspective
+Published: Tue, 13 Oct 2026 15:02:21 +0000
+URL: https://www.nasa.gov/?p=1055848
+For more information, contact Joel W. Sills, Langley Research Center, joel.w.sills@nasa.gov Download the PDF version Complex mode shapes can emerge in a linear structure even when overall damping is low. This behavior can occur when two structural modes are closely spaced in frequency and are coupled through nonproportional damping. As the damping interaction increases, the […]
+
 [NASA News] NASA JPL Testing Readies Voyager Technologies Lander for Moon Mission
 Published: Tue, 13 Oct 2026 13:00:00 +0000
 URL: https://www.nasa.gov/?p=1055724

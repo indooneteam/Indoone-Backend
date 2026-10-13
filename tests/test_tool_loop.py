@@ -227,6 +227,21 @@ async def test_run_tool_loop_uses_auto_mode_and_the_users_declarations(monkeypat
     assert captured["count"] == len(tool_loop.model_tool_declarations("u1"))
 
 
+def test_plain_chat_does_not_carry_the_tool_catalogue() -> None:
+    """A greeting must not pay ~2,900 tokens for tools it cannot use."""
+    assert tool_loop.needs_tools("hi") is False
+    assert tool_loop.needs_tools("thanks!") is False
+    assert tool_loop.needs_tools("how are you") is False
+
+
+def test_a_request_for_a_service_still_uses_tools() -> None:
+    assert tool_loop.needs_tools("check my Zoho Mail") is True
+    assert tool_loop.needs_tools("how many GitHub repositories do I have?") is True
+    assert tool_loop.needs_tools("summarise my unread email") is True
+    assert tool_loop.needs_tools("ಇಮೇಲ್ ನೋಡು") is True
+    assert tool_loop.needs_tools("what is the capital of Karnataka and why") is True
+
+
 def test_tool_declarations_skip_connectors_the_user_has_not_connected(monkeypatch) -> None:
     """A connector the user never connected can only fail, so it is not offered."""
     monkeypatch.setattr(

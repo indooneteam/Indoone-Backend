@@ -348,3 +348,122 @@ def test_vibe_identity_uses_product_name_without_forcing_a_fixed_phrase() -> Non
     assert "Do not call the live voice experience only 'Indoone AI'." in instruction
     assert "Do not force the fixed phrase 'I am Indoone Vibe' as a standalone reply" in instruction
     assert "live voice experience in the Indoone app" in instruction
+
+
+def _instruction(setup: dict[str, object]) -> str:
+    return setup["systemInstruction"]["parts"][0]["text"]
+
+
+def test_vibe_setup_tells_the_model_which_read_only_tools_it_has() -> None:
+    setup = vibe_api._setup_message("models/gemini-live-test", "Aoede")["setup"]
+    instruction = _instruction(setup)
+
+    assert "Zoho Mail" in instruction
+    assert "search_gmail_messages" in instruction
+    assert "GitHub" in instruction
+    assert "read-only tools" in instruction
+    assert "Never claim you sent, changed, archived, or deleted anything." in instruction
+
+
+def test_vibe_setup_omits_the_context_lines_when_there_is_no_context() -> None:
+    setup = vibe_api._setup_message("models/gemini-live-test", "Aoede")["setup"]
+    instruction = _instruction(setup)
+
+    assert "The user's name is" not in instruction
+    assert "Today is " not in instruction
+    assert instruction == f"{vibe_api._SYSTEM_INSTRUCTION} {vibe_api._TOOL_INSTRUCTION}"
+
+
+def test_vibe_setup_appends_the_session_context_lines() -> None:
+    setup = vibe_api._setup_message(
+        "models/gemini-live-test",
+        "Aoede",
+        "medium",
+        "  The user's name is Yashwanth.   Today is 2026-10-13 (Tuesday), 18:10 IST.  ",
+    )["setup"]
+    instruction = _instruction(setup)
+
+    assert instruction.endswith(
+        "The user's name is Yashwanth. Today is 2026-10-13 (Tuesday), 18:10 IST."
+    )
+    assert "  " not in instruction
+
+
+def test_vibe_websocket_sends_the_user_name_and_today_in_the_live_setup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
+    monkeypatch.setenv("GEMINI_LIVE_MODEL", "gemini-3.8-live-extended-thinking")
+    monkeypatch.setattr(vibe_api, "extract_principal", lambda authorization: "firebase-user-1")
+    monkeypatch.setattr(
+        vibe_api,
+        "_user_name_line",
+        lambda user_id: "The user's name is Yashwanth." if user_id == "firebase-user-1" else "",
+    )
+    monkeypatch.setattr(
+        vibe_api,
+        "_now_line",
+        lambda: "Today is 2026-10-13 (Tuesday), 18:10 IST.",
+    )
+    upstream = FakeGeminiWebSocket()
+    monkeypatch.setattr(vibe_api.websockets, "connect", lambda *args, **kwargs: upstream)
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/api/vibe/session",
+            headers={"Authorization": "Bearer test-firebase-token"},
+        ) as websocket:
+            assert websocket.receive_json()["type"] == "ready"
+            websocket.send_json({"type": "stop"})
+            assert websocket.receive_json()["type"] == "stopped"
+
+    instruction = _instruction(upstream.sent[0]["setup"])
+    assert "The user's name is Yashwanth." in instruction
+    assert "Today is 2026-10-13 (Tuesday), 18:10 IST." in instruction
+
+
+def test_vibe_tool_failure_answers_the_model_and_keeps_the_session_alive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
+    monkeypatch.setenv("GEMINI_LIVE_MODEL", "gemini-3.8-live-extended-thinking")
+    monkeypatch.setattr(vibe_api, "extract_principal", lambda authorization: "firebase-user-1")
+
+    async def failing_tool(user_id: str, name: str, args: object) -> dict[str, object]:
+        raise RuntimeError("Zoho Mail is not reachable")
+
+    monkeypatch.setattr(vibe_api, "_execute_voice_tool", failing_tool)
+    upstream = FakeGeminiWebSocket()
+    monkeypatch.setattr(vibe_api.websockets, "connect", lambda *args, **kwargs: upstream)
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/api/vibe/session",
+            headers={"Authorization": "Bearer test-firebase-token"},
+        ) as websocket:
+            assert websocket.receive_json()["type"] == "ready"
+            websocket.send_json({"type": "text", "text": "Check my unread email"})
+
+            assert websocket.receive_json() == {
+                "type": "status",
+                "interaction_status": "IN_PROGRESS",
+            }
+            assert websocket.receive_json() == {"type": "status", "interaction_status": "IDLE"}
+            transcript = websocket.receive_json()
+            assert transcript == {
+                "type": "transcript",
+                "role": "assistant",
+                "text": "I found one unread email.",
+            }
+
+            websocket.send_json({"type": "stop"})
+            assert websocket.receive_json()["type"] == "stopped"
+
+    tool_response = next(message for message in upstream.sent if "toolResponse" in message)
+    function_response = tool_response["toolResponse"]["functionResponses"][0]
+    assert function_response["id"] == "call-gmail-1"
+    assert function_response["name"] == "search_gmail_messages"
+    assert function_response["response"]["output"] == {
+        "ok": False,
+        "error": "That action could not be completed right now.",
+    }

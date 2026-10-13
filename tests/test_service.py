@@ -127,3 +127,23 @@ def test_model_artifacts_require_indoone_model_release(monkeypatch: pytest.Monke
         match="Indoone model serving requires GITHUB_MODEL_REPOSITORY, GITHUB_MODEL_RELEASE_TAG, and GITHUB_MODEL_TOKEN",
     ):
         service._ensure_model_artifacts(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_generate_reply_forwards_the_extra_instruction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The name line must reach the model on the plain-answer path too."""
+    from app.ai import gemini_service
+
+    captured: dict[str, object] = {}
+
+    async def fake_generate_gemini_reply(message, history=None, document_context="", extra_system_instruction=""):
+        captured["extra_system_instruction"] = extra_system_instruction
+        return "answer"
+
+    monkeypatch.setattr(service, "_gemini_backend_enabled", lambda: True)
+    monkeypatch.setattr(gemini_service, "generate_gemini_reply", fake_generate_gemini_reply)
+
+    reply = await service.generate_reply("do you know my name?", extra_system_instruction="The user's name is Kishore.")
+
+    assert reply == "answer"
+    assert captured["extra_system_instruction"] == "The user's name is Kishore."

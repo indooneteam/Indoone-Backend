@@ -12,6 +12,7 @@ from cryptography.fernet import Fernet
 from app.capabilities.store import (
     consume_oauth_state,
     get_completed_oauth_state,
+    get_completed_oauth_state_any_code,
     get_integration_token,
     record_oauth_state_success,
     upsert_integration_token,
@@ -225,6 +226,15 @@ async def exchange_oauth_code(integration_id: str, state: str, code: str) -> dic
             return {
                 "integration": normalized,
                 "user_id": completed["user_id"],
+                "connected": True,
+                "already_completed": True,
+                "secrets_exposed": False,
+            }
+        completed_any_code = get_completed_oauth_state_any_code(state.strip(), normalized)
+        if completed_any_code is not None:
+            return {
+                "integration": normalized,
+                "user_id": completed_any_code["user_id"],
                 "connected": True,
                 "already_completed": True,
                 "secrets_exposed": False,

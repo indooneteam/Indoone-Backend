@@ -153,7 +153,7 @@ def create_oauth_state(state: str, user_id: str, integration_id: str, redirect_u
         db.commit()
 
 
-def consume_oauth_state(state: str, integration_id: str, max_age_seconds: int = 600) -> dict[str, str] | None:
+def consume_oauth_state(state: str, integration_id: str, max_age_seconds: int = 1800) -> dict[str, str] | None:
     initialize()
     with closing(_connect()) as db:
         row = db.execute(
@@ -201,7 +201,7 @@ def record_oauth_state_success(state: str, integration_id: str, user_id: str, pr
 
 
 def get_completed_oauth_state(
-    state: str, integration_id: str, provider_code: str, max_age_seconds: int = 600
+    state: str, integration_id: str, provider_code: str, max_age_seconds: int = 1800
 ) -> dict[str, str] | None:
     """Recognize only the exact same state+code after a successful exchange."""
     normalized_state = state.strip()
@@ -218,6 +218,39 @@ def get_completed_oauth_state(
             (state_hash, normalized_integration),
         ).fetchone()
     if row is None or not hmac.compare_digest(str(row["code_hash"]), code_hash):
+        return None
+    try:
+        created = datetime.fromisoformat(str(row["created_at"]))
+        age = (datetime.now(timezone.utc) - created).total_seconds()
+    except (TypeError, ValueError):
+        return None
+    if age < 0 or age > max_age_seconds:
+        return None
+    return {"user_id": str(row["user_id"]), "integration_id": normalized_integration}
+
+
+def get_completed_oauth_state_any_code(
+    state: str, integration_id: str, max_age_seconds: int = 1800
+) -> dict[str, str] | None:
+    """Recognize a completed exchange for this state, whatever code was sent.
+
+    The browser can resend the callback URL after the exchange has already
+    succeeded (for example when the app completed it first), so the exact-code
+    receipt may not match. The outcome is still "connected", so the page should
+    report success instead of a failure.
+    """
+    normalized_state = state.strip()
+    normalized_integration = integration_id.strip().lower()
+    if not normalized_state or not normalized_integration:
+        return None
+    state_hash = hashlib.sha256(normalized_state.encode("utf-8")).hexdigest()
+    initialize()
+    with closing(_connect()) as db:
+        row = db.execute(
+            "SELECT user_id, created_at FROM oauth_state_results WHERE state_hash = ? AND integration_id = ?",
+            (state_hash, normalized_integration),
+        ).fetchone()
+    if row is None:
         return None
     try:
         created = datetime.fromisoformat(str(row["created_at"]))

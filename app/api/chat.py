@@ -26,6 +26,7 @@ from app.capabilities.document_extract import (
 from app.capabilities.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
 from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
+from app.ai.gemini_service import ModelBusyError
 from app.ai.tool_loop import run_tool_loop
 from app.capabilities.store import get_pending_email_action
 from app.plugins.email_tools import (
@@ -326,6 +327,12 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 document_context=document_context,
                 media_attachments=media_attachments,
             )
+    except ModelBusyError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=str(exc),
+            headers={"Retry-After": "20"},
+        ) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

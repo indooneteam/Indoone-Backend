@@ -17,6 +17,16 @@ import httpx
 
 logger = logging.getLogger("indoone.gemini")
 
+# What the user is told when the provider is at its limit. It never names the
+# provider, the quota, or the reason: the user only needs to know to retry.
+BUSY_MESSAGE = (
+    "Indoone is handling a lot of requests right now. Please try again in a moment."
+)
+
+
+class ModelBusyError(RuntimeError):
+    """The provider is at its limit right now; the caller should ask again shortly."""
+
 from app.web_research.grounding import (
     GroundedEvidence,
     append_sources,
@@ -70,6 +80,17 @@ def _get_config() -> tuple[str, str]:
         raise RuntimeError("GEMINI_MODEL is not configured")
 
     return api_key, model
+
+
+def _get_tool_config() -> tuple[str, str]:
+    """The model that chooses and drives tools.
+
+    Kept separate from the plain-answer model so the two draw on different
+    provider quotas; one message then spreads its usage over both.
+    """
+    api_key, model = _get_config()
+    tool_model = os.getenv("GEMINI_TOOL_MODEL", "").strip()
+    return api_key, (tool_model or model)
 
 
 def _content_text(value: object) -> str:
@@ -208,7 +229,7 @@ async def _post_generate_content(
             # The provider names the quota that ran out (requests or tokens,
             # per minute or per day). Log it so the real limit is known.
             logger.warning("Gemini rate limit reached: %s", detail[:400])
-            raise RuntimeError("Gemini rate limit reached")
+            raise ModelBusyError(BUSY_MESSAGE)
         if response.status_code in {401, 403}:
             raise RuntimeError("Gemini API authentication failed")
         raise RuntimeError(f"Gemini API returned HTTP {response.status_code}: {detail}")
@@ -334,7 +355,7 @@ async def generate_gemini_function_call_reply(
     if not tool_declarations:
         raise ValueError("at least one function declaration is required")
 
-    api_key, model = _get_config()
+    api_key, model = _get_tool_config()
     encoded_model = quote(model, safe="")
     url = f"{_API_BASE_URL}/models/{encoded_model}:generateContent"
     system_instruction = (

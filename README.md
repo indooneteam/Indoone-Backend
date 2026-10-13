@@ -19,6 +19,9 @@ Google AI Studio / Gemini API uses the exact model ID `gemma-4-26b-a4b-it` for G
 ```text
 INDOONE_MODEL_BACKEND=gemini
 GEMINI_MODEL=gemma-4-26b-a4b-it
+# Optional: the model that chooses and drives tools. Set a different model
+# than GEMINI_MODEL so a message and its tool calls use separate quotas.
+GEMINI_TOOL_MODEL=gemma-4-26b-a4b-it
 GEMINI_API_KEY=<Google AI Studio API key stored as a secret>
 ```
 

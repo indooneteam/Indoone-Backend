@@ -305,16 +305,19 @@ async def generate_reply(
             history=history,
             document_context=document_context,
             media_attachments=media_attachments,
+            extra_system_instruction=extra_system_instruction,
         )
     if media_attachment is None:
         return await LocalAIService().generate(
             message,
             history=history,
             document_context=document_context,
+            extra_system_instruction=extra_system_instruction,
         )
     return await LocalAIService().generate(
         message,
         history=history,
         document_context=document_context,
         media_attachment=media_attachment,
+        extra_system_instruction=extra_system_instruction,
     )

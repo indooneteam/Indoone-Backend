@@ -1,10 +1,19 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import os
 
 from app.ai.service import generate_reply
 from app.ai.conversation_store import ConversationStore
+
+logger = logging.getLogger("indoone.channel")
+
+# Sent when the model could not answer at all. The channel user gets an honest
+# reply instead of silence, and nothing about the provider is revealed.
+_FALLBACK_REPLY = (
+    "Indoone is handling a lot of requests right now. Please try again in a moment."
+)
 
 def _enabled(name: str) -> bool:
     return os.getenv(name, "false").strip().lower() in {"1", "true", "yes", "on"}
@@ -27,7 +36,12 @@ async def _generate_with_history(owner_user_id: str, channel: str, sender_id: st
     except (ValueError, PermissionError):
         history = []
 
-    reply = await generate_reply(text, history=history)
+    try:
+        reply = await generate_reply(text, history=history)
+    except Exception:
+        # A channel message must never be left unanswered.
+        logger.exception("channel reply failed", extra={"channel": channel})
+        reply = _FALLBACK_REPLY
     store.append(
         conversation_id,
         [("user", text), ("assistant", reply)],

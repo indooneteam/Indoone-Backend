@@ -281,6 +281,7 @@ async def run_tool_loop(
     message: str,
     history: list[tuple[str, str]] | None = None,
     approval_tokens: Iterable[str] | None = None,
+    extra_system_instruction: str = "",
 ) -> str | None:
     """Run the unified tool loop.
 
@@ -319,7 +320,10 @@ async def run_tool_loop(
         history=history,
         tool_declarations=model_tool_declarations(user_id),
         execute_tool=execute_tool,
-        extra_system_instruction=_UNIFIED_SYSTEM_INSTRUCTION,
+        extra_system_instruction=(
+            _UNIFIED_SYSTEM_INSTRUCTION
+            + ("\n\n" + extra_system_instruction.strip() if extra_system_instruction.strip() else "")
+        ),
         tool_mode="AUTO",
         return_none_when_no_tool=True,
         reuse_first_text_when_no_tool=True,

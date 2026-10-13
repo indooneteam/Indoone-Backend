@@ -118,7 +118,7 @@ def test_chat_rejects_empty_message(monkeypatch) -> None:
 
 
 def test_chat_returns_ai_reply(monkeypatch) -> None:
-    async def fake_reply(message: str, history=None, document_context="") -> str:
+    async def fake_reply(message: str, history=None, document_context="", extra_system_instruction="") -> str:
         assert history == []
         assert document_context == ""
         return f"test reply: {message}"
@@ -139,7 +139,7 @@ def test_chat_returns_ai_reply(monkeypatch) -> None:
 def test_chat_reuses_conversation_context(monkeypatch, tmp_path: Path) -> None:
     observed: list[list[tuple[str, str]]] = []
 
-    async def fake_reply(message: str, history=None, document_context="") -> str:
+    async def fake_reply(message: str, history=None, document_context="", extra_system_instruction="") -> str:
         assert document_context == ""
         observed.append(history or [])
         return f"reply: {message}"
@@ -173,7 +173,7 @@ def test_principal_context_can_be_cleared() -> None:
 
 
 def test_chat_returns_grounded_research_sources(monkeypatch) -> None:
-    async def fake_reply(message: str, history=None, document_context="") -> str:
+    async def fake_reply(message: str, history=None, document_context="", extra_system_instruction="") -> str:
         return (
             "AI technology is developing across several research areas.\n\n"
             "Sources:\n"
@@ -195,3 +195,26 @@ def test_chat_returns_grounded_research_sources(monkeypatch) -> None:
         {"title": "Research source", "url": "https://research.example/ai"},
         {"title": "News source", "url": "https://news.example/ai"},
     ]
+
+
+def test_user_name_line_uses_the_stored_name_only(monkeypatch) -> None:
+    """Only the name reaches the prompt; nothing else stored about the user does."""
+    from app.api import chat
+
+    monkeypatch.setattr(
+        chat,
+        "list_memories",
+        lambda user_id, limit=20: [
+            {"key": "profession", "value": "Student"},
+            {"key": "name", "value": "  Yashwanth  "},
+        ],
+    )
+    assert chat._user_name_line("u1") == "The user's name is Yashwanth."
+
+    monkeypatch.setattr(chat, "list_memories", lambda user_id, limit=20: [])
+    assert chat._user_name_line("u1") == ""
+
+    monkeypatch.setattr(chat, "list_memories", lambda user_id, limit=20: [{"key": "nickname", "value": "Chinni"}])
+    assert chat._user_name_line("u1") == "The user's name is Chinni."
+
+    assert chat._user_name_line("") == ""

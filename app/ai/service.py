@@ -228,6 +228,7 @@ class LocalAIService:
         document_context: str = "",
         media_attachment: dict[str, object] | None = None,
         media_attachments: list[dict[str, object]] | None = None,
+        extra_system_instruction: str = "",
     ) -> str:
         cleaned_message = message.strip()
         if not cleaned_message:
@@ -244,6 +245,7 @@ class LocalAIService:
                     history=history,
                     document_context=document_context,
                     media_attachments=media_attachments,
+                    extra_system_instruction=extra_system_instruction,
                 )
             if media_attachment is not None:
                 return await generate_gemini_reply(
@@ -251,11 +253,13 @@ class LocalAIService:
                     history=history,
                     document_context=document_context,
                     media_attachment=media_attachment,
+                    extra_system_instruction=extra_system_instruction,
                 )
             return await generate_gemini_reply(
                 cleaned_message,
                 history=history,
                 document_context=document_context,
+                extra_system_instruction=extra_system_instruction,
             )
 
         if media_attachment is not None or media_attachments:
@@ -293,6 +297,7 @@ async def generate_reply(
     document_context: str = "",
     media_attachment: dict[str, object] | None = None,
     media_attachments: list[dict[str, object]] | None = None,
+    extra_system_instruction: str = "",
 ) -> str:
     if media_attachments:
         return await LocalAIService().generate(

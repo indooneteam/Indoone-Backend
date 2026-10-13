@@ -52,10 +52,11 @@ async def test_configured_gemini_backend_uses_gemini_chat_and_preserves_context(
 
     captured: dict[str, object] = {}
 
-    async def fake_generate_gemini_reply(message, history=None, document_context=""):
+    async def fake_generate_gemini_reply(message, history=None, document_context="", extra_system_instruction=""):
         captured["message"] = message
         captured["history"] = history
         captured["document_context"] = document_context
+        captured["extra_system_instruction"] = extra_system_instruction
         return "Gemini answer with optional web research."
 
     class UnusedLocalProvider:
@@ -78,6 +79,7 @@ async def test_configured_gemini_backend_uses_gemini_chat_and_preserves_context(
         "message": "What changed recently?",
         "history": history,
         "document_context": "User-provided notes.",
+        "extra_system_instruction": "",
     }
 
 

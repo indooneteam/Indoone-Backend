@@ -270,6 +270,7 @@ async def generate_gemini_reply(
     document_context: str = "",
     media_attachment: dict[str, object] | None = None,
     media_attachments: list[dict[str, object]] | None = None,
+    extra_system_instruction: str = "",
 ) -> str:
     cleaned = message.strip()
     if not cleaned:
@@ -279,6 +280,8 @@ async def generate_gemini_reply(
     encoded_model = quote(model, safe="")
     url = f"{_API_BASE_URL}/models/{encoded_model}:generateContent"
     system_instruction = _SYSTEM_INSTRUCTION + "\n\n" + build_grounded_prompt_instruction()
+    if extra_system_instruction.strip():
+        system_instruction += "\n\n" + extra_system_instruction.strip()
 
     payload: dict[str, Any] = {
         "systemInstruction": {"parts": [{"text": system_instruction}]},

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 
 import uvicorn
@@ -54,7 +55,23 @@ def server_settings() -> dict[str, object]:
     }
 
 
+def _configure_logging() -> None:
+    """Give the application's own loggers a handler.
+
+    Uvicorn configures only its own loggers, so application records
+    (``indoone.*``) had no handler and every INFO record was dropped, which
+    made a failing Vibe session invisible in the journal.
+    """
+    level_name = os.getenv("INDOONE_SERVER_LOG_LEVEL", "info").strip().upper() or "INFO"
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+
 def main() -> None:
+    _configure_logging()
     uvicorn.run(**server_settings())
 
 

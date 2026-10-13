@@ -6,6 +6,7 @@ The API key stays server-side in GEMINI_API_KEY and is never sent to the Android
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import logging
 import os
@@ -212,16 +213,39 @@ def _generation_config(model: str) -> dict[str, Any]:
     return config
 
 
+# The provider intermittently answers 500 "Internal error" or a gateway error
+# (measured: roughly one call in ten). One short retry clears it, so a provider
+# hiccup does not become a lost reply for the user.
+_TRANSIENT_STATUSES = frozenset({500, 502, 503, 504})
+_MAX_ATTEMPTS = 3
+_RETRY_DELAYS = (1.0, 2.0)
+
+
 async def _post_generate_content(
     client: httpx.AsyncClient,
     url: str,
     headers: dict[str, str],
     payload: dict[str, Any],
 ) -> dict[str, Any]:
-    try:
-        response = await client.post(url, headers=headers, json=payload)
-    except httpx.HTTPError as exc:
-        raise RuntimeError("Gemini request failed") from exc
+    response: httpx.Response | None = None
+    for attempt in range(_MAX_ATTEMPTS):
+        last_attempt = attempt + 1 >= _MAX_ATTEMPTS
+        try:
+            response = await client.post(url, headers=headers, json=payload)
+        except httpx.HTTPError as exc:
+            if last_attempt:
+                raise RuntimeError("Gemini request failed") from exc
+            await asyncio.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
+            continue
+        if response.status_code not in _TRANSIENT_STATUSES or last_attempt:
+            break
+        logger.warning(
+            "Gemini returned HTTP %s; retrying (%d/%d)",
+            response.status_code,
+            attempt + 1,
+            _MAX_ATTEMPTS,
+        )
+        await asyncio.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
 
     if response.status_code != 200:
         detail = response.text[:500].replace("\n", " ").strip()

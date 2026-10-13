@@ -263,7 +263,16 @@ async def _execute_and_send_tool_response(
         logger.warning("Gemini Live returned a function call without an ID or name")
         return
 
-    result = await _execute_voice_tool(user_id, name, call.get("args", {}))
+    try:
+        result = await _execute_voice_tool(user_id, name, call.get("args", {}))
+    except Exception:
+        logger.exception("Vibe tool execution failed: %s", name)
+        raise
+    logger.info(
+        "Vibe tool %s -> ok=%s",
+        name,
+        result.get("ok") if isinstance(result, dict) else result,
+    )
     payload: dict[str, object] = {
         "toolResponse": {
             "functionResponses": [{
@@ -298,7 +307,9 @@ async def _handle_gemini_message(
         return True
 
     if "error" in message:
-        await _send_error(websocket, _google_error_detail(message, api_key))
+        detail = _google_error_detail(message, api_key)
+        logger.warning("Gemini Live error message: %s", detail[:300])
+        await _send_error(websocket, detail)
         return False
 
     server_content = message.get("serverContent", message.get("server_content"))
@@ -317,6 +328,10 @@ async def _handle_gemini_message(
     if isinstance(tool_call, dict):
         calls = tool_call.get("functionCalls", tool_call.get("function_calls"))
         if isinstance(calls, list):
+            logger.info(
+                "Vibe tool call(s): %s",
+                [str(item.get("name")) for item in calls if isinstance(item, dict)],
+            )
             for call in calls:
                 if not isinstance(call, dict):
                     continue
@@ -537,6 +552,7 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
         user_id = extract_principal(websocket.headers.get("authorization", ""))
     except Exception:
         # WebSockets bypass the HTTP request middleware, so authenticate explicitly.
+        logger.warning("Vibe websocket rejected: authentication failed")
         await websocket.close(code=1008, reason="authentication required")
         return
 
@@ -571,6 +587,10 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
                 return
             if not isinstance(setup_response, dict) or "setupComplete" not in setup_response:
                 raise RuntimeError("Gemini Live did not confirm session setup")
+            logger.info(
+                "Vibe live setup accepted",
+                extra={"model": model, "signed_in": bool(user_id), "tools": len(_voice_tool_declarations())},
+            )
 
             await websocket.send_json({
                 "type": "ready",

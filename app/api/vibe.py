@@ -14,9 +14,10 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.auth import extract_principal
 from app.api.chat import _now_line, _user_name_line
-from app.ai.tool_loop import dispatch_tool, email_read_tool_declarations
+from app.ai.tool_loop import _GITHUB_TOOL_NAMES, dispatch_tool, email_read_tool_declarations
 from app.ai.tool_registry import function_declarations
 from app.plugins.gmail.service import get_gmail_message, list_gmail_messages
+from app.plugins.github.chat_tools import _format_github_result
 
 logger = logging.getLogger("indoone.vibe")
 
@@ -32,6 +33,7 @@ _MAX_WS_MESSAGE_BYTES = _MAX_AUDIO_BYTES + 1_000_000
 _DEFAULT_VOICE = "Aoede"
 _DEFAULT_LIVE_MODEL = "gemini-3.8-live-extended-thinking"
 _DEFAULT_THINKING_LEVEL = "medium"
+_VOICE_ERROR_MESSAGE = "Vibe could not reach the voice service. Please try again."
 
 _SYSTEM_INSTRUCTION = (
     "You are the live voice experience called Indoone Vibe in the Indoone app. "
@@ -244,7 +246,25 @@ async def _execute_voice_tool(user_id: str, name: str, args: object) -> dict[str
     if not user_id.strip() or not name.strip():
         return {"ok": False, "error": "This voice action needs a signed-in Indoone user."}
     # Read-only plugin tools are dispatched through the shared chat tool loop.
-    return await dispatch_tool(user_id, "", name, args if isinstance(args, dict) else {})
+    result = await dispatch_tool(user_id, "", name, args if isinstance(args, dict) else {})
+    return _voice_tool_result(name, result)
+
+
+def _voice_tool_result(name: str, result: object) -> dict[str, object]:
+    """Return a short, readable tool result for the live model.
+
+    GitHub tools hand back the provider's full nested payload. The live model
+    cannot use that shape, so voice reuses the same summary formatter chat uses
+    instead of forwarding the raw structure.
+    """
+    if not isinstance(result, dict):
+        return {"ok": False, "error": "The tool returned an unreadable result."}
+    if name not in _GITHUB_TOOL_NAMES:
+        return result
+    summary = _format_github_result(name, result)
+    if result.get("ok"):
+        return {"ok": True, "output": summary}
+    return {"ok": False, "error": summary}
 
 
 def _google_error_detail(message: dict[str, object], api_key: str) -> str:
@@ -305,11 +325,6 @@ async def _execute_and_send_tool_response(
         # waiting for a tool result that never arrives.
         logger.exception("Vibe tool execution failed: %s", name)
         result = {"ok": False, "error": "That action could not be completed right now."}
-    logger.info(
-        "Vibe tool %s -> ok=%s",
-        name,
-        result.get("ok") if isinstance(result, dict) else result,
-    )
     payload: dict[str, object] = {
         "toolResponse": {
             "functionResponses": [{
@@ -319,6 +334,12 @@ async def _execute_and_send_tool_response(
             }],
         },
     }
+    logger.info(
+        "Vibe tool %s -> ok=%s (%d bytes)",
+        name,
+        result.get("ok") if isinstance(result, dict) else result,
+        len(json.dumps(payload)),
+    )
     try:
         await _send_gemini_message(gemini, send_lock, payload)
     except Exception:
@@ -344,9 +365,9 @@ async def _handle_gemini_message(
         return True
 
     if "error" in message:
-        detail = _google_error_detail(message, api_key)
-        logger.warning("Gemini Live error message: %s", detail[:300])
-        await _send_error(websocket, detail)
+        # Keep the provider's wording in the log; the user gets our own message.
+        logger.warning("Gemini Live error message: %s", _google_error_detail(message, api_key))
+        await _send_error(websocket, _VOICE_ERROR_MESSAGE)
         return False
 
     server_content = message.get("serverContent", message.get("server_content"))
@@ -360,6 +381,10 @@ async def _handle_gemini_message(
                 "type": "status",
                 "interaction_status": status_text,
             })
+
+    cancellation = message.get("toolCallCancellation", message.get("tool_call_cancellation"))
+    if isinstance(cancellation, dict):
+        logger.warning("Gemini Live cancelled tool call(s): %s", cancellation.get("ids"))
 
     tool_call = message.get("toolCall", message.get("tool_call"))
     if isinstance(tool_call, dict):
@@ -626,7 +651,11 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
                 raise RuntimeError("Gemini Live returned invalid setup JSON") from exc
 
             if isinstance(setup_response, dict) and "error" in setup_response:
-                await _send_error(websocket, _google_error_detail(setup_response, api_key))
+                logger.warning(
+                    "Gemini Live setup error: %s",
+                    _google_error_detail(setup_response, api_key),
+                )
+                await _send_error(websocket, _VOICE_ERROR_MESSAGE)
                 return
             if not isinstance(setup_response, dict) or "setupComplete" not in setup_response:
                 raise RuntimeError("Gemini Live did not confirm session setup")

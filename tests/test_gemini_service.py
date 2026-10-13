@@ -5,6 +5,7 @@ import asyncio
 import pytest
 
 from app.ai import gemini_service
+from app.ai import tool_loop
 
 
 def _response(parts: list[dict[str, object]]) -> dict[str, object]:
@@ -62,8 +63,16 @@ def test_non_gemma4_generation_config_does_not_set_gemma_thinking_options() -> N
 
 
 def test_system_instruction_requires_final_user_facing_answer_only() -> None:
-    assert "only the final user-facing answer" in gemini_service._SYSTEM_INSTRUCTION
-    assert "Never output hidden analysis" in gemini_service._SYSTEM_INSTRUCTION
+    assert "Output only the final answer" in gemini_service._SYSTEM_INSTRUCTION
+    assert "no analysis" in gemini_service._SYSTEM_INSTRUCTION
+
+
+def test_system_instruction_asks_for_plain_text_with_emoji() -> None:
+    """The app renders plain text, so markdown markers would show up literally."""
+    assert "no markdown" in gemini_service._SYSTEM_INSTRUCTION
+    assert "emoji" in gemini_service._SYSTEM_INSTRUCTION
+    assert "no markdown" in tool_loop._UNIFIED_SYSTEM_INSTRUCTION
+    assert "emoji" in tool_loop._UNIFIED_SYSTEM_INSTRUCTION
 
 
 

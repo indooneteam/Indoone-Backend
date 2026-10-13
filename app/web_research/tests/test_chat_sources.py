@@ -23,7 +23,7 @@ def test_chat_returns_grounded_sources_and_persists_full_reply(monkeypatch) -> N
             captured["messages"] = messages
             captured["user_id"] = user_id
 
-    async def fake_generate_reply(message, *, history=None, document_context=""):
+    async def fake_generate_reply(message, *, history=None, document_context="", extra_system_instruction=""):
         assert message == "What is the latest update?"
         return (
             "Current answer.\n\nSources:\n"

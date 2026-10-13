@@ -28,7 +28,7 @@ from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
 from app.ai.gemini_service import ModelBusyError
 from app.ai.tool_loop import needs_tools, run_tool_loop
-from app.capabilities.store import get_pending_email_action
+from app.capabilities.store import get_pending_email_action, list_memories
 from app.plugins.email_tools import (
     CANCEL_RE,
     CONFIRM_RE,
@@ -252,6 +252,9 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
 
     try:
         tool_reply = None
+        # One short line naming the user, so a reply can address them by name. It
+        # costs a few tokens, and nothing at all when no name is known.
+        name_line = _user_name_line(user_id)
         if not attachments and not file_ids and not document_context.strip() and not media_attachments:
             if gemini_enabled:
                 # A pending email confirmation must be resolved before anything else.
@@ -279,6 +282,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                             body.message,
                             history=history,
                             approval_tokens=body.approval_tokens,
+                            extra_system_instruction=name_line,
                         )
                     except Exception:
                         tool_reply = None
@@ -312,6 +316,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 body.message,
                 history=history,
                 document_context=document_context,
+                extra_system_instruction=name_line,
             )
         elif len(media_attachments) == 1:
             reply_with_sources = await generate_reply(
@@ -319,6 +324,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 history=history,
                 document_context=document_context,
                 media_attachment=media_attachments[0],
+                extra_system_instruction=name_line,
             )
         else:
             reply_with_sources = await generate_reply(
@@ -326,6 +332,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 history=history,
                 document_context=document_context,
                 media_attachments=media_attachments,
+                extra_system_instruction=name_line,
             )
     except ModelBusyError as exc:
         raise HTTPException(
@@ -395,3 +402,26 @@ async def code_edit_suggestion(request: Request, body: CodeEditSuggestionRequest
         "proposal_only": True,
         "secrets_exposed": False,
     }
+
+
+def _user_name_line(user_id: str) -> str:
+    """Return a one-line instruction naming the user, or "" when unknown.
+
+    The name lives in the memory store, so it is read fresh on every request. Only
+    the name is sent: no other stored detail reaches the model.
+    """
+    normalized = user_id.strip()
+    if not normalized:
+        return ""
+    try:
+        rows = list_memories(normalized, limit=20)
+    except Exception:
+        return ""
+    for wanted in ("name", "nickname"):
+        for row in rows:
+            if str(row.get("key") or "").strip().casefold() != wanted:
+                continue
+            value = " ".join(str(row.get("value") or "").split()).strip()
+            if value:
+                return f"The user's name is {value[:60]}."
+    return ""

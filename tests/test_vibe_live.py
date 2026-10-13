@@ -359,10 +359,12 @@ def test_vibe_setup_tells_the_model_which_read_only_tools_it_has() -> None:
     instruction = _instruction(setup)
 
     assert "Zoho Mail" in instruction
-    assert "search_gmail_messages" in instruction
+    assert "email tools" in instruction
     assert "GitHub" in instruction
     assert "read-only tools" in instruction
     assert "Never claim you sent, changed, archived, or deleted anything." in instruction
+    # The Gmail-only shortcut must not be advertised to a Zoho Mail user.
+    assert "search_gmail_messages" not in instruction
 
 
 def test_vibe_setup_omits_the_context_lines_when_there_is_no_context() -> None:
@@ -573,3 +575,71 @@ def test_vibe_handles_a_cancelled_tool_call_without_crashing() -> None:
 
     assert asyncio.run(run()) is True
     assert frontend.events == []
+
+
+def _pretend_connected(monkeypatch: pytest.MonkeyPatch, connected: set[str]) -> None:
+    """Make both the chat catalogue and Vibe see only these connectors."""
+    from app.ai import tool_loop as tool_loop_api
+
+    def lookup(user_id: str, connector_id: str):
+        return {"integration_id": connector_id} if connector_id in connected else None
+
+    monkeypatch.setattr(tool_loop_api, "get_integration_token_metadata", lookup)
+    monkeypatch.setattr(vibe_api, "get_integration_token_metadata", lookup)
+
+
+def _voice_tool_names(monkeypatch: pytest.MonkeyPatch, connected: set[str], user: str = "firebase-user-1") -> list[str]:
+    _pretend_connected(monkeypatch, connected)
+    return [str(item.get("name")) for item in vibe_api._voice_tool_declarations(user)]
+
+
+def test_vibe_offers_only_the_connected_connectors(monkeypatch: pytest.MonkeyPatch) -> None:
+    names = _voice_tool_names(monkeypatch, {"github", "zoho_mail"})
+
+    assert "github_list_repositories" in names
+    assert "search_emails" in names
+    assert "search_gmail_messages" not in names
+    for prefix in ("google_", "youtube_", "instagram_", "facebook_", "canva_"):
+        assert not [name for name in names if name.startswith(prefix)]
+
+
+def test_vibe_hides_every_connector_tool_when_nothing_is_connected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert _voice_tool_names(monkeypatch, set()) == []
+
+
+def test_vibe_keeps_the_full_catalogue_without_a_signed_in_user(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    names = _voice_tool_names(monkeypatch, set(), user="")
+
+    assert "search_gmail_messages" in names
+    assert "github_list_repositories" in names
+    assert "canva_list_designs" in names
+
+
+def test_vibe_live_setup_uses_the_signed_in_users_tools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
+    monkeypatch.setenv("GEMINI_LIVE_MODEL", "gemini-3.8-live-extended-thinking")
+    monkeypatch.setattr(vibe_api, "extract_principal", lambda authorization: "firebase-user-1")
+    _pretend_connected(monkeypatch, {"github"})
+    upstream = FakeGeminiWebSocket()
+    monkeypatch.setattr(vibe_api.websockets, "connect", lambda *args, **kwargs: upstream)
+
+    with TestClient(app) as client:
+        with client.websocket_connect(
+            "/api/vibe/session",
+            headers={"Authorization": "Bearer test-firebase-token"},
+        ) as websocket:
+            assert websocket.receive_json()["type"] == "ready"
+            websocket.send_json({"type": "stop"})
+            assert websocket.receive_json()["type"] == "stopped"
+
+    declarations = upstream.sent[0]["setup"]["tools"][0]["functionDeclarations"]
+    names = [str(item.get("name")) for item in declarations]
+    assert "github_list_repositories" in names
+    assert "google_calendar_list_events" not in names
+    assert "canva_list_designs" not in names

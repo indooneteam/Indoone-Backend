@@ -467,3 +467,109 @@ def test_vibe_tool_failure_answers_the_model_and_keeps_the_session_alive(
         "ok": False,
         "error": "That action could not be completed right now.",
     }
+
+
+def test_vibe_sends_the_github_summary_instead_of_the_raw_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw = {
+        "ok": True,
+        "result": {
+            "integration": "github",
+            "repositories": [
+                {
+                    "id": 1,
+                    "name": "Indoone-Backend",
+                    "full_name": "indooneteam/Indoone-Backend",
+                    "private": True,
+                    "html_url": "https://github.com/indooneteam/Indoone-Backend",
+                    "default_branch": "main",
+                    "description": None,
+                },
+            ],
+        },
+    }
+
+    async def fake_dispatch(user_id: str, conversation_id: str, name: str, arguments: object):
+        assert user_id == "firebase-user-1"
+        assert name == "github_list_repositories"
+        return raw
+
+    monkeypatch.setattr(vibe_api, "dispatch_tool", fake_dispatch)
+
+    result = asyncio.run(
+        vibe_api._execute_voice_tool("firebase-user-1", "github_list_repositories", {})
+    )
+
+    assert result["ok"] is True
+    assert "indooneteam/Indoone-Backend" in result["output"]
+    assert "Private" in result["output"]
+    assert "repositories" not in result
+
+
+def test_vibe_reports_a_github_failure_as_readable_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_dispatch(user_id: str, conversation_id: str, name: str, arguments: object):
+        return {"ok": False, "code": "GITHUB_TOOL_FAILED", "message": "GitHub is not connected."}
+
+    monkeypatch.setattr(vibe_api, "dispatch_tool", fake_dispatch)
+
+    result = asyncio.run(
+        vibe_api._execute_voice_tool("firebase-user-1", "github_list_repositories", {})
+    )
+
+    assert result == {"ok": False, "error": "GitHub is not connected."}
+
+
+def test_vibe_sends_its_own_message_when_gemini_reports_an_error() -> None:
+    class FakeFrontend:
+        def __init__(self) -> None:
+            self.events: list[dict[str, object]] = []
+
+        async def send_json(self, event: dict[str, object]) -> None:
+            self.events.append(event)
+
+    frontend = FakeFrontend()
+
+    async def run() -> bool:
+        return await vibe_api._handle_gemini_message(
+            frontend,  # type: ignore[arg-type]
+            json.dumps({"error": {"code": 13, "message": "A system error occurred"}}),
+            "test-api-key",
+            "user-1",
+            object(),
+            asyncio.Lock(),
+            set(),
+        )
+
+    assert asyncio.run(run()) is False
+    assert frontend.events == [
+        {"type": "error", "detail": vibe_api._VOICE_ERROR_MESSAGE}
+    ]
+    assert "system error" not in json.dumps(frontend.events)
+
+
+def test_vibe_handles_a_cancelled_tool_call_without_crashing() -> None:
+    class FakeFrontend:
+        def __init__(self) -> None:
+            self.events: list[dict[str, object]] = []
+
+        async def send_json(self, event: dict[str, object]) -> None:
+            self.events.append(event)
+
+    frontend = FakeFrontend()
+
+    async def run() -> bool:
+        return await vibe_api._handle_gemini_message(
+            frontend,  # type: ignore[arg-type]
+            json.dumps({"toolCallCancellation": {"ids": ["call-1"]}}),
+            "test-api-key",
+            "user-1",
+            object(),
+            asyncio.Lock(),
+            set(),
+        )
+
+    assert asyncio.run(run()) is True
+    assert frontend.events == []

@@ -14,8 +14,14 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.auth import extract_principal
 from app.api.chat import _now_line, _user_name_line
-from app.ai.tool_loop import _GITHUB_TOOL_NAMES, dispatch_tool, email_read_tool_declarations
+from app.ai.tool_loop import (
+    _GITHUB_TOOL_NAMES,
+    dispatch_tool,
+    email_read_tool_declarations,
+    model_tool_declarations,
+)
 from app.ai.tool_registry import function_declarations
+from app.capabilities.store import get_integration_token_metadata
 from app.plugins.gmail.service import get_gmail_message, list_gmail_messages
 from app.plugins.github.chat_tools import _format_github_result
 
@@ -98,13 +104,13 @@ _GMAIL_SEARCH_TOOL: dict[str, object] = {
 
 
 _TOOL_INSTRUCTION = (
-    "Use your read-only tools instead of guessing. Email: for Gmail use "
-    "search_gmail_messages, and for both Gmail and Zoho Mail you can list, count, "
-    "search, read, and read drafts. Plugins: GitHub, Google Calendar, Drive and "
-    "Photos, YouTube, Instagram, Facebook, and Canva, whichever the user has "
-    "connected. Report only what a tool returned. Never claim you sent, changed, "
-    "archived, or deleted anything. If a connector is not connected, say the user "
-    "must connect it in Indoone."
+    "Use the read-only tools you were given instead of guessing, and no others. "
+    "Email: use the email tools (list, count, search, read, drafts) for Gmail or "
+    "Zoho Mail, whichever the user has connected. Plugins: GitHub, Google "
+    "Calendar, Drive and Photos, YouTube, Instagram, Facebook, and Canva. Report "
+    "only what a tool returned. Never claim you sent, changed, archived, or "
+    "deleted anything. If a connector is not connected, say the user must connect "
+    "it in Indoone."
 )
 
 
@@ -126,6 +132,7 @@ def _setup_message(
     voice: str,
     thinking_level: str = _DEFAULT_THINKING_LEVEL,
     extra_instruction: str = "",
+    user_id: str = "",
 ) -> dict[str, object]:
     return {
         "setup": {
@@ -142,7 +149,7 @@ def _setup_message(
             "systemInstruction": {
                 "parts": [{"text": _system_instruction(extra_instruction)}],
             },
-            "tools": [{"functionDeclarations": _voice_tool_declarations()}],
+            "tools": [{"functionDeclarations": _voice_tool_declarations(user_id)}],
             "inputAudioTranscription": {},
             "outputAudioTranscription": {},
         },
@@ -221,20 +228,48 @@ async def _search_gmail_for_voice(user_id: str, args: dict[str, Any]) -> dict[st
 _VOICE_CONNECTOR_PREFIXES = ("github_", "google_", "youtube_", "instagram_", "facebook_", "canva_")
 
 
-def _voice_tool_declarations() -> list[dict[str, object]]:
-    """Indoone Vibe tools: the read-only plugins and the read-only email tools.
+def _connector_is_connected(user_id: str, connector_id: str) -> bool:
+    """Whether the signed-in user has connected a connector.
 
-    Vibe reuses the same registry as chat, so any read-only plugin tool (GitHub,
-    Google Calendar/Drive/Photos, YouTube, Instagram, Facebook, Canva) works by
-    voice too, and so do the read-only email tools (list, count, search, read,
-    drafts) for Gmail and Zoho Mail. Data-changing tools are deliberately left
-    out: voice has no approval flow.
+    With no signed-in user the answer is unknown, so the tool is kept rather
+    than silently hidden.
     """
-    declarations: list[dict[str, object]] = [dict(_GMAIL_SEARCH_TOOL)]
-    declarations.extend(email_read_tool_declarations())
-    for declaration in function_declarations(read_only=True):
-        if str(declaration.get("name", "")).startswith(_VOICE_CONNECTOR_PREFIXES):
-            declarations.append(dict(declaration))
+    normalized = user_id.strip()
+    if not normalized:
+        return True
+    try:
+        return get_integration_token_metadata(normalized, connector_id) is not None
+    except Exception:
+        return False
+
+
+def _voice_tool_declarations(user_id: str = "") -> list[dict[str, object]]:
+    """Indoone Vibe tools: the read-only tools the user can actually reach.
+
+    Vibe builds its list from ``model_tool_declarations``, the same call chat
+    makes, so the two can never drift. That call already drops every connector
+    the user has not connected. Offering those tools anyway left the live model
+    unsure of what it had, so instead of calling a tool it answered "let me check
+    the connection". Only read-only tools are kept: voice has no approval flow.
+    """
+    read_only_names = {
+        str(item.get("name") or "") for item in function_declarations(read_only=True)
+    }
+    declarations: list[dict[str, object]] = []
+    gmail = _connector_is_connected(user_id, "gmail")
+    if gmail:
+        declarations.append(dict(_GMAIL_SEARCH_TOOL))
+    # The email tools resolve the provider through the same store, so they are
+    # only offered when Gmail or Zoho Mail is actually connected.
+    if gmail or _connector_is_connected(user_id, "zoho_mail"):
+        declarations.extend(email_read_tool_declarations())
+    for declaration in model_tool_declarations(user_id):
+        name = str(declaration.get("name") or "")
+        if not name.startswith(_VOICE_CONNECTOR_PREFIXES):
+            continue
+        if name not in read_only_names:
+            continue
+        declarations.append(dict(declaration))
     return declarations
 
 
@@ -383,6 +418,10 @@ async def _handle_gemini_message(
             })
 
     cancellation = message.get("toolCallCancellation", message.get("tool_call_cancellation"))
+    if cancellation is None and isinstance(server_content, dict):
+        cancellation = server_content.get(
+            "toolCallCancellation", server_content.get("tool_call_cancellation")
+        )
     if isinstance(cancellation, dict):
         logger.warning("Gemini Live cancelled tool call(s): %s", cancellation.get("ids"))
 
@@ -642,7 +681,9 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
                 line for line in (_user_name_line(user_id), _now_line()) if line
             )
             await gemini.send(
-                json.dumps(_setup_message(model, voice, thinking_level, context_line))
+                json.dumps(
+                    _setup_message(model, voice, thinking_level, context_line, user_id)
+                )
             )
             first_message = await asyncio.wait_for(gemini.recv(), timeout=30)
             try:
@@ -661,7 +702,7 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
                 raise RuntimeError("Gemini Live did not confirm session setup")
             logger.info(
                 "Vibe live setup accepted",
-                extra={"model": model, "signed_in": bool(user_id), "tools": len(_voice_tool_declarations())},
+                extra={"model": model, "signed_in": bool(user_id), "tools": len(_voice_tool_declarations(user_id))},
             )
 
             await websocket.send_json({

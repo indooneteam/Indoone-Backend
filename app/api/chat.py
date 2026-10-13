@@ -27,7 +27,7 @@ from app.capabilities.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyz
 from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
 from app.ai.gemini_service import ModelBusyError
-from app.ai.tool_loop import run_tool_loop
+from app.ai.tool_loop import needs_tools, run_tool_loop
 from app.capabilities.store import get_pending_email_action
 from app.plugins.email_tools import (
     CANCEL_RE,
@@ -270,7 +270,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                             "Reply CONFIRM to approve it or CANCEL to stop it before "
                             "starting another email action."
                         )
-                if tool_reply is None:
+                if tool_reply is None and needs_tools(body.message):
                     # One loop, every tool: the model chooses whether and which to call.
                     try:
                         tool_reply = await run_tool_loop(

@@ -95,6 +95,38 @@ def _gemini_backend_enabled() -> bool:
     return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
 
 
+# A message that names a connected service, or an action on one, needs the tool
+# catalogue. A short greeting does not, and every call re-sends all declarations
+# (~2,900 tokens), so plain chat should not pay for them.
+_TOOL_HINTS = (
+    "email", "e-mail", "mail", "inbox", "gmail", "zoho", "draft", "unread",
+    "reply", "send", "forward", "archive",
+    "github", "repo", "repository", "commit", "pull request", "issue", "branch",
+    "calendar", "event", "meeting", "schedule",
+    "drive", "folder", "photo", "youtube", "video", "instagram", "facebook",
+    "canva", "design", "post",
+    "check", "search", "find", "list", "show", "summar", "delete", "connect",
+    "ಮೇಲ್", "ಇಮೇಲ್", "ಇನ್‌ಬಾಕ್ಸ್", "ಇನ್ಬಾಕ್ಸ್", "ಕಳುಹಿಸ", "ಓದ", "ನೋಡ",
+    "ರೆಪೊ", "ಕಮಿಟ್", "ಇಷ್ಯೂ", "ಕ್ಯಾಲೆಂಡರ್", "ಫೋಟೋ", "ವಿಡಿಯೋ",
+)
+_SHORT_MESSAGE_WORDS = 6
+
+
+def needs_tools(message: str) -> bool:
+    """Whether a message should carry the tool catalogue.
+
+    Every model call re-sends all declarations, so a short greeting must not pay
+    for them. Anything longer, or naming a service or an action, still goes
+    through the tool loop exactly as before.
+    """
+    text = " ".join(str(message).split()).strip().casefold()
+    if not text:
+        return False
+    if any(hint in text for hint in _TOOL_HINTS):
+        return True
+    return len(text.split()) > _SHORT_MESSAGE_WORDS
+
+
 _CONNECTOR_IDS = tuple(
     sorted({spec.connector_id for spec in TOOL_SPECS if getattr(spec, "connector_id", None)})
 )

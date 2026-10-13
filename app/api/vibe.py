@@ -13,6 +13,7 @@ import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.auth import extract_principal
+from app.api.chat import _now_line, _user_name_line
 from app.ai.tool_loop import dispatch_tool, email_read_tool_declarations
 from app.ai.tool_registry import function_declarations
 from app.plugins.gmail.service import get_gmail_message, list_gmail_messages
@@ -94,7 +95,36 @@ _GMAIL_SEARCH_TOOL: dict[str, object] = {
 }
 
 
-def _setup_message(model: str, voice: str, thinking_level: str = _DEFAULT_THINKING_LEVEL) -> dict[str, object]:
+_TOOL_INSTRUCTION = (
+    "Use your read-only tools instead of guessing. Email: for Gmail use "
+    "search_gmail_messages, and for both Gmail and Zoho Mail you can list, count, "
+    "search, read, and read drafts. Plugins: GitHub, Google Calendar, Drive and "
+    "Photos, YouTube, Instagram, Facebook, and Canva, whichever the user has "
+    "connected. Report only what a tool returned. Never claim you sent, changed, "
+    "archived, or deleted anything. If a connector is not connected, say the user "
+    "must connect it in Indoone."
+)
+
+
+def _system_instruction(extra_instruction: str = "") -> str:
+    """Return the live system instruction plus the per-session context lines.
+
+    The context lines name the signed-in user and give today's date, so Vibe
+    answers "what is my name" and "what is the date" the same way chat does.
+    """
+    text = f"{_SYSTEM_INSTRUCTION} {_TOOL_INSTRUCTION}"
+    extra = " ".join(extra_instruction.split())
+    if not extra:
+        return text
+    return f"{text} {extra}"
+
+
+def _setup_message(
+    model: str,
+    voice: str,
+    thinking_level: str = _DEFAULT_THINKING_LEVEL,
+    extra_instruction: str = "",
+) -> dict[str, object]:
     return {
         "setup": {
             "model": model,
@@ -108,16 +138,7 @@ def _setup_message(model: str, voice: str, thinking_level: str = _DEFAULT_THINKI
                 "thinkingConfig": {"thinkingLevel": thinking_level.upper()},
             },
             "systemInstruction": {
-                "parts": [{
-                    "text": (
-                        _SYSTEM_INSTRUCTION
-                        + " When the user asks to check or track their email, use the "
-                        "search_gmail_messages tool rather than guessing. Only report "
-                        "email details returned by the tool. The tool is read-only; never "
-                        "claim an email was sent or changed. If Gmail is not connected, "
-                        "explain that the user must connect Gmail in Indoone."
-                    )
-                }],
+                "parts": [{"text": _system_instruction(extra_instruction)}],
             },
             "tools": [{"functionDeclarations": _voice_tool_declarations()}],
             "inputAudioTranscription": {},
@@ -251,6 +272,19 @@ async def _send_gemini_message(gemini, send_lock: asyncio.Lock, payload: dict[st
         await gemini.send(json.dumps(payload))
 
 
+def _log_tool_task_error(task: asyncio.Task) -> None:
+    """Log an exception raised by a finished Vibe tool task.
+
+    The task is dropped from the tracking set the moment it finishes, so without
+    this the exception is never retrieved and the session looks like it stalled.
+    """
+    if task.cancelled():
+        return
+    error = task.exception()
+    if error is not None:
+        logger.error("Vibe tool task failed: %s", type(error).__name__)
+
+
 async def _execute_and_send_tool_response(
     user_id: str,
     call: dict[str, Any],
@@ -266,8 +300,11 @@ async def _execute_and_send_tool_response(
     try:
         result = await _execute_voice_tool(user_id, name, call.get("args", {}))
     except Exception:
+        # A failing tool must never end the live session. Report the failure back to
+        # the model so it can say so and carry on, instead of leaving the model
+        # waiting for a tool result that never arrives.
         logger.exception("Vibe tool execution failed: %s", name)
-        raise
+        result = {"ok": False, "error": "That action could not be completed right now."}
     logger.info(
         "Vibe tool %s -> ok=%s",
         name,
@@ -340,6 +377,7 @@ async def _handle_gemini_message(
                 )
                 tool_tasks.add(task)
                 task.add_done_callback(tool_tasks.discard)
+                task.add_done_callback(_log_tool_task_error)
 
     if not isinstance(server_content, dict):
         return True
@@ -575,7 +613,12 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
             ping_timeout=20,
             max_size=_MAX_WS_MESSAGE_BYTES,
         ) as gemini:
-            await gemini.send(json.dumps(_setup_message(model, voice, thinking_level)))
+            context_line = " ".join(
+                line for line in (_user_name_line(user_id), _now_line()) if line
+            )
+            await gemini.send(
+                json.dumps(_setup_message(model, voice, thinking_level, context_line))
+            )
             first_message = await asyncio.wait_for(gemini.recv(), timeout=30)
             try:
                 setup_response = json.loads(first_message)

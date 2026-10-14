@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-13T22:48:27.775690+00:00",
+  "updated_at": "2026-10-14T17:15:17.503739+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -25,6 +25,30 @@
       "summary": "This long-duration image shows star trails above Earth and the blue lights of fishing boats and the yellow lights of Indonesian cities stretching below the International Space Station as it orbited 258 miles above the Banda Sea on Sept. 20, 2026. Image credit: NASA/Anil Menon",
       "published": "Wed, 30 Sep 2026 17:50:50 +0000",
       "fingerprint": "8f322f461ca55b2cac30e801e8b7be9883878846d69765a94c3b0cac4b1723c5"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s Space X CRS-35 Launch Jellyfish",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1056002",
+      "summary": "Sunlight illuminates the exhaust plumes of a SpaceX Falcon 9 rocket carrying the company’s Dragon spacecraft on Oct. 13, 2026. This visual phenomenon is known as a “jellyfish”; it happens near sunrise or sunset when the exhaust plume from the rocket becomes brightly illuminated, creating a glowing shape resembling a jellyfish. The mission lifted off […]",
+      "published": "Wed, 14 Oct 2026 15:18:38 +0000",
+      "fingerprint": "07e5a0285d1a47f8cde8636eb6c283885442d1f53eb5d0f1604a3103b6c009eb"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Develops Batteries to Power Humanity’s Return to Moon",
+      "url": "https://www.nasa.gov/?p=1056228",
+      "summary": "If you’ve ever had your car start sluggishly, or not at all, on a particularly frigid winter morning, you know standard batteries do not like extreme cold. That’s why NASA researchers are working to develop a battery that could function in the brutal cold of the Moon’s South Pole, where nighttime temperatures plunge to minus […]",
+      "published": "Wed, 14 Oct 2026 14:41:21 +0000",
+      "fingerprint": "e187cffc80930d337c833a8fd7ba2e78f40868798066567dd505fda9a6b4ff49"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Discuss Artemis Acceleration, Status of Upcoming Moon Missions",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1056094",
+      "summary": "NASA will provide an update on its plans to return American astronauts to the surface of the Moon by 2028 at 2 p.m. EDT, Friday, Oct. 23, at the agency’s Kennedy Space Center in Florida. Learn where to watch online: https://www.nasa.gov/live Participants in the briefing include: The update will include details about NASA’s Artemis III […]",
+      "published": "Wed, 14 Oct 2026 13:32:25 +0000",
+      "fingerprint": "09778a8dea58269d2e8d41d706e4d261f92401d6acf8181598cd5651a87de82e"
     },
     {
       "source": "NASA News",

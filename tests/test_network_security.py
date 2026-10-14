@@ -107,7 +107,32 @@ def test_cors_allows_the_projects_own_web_origin_by_default(monkeypatch) -> None
     )
 
 
-def test_configured_origins_still_win(monkeypatch) -> None:
+def test_configured_origins_are_added_to_the_web_origin(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_ALLOWED_ORIGINS", "https://app.example.com")
 
-    assert allowed_origins() == ["https://app.example.com"]
+    assert allowed_origins() == [
+        "https://indooneteam.github.io",
+        "https://app.example.com",
+    ]
+
+
+def test_the_web_origin_is_allowed_even_when_another_is_configured(monkeypatch) -> None:
+    """The variable adds origins; it does not remove the web app's own."""
+    monkeypatch.setenv("INDOONE_ENV", "production")
+    monkeypatch.setenv("INDOONE_ALLOWED_HOSTS", "api.example.com")
+    monkeypatch.setenv("INDOONE_ALLOWED_ORIGINS", "https://app.example.com")
+    monkeypatch.setenv("INDOONE_TRUST_PROXY_HEADERS", "false")
+
+    app = FastAPI()
+    app.get("/")(lambda: {"status": "ok"})
+    configure_network_security(app)
+    client = TestClient(app)
+
+    response = client.get(
+        "/",
+        headers={"Origin": "https://indooneteam.github.io"},
+    )
+
+    assert response.headers.get("access-control-allow-origin") == (
+        "https://indooneteam.github.io"
+    )

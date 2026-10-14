@@ -2,7 +2,11 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.network_security import configure_network_security, validate_network_security_config
+from app.api.network_security import (
+    allowed_origins,
+    configure_network_security,
+    validate_network_security_config,
+)
 
 
 def test_development_uses_safe_default_hosts(monkeypatch) -> None:
@@ -77,3 +81,33 @@ def test_cors_allows_only_configured_origin(monkeypatch) -> None:
     assert allowed.status_code == 200
     assert allowed.headers["access-control-allow-origin"] == "https://app.example.com"
     assert blocked.status_code == 400
+
+
+def test_cors_allows_the_projects_own_web_origin_by_default(monkeypatch) -> None:
+    """With INDOONE_ALLOWED_ORIGINS unset, the web app can still reach us."""
+    monkeypatch.setenv("INDOONE_ENV", "development")
+    monkeypatch.setenv("INDOONE_ALLOWED_HOSTS", "testserver")
+    monkeypatch.delenv("INDOONE_ALLOWED_ORIGINS", raising=False)
+    monkeypatch.setenv("INDOONE_TRUST_PROXY_HEADERS", "false")
+
+    assert allowed_origins() == ["https://indooneteam.github.io"]
+
+    app = FastAPI()
+    app.get("/")(lambda: {"status": "ok"})
+    configure_network_security(app)
+    client = TestClient(app)
+
+    response = client.get(
+        "/",
+        headers={"Origin": "https://indooneteam.github.io"},
+    )
+
+    assert response.headers.get("access-control-allow-origin") == (
+        "https://indooneteam.github.io"
+    )
+
+
+def test_configured_origins_still_win(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_ALLOWED_ORIGINS", "https://app.example.com")
+
+    assert allowed_origins() == ["https://app.example.com"]

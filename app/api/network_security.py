@@ -10,6 +10,12 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 _PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 _DEFAULT_ALLOWED_HOSTS = ("testserver", "localhost", "127.0.0.1")
 
+# The project's own web app, served from GitHub Pages. Its origin is fixed and
+# known, and without it the web app cannot reach this backend at all: a browser
+# refuses the call before it is sent. The native app is unaffected, because it
+# does not make cross-origin calls.
+_DEFAULT_ALLOWED_ORIGINS = ("https://indooneteam.github.io",)
+
 
 def _csv_env(name: str) -> list[str]:
     raw = os.getenv(name, "")
@@ -28,7 +34,16 @@ def allowed_hosts() -> list[str]:
 
 
 def allowed_origins() -> list[str]:
-    return _csv_env("INDOONE_ALLOWED_ORIGINS")
+    """Configured origins, or the project's own web origin.
+
+    INDOONE_ALLOWED_ORIGINS still wins outright when it is set, so a server can
+    narrow this or widen it. It is only when it is unset that the web app's own
+    origin is allowed, which is what makes the web work out of the box.
+    """
+    configured = _csv_env("INDOONE_ALLOWED_ORIGINS")
+    if configured:
+        return configured
+    return list(_DEFAULT_ALLOWED_ORIGINS)
 
 
 def trusted_proxy_ips() -> list[str]:

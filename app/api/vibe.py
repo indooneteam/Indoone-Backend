@@ -38,6 +38,9 @@ _MAX_TEXT_LENGTH = 8_000
 _MAX_WS_MESSAGE_BYTES = _MAX_AUDIO_BYTES + 1_000_000
 _DEFAULT_VOICE = "Aoede"
 _DEFAULT_LIVE_MODEL = "gemini-3.8-live-extended-thinking"
+
+# How long an accepted socket may wait for its opening auth message.
+_LIVE_AUTH_TIMEOUT_SECONDS = 15.0
 _DEFAULT_THINKING_LEVEL = "medium"
 _VOICE_ERROR_MESSAGE = "Vibe could not reach the voice service. Please try again."
 
@@ -649,23 +652,75 @@ async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str, user_id: s
                 task.cancel()
         await asyncio.gather(*tasks, *tool_tasks, return_exceptions=True)
 
+async def _await_websocket_auth(websocket: WebSocket) -> str:
+    """Read the caller's token from the first message of an accepted socket.
+
+    A browser cannot set a header on a WebSocket - the API has no parameter for
+    one - so the web app sends the token as its opening message instead of in
+    Authorization. The native app still uses the header, and never reaches here.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _LIVE_AUTH_TIMEOUT_SECONDS
+
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            raise ValueError("authentication timed out")
+
+        try:
+            message = await asyncio.wait_for(
+                websocket.receive_json(), timeout=remaining
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("authentication message must be valid JSON") from exc
+
+        if not isinstance(message, dict):
+            raise ValueError("authentication message must be a JSON object")
+
+        if str(message.get("type") or "").strip().lower() != "auth":
+            raise ValueError("first message must be an auth message")
+
+        token = str(message.get("token") or "").strip()
+        if not token:
+            raise ValueError("auth message carried no token")
+
+        return extract_principal(f"Bearer {token}")
+
+
 async def _vibe_live_session(websocket: WebSocket) -> None:
-    try:
-        user_id = extract_principal(websocket.headers.get("authorization", ""))
-    except Exception:
-        # WebSockets bypass the HTTP request middleware, so authenticate explicitly.
-        logger.warning("Vibe websocket rejected: authentication failed")
-        await websocket.close(code=1008, reason="authentication required")
-        return
+    header = websocket.headers.get("authorization", "")
+    accepted = False
+
+    if header:
+        # The native app: the token travels in the header.
+        try:
+            user_id = extract_principal(header)
+        except Exception:
+            # WebSockets bypass the HTTP request middleware, so authenticate explicitly.
+            logger.warning("Vibe websocket rejected: authentication failed")
+            await websocket.close(code=1008, reason="authentication required")
+            return
+    else:
+        # The web app: no header is possible, so the token is the first message.
+        await websocket.accept()
+        accepted = True
+        try:
+            user_id = await _await_websocket_auth(websocket)
+        except Exception as exc:
+            logger.warning("Vibe websocket rejected: authentication failed (%s)", exc)
+            await websocket.close(code=1008, reason="authentication required")
+            return
 
     try:
         api_key, model, voice, thinking_level = _live_config()
     except RuntimeError as exc:
-        await websocket.accept()
+        if not accepted:
+            await websocket.accept()
         await _send_error(websocket, str(exc))
         return
 
-    await websocket.accept()
+    if not accepted:
+        await websocket.accept()
     url = f"{_GEMINI_LIVE_ENDPOINT}?{urlencode({'key': api_key})}"
 
     try:

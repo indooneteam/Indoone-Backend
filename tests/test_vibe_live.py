@@ -332,11 +332,23 @@ def test_vibe_does_not_forward_gemini_parts_marked_as_internal_thought() -> None
     }]
 
 
-def test_vibe_websocket_rejects_missing_authentication() -> None:
+def test_vibe_websocket_rejects_missing_authentication(monkeypatch) -> None:
+    """A socket that never authenticates gets no session.
+
+    The socket is now accepted before it is authenticated, because a browser
+    cannot put a token in a WebSocket header and sends it as its first message
+    instead. So the refusal comes after the short auth window rather than at
+    once - but an unauthenticated socket is still closed, and still gets no
+    session. The window is shortened here so the test does not wait it out.
+    """
+    monkeypatch.setattr(vibe_api, "_LIVE_AUTH_TIMEOUT_SECONDS", 0.2)
+
     with TestClient(app) as client:
+        # The socket is accepted first now, so the refusal shows up as the
+        # socket closing with nothing to read - never as a session starting.
         with pytest.raises(WebSocketDisconnect):
-            with client.websocket_connect("/api/vibe/session"):
-                pass
+            with client.websocket_connect("/api/vibe/session") as socket:
+                socket.receive_json()
 
 
 

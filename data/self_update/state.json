@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-14T17:15:17.503739+00:00",
+  "updated_at": "2026-10-14T21:44:03.064676+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -25,6 +25,22 @@
       "summary": "This long-duration image shows star trails above Earth and the blue lights of fishing boats and the yellow lights of Indonesian cities stretching below the International Space Station as it orbited 258 miles above the Banda Sea on Sept. 20, 2026. Image credit: NASA/Anil Menon",
       "published": "Wed, 30 Sep 2026 17:50:50 +0000",
       "fingerprint": "8f322f461ca55b2cac30e801e8b7be9883878846d69765a94c3b0cac4b1723c5"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Host News Conference Previewing US Spacewalks 100, 101",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1056475",
+      "summary": "NASA will preview two upcoming spacewalks to complete solar array installation and power augmentation of the International Space Station during a news conference at 2 p.m. EDT, Tuesday, Oct. 20, from NASA’s Johnson Space Center in Houston. NASA will stream the event through a variety of platforms. Learn where to watch online: https://www.nasa.gov/live NASA participants […]",
+      "published": "Wed, 14 Oct 2026 20:13:29 +0000",
+      "fingerprint": "49474dd15ead130d32c845f8916a5b6b35b8adaf3b0e1a62a3a4a2c316043ac5"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Astronauts to Answer Questions from Florida Students",
+      "url": "https://www.nasa.gov/?p=1056421",
+      "summary": "Students in Florida will hear from NASA astronauts Jessica Watkins and Luke Delaney as they answer prerecorded STEM questions while aboard the International Space Station. The Earth-to-space call will begin at 12 p.m. EDT Friday, Oct. 16, and will stream live on the agency’s Learn With NASA YouTube channel. This event is hosted by Sally Ride Elementary School […]",
+      "published": "Wed, 14 Oct 2026 19:12:51 +0000",
+      "fingerprint": "71ca0b9a88f2af491fe4f95ece56f76dd4acd299cf411ae03f3f62acb1340def"
     },
     {
       "source": "NASA News",

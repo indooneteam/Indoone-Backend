@@ -187,7 +187,19 @@ async def request_context_middleware(request: Request, call_next):
         request.method.upper() == "GET"
         and request.url.path in {"/health", "/ready"}
     )
-    authentication_exempt = provider_webhook or public_oauth_callback or public_health_check
+    # A CORS preflight carries no credentials, by design: the browser sends it
+    # before it will send the real request. This middleware runs before the CORS
+    # middleware, so refusing a preflight here means the browser never receives
+    # an allow-origin header - and then never sends the real call at all. The
+    # CORS middleware still decides whether the origin is allowed, and answers a
+    # preflight from an origin it does not allow without that header.
+    preflight = request.method.upper() == "OPTIONS"
+    authentication_exempt = (
+        provider_webhook
+        or public_oauth_callback
+        or public_health_check
+        or preflight
+    )
     principal = ""
     if authorization and not authentication_exempt:
         try:

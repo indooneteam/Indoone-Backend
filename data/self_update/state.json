@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-14T21:44:03.064676+00:00",
+  "updated_at": "2026-10-15T17:04:53.948426+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -33,6 +33,14 @@
       "summary": "NASA will preview two upcoming spacewalks to complete solar array installation and power augmentation of the International Space Station during a news conference at 2 p.m. EDT, Tuesday, Oct. 20, from NASA’s Johnson Space Center in Houston. NASA will stream the event through a variety of platforms. Learn where to watch online: https://www.nasa.gov/live NASA participants […]",
       "published": "Wed, 14 Oct 2026 20:13:29 +0000",
       "fingerprint": "49474dd15ead130d32c845f8916a5b6b35b8adaf3b0e1a62a3a4a2c316043ac5"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Astronauts to Answer Questions from Florida Students",
+      "url": "https://www.nasa.gov/?p=1056421",
+      "summary": "Editor’s Note: This article was updated Thursday, Oct. 15, 2026, to reflect a change to the event start time. Students in Florida will hear from NASA astronauts Jessica Watkins and Luke Delaney as they answer prerecorded STEM questions while aboard the International Space Station. The Earth-to-space call will begin at 12:30 p.m. EDT Friday, Oct. 16, […]",
+      "published": "Wed, 14 Oct 2026 19:12:51 +0000",
+      "fingerprint": "be18dcec1c873eb523e3f30216420e5d139fa637677fb3ed23a948bb117902d0"
     },
     {
       "source": "NASA News",
@@ -249,6 +257,38 @@
       "summary": "A newly released panorama captured by NASA’s Curiosity rover offers the most detailed view yet of distant, wind-carved Martian cliffs, highlighting features the mission’s scientists have long been waiting to see up close. The scene was snapped at 8:30 a.m. local Mars time, showing striking blue hues in the foreground as bright morning light illuminates […]",
       "published": "Tue, 06 Oct 2026 15:30:07 +0000",
       "fingerprint": "d02dfe94a53b2ad3ead0f6a689058d99fd47908d0eb0e5ec1d57e55de02dac0b"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Conduct Low-Altitude Flights Over Texas Farmland",
+      "url": "https://www.nasa.gov/?p=1056679",
+      "summary": "A NASA Dynamic Aviation A200 aircraft will conduct low-flying research flights over farmland near Transit, Texas, from Thursday, Oct. 22, through Monday, Nov. 9. These flights will measure gaseous and particulate emissions from animal feeding operations. Agricultural emissions represent an important and understudied part of Earth’s land and atmosphere systems. The FarmFlux mission will deploy […]",
+      "published": "Thu, 15 Oct 2026 16:42:10 +0000",
+      "fingerprint": "8d932aa3cd93132c4c2bb9498b070555ebf7ce7372ad20cd6c7906e20de98ae0"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Awards Enable Research, Technology to Build Future Workforce",
+      "url": "https://www.nasa.gov/?p=1056624",
+      "summary": "NASA has selected 12 U.S. institutions to receive $12 million to accelerate academic research and technology development in support of the agency’s priorities for exploring the Moon, Mars, and deep space. Through NASA’s Minority University Research and Education Project (MUREP) Space Technology Artemis Research (M‑STAR) initiative, selected institutions will each receive up to $1 million […]",
+      "published": "Thu, 15 Oct 2026 15:57:47 +0000",
+      "fingerprint": "036ed10a3840b8a94ee6ae55c6e6f6dd08f1aaea8721121f9d981bd78250d7db"
+    },
+    {
+      "source": "NASA News",
+      "title": "Rigorous Analysis Confirms NASA’s Artemis II Heat Shield Performance",
+      "url": "https://www.nasa.gov/?p=1056507",
+      "summary": "NASA’s Artemis II mission sent four astronauts around the Moon and brought them safely back to Earth, laying a foundation for crewed flights to the Moon’s surface. Additional engineering data analysis of the Orion spacecraft’s heat shield confirmed initial data showing the heat shield performed as expected. In particular, NASA measured whether the thermal protection […]",
+      "published": "Thu, 15 Oct 2026 14:57:21 +0000",
+      "fingerprint": "e6c5ee05c960deea14f33c8a0cc4eb90c6e3e50bc92f577277eefbe8fb0061fd"
+    },
+    {
+      "source": "NASA News",
+      "title": "Chandra Finds Possible Origin of ‘Treble Clef’ Waves",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1056389",
+      "summary": "A formation of radio waves looks remarkably like a treble clef in this Oct. 14, 2026, image from NASA’s Chandra X-Ray Observatory. Researchers used Chandra to find that the Treble Clef is likely caused by an outburst from a supermassive black hole, followed by a collision of two galaxy clusters. Read more about this discovery. […]",
+      "published": "Thu, 15 Oct 2026 14:19:06 +0000",
+      "fingerprint": "7371be435f77a1d2cf565e7f9274a0f82dd71e44cb203a180e1c3a7a3f49ff2c"
     },
     {
       "source": "NASA News",

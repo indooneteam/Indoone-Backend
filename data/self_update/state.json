@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-15T21:26:27.886694+00:00",
+  "updated_at": "2026-10-16T16:42:30.016374+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -433,6 +433,22 @@
       "summary": "NASA is leveraging its expertise and enhancing its test facilities to help address a rare but persistent aviation hazard: icing that occurs when aircraft encounter unusually large, very cold water droplets in clouds. The problem, known as “supercooled large droplet icing,” occurs when aircraft fly through clouds containing unusually large drops of water that are […]",
       "published": "Mon, 05 Oct 2026 15:27:23 +0000",
       "fingerprint": "02dd6bc06d658946e4fabf3af179217bae545ab48331a4276a999b47a8c5234c"
+    },
+    {
+      "source": "NASA News",
+      "title": "Artemis II Heat Shield After Splashdown",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1057059",
+      "summary": "Shortly after NASA’s Artemis II mission splashed down on April 10, 2026, U.S. Navy divers captured underwater imagery of the Orion spacecraft’s heat shield. In the months after, the agency measured whether the thermal protection system effectively safeguarded the crew and Orion systems as the spacecraft reentered Earth’s atmosphere. This rigorous analysis confirmed that the […]",
+      "published": "Fri, 16 Oct 2026 16:28:01 +0000",
+      "fingerprint": "bf2b6a73c1ca879f2ab14ee5d48b907c01d54c5c26e2fea230d05ba47ea962c0"
+    },
+    {
+      "source": "NASA News",
+      "title": "I Am Artemis: Allison Mjoen",
+      "url": "https://www.nasa.gov/?p=1056996",
+      "summary": "As the supercooled propellant flowed into the core stage, and NASA’s SLS (Space Launch System) rocket roared to life, Allison Mjoen and her family watched with awe and pride. Mjoen, NASA’s operations manager for the agency’s Exploration Ground Systems Program, helped shape the systems and ground operations that will one day send humans back to […]",
+      "published": "Fri, 16 Oct 2026 14:24:29 +0000",
+      "fingerprint": "f4705dcdbc02880f075b381d2ac76554afb09d69fa0e7b8c360804631625720a"
     },
     {
       "source": "NASA News",

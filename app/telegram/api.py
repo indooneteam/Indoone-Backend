@@ -4,6 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.telegram.ai_reply import process_telegram_update
+from app.api.errors import provider_failure
 from app.telegram.service import (
     delete_webhook,
     get_updates,
@@ -46,7 +47,7 @@ async def telegram_probe() -> dict[str, object]:
     try:
         return await probe_telegram()
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("telegram", exc, status_code=503) from exc
 
 
 @router.post("/updates")
@@ -56,7 +57,7 @@ async def telegram_updates(request: TelegramUpdatesRequest) -> dict[str, object]
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("telegram", exc, status_code=503) from exc
 
 
 @router.post("/send-message")
@@ -68,7 +69,7 @@ async def telegram_send_message(request: TelegramSendRequest) -> dict[str, objec
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise provider_failure("telegram", exc, status_code=502) from exc
 
 
 @router.get("/webhook")
@@ -76,7 +77,7 @@ async def telegram_webhook_info() -> dict[str, object]:
     try:
         return await get_webhook_info()
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("telegram", exc, status_code=503) from exc
 
 
 @router.post("/webhook")
@@ -88,7 +89,7 @@ async def telegram_set_webhook(request: TelegramWebhookRequest) -> dict[str, obj
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise provider_failure("telegram", exc, status_code=502) from exc
 
 
 @router.delete("/webhook")
@@ -98,7 +99,7 @@ async def telegram_delete_webhook(request: TelegramWebhookDeleteRequest) -> dict
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise provider_failure("telegram", exc, status_code=502) from exc
 
 
 @router.post("/webhook/incoming")

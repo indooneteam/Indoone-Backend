@@ -50,6 +50,7 @@ from app.capabilities.voice_session import (
 )
 
 from app.plugins.gmail.oauth_routes import router as gmail_oauth_router
+from app.api.errors import provider_failure
 
 router = APIRouter(tags=["capabilities"])
 router.include_router(gmail_oauth_router)
@@ -191,7 +192,7 @@ async def connect_integration(integration_id: str, request: IntegrationConnectRe
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("capability", exc, status_code=503) from exc
 
 
 @router.post("/integrations/{integration_id}/callback")
@@ -201,7 +202,7 @@ async def integration_callback(integration_id: str, request: IntegrationCallback
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (RuntimeError, httpx.HTTPError) as exc:
-        raise HTTPException(status_code=502, detail=f"oauth exchange failed: {exc}") from exc
+        raise provider_failure("oauth exchange", exc) from exc
 
 
 @router.get("/integrations/{integration_id}/callback", response_class=HTMLResponse)
@@ -383,7 +384,7 @@ async def image_generation(request: ImageGenerationRequest) -> dict[str, object]
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("capability", exc, status_code=503) from exc
     return {"result": {"provider": result.provider, "model": result.model, "mime_type": result.mime_type, "image_base64": result.image_base64, "metadata": result.metadata}}
 
 
@@ -394,7 +395,7 @@ async def voice_transcribe(request: VoiceTranscriptionRequest) -> dict[str, obje
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("capability", exc, status_code=503) from exc
     return {"result": {"text": result.text, "language": result.language, "provider": result.provider}}
 
 
@@ -405,7 +406,7 @@ async def voice_synthesize(request: VoiceSynthesisRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("capability", exc, status_code=503) from exc
     return {"result": {"audio_base64": result.audio_base64, "mime_type": result.mime_type, "language": result.language, "voice": result.voice, "provider": result.provider}}
 
 

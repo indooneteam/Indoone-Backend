@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from secrets import token_urlsafe
 
 from app.capabilities.store import create_oauth_state
+from app.api.errors import provider_failure
 from app.capabilities.youtube_live import (
     bind_broadcast,
     create_broadcast,
@@ -196,7 +197,7 @@ async def connect(request: LiveConnectRequest) -> dict[str, object]:
         result["live_enabled"] = True
         return {**result, "state": state}
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("youtube live", exc, status_code=503) from exc
 
 
 @router.post("/callback")
@@ -210,7 +211,7 @@ async def callback(request: LiveCallbackRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube live oauth failed: {exc}") from exc
+        raise provider_failure("youtube live oauth", exc) from exc
 
 
 def _route_error(exc: Exception, operation: str) -> HTTPException:
@@ -219,8 +220,8 @@ def _route_error(exc: Exception, operation: str) -> HTTPException:
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=str(exc))
     if isinstance(exc, (httpx.HTTPError, RuntimeError)):
-        return HTTPException(status_code=502, detail=f"youtube live {operation} failed: {exc}")
-    return HTTPException(status_code=500, detail=f"youtube live {operation} failed")
+        return provider_failure(f"youtube live {operation}", exc)
+    return provider_failure(f"youtube live {operation}", exc, status_code=500)
 
 
 @router.post("/broadcasts")

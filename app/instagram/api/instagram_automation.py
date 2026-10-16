@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.instagram.capabilities.instagram_automation import plan_automation
 from app.instagram.capabilities.instagram_comments import reply_to_comment
 from app.instagram.capabilities.instagram_messaging import send_text_message
+from app.api.errors import REQUEST_FAILED_MESSAGE, provider_failure
 
 router = APIRouter(prefix="/integrations/instagram/automation", tags=["instagram-automation"])
 
@@ -48,7 +49,7 @@ async def plan(request: PlanRequest) -> dict[str, object]:
 @router.post("/execute")
 async def execute(request: ExecuteRequest) -> dict[str, object]:
     if not request.approved:
-        raise HTTPException(status_code=403, detail="instagram automation execution requires explicit approval")
+        raise HTTPException(status_code=403, detail="Automation execution requires explicit approval")
 
     results: list[dict[str, object]] = []
     for action in request.actions:
@@ -74,9 +75,9 @@ async def execute(request: ExecuteRequest) -> dict[str, object]:
         except (ValueError, PermissionError) as exc:
             results.append({"action": action.action, "success": False, "error": str(exc)})
         except httpx.HTTPError as exc:
-            results.append({"action": action.action, "success": False, "error": f"provider failed: {exc}"})
+            results.append({"action": action.action, "success": False, "error": REQUEST_FAILED_MESSAGE})
         except RuntimeError as exc:
-            results.append({"action": action.action, "success": False, "error": str(exc)})
+            results.append({"action": action.action, "success": False, "error": REQUEST_FAILED_MESSAGE})
 
     return {
         "integration": "instagram",

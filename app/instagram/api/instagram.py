@@ -14,6 +14,7 @@ from app.instagram.capabilities.instagram import (
     publish_media,
 )
 from app.capabilities.store import create_oauth_state
+from app.api.errors import provider_failure
 
 router = APIRouter(prefix="/integrations/instagram", tags=["instagram"])
 
@@ -80,7 +81,7 @@ async def callback(request: CallbackRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"instagram oauth failed: {exc}") from exc
+        raise provider_failure("instagram oauth", exc) from exc
 
 
 @router.post("/profile")
@@ -90,7 +91,7 @@ async def profile(request: UserRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram provider failed: {exc}") from exc
+        raise provider_failure("instagram provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -102,7 +103,7 @@ async def media(request: MediaListRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram provider failed: {exc}") from exc
+        raise provider_failure("instagram provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -120,7 +121,7 @@ async def create_container(request: CreateContainerRequest) -> dict[str, object]
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram provider failed: {exc}") from exc
+        raise provider_failure("instagram provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -134,6 +135,6 @@ async def publish(request: PublishRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram provider failed: {exc}") from exc
+        raise provider_failure("instagram provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

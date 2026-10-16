@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException
 from app.ai.approval import validate_approval_token
 from app.ai.connector_authorization import authorize_tool
 from pydantic import BaseModel, Field
+from app.api.errors import provider_failure
 
 from app.plugins.github.service import (
     list_github_issues,
@@ -94,9 +95,9 @@ async def github_repositories(request: GithubRepositoriesRequest) -> dict[str, o
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub provider request failed") from exc
+        raise provider_failure("GitHub provider request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 
 @router.post("/issues")
@@ -106,9 +107,9 @@ async def github_issues(request: GithubIssuesRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub provider request failed") from exc
+        raise provider_failure("GitHub provider request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 
 @router.post("/pull-requests")
@@ -118,9 +119,9 @@ async def github_pull_requests(request: GithubPullRequestsRequest) -> dict[str, 
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub provider request failed") from exc
+        raise provider_failure("GitHub provider request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 
 @router.post("/create-issue")
@@ -132,9 +133,9 @@ async def github_create_issue_endpoint(request: GithubCreateIssueRequest) -> dic
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub provider request failed") from exc
+        raise provider_failure("GitHub provider request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 
 @router.post("/comment")
@@ -146,9 +147,9 @@ async def github_comment_endpoint(request: GithubCommentRequest) -> dict[str, ob
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub provider request failed") from exc
+        raise provider_failure("GitHub provider request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 
 
@@ -172,9 +173,9 @@ async def github_repository_contents(request: GithubRepositoryPathRequest) -> di
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub repository contents request failed") from exc
+        raise provider_failure("GitHub repository contents request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 
 @router.post("/read-file")
@@ -184,9 +185,9 @@ async def github_repository_read_file(request: GithubReadFileRequest) -> dict[st
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub repository file request failed") from exc
+        raise provider_failure("GitHub repository file request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 
 @router.post("/search-code")
@@ -196,9 +197,9 @@ async def github_repository_search_code(request: GithubCodeSearchRequest) -> dic
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub code search request failed") from exc
+        raise provider_failure("GitHub code search request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 
 @router.post("/commits")
@@ -208,9 +209,9 @@ async def github_repository_commits(request: GithubCommitHistoryRequest) -> dict
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub commit history request failed") from exc
+        raise provider_failure("GitHub commit history request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 
 @router.post("/compare")
@@ -220,9 +221,9 @@ async def github_repository_compare(request: GithubCompareCommitsRequest) -> dic
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub commit comparison request failed") from exc
+        raise provider_failure("GitHub commit comparison request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc
 
 @router.post("/commit-file")
 async def github_repository_commit_file(request: GithubUpdateFileRequest) -> dict[str, object]:
@@ -252,9 +253,15 @@ async def github_repository_commit_file(request: GithubUpdateFileRequest) -> dic
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPStatusError as exc:
         if exc.response.status_code == 403:
-            raise HTTPException(status_code=403, detail="GitHub refused the write. Check the linked account's repository permissions.") from exc
-        raise HTTPException(status_code=502, detail="GitHub could not commit the file update.") from exc
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "The linked account does not have permission to write here. "
+                    "Check the account's repository permissions."
+                ),
+            ) from exc
+        raise provider_failure("GitHub could not commit the file update.", exc) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="GitHub file commit request failed.") from exc
+        raise provider_failure("GitHub file commit request failed.", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("github plugin", exc, status_code=503) from exc

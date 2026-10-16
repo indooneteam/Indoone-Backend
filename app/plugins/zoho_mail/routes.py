@@ -5,6 +5,7 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from app.api.errors import REQUEST_FAILED_MESSAGE, provider_failure
 
 from app.plugins.zoho_mail.service import (
     get_message_content,
@@ -81,12 +82,12 @@ def _raise_provider_error(exc: Exception) -> None:
     if isinstance(exc, ValueError):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if isinstance(exc, httpx.HTTPError):
-        raise HTTPException(status_code=502, detail="Zoho Mail API request failed") from exc
+        raise HTTPException(status_code=502, detail=REQUEST_FAILED_MESSAGE) from exc
     if isinstance(exc, PermissionError):
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     if isinstance(exc, RuntimeError):
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    raise HTTPException(status_code=500, detail="Zoho Mail request failed") from exc
+        raise provider_failure("zoho mail plugin", exc, status_code=503) from exc
+    raise HTTPException(status_code=500, detail=REQUEST_FAILED_MESSAGE) from exc
 
 
 @router.post("/accounts")

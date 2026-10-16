@@ -15,6 +15,7 @@ from app.capabilities.canva import (
     list_designs,
 )
 from app.capabilities.store import create_oauth_state
+from app.api.errors import provider_failure
 
 router = APIRouter(prefix="/integrations/canva", tags=["canva"])
 
@@ -63,7 +64,7 @@ async def connect(request: ConnectRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("canva", exc, status_code=503) from exc
 
 
 @router.post("/callback")
@@ -73,7 +74,7 @@ async def callback(request: CallbackRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"canva oauth failed: {exc}") from exc
+        raise provider_failure("canva oauth", exc) from exc
 
 
 @router.post("/designs")
@@ -83,9 +84,9 @@ async def designs(request: DesignsRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"canva provider failed: {exc}") from exc
+        raise provider_failure("canva provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("canva", exc, status_code=503) from exc
 
 
 @router.post("/design")
@@ -95,9 +96,9 @@ async def design(request: DesignRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"canva provider failed: {exc}") from exc
+        raise provider_failure("canva provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("canva", exc, status_code=503) from exc
 
 
 @router.post("/export-formats")
@@ -107,9 +108,9 @@ async def export_formats(request: DesignRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"canva provider failed: {exc}") from exc
+        raise provider_failure("canva provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("canva", exc, status_code=503) from exc
 
 
 @router.post("/export")
@@ -121,9 +122,9 @@ async def export_design(request: ExportCreateRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"canva provider failed: {exc}") from exc
+        raise provider_failure("canva provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("canva", exc, status_code=503) from exc
 
 
 @router.post("/export-job")
@@ -133,6 +134,6 @@ async def export_job(request: ExportJobRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"canva provider failed: {exc}") from exc
+        raise provider_failure("canva provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("canva", exc, status_code=503) from exc

@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from app.api.errors import provider_failure
 
 from app.plugins.gmail.service import (
     create_gmail_draft,
@@ -74,9 +75,9 @@ async def gmail_messages(request: GmailMessagesRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"gmail provider failed: {exc}") from exc
+        raise provider_failure("gmail provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("gmail plugin", exc, status_code=503) from exc
 
 
 @router.post("/message")
@@ -86,9 +87,9 @@ async def gmail_message(request: GmailMessageRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"gmail provider failed: {exc}") from exc
+        raise provider_failure("gmail provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("gmail plugin", exc, status_code=503) from exc
 
 
 @router.post("/send")
@@ -100,9 +101,9 @@ async def gmail_send(request: GmailSendRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"gmail provider failed: {exc}") from exc
+        raise provider_failure("gmail provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("gmail plugin", exc, status_code=503) from exc
 
 
 
@@ -112,8 +113,8 @@ async def gmail_drafts_list(request: GmailMessagesRequest) -> dict[str, object]:
         return await list_gmail_drafts(request.user_id, request.max_results)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Gmail provider failed to list drafts")
+    except httpx.HTTPError as exc:
+        raise provider_failure("Gmail provider failed to list drafts", exc) from exc
 
 
 @router.post("/drafts")
@@ -122,10 +123,10 @@ async def gmail_create_draft(request: GmailDraftRequest) -> dict[str, object]:
         return await create_gmail_draft(request.user_id, request.to, request.subject, request.body)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Gmail provider failed to create draft")
+    except httpx.HTTPError as exc:
+        raise provider_failure("Gmail provider failed to create draft", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("gmail plugin", exc, status_code=503) from exc
 
 
 @router.put("/drafts")
@@ -140,10 +141,10 @@ async def gmail_update_draft(request: GmailDraftUpdateRequest) -> dict[str, obje
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Gmail provider failed to update draft")
+    except httpx.HTTPError as exc:
+        raise provider_failure("Gmail provider failed to update draft", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("gmail plugin", exc, status_code=503) from exc
 
 
 @router.post("/drafts/delete")
@@ -154,8 +155,8 @@ async def gmail_delete_draft(request: GmailDraftActionRequest) -> dict[str, obje
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Gmail provider failed to delete draft")
+    except httpx.HTTPError as exc:
+        raise provider_failure("Gmail provider failed to delete draft", exc) from exc
 
 
 @router.post("/messages/delete")
@@ -166,8 +167,8 @@ async def gmail_delete_message(request: GmailMessageActionRequest) -> dict[str, 
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Gmail provider failed to move message to Trash")
+    except httpx.HTTPError as exc:
+        raise provider_failure("Gmail provider failed to move message to Trash", exc) from exc
 
 
 @router.post("/reply")
@@ -183,7 +184,7 @@ async def gmail_reply(request: GmailReplyRequest) -> dict[str, object]:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except httpx.HTTPError:
-        raise HTTPException(status_code=502, detail="Gmail provider failed to send reply")
+    except httpx.HTTPError as exc:
+        raise provider_failure("Gmail provider failed to send reply", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("gmail plugin", exc, status_code=503) from exc

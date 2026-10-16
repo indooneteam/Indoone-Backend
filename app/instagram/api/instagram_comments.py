@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from app.api.errors import provider_failure
 
 from app.instagram.capabilities.instagram_comments import (
     create_media_comment,
@@ -50,7 +51,7 @@ async def media_comments(request: MediaCommentsRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram comments provider failed: {exc}") from exc
+        raise provider_failure("instagram comments provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -64,7 +65,7 @@ async def create_comment(request: CreateCommentRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram comments provider failed: {exc}") from exc
+        raise provider_failure("instagram comments provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -78,7 +79,7 @@ async def reply(request: CommentRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram comments provider failed: {exc}") from exc
+        raise provider_failure("instagram comments provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -92,7 +93,7 @@ async def delete(request: CommentRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram comments provider failed: {exc}") from exc
+        raise provider_failure("instagram comments provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -106,6 +107,6 @@ async def moderate(request: ModerationRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram comments provider failed: {exc}") from exc
+        raise provider_failure("instagram comments provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

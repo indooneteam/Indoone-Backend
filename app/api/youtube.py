@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from secrets import token_urlsafe
 
 from app.capabilities.store import create_oauth_state
+from app.api.errors import provider_failure
 from app.capabilities.youtube import (
     build_youtube_authorization,
     exchange_youtube_code,
@@ -289,7 +290,7 @@ async def connect(request: ConnectRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("youtube", exc, status_code=503) from exc
 
 
 @router.post("/normal/connect")
@@ -299,7 +300,7 @@ async def normal_connect(request: ConnectRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("youtube", exc, status_code=503) from exc
 
 
 @router.post("/channel/connect")
@@ -309,7 +310,7 @@ async def channel_connect(request: ConnectRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("youtube", exc, status_code=503) from exc
 
 
 @router.post("/video-manager/connect")
@@ -319,7 +320,7 @@ async def video_manager_connect(request: ManagerConnectRequest) -> dict[str, obj
         create_oauth_state(state, request.user_id, "youtube_video_manager", request.redirect_uri.strip())
         return {**build_youtube_manager_authorization(state, request.redirect_uri), "state": state}
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("youtube", exc, status_code=503) from exc
 
 
 @router.post("/callback")
@@ -329,7 +330,7 @@ async def callback(request: CallbackRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube oauth failed: {exc}") from exc
+        raise provider_failure("youtube oauth", exc) from exc
 
 
 @router.post("/video-manager/callback")
@@ -339,7 +340,7 @@ async def video_manager_callback(request: ManagerCallbackRequest) -> dict[str, o
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube video manager oauth failed: {exc}") from exc
+        raise provider_failure("youtube video manager oauth", exc) from exc
 
 
 @router.post("/search")
@@ -349,7 +350,7 @@ async def search(request: SearchRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube search failed: {exc}") from exc
+        raise provider_failure("youtube search", exc) from exc
 
 
 @router.post("/videos")
@@ -359,7 +360,7 @@ async def videos(request: VideoRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube video lookup failed: {exc}") from exc
+        raise provider_failure("youtube video lookup", exc) from exc
 
 
 @router.post("/my-channel")
@@ -369,7 +370,7 @@ async def my_channel(request: ChannelRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube channel lookup failed: {exc}") from exc
+        raise provider_failure("youtube channel lookup", exc) from exc
 
 
 @router.post("/dashboard")
@@ -379,7 +380,7 @@ async def dashboard(request: DashboardRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube dashboard failed: {exc}") from exc
+        raise provider_failure("youtube dashboard", exc) from exc
 
 
 @router.post("/video/update")
@@ -400,7 +401,7 @@ async def video_update(request: VideoUpdateRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube video update failed: {exc}") from exc
+        raise provider_failure("youtube video update", exc) from exc
 
 
 @router.post("/video/delete")
@@ -412,7 +413,7 @@ async def video_delete(request: VideoDeleteRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube video delete failed: {exc}") from exc
+        raise provider_failure("youtube video delete", exc) from exc
 
 
 @router.post("/video/thumbnail")
@@ -425,7 +426,7 @@ async def video_thumbnail(request: ThumbnailRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube thumbnail update failed: {exc}") from exc
+        raise provider_failure("youtube thumbnail update", exc) from exc
 
 
 @router.post("/playlist/list")
@@ -435,7 +436,7 @@ async def playlist_list(request: PlaylistListRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube playlist list failed: {exc}") from exc
+        raise provider_failure("youtube playlist list", exc) from exc
 
 
 @router.post("/playlist/get")
@@ -445,7 +446,7 @@ async def playlist_get(request: PlaylistRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube playlist get failed: {exc}") from exc
+        raise provider_failure("youtube playlist get", exc) from exc
 
 
 @router.post("/playlist/create")
@@ -457,7 +458,7 @@ async def playlist_create(request: PlaylistCreateRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube playlist create failed: {exc}") from exc
+        raise provider_failure("youtube playlist create", exc) from exc
 
 
 @router.post("/playlist/update")
@@ -469,7 +470,7 @@ async def playlist_update(request: PlaylistUpdateRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube playlist update failed: {exc}") from exc
+        raise provider_failure("youtube playlist update", exc) from exc
 
 
 @router.post("/playlist/delete")
@@ -481,7 +482,7 @@ async def playlist_delete(request: PlaylistRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube playlist delete failed: {exc}") from exc
+        raise provider_failure("youtube playlist delete", exc) from exc
 
 
 @router.post("/playlist/items")
@@ -491,7 +492,7 @@ async def playlist_items(request: PlaylistItemListRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube playlist items failed: {exc}") from exc
+        raise provider_failure("youtube playlist items", exc) from exc
 
 
 @router.post("/playlist/add")
@@ -503,7 +504,7 @@ async def playlist_add(request: PlaylistAddRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube playlist add failed: {exc}") from exc
+        raise provider_failure("youtube playlist add", exc) from exc
 
 
 @router.post("/playlist/remove")
@@ -515,7 +516,7 @@ async def playlist_remove(request: PlaylistItemRemoveRequest) -> dict[str, objec
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube playlist remove failed: {exc}") from exc
+        raise provider_failure("youtube playlist remove", exc) from exc
 
 
 @router.post("/playlist/reorder")
@@ -527,7 +528,7 @@ async def playlist_reorder(request: PlaylistItemReorderRequest) -> dict[str, obj
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube playlist reorder failed: {exc}") from exc
+        raise provider_failure("youtube playlist reorder", exc) from exc
 
 
 @router.post("/comments/list")
@@ -548,7 +549,7 @@ async def comments_list(request: CommentThreadListRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube comment list failed: {exc}") from exc
+        raise provider_failure("youtube comment list", exc) from exc
 
 
 @router.post("/comments/replies")
@@ -564,7 +565,7 @@ async def comments_replies(request: CommentRepliesRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube comment replies failed: {exc}") from exc
+        raise provider_failure("youtube comment replies", exc) from exc
 
 
 @router.post("/comments/create")
@@ -582,7 +583,7 @@ async def comments_create(request: TopLevelCommentRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube comment create failed: {exc}") from exc
+        raise provider_failure("youtube comment create", exc) from exc
 
 
 @router.post("/comments/reply")
@@ -594,7 +595,7 @@ async def comments_reply(request: CommentReplyRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube comment reply failed: {exc}") from exc
+        raise provider_failure("youtube comment reply", exc) from exc
 
 
 @router.post("/comments/update")
@@ -606,7 +607,7 @@ async def comments_update(request: CommentUpdateRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube comment update failed: {exc}") from exc
+        raise provider_failure("youtube comment update", exc) from exc
 
 
 @router.post("/comments/delete")
@@ -618,7 +619,7 @@ async def comments_delete(request: CommentDeleteRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube comment delete failed: {exc}") from exc
+        raise provider_failure("youtube comment delete", exc) from exc
 
 
 @router.post("/comments/moderate")
@@ -636,7 +637,7 @@ async def comments_moderate(request: CommentModerateRequest) -> dict[str, object
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube comment moderation failed: {exc}") from exc
+        raise provider_failure("youtube comment moderation", exc) from exc
 
 
 @router.post("/upload")
@@ -649,4 +650,4 @@ async def upload(request: UploadRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"youtube upload failed: {exc}") from exc
+        raise provider_failure("youtube upload", exc) from exc

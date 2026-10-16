@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.web_research.research import build_free_research_provider
+from app.api.errors import REQUEST_FAILED_MESSAGE, provider_failure
 
 router = APIRouter(tags=["web-research"])
 
@@ -26,11 +27,11 @@ class DeepResearchRequest(BaseModel):
 async def research(request: ResearchRequest) -> dict[str, object]:
     provider = build_free_research_provider()
     if provider is None:
-        raise HTTPException(status_code=503, detail="live research provider is not configured")
+        raise HTTPException(status_code=503, detail=REQUEST_FAILED_MESSAGE)
     try:
         results = await provider.search(request.query, request.limit)
     except (RuntimeError, ValueError, httpx.HTTPError) as exc:
-        raise HTTPException(status_code=502, detail=f"research provider failed: {exc}") from exc
+        raise provider_failure("research provider", exc) from exc
     return {
         "query": request.query,
         "results": [
@@ -44,7 +45,7 @@ async def research(request: ResearchRequest) -> dict[str, object]:
 async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
     provider = build_free_research_provider()
     if provider is None:
-        raise HTTPException(status_code=503, detail="live research provider is not configured")
+        raise HTTPException(status_code=503, detail=REQUEST_FAILED_MESSAGE)
     queries = [
         request.query,
         f"{request.query} official sources",
@@ -56,7 +57,7 @@ async def deep_research(request: DeepResearchRequest) -> dict[str, object]:
         try:
             batch = await provider.search(query, request.per_query_limit)
         except (RuntimeError, ValueError, httpx.HTTPError) as exc:
-            raise HTTPException(status_code=502, detail=f"research provider failed: {exc}") from exc
+            raise provider_failure("research provider", exc) from exc
         for item in batch:
             if item.url in seen:
                 continue

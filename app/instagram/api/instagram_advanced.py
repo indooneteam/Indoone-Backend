@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from app.api.errors import provider_failure
 
 from app.instagram.capabilities.instagram_advanced import (
     get_container_status,
@@ -37,7 +38,7 @@ async def reels(request: MediaListRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram reels provider failed: {exc}") from exc
+        raise provider_failure("instagram reels provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -49,7 +50,7 @@ async def stories(request: MediaListRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram stories provider failed: {exc}") from exc
+        raise provider_failure("instagram stories provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -61,7 +62,7 @@ async def media(request: MediaDetailsRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram media provider failed: {exc}") from exc
+        raise provider_failure("instagram media provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -73,6 +74,6 @@ async def container(request: ContainerRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram container provider failed: {exc}") from exc
+        raise provider_failure("instagram container provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.capabilities.integrations import _fernet
 from app.capabilities.store import delete_integration_token, get_integration_token, get_integration_token_metadata
 from app.plugins.gmail.oauth import exchange_gmail_server_auth_code, gmail_server_authorization_config, store_native_access_token
+from app.api.errors import provider_failure
 
 
 router = APIRouter(tags=["gmail"])
@@ -36,7 +37,7 @@ async def gmail_auth_config() -> dict[str, object]:
         # Only the public client ID is returned; secrets remain server-side.
         return gmail_server_authorization_config()
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("gmail authorization", exc, status_code=503) from exc
 
 
 @router.post("/integrations/gmail/server-auth-code")
@@ -50,9 +51,9 @@ async def gmail_server_auth_code(request: GmailServerAuthCodeRequest) -> dict[st
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Google rejected the Gmail authorization code") from exc
+        raise provider_failure("Google rejected the Gmail authorization code", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("gmail authorization", exc, status_code=503) from exc
 
 @router.post("/integrations/gmail/disconnect")
 async def gmail_disconnect(request: GmailDisconnectRequest) -> dict[str, object]:
@@ -143,6 +144,6 @@ async def gmail_native_token(request: NativeIntegrationTokenRequest) -> dict[str
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Google rejected the Gmail access token") from exc
+        raise provider_failure("Google rejected the Gmail access token", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("gmail authorization", exc, status_code=503) from exc

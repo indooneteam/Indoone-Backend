@@ -396,7 +396,8 @@ async def _handle_gemini_message(
     try:
         message = json.loads(raw_message)
     except (TypeError, ValueError):
-        await _send_error(websocket, "Gemini Live returned invalid JSON.")
+        logger.warning("Gemini Live returned invalid JSON")
+        await _send_error(websocket, _VOICE_ERROR_MESSAGE)
         return False
 
     if not isinstance(message, dict):
@@ -714,9 +715,12 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
     try:
         api_key, model, voice, thinking_level = _live_config()
     except RuntimeError as exc:
+        # A configuration failure is ours to fix, not the user's to read. Log the real
+        # reason and send the same wording the client already understands.
+        logger.error("Vibe live configuration is not usable: %s", exc)
         if not accepted:
             await websocket.accept()
-        await _send_error(websocket, str(exc))
+        await _send_error(websocket, _VOICE_ERROR_MESSAGE)
         return
 
     if not accepted:
@@ -771,19 +775,15 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
     except Exception as exc:
         response = getattr(exc, "response", None)
         status = getattr(response, "status_code", None)
-        if status:
-            detail = (
-                f"Google Gemini Live rejected the connection (HTTP {status}). "
-                "Check GEMINI_LIVE_MODEL and Gemini API access."
-            )
-        elif isinstance(exc, TimeoutError):
-            detail = "Gemini Live setup timed out. Check the model and network access."
-        elif isinstance(exc, RuntimeError) and str(exc).startswith("Gemini Live"):
-            detail = str(exc)
-        else:
-            detail = "Gemini Live connection failed. Check the backend log for the error type."
-        logger.warning("Indoone Vibe Live session failed (%s)", type(exc).__name__)
-        await _send_error(websocket, detail)
+        # Every branch now logs the real reason and sends the same user-facing wording.
+        # The status code, the model name and the exception text stay in the log, where
+        # they are useful, and out of the message, where they are not.
+        logger.warning(
+            "Indoone Vibe Live session failed (%s, HTTP %s)",
+            type(exc).__name__,
+            status or "none",
+        )
+        await _send_error(websocket, _VOICE_ERROR_MESSAGE)
 
 
 @router.websocket("/vibe/session")

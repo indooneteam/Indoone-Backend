@@ -16,6 +16,14 @@ def _db_path() -> Path:
     return Path(os.getenv("INDOONE_CAPABILITY_DB", "data/indoone_capabilities.db"))
 
 
+# Reply rules are set by the business that connected a channel account. The
+# limits match the ones the channel automation module already enforces.
+_CHANNEL_RULE_TRIGGERS = frozenset({"comment", "message"})
+_CHANNEL_RULE_MAX_PER_CHANNEL = 50
+_CHANNEL_RULE_MAX_KEYWORD = 2200
+_CHANNEL_RULE_MAX_RESPONSE = 2200
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -126,6 +134,20 @@ def initialize() -> None:
             );
             CREATE INDEX IF NOT EXISTS idx_channel_inbound_events_updated
                 ON channel_inbound_events(updated_at);
+            CREATE TABLE IF NOT EXISTS channel_rules (
+                user_id TEXT NOT NULL,
+                rule_id TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                trigger TEXT NOT NULL CHECK(trigger IN ('comment', 'message')),
+                keyword TEXT NOT NULL,
+                response TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, rule_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_channel_rules_user_channel
+                ON channel_rules(user_id, channel);
             CREATE INDEX IF NOT EXISTS idx_integration_tokens_user ON integration_tokens(user_id);
             CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
             CREATE INDEX IF NOT EXISTS idx_projects_user_updated ON projects(user_id, updated_at DESC);
@@ -697,3 +719,141 @@ def list_agent_runs(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
     with closing(_connect()) as db:
         rows = db.execute("SELECT * FROM agent_runs WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?", (user_id, limit)).fetchall()
     return [{**{key: row[key] for key in row.keys() if key not in {"steps", "results", "blocked_steps", "retry_counts"}}, "steps": json.loads(row["steps"]), "results": json.loads(row["results"]), "blocked_steps": json.loads(row["blocked_steps"]), "retry_counts": json.loads(row["retry_counts"])} for row in rows]
+
+
+def _channel_rule_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    data = dict(row)
+    data["enabled"] = bool(data["enabled"])
+    return data
+
+
+def upsert_channel_rule(
+    user_id: str,
+    channel: str,
+    trigger: str,
+    keyword: str,
+    response: str,
+    enabled: bool = True,
+    rule_id: str | None = None,
+) -> dict[str, Any]:
+    """Create or replace one reply rule for a connected channel account.
+
+    Passing a rule_id updates that rule in place and keeps its original
+    created_at; passing none creates a new one.
+    """
+    normalized_user = user_id.strip()
+    normalized_channel = channel.strip().lower()
+    normalized_trigger = trigger.strip().lower()
+    normalized_keyword = keyword.strip().lower()
+    normalized_response = response.strip()
+
+    if not normalized_user:
+        raise ValueError("user_id is required")
+    if not normalized_channel:
+        raise ValueError("channel is required")
+    if normalized_trigger not in _CHANNEL_RULE_TRIGGERS:
+        raise ValueError(f"trigger must be one of: {', '.join(sorted(_CHANNEL_RULE_TRIGGERS))}")
+    if not normalized_response:
+        raise ValueError("response is required")
+    if len(normalized_keyword) > _CHANNEL_RULE_MAX_KEYWORD:
+        raise ValueError(f"keyword must be at most {_CHANNEL_RULE_MAX_KEYWORD} characters")
+    if len(normalized_response) > _CHANNEL_RULE_MAX_RESPONSE:
+        raise ValueError(f"response must be at most {_CHANNEL_RULE_MAX_RESPONSE} characters")
+
+    initialize()
+    timestamp = _now()
+    identifier = (rule_id or "").strip()
+    existing = get_channel_rule(normalized_user, identifier) if identifier else None
+    if not identifier:
+        identifier = uuid4().hex
+    created_at = str(existing["created_at"]) if existing else timestamp
+
+    with closing(_connect()) as db:
+        if existing is None:
+            stored = db.execute(
+                "SELECT COUNT(*) FROM channel_rules WHERE user_id = ? AND channel = ?",
+                (normalized_user, normalized_channel),
+            ).fetchone()[0]
+            if stored >= _CHANNEL_RULE_MAX_PER_CHANNEL:
+                raise ValueError(f"a channel may hold at most {_CHANNEL_RULE_MAX_PER_CHANNEL} rules")
+        db.execute(
+            """
+            INSERT INTO channel_rules(user_id, rule_id, channel, trigger, keyword, response, enabled, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, rule_id) DO UPDATE SET
+                channel=excluded.channel,
+                trigger=excluded.trigger,
+                keyword=excluded.keyword,
+                response=excluded.response,
+                enabled=excluded.enabled,
+                updated_at=excluded.updated_at
+            """,
+            (
+                normalized_user,
+                identifier,
+                normalized_channel,
+                normalized_trigger,
+                normalized_keyword,
+                normalized_response,
+                1 if enabled else 0,
+                created_at,
+                timestamp,
+            ),
+        )
+        db.commit()
+
+    return get_channel_rule(normalized_user, identifier) or {}
+
+
+def get_channel_rule(user_id: str, rule_id: str) -> dict[str, Any] | None:
+    initialize()
+    with closing(_connect()) as db:
+        row = db.execute(
+            "SELECT user_id, rule_id, channel, trigger, keyword, response, enabled, created_at, updated_at FROM channel_rules WHERE user_id = ? AND rule_id = ?",
+            (user_id.strip(), rule_id.strip()),
+        ).fetchone()
+    return _channel_rule_row(row)
+
+
+def list_channel_rules(
+    user_id: str,
+    channel: str | None = None,
+    enabled_only: bool = False,
+) -> list[dict[str, Any]]:
+    initialize()
+    query = "SELECT user_id, rule_id, channel, trigger, keyword, response, enabled, created_at, updated_at FROM channel_rules WHERE user_id = ?"
+    parameters: list[Any] = [user_id.strip()]
+    if channel:
+        query += " AND channel = ?"
+        parameters.append(channel.strip().lower())
+    if enabled_only:
+        query += " AND enabled = 1"
+    query += " ORDER BY created_at ASC, rule_id ASC"
+
+    with closing(_connect()) as db:
+        rows = db.execute(query, tuple(parameters)).fetchall()
+    return [rule for rule in (_channel_rule_row(row) for row in rows) if rule is not None]
+
+
+def set_channel_rule_enabled(user_id: str, rule_id: str, enabled: bool) -> bool:
+    initialize()
+    with closing(_connect()) as db:
+        cursor = db.execute(
+            "UPDATE channel_rules SET enabled = ?, updated_at = ? WHERE user_id = ? AND rule_id = ?",
+            (1 if enabled else 0, _now(), user_id.strip(), rule_id.strip()),
+        )
+        db.commit()
+    return cursor.rowcount > 0
+
+
+def delete_channel_rule(user_id: str, rule_id: str) -> bool:
+    initialize()
+    with closing(_connect()) as db:
+        cursor = db.execute(
+            "DELETE FROM channel_rules WHERE user_id = ? AND rule_id = ?",
+            (user_id.strip(), rule_id.strip()),
+        )
+        db.commit()
+    return cursor.rowcount > 0

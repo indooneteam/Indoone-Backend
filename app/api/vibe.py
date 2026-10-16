@@ -41,7 +41,11 @@ _DEFAULT_LIVE_MODEL = "gemini-3.8-live-extended-thinking"
 
 # How long an accepted socket may wait for its opening auth message.
 _LIVE_AUTH_TIMEOUT_SECONDS = 15.0
-_DEFAULT_THINKING_LEVEL = "medium"
+# A live voice session must not go quiet while the model reasons: on the
+# extended-thinking live model, a higher level makes the audio stop mid-answer and
+# then resume, which the user hears as the voice cutting in and out. Low keeps the
+# reply continuous, which is what a spoken conversation needs.
+_DEFAULT_THINKING_LEVEL = "low"
 _VOICE_ERROR_MESSAGE = "Vibe could not reach the voice service. Please try again."
 
 _SYSTEM_INSTRUCTION = (
@@ -396,8 +400,7 @@ async def _handle_gemini_message(
     try:
         message = json.loads(raw_message)
     except (TypeError, ValueError):
-        logger.warning("Gemini Live returned invalid JSON")
-        await _send_error(websocket, _VOICE_ERROR_MESSAGE)
+        await _send_error(websocket, "Gemini Live returned invalid JSON.")
         return False
 
     if not isinstance(message, dict):
@@ -715,12 +718,9 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
     try:
         api_key, model, voice, thinking_level = _live_config()
     except RuntimeError as exc:
-        # A configuration failure is ours to fix, not the user's to read. Log the real
-        # reason and send the same wording the client already understands.
-        logger.error("Vibe live configuration is not usable: %s", exc)
         if not accepted:
             await websocket.accept()
-        await _send_error(websocket, _VOICE_ERROR_MESSAGE)
+        await _send_error(websocket, str(exc))
         return
 
     if not accepted:
@@ -773,15 +773,12 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         return
     except Exception as exc:
-        response = getattr(exc, "response", None)
-        status = getattr(response, "status_code", None)
-        # Every branch now logs the real reason and sends the same user-facing wording.
-        # The status code, the model name and the exception text stay in the log, where
-        # they are useful, and out of the message, where they are not.
+        # The reason stays in the log, where it is useful; the user gets our own message.
         logger.warning(
-            "Indoone Vibe Live session failed (%s, HTTP %s)",
+            "Indoone Vibe Live session failed (%s): %s",
             type(exc).__name__,
-            status or "none",
+            exc,
+            exc_info=True,
         )
         await _send_error(websocket, _VOICE_ERROR_MESSAGE)
 

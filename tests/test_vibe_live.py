@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 import pytest
 from fastapi.testclient import TestClient
@@ -173,21 +174,28 @@ def test_vibe_websocket_forwards_audio_and_translates_audio_response(
 
 def test_vibe_websocket_rejects_legacy_live_model_for_extended_thinking(
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
     monkeypatch.setenv("GEMINI_LIVE_MODEL", "gemini-3.8-live")
     monkeypatch.setattr(vibe_api, "extract_principal", lambda authorization: "test-user")
 
-    with TestClient(app) as client:
-        with client.websocket_connect(
-            "/api/vibe/session",
-            headers={"Authorization": "Bearer test-firebase-token"},
-        ) as websocket:
-            event = websocket.receive_json()
-            assert event == {
-                "type": "error",
-                "detail": "Indoone Vibe requires GEMINI_LIVE_MODEL=gemini-3.8-live-extended-thinking",
-            }
+    with caplog.at_level(logging.ERROR, logger="indoone.vibe"):
+        with TestClient(app) as client:
+            with client.websocket_connect(
+                "/api/vibe/session",
+                headers={"Authorization": "Bearer test-firebase-token"},
+            ) as websocket:
+                event = websocket.receive_json()
+
+    # The client is told the voice service could not be reached. Which model we require
+    # and which key is missing is our own configuration detail, so it goes to the log
+    # and not onto the wire.
+    assert event == {
+        "type": "error",
+        "detail": "Vibe could not reach the voice service. Please try again.",
+    }
+    assert "GEMINI_LIVE_MODEL=gemini-3.8-live-extended-thinking" in caplog.text
 
 
 def test_search_gmail_for_voice_uses_user_scoped_read_only_tools(monkeypatch: pytest.MonkeyPatch) -> None:

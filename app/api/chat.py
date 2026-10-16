@@ -1,4 +1,5 @@
 import base64
+import logging
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -39,6 +40,8 @@ from app.plugins.email_tools import (
     handle_email_chat_with_tools,
 )
 from app.plugins.github.chat_tools import handle_github_chat_with_tools
+
+logger = logging.getLogger("indoone.chat")
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
@@ -346,7 +349,17 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             headers={"Retry-After": "20"},
         ) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # The failure is logged in full and the client gets wording of our own. The
+        # provider's error text must not travel: it names a third party and points at
+        # our configuration rather than at anything the user can act on.
+        logger.error("Chat generation failed: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Indoone AI could not complete this request. "
+                "Please try again in a moment."
+            ),
+        ) from exc
 
     reply, web_sources = split_grounded_sources(reply_with_sources)
 

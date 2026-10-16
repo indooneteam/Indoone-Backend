@@ -136,6 +136,46 @@ def test_chat_returns_ai_reply(monkeypatch) -> None:
     assert response.headers["X-Request-ID"]
 
 
+def test_chat_does_not_leak_the_provider_error_to_the_client(monkeypatch, caplog) -> None:
+    """A provider failure must reach the client as our wording, never as the provider's.
+
+    The Gemini service raises a RuntimeError whose text carries the provider's own error
+    body. The API must log that text and answer with wording of our own, because the app
+    shows this detail to the user as the AI's reply.
+    """
+
+    async def failing_reply(
+        message: str, history=None, document_context="", extra_system_instruction=""
+    ) -> str:
+        raise RuntimeError(
+            "Gemini API returned HTTP 400: API key not valid. Please pass a valid API key."
+        )
+
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
+    monkeypatch.setattr("app.api.chat.generate_reply", failing_reply)
+
+    with caplog.at_level(logging.ERROR, logger="indoone.chat"):
+        response = client.post(
+            "/api/chat",
+            json={"message": "Hello Indoone"},
+            headers=_auth_headers(),
+        )
+
+    assert response.status_code == 503
+    # The HTTPException handler puts exc.detail on the response as "message", and that is
+    # the field the app reads first.
+    payload = response.json()
+    assert payload["code"] == "HTTP_503"
+    message = payload["message"]
+    assert message == (
+        "Indoone AI could not complete this request. Please try again in a moment."
+    )
+    assert "Gemini" not in message
+    assert "API key" not in message
+    # The real reason is not lost: it is in the log, where it is useful.
+    assert "Gemini API returned HTTP 400" in caplog.text
+
+
 def test_chat_reuses_conversation_context(monkeypatch, tmp_path: Path) -> None:
     observed: list[list[tuple[str, str]]] = []
 

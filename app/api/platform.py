@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -15,6 +16,8 @@ from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file, save_text_file
 from app.ai.memory import extract_memory_candidates
 from app.ai.service import generate_reply
+
+logger = logging.getLogger("indoone.platform")
 
 router = APIRouter(tags=["platform"])
 _stream_store = ConversationStore()
@@ -86,7 +89,16 @@ async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingRes
             document_context=document_context,
         )
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # Log the real failure; the client gets wording of our own that names no
+        # provider and no configuration key.
+        logger.error("Platform chat generation failed: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Indoone AI could not complete this request. "
+                "Please try again in a moment."
+            ),
+        ) from exc
 
     quality = assess_answer(body.message, reply)
     if not quality.passed:

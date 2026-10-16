@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-16T16:42:30.016374+00:00",
+  "updated_at": "2026-10-16T21:14:07.020363+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -433,6 +433,14 @@
       "summary": "NASA is leveraging its expertise and enhancing its test facilities to help address a rare but persistent aviation hazard: icing that occurs when aircraft encounter unusually large, very cold water droplets in clouds. The problem, known as “supercooled large droplet icing,” occurs when aircraft fly through clouds containing unusually large drops of water that are […]",
       "published": "Mon, 05 Oct 2026 15:27:23 +0000",
       "fingerprint": "02dd6bc06d658946e4fabf3af179217bae545ab48331a4276a999b47a8c5234c"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Names Stephen Cash Marshall Space Flight Center Director",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1057238",
+      "summary": "NASA Administrator Jared Isaacman has named Stephen Cash director of the agency’s Marshall Space Flight Center in Huntsville, Alabama, effective Monday, Oct. 19. Cash, a veteran NASA engineer and aerospace executive, returns to lead the center where he began his career more than four decades ago. “Marshall contributions to NASA’s missions are historic and it’s […]",
+      "published": "Fri, 16 Oct 2026 20:14:39 +0000",
+      "fingerprint": "6b26561d6f4e46827e5e2412ece07f39134e78666b924a402f0cd8ef06fed39c"
     },
     {
       "source": "NASA News",

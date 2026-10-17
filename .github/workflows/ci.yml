@@ -48,17 +48,16 @@ jobs:
           print("colab_notebook_python=valid")
           PY
 
-      # The agent, intent and orchestrator suites run again now that
-      # app/ai/question_understanding.py is back and POST /api/agent is mounted. Four stay
-      # out until somebody decides what they should assert: the first documents a
-      # chat-to-agent integration that does not exist, the second patches an internal name
-      # app/api/chat.py never had, and the last two patch a provider hook whose shape has
-      # changed. Keep this list as arguments only - the run block is folded into one line,
-      # so a # here would comment the rest of the command out.
+      # The agent, intent, orchestrator and chat-integration suites all run now: the
+      # question-understanding module is back, POST /api/agent is mounted, and the chat
+      # routes through the agent. Three stay out until somebody decides what they should
+      # assert: the first patches an internal name app/api/chat.py never had, and the last
+      # two patch a provider hook whose shape has changed. Keep this list as arguments
+      # only - the run block is folded into one line, so a # here would comment the rest
+      # of the command out.
       - name: Run tests
         run: >-
           python -m pytest -q -W error
-          --ignore=tests/test_agent_chat_integration.py
           --ignore=tests/test_chat_memory.py
           --ignore=tests/test_rag_service_integration.py
           --ignore=tests/test_service_knowledge.py

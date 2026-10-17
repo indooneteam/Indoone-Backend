@@ -29,6 +29,7 @@ from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
 from app.ai.gemini_service import ModelBusyError
 from app.ai.tool_loop import needs_tools, run_tool_loop
+from app.ai.agent_async import execute_agent_async
 from app.capabilities.store import get_pending_email_action, list_memories
 from datetime import datetime, timedelta, timezone
 
@@ -106,6 +107,32 @@ def _decode_chat_attachment(body: ChatRequest) -> dict[str, object] | None:
         raise HTTPException(status_code=413, detail="attachment exceeds the 8 MB limit")
 
     return {"filename": filename, "mime_type": mime_type, "content": content}
+
+
+async def _agent_history_for_chat(
+    user_id: str,
+    message: str,
+    history: list[tuple[str, str]],
+    approval_tokens: list[str] | None,
+) -> list[tuple[str, str]] | None:
+    """Run the multi-step agent and return the history with its tool output appended.
+
+    Returns None when the agent planned nothing, so the caller can fall back to the
+    single-tool loop and the plugin paths exactly as before.
+
+    The agent plans its steps deterministically, so it does not need the model
+    backend to be enabled, and it can feed one step's result into the next. Its output
+    goes into the history as a tool turn, and the model then answers from it.
+    """
+    execution = await execute_agent_async(
+        message,
+        user_id=user_id,
+        approval_tokens=tuple(approval_tokens or ()),
+    )
+    if not execution.results:
+        return None
+    lines = [f"{result.name}: {result.output}" for result in execution.results]
+    return [*history, ("tool", "\n".join(lines))]
 
 
 def _decode_chat_attachments(body: ChatRequest) -> list[dict[str, object]]:
@@ -273,6 +300,25 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         extra_lines = [line for line in (_user_name_line(user_id), _now_line()) if line]
         extra_instruction = " ".join(extra_lines)
         if not attachments and not file_ids and not document_context.strip() and not media_attachments:
+            # The agent runs first. It plans its own tool steps and can chain one result
+            # into the next, and it is deterministic, so it does not depend on the model
+            # backend. What it gathers goes into the history and the model answers from
+            # it below. When it plans nothing, every path under this runs as it did.
+            agent_ran = False
+            # No needs_tools gate here: that is a cost heuristic for the model call -
+            # a short greeting should not pay for the whole tool catalogue. The agent
+            # is deterministic and plans nothing for a greeting, so it costs almost
+            # nothing and catches the short requests the heuristic would miss.
+            if tool_reply is None:
+                agent_history = await _agent_history_for_chat(
+                    user_id,
+                    body.message,
+                    history,
+                    body.approval_tokens,
+                )
+                if agent_history is not None:
+                    history = agent_history
+                    agent_ran = True
             if gemini_enabled:
                 # A pending email confirmation must be resolved before anything else.
                 pending = get_pending_email_action(user_id, conversation_id)
@@ -290,8 +336,9 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                             "Reply CONFIRM to approve it or CANCEL to stop it before "
                             "starting another email action."
                         )
-                if tool_reply is None and needs_tools(body.message):
+                if tool_reply is None and not agent_ran and needs_tools(body.message):
                     # One loop, every tool: the model chooses whether and which to call.
+                    # This is the fallback for when the agent planned nothing.
                     try:
                         tool_reply = await run_tool_loop(
                             user_id,
@@ -319,7 +366,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                         "email service failed. Please retry shortly. I will not claim that "
                         "an email was sent or deleted unless the operation was confirmed."
                     )
-                if tool_reply is None:
+                if tool_reply is None and not agent_ran:
                     tool_reply = await handle_github_chat_with_tools(
                         user_id,
                         body.message,

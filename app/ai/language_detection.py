@@ -265,36 +265,43 @@ INDIC_CANCEL_WORDS = (
 
 INDIC_SEND_WORDS = (
     # Hindi
-    "भेजो", "भेज", "भेज दो",
+    "भेजो", "भेज", "भेज दो", "भेजना", "भेजिए",
     # Bengali
-    "পাঠাও", "পাঠান",
+    "পাঠাও", "পাঠান", "পাঠিয়ে",
     # Punjabi
-    "ਭੇਜੋ", "ਭੇਜ",
+    "ਭੇਜੋ", "ਭੇਜ", "ਭੇਜਣਾ",
     # Tamil
-    "அனுப்பு", "அனுப்புங்கள்",
+    "அனுப்பு", "அனுப்புங்கள்", "அனுப்பவும்",
     # Telugu
-    "పంపు", "పంపండి",
+    "పంపు", "పంపండి", "పంపించు",
     # Kannada
-    "ಕಳುಹಿಸು", "ಕಳುಹಿಸಿ",
+    "ಕಳುಹಿಸು", "ಕಳುಹಿಸಿ", "ಕಳಿಸು", "ಕಳಿಸಿ",
     # Malayalam
-    "അയക്കൂ", "അയയ്ക്കുക",
+    "അയക്കൂ", "അയയ്ക്കുക", "അയക്കുക",
     # Urdu
-    "بھیجیں", "بھیجو",
+    "بھیجیں", "بھیجو", "بھیجنا",
     # Marathi
-    "पाठव", "पाठवा",
+    "पाठव", "पाठवा", "पाठवणे",
     # Gujarati
-    "મોકલો", "મોકલ",
+    "મોકલો", "મોકલ", "મોકલવું",
     # Odia
-    "ପଠାଅ", "ପଠାନ୍ତୁ",
+    "ପଠାଅ", "ପଠାନ୍ତୁ", "ପଠାଇବା",
     # Assamese
-    "পঠিয়াও", "পঠিয়ান",
+    "পঠিয়াও", "পঠিয়ান", "পঠোৱা",
 )
 
 # The word for mail itself. In every one of these languages it is the English word in
 # the local script, which is why they read as transliterations of "mail".
 INDIC_MAIL_WORDS = (
+    # The bare "mail" word in each language.
     "मेल", "মেল", "ਮੇਲ", "மெயில்", "మెయిల్", "ಮೇಲ್",
-    "മെയിൽ", "میل", "મેલ", "ମେଲ", "মেইল",
+    "മെയിൽ", "میل", "મેલ", "ମେଲ", "ମେଲ୍", "মেইল",
+    # And the everyday "e-mail" spelling people actually type. These were
+    # missing: the boundary rule in the callers means "ಇಮೇಲ್" does not match
+    # "ಮೇಲ್", so a message like "ಇಮೇಲ್ ಕಳಿಸು" was not seen as an email request
+    # at all. Each of these is a separate word in its own language.
+    "ईमेल", "ইমেল", "ਈਮੇਲ", "மின்னஞ்சல்", "ఇమెయిల్", "ಇಮೇಲ್",
+    "ഇമെയിൽ", "ایمیل", "ઈમેલ", "ଇମେଲ", "ইমেইল",
 )
 
 # Words that turn a request into a refusal. The Indian languages mostly negate with a

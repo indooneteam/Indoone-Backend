@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from app.ai.language_detection import (
@@ -128,3 +130,38 @@ def test_every_indian_script_has_a_send_word() -> None:
         assert any(
             pattern.search(word) for word in INDIC_SEND_WORDS
         ), f"no send word is written in {script}"
+
+
+def _matches(words: tuple[str, ...], text: str) -> bool:
+    """The same boundary rule the callers use, so the test cannot drift from them."""
+    return any(re.search(rf"(?<!\w){re.escape(word)}(?!\w)", text) for word in words)
+
+
+@pytest.mark.parametrize(
+    ("message", "language"),
+    [
+        ("ಇಮೇಲ್ ಕಳಿಸು", "Kannada"),
+        ("ईमेल भेजो", "Hindi"),
+        ("ইমেল পাঠাও", "Bengali"),
+        ("ਈਮੇਲ ਭੇਜੋ", "Punjabi"),
+        ("மின்னஞ்சல் அனுப்பு", "Tamil"),
+        ("ఇమెయిల్ పంపు", "Telugu"),
+        ("ഇമെയിൽ അയക്കൂ", "Malayalam"),
+        ("ایمیل بھیجو", "Urdu"),
+        ("ईमेल पाठवा", "Marathi"),
+        ("ઈમેલ મોકલો", "Gujarati"),
+        ("ଇମେଲ ପଠାଅ", "Odia"),
+        ("ইমেইল পঠিয়াও", "Assamese"),
+    ],
+)
+def test_an_everyday_email_request_is_recognised_in_every_language(
+    message: str, language: str
+) -> None:
+    """People type the everyday spelling, not the bare dictionary word.
+
+    The boundary rule the callers use means "ಇಮೇಲ್" does not match "ಮೇಲ್", so
+    these sentences used to arrive as ordinary chat and never reached the email
+    tools at all. This pins every language's everyday form.
+    """
+    assert _matches(INDIC_MAIL_WORDS, message), f"{language}: no mail word matched {message!r}"
+    assert _matches(INDIC_SEND_WORDS, message), f"{language}: no send word matched {message!r}"

@@ -18,6 +18,11 @@ import os
 from typing import Any, Iterable
 
 from app.ai.approval import decide_tool
+from app.ai.language_detection import (
+    INDIC_MAIL_WORDS,
+    INDIC_SEND_WORDS,
+    SCRIPT_RANGES,
+)
 from app.ai.tool_registry import (
     EMAIL_TOOL_DECLARATIONS,
     GITHUB_TOOL_DECLARATIONS,
@@ -109,7 +114,12 @@ _TOOL_HINTS = (
     "check", "search", "find", "list", "show", "summar", "delete", "connect",
     "ಮೇಲ್", "ಇಮೇಲ್", "ಇನ್‌ಬಾಕ್ಸ್", "ಇನ್ಬಾಕ್ಸ್", "ಕಳುಹಿಸ", "ಓದ", "ನೋಡ",
     "ರೆಪೊ", "ಕಮಿಟ್", "ಇಷ್ಯೂ", "ಕ್ಯಾಲೆಂಡರ್", "ಫೋಟೋ", "ವಿಡಿಯೋ",
-)
+) + INDIC_MAIL_WORDS + INDIC_SEND_WORDS
+
+
+def _written_in_indic(message: str) -> bool:
+    """Whether the message is written in any Indian script."""
+    return any(pattern.search(message) for _, pattern in SCRIPT_RANGES)
 _SHORT_MESSAGE_WORDS = 6
 
 
@@ -124,6 +134,12 @@ def needs_tools(message: str) -> bool:
     if not text:
         return False
     if any(hint in text for hint in _TOOL_HINTS):
+        return True
+    # A message written in an Indian script is offered the tools unless it is a bare
+    # word. Matching it against a keyword list would mean keeping that list in twelve
+    # languages and eleven scripts, and every language added later would be a gap until
+    # somebody remembered it. The script is the reliable signal; the word list is not.
+    if _written_in_indic(str(message)) and len(text.split()) > 1:
         return True
     return len(text.split()) > _SHORT_MESSAGE_WORDS
 

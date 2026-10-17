@@ -54,6 +54,12 @@ class StreamChatRequest(BaseModel):
     file_id: str | None = Field(default=None, max_length=128)
 
 
+class MemoryCandidatesRequest(BaseModel):
+    """The message to read durable memory candidates from."""
+
+    message: str = Field(min_length=1, max_length=20_000)
+
+
 # The Control Center gateway expects /api/platform/chat/stream; both paths map
 # to this one handler.
 @router.post("/platform/chat/stream")
@@ -118,7 +124,7 @@ async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingRes
 
 
 @router.post("/ai/memory/candidates")
-async def memory_candidates(request: PlanRequest) -> dict[str, object]:
+async def memory_candidates(request: MemoryCandidatesRequest) -> dict[str, object]:
     candidates = extract_memory_candidates(request.message)
     return {
         "candidates": [

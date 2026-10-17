@@ -32,7 +32,7 @@ def test_chat_uses_model_for_tool_requests(monkeypatch) -> None:
 
     captured_history: list[tuple[str, str]] = []
 
-    async def fake_generate_reply(message: str, history=None, document_context="") -> str:
+    async def fake_generate_reply(message: str, history=None, document_context="", extra_system_instruction: str = "") -> str:
         captured_history.extend(history or [])
         return "The trained model summarized the tool result."
 

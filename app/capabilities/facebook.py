@@ -92,9 +92,12 @@ async def exchange_facebook_code(state: str, code: str) -> dict[str, object]:
         raise ValueError("invalid or expired oauth state")
     app_id, app_secret = _credentials()
     async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(
+        # The app secret and the authorization code go in the body, not the query string.
+        # A query string travels in the URL, and the URL of a failed request is what
+        # provider_failure logs - which would put the secret in the log.
+        response = await client.post(
             _TOKEN_URL,
-            params={
+            data={
                 "client_id": app_id,
                 "client_secret": app_secret,
                 "redirect_uri": state_data["redirect_uri"],

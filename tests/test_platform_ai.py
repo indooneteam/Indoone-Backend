@@ -51,17 +51,12 @@ def test_the_openapi_schema_builds() -> None:
     what happened: one route named a model that was never imported, and every documented
     path went with it.
     """
-    import warnings
-
     import app.main as main
 
-    with warnings.catch_warnings():
-        # Four paths are declared in two routers, so FastAPI warns about duplicate
-        # operation IDs. That is a real issue and it is reported on its own; it is not
-        # what this test is about, and CI turns warnings into errors. Filtering it here
-        # keeps this test about the schema, and leaves the duplicates to their own fix.
-        warnings.filterwarnings("ignore", message="Duplicate Operation ID")
-        schema = main.app.openapi()
+    # No warning filter here on purpose. A path declared in two routers makes FastAPI warn
+    # about a duplicate operation ID, and CI runs pytest with -W error, so this test fails
+    # if a duplicate is ever introduced again. That is how the four duplicates were found.
+    schema = main.app.openapi()
 
     assert schema["paths"], "the schema built but documents no paths"
     assert "/api/chat" in schema["paths"]

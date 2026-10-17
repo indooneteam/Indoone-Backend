@@ -13,6 +13,7 @@ from app.ai.conversation_store import ConversationStore
 from app.api.approvals import router as approvals_router
 from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
+from app.api.agent_async import router as agent_async_router
 from app.web_research.api import router as web_research_router
 from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
@@ -305,6 +306,7 @@ app.include_router(platform_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")
+app.include_router(agent_async_router, prefix="/api")
 app.include_router(web_research_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(files_router, prefix="/api")

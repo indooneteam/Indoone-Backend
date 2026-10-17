@@ -25,19 +25,15 @@ from app.capabilities.store import (
     delete_integration_token,
     create_project,
     create_task,
-    delete_memory,
     delete_project,
     get_agent_run,
     get_project,
     get_integration_token_metadata,
     list_agent_runs,
-    list_memories,
     list_projects,
     list_tasks,
-    search_memories,
     search_projects,
     update_project,
-    upsert_memory,
 )
 from app.capabilities.vision import analyze_image
 from app.capabilities.voice import synthesize_speech, transcribe_audio
@@ -54,19 +50,6 @@ from app.api.errors import provider_failure
 
 router = APIRouter(tags=["capabilities"])
 router.include_router(gmail_oauth_router)
-
-
-class MemoryRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    key: str = Field(min_length=1, max_length=128)
-    value: str = Field(min_length=1, max_length=4_000)
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    source: str = Field(default="user", min_length=1, max_length=128)
-
-
-class MemoryDeleteRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    memory_id: str = Field(min_length=1, max_length=128)
 
 
 class ProjectRequest(BaseModel):
@@ -250,30 +233,6 @@ async def integration_status(integration_id: str, user_id: str = Query(..., min_
         raise HTTPException(status_code=404, detail="integration not found")
     metadata = get_integration_token_metadata(user_id, integration_id.strip().lower())
     return {"integration": integration_id.strip().lower(), "connected": metadata is not None, "metadata": metadata}
-
-
-@router.get("/memory")
-async def get_memories(
-    user_id: str = Query(..., min_length=1, max_length=256),
-    key_prefix: str = Query(default="", max_length=128),
-    source: str = Query(default="", max_length=128),
-    limit: int = Query(default=100, ge=1, le=500),
-    q: str = Query(default="", max_length=500),
-) -> dict[str, object]:
-    memories = search_memories(user_id, q, limit) if q.strip() else list_memories(user_id, key_prefix, source, limit)
-    return {"memories": memories}
-
-
-@router.post("/memory")
-async def write_memory(request: MemoryRequest) -> dict[str, object]:
-    return {"memory": upsert_memory(request.user_id, request.key, request.value, request.confidence, request.source)}
-
-
-@router.delete("/memory")
-async def remove_memory(request: MemoryDeleteRequest) -> dict[str, bool]:
-    if not delete_memory(request.user_id, request.memory_id):
-        raise HTTPException(status_code=404, detail="memory not found")
-    return {"deleted": True}
 
 
 @router.post("/projects")

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import json
 from uuid import uuid4
 
@@ -12,40 +11,13 @@ from pydantic import BaseModel, Field
 from app.ai.answer_quality import assess_answer
 from app.ai.tool_loop import run_tool_loop
 from app.ai.conversation_store import ConversationStore
-from app.ai.file_context import read_text_file, save_text_file
+from app.ai.file_context import read_text_file
 from app.ai.memory import extract_memory_candidates
 from app.ai.service import generate_reply
 from app.api.errors import REQUEST_FAILED_MESSAGE, provider_failure
 
 router = APIRouter(tags=["platform"])
 _stream_store = ConversationStore()
-
-
-class FileRequest(BaseModel):
-    filename: str = Field(min_length=1, max_length=255)
-    content_base64: str = Field(min_length=1, max_length=3_000_000)
-
-
-class FileResponse(BaseModel):
-    file_id: str
-    filename: str
-    bytes: int
-    text_preview: str
-
-
-@router.post("/files", response_model=FileResponse)
-async def upload_file(request: FileRequest) -> FileResponse:
-    try:
-        content = base64.b64decode(request.content_base64, validate=True)
-        result = save_text_file(request.filename, content)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return FileResponse(
-        file_id=str(result["file_id"]),
-        filename=str(result["filename"]),
-        bytes=int(result["bytes"]),
-        text_preview=str(result["text"])[:5000],
-    )
 
 
 class StreamChatRequest(BaseModel):

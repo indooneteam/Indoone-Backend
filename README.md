@@ -2,6 +2,17 @@
 
 Backend foundation for the Indoone AI + automation platform.
 
+## Documentation
+
+- [`docs/BACKEND_CAPABILITIES.md`](docs/BACKEND_CAPABILITIES.md) - the capability
+  endpoints and the boundaries around them. Every endpoint it lists is served.
+- [`docs/DATASET_QUALITY.md`](docs/DATASET_QUALITY.md) - the training-data quality gate.
+- [`docs/ai/README_CORE_AI.md`](docs/ai/README_CORE_AI.md) and
+  [`docs/ai/CORE_AI_V1_FREEZE.md`](docs/ai/CORE_AI_V1_FREEZE.md) - the Core AI v1
+  contract and what it freezes.
+- [`deploy/DEPLOY.md`](deploy/DEPLOY.md) - how the service is set up and updated on the
+  server, and where the secrets live (not in this repository).
+
 ## AI direction
 
 Indoone chat keeps local-model inference as the default:

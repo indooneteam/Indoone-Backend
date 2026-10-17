@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import app.plugins.email_assistant as email_assistant
+from cryptography.fernet import Fernet
 
 import pytest
 
@@ -792,3 +794,56 @@ def test_zoho_recent_fetch_uses_provider_maximum_of_200(monkeypatch) -> None:
 
     assert len(rows) == 1
     assert calls == [200]
+
+
+def test_confirming_a_zoho_send_reaches_the_provider(monkeypatch, tmp_path) -> None:
+    """End to end: save a pending send, confirm it, and prove the provider was called.
+
+    This is the link nothing covered. One test proved the request saves a pending action,
+    another proved a bare "yes" reaches handle_email_chat, but nothing proved that the
+    confirm actually reaches Zoho Mail. That is the link that broke in production.
+    """
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    monkeypatch.setenv("INDOONE_OAUTH_ENCRYPTION_KEY", Fernet.generate_key().decode())
+
+    email_tools._save_pending(
+        "user-1",
+        "conversation-1",
+        "zoho_mail",
+        "send_email",
+        {
+            "account_id": "111",
+            "from_address": "me@example.com",
+            "to": "ravi@example.com",
+            "subject": "Hello",
+            "body": "Body text",
+        },
+    )
+
+    sent: list[dict[str, object]] = []
+
+    async def fake_send_message(
+        user_id, account_id, from_address, to_address, subject, content, approved=False
+    ):
+        sent.append(
+            {
+                "user_id": user_id,
+                "account_id": account_id,
+                "from": from_address,
+                "to": to_address,
+                "subject": subject,
+                "content": content,
+                "approved": approved,
+            }
+        )
+        return {"status": {"code": 200}, "data": {"messageId": "msg-1"}}
+
+    monkeypatch.setattr(email_assistant, "send_message", fake_send_message)
+
+    reply = asyncio.run(email_assistant.handle_email_chat("user-1", "conversation-1", "yes"))
+
+    assert len(sent) == 1, "the confirmed send never reached the provider"
+    assert sent[0]["to"] == "ravi@example.com"
+    assert sent[0]["subject"] == "Hello"
+    assert sent[0]["approved"] is True, "the send must be explicitly approved"
+    assert "sent" in reply.lower()

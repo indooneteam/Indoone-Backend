@@ -7,7 +7,7 @@ from app.ai.tools import ToolResult
 
 
 def test_async_agent_uses_current_event_loop(monkeypatch) -> None:
-    async def fake_run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
+    async def fake_run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None, user_id: str = "") -> ToolResult:
         return ToolResult(name, str(asyncio.get_running_loop()), safe=True)
 
     monkeypatch.setattr("app.ai.agent_async.run_tool_async", fake_run_tool_async)
@@ -25,7 +25,7 @@ def test_async_agent_uses_current_event_loop(monkeypatch) -> None:
 def test_async_agent_retries_retryable_result(monkeypatch) -> None:
     calls = 0
 
-    async def fake_run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None) -> ToolResult:
+    async def fake_run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None, user_id: str = "") -> ToolResult:
         nonlocal calls
         calls += 1
         if calls == 1:

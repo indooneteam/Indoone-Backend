@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from app.ai.language_detection import INDIC_NEGATION_WORDS, INDIC_SEND_WORDS
 from app.ai.tool_registry import EMAIL_TOOL_DECLARATIONS
 import re
 from typing import Any
@@ -54,12 +55,18 @@ def _explicit_send_intent(message: str) -> bool:
     value = message.casefold()
     if re.search(r"\b(don't|do not|never|not)\b.{0,24}\b(send|email|mail)\b", value):
         return False
-    if any(term in value for term in ("ಕಳುಹಿಸಬೇಡ", "ಕಳುಹಿಸಬೇಡಿ", "ಸೆಂಡ್ ಮಾಡಬೇಡ", "ಸೆಂಡ್ ಮಾಡಬೇಡಿ")):
+    # A refusal in any supported language is a negation word next to a send word. The
+    # Indian languages mostly negate with a suffix - "kalusabeda" is send plus a
+    # negative ending - so the two have to be looked for together.
+    if any(negation in value for negation in INDIC_NEGATION_WORDS) and any(
+        send in value for send in INDIC_SEND_WORDS
+    ):
         return False
     return bool(
         re.search(r"\b(send|sending|dispatch|send out|mail it)\b", value)
         or re.search(r"\b(kalisu|kalisi|kalisbeku|kalsu|mail maadi kalisu)\b", value)
-        or any(term in value for term in ("ಕಳುಹಿಸು", "ಕಳುಹಿಸಿ", "ಸೆಂಡ್ ಮಾಡು"))
+        or any(term in value for term in INDIC_SEND_WORDS)
+        or "ಸೆಂಡ್ ಮಾಡು" in value
     )
 
 

@@ -34,6 +34,8 @@ SCRIPT_RANGES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("Punjabi", re.compile(r"[\u0A00-\u0A7F]")),
     ("Odia", re.compile(r"[\u0B00-\u0B7F]")),
     ("Urdu", re.compile(r"[\u0600-\u06FF]")),
+    # Ol Chiki, the script Santali is written in.
+    ("Santali", re.compile(r"[\u1C50-\u1C7F]")),
     ("Sinhala", re.compile(r"[\u0D80-\u0DFF]")),
     # Other major world scripts
     ("Greek", re.compile(r"[\u0370-\u03FF]")),
@@ -68,6 +70,19 @@ LANGUAGE_NAMES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("Punjabi", ("punjabi", "ਪੰਜਾਬੀ", "ਪੰਜਾਬੀ ਵਿੱਚ")),
     ("Odia", ("odia", "oriya", "ଓଡ଼ିଆ", "ଓଡିଆ", "ଓଡ଼ିଆରେ")),
     ("Urdu", ("urdu", "اردو")),
+    # The rest of the languages India recognises, by their English names. Their
+    # native spellings are not listed here: guessing one would be worse than leaving
+    # it out, and the script ranges below already recognise the text itself.
+    ("Nepali", ("nepali", "नेपाली", "नेपालीमा")),
+    ("Sanskrit", ("sanskrit", "संस्कृत", "संस्कृतम्")),
+    ("Konkani", ("konkani", "कोंकणी")),
+    ("Maithili", ("maithili", "मैथिली")),
+    ("Dogri", ("dogri", "डोगरी")),
+    ("Bodo", ("bodo",)),
+    ("Manipuri", ("manipuri", "meitei")),
+    ("Santali", ("santali", "ᱥᱟᱱᱛᱟᱲᱤ")),
+    ("Sindhi", ("sindhi", "سنڌي")),
+    ("Kashmiri", ("kashmiri",)),
     # Other languages Google supports
     ("English", ("english",)),
     ("French", ("french", "français", "francais")),
@@ -179,3 +194,119 @@ def detect_response_language(message: str) -> str:
             return best_language
 
     return "English"
+
+
+# ---------------------------------------------------------------------------
+# Feature words for the Indian languages.
+#
+# Every feature that has to recognise a word the user typed - a confirmation, a
+# cancellation, a request to send - reads these lists, so there is one list per idea
+# instead of six hand-written patterns that drift apart. English keeps its own pattern
+# inside each feature, because it does not need transliteration.
+#
+# The yes and no forms are the standard ones and were checked against published phrase
+# lists. The send forms are the everyday imperative. A native speaker should still
+# review them: a wrong word here changes behaviour, not just the sound of a sentence.
+# ---------------------------------------------------------------------------
+
+INDIC_CONFIRM_WORDS = (
+    # Hindi
+    "हाँ", "हां", "जी", "ठीक", "भेजो", "भेज दो",
+    # Bengali
+    "হ্যাঁ", "হাঁ", "ঠিক", "পাঠাও",
+    # Punjabi
+    "ਹਾਂ", "ਠੀਕ", "ਭੇਜੋ",
+    # Tamil
+    "ஆம்", "சரி", "அனுப்பு",
+    # Telugu
+    "అవును", "సరే", "పంపు",
+    # Kannada
+    "ಹೌದು", "ಸರಿ", "ಕಳುಹಿಸು",
+    # Malayalam
+    "അതെ", "ശരി", "അയക്കൂ",
+    # Urdu
+    "ہاں", "ٹھیک", "بھیجیں",
+    # Marathi
+    "होय", "हो", "पाठव",
+    # Gujarati
+    "હા", "બરાબર", "મોકલો",
+    # Odia
+    "ହଁ", "ଠିକ", "ପଠାଅ",
+    # Assamese
+    "হয়", "ঠিক", "পঠিয়াও",
+)
+
+INDIC_CANCEL_WORDS = (
+    # Hindi
+    "नहीं", "ना", "रद्द",
+    # Bengali
+    "না", "বাতিল",
+    # Punjabi
+    "ਨਹੀਂ", "ਨਾ", "ਰੱਦ",
+    # Tamil
+    "இல்லை", "வேண்டாம்", "ரத்து",
+    # Telugu
+    "కాదు", "వద్దు", "రద్దు",
+    # Kannada
+    "ಇಲ್ಲ", "ಬೇಡ", "ರದ್ದು",
+    # Malayalam
+    "ഇല്ല", "അല്ല", "വേണ്ട",
+    # Urdu
+    "نہیں", "نا",
+    # Marathi
+    "नाही", "नको", "रद्द",
+    # Gujarati
+    "ના", "નહીં", "રદ",
+    # Odia
+    "ନା", "ନାହିଁ", "ବାତିଲ",
+    # Assamese
+    "নহয়", "নালাগে", "বাতিল",
+)
+
+INDIC_SEND_WORDS = (
+    # Hindi
+    "भेजो", "भेज", "भेज दो",
+    # Bengali
+    "পাঠাও", "পাঠান",
+    # Punjabi
+    "ਭੇਜੋ", "ਭੇਜ",
+    # Tamil
+    "அனுப்பு", "அனுப்புங்கள்",
+    # Telugu
+    "పంపు", "పంపండి",
+    # Kannada
+    "ಕಳುಹಿಸು", "ಕಳುಹಿಸಿ",
+    # Malayalam
+    "അയക്കൂ", "അയയ്ക്കുക",
+    # Urdu
+    "بھیجیں", "بھیجو",
+    # Marathi
+    "पाठव", "पाठवा",
+    # Gujarati
+    "મોકલો", "મોકલ",
+    # Odia
+    "ପଠାଅ", "ପଠାନ୍ତୁ",
+    # Assamese
+    "পঠিয়াও", "পঠিয়ান",
+)
+
+# The word for mail itself. In every one of these languages it is the English word in
+# the local script, which is why they read as transliterations of "mail".
+INDIC_MAIL_WORDS = (
+    "मेल", "মেল", "ਮੇਲ", "மெயில்", "మెయిల్", "ಮೇಲ್",
+    "മെയിൽ", "میل", "મેલ", "ମେଲ", "মেইল",
+)
+
+# Words that turn a request into a refusal. The Indian languages mostly negate with a
+# suffix or a preceding particle rather than a separate word, so these are the forms
+# that appear next to a send verb.
+INDIC_NEGATION_WORDS = (
+    "नहीं", "मत", "ना", "নয়", "না", "ਨਹੀਂ", "ਨਾ", "வேண்டாம்", "இல்லை",
+    "వద్దు", "కాదు", "ಬೇಡ", "അരുത്", "വേണ്ട", "نہیں", "नको", "નહીં",
+    "ନାହିଁ", "ନା", "নালাগে",
+)
+
+
+def indic_pattern(words: tuple[str, ...]) -> str:
+    """One alternation of escaped words, ready to drop into a regex."""
+    return "|".join(re.escape(word) for word in words)

@@ -37,7 +37,6 @@ _IST = timezone(timedelta(hours=5, minutes=30))
 from app.plugins.email_tools import (
     CANCEL_RE,
     CONFIRM_RE,
-    EMAIL_CONTEXT_RE,
     handle_email_chat,
     handle_email_chat_with_tools,
 )
@@ -306,18 +305,16 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             # backend. What it gathers goes into the history and the model answers from
             # it below. When it plans nothing, every path under this runs as it did.
             agent_ran = False
-            # Email does not go through the agent. An email request has its own path:
-            # it saves a pending action, asks the user to confirm, and sends through
-            # the provider the user actually connected. The agent would instead plan
-            # gmail_compose, which needs no approval and no connector, quietly take the
-            # request over, and leave the user confirming into a path that never runs.
+            # The agent decides. Every email tool is either gated on the user having
+            # connected that mailbox or gated on approval, so for an email request the
+            # agent either plans nothing or blocks the step it planned - and in both
+            # cases it produces no result, which leaves the request to the email path
+            # below. That path knows the provider the user actually connected and asks
+            # for the one confirmation.
             #
-            # The pending check matters as much as the keyword one: once an action is
-            # waiting, the reply that confirms it may be a bare "yes", which carries no
-            # email keyword at all.
-            email_owns_this = bool(EMAIL_CONTEXT_RE.search(body.message)) or bool(
-                get_pending_email_action(user_id, conversation_id)
-            )
+            # The pending check is still needed: once an action is waiting, the reply
+            # that confirms it may be a bare "yes", which is not a tool request at all.
+            email_owns_this = bool(get_pending_email_action(user_id, conversation_id))
             # No needs_tools gate otherwise: that is a cost heuristic for the model
             # call - a short greeting should not pay for the whole tool catalogue. The
             # agent is deterministic and plans nothing for a greeting, so it costs

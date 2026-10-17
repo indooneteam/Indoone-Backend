@@ -23,3 +23,46 @@ def test_calculation_plan_uses_local_tool() -> None:
     assert result is not None
     assert result.safe is True
     assert result.output == "96"
+
+
+def test_memory_candidates_endpoint_accepts_a_message(monkeypatch) -> None:
+    """The endpoint used to name a request model that was never imported.
+
+    That is not only a broken doc: FastAPI validates the body against the annotation, so
+    the route could not accept a request at all. This checks the route answers, which is
+    what a real caller does.
+    """
+    from fastapi.testclient import TestClient
+
+    import app.main as main
+
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
+    with TestClient(main.app) as client:
+        response = client.post("/api/ai/memory/candidates", json={"message": "Call me Bro from now on."})
+
+    assert response.status_code == 200, response.text
+    assert "candidates" in response.json()
+
+
+def test_the_openapi_schema_builds() -> None:
+    """The API docs are generated from this schema, so it failing means /docs is dead.
+
+    A single unresolvable annotation is enough to bring the whole thing down, which is
+    what happened: one route named a model that was never imported, and every documented
+    path went with it.
+    """
+    import warnings
+
+    import app.main as main
+
+    with warnings.catch_warnings():
+        # Four paths are declared in two routers, so FastAPI warns about duplicate
+        # operation IDs. That is a real issue and it is reported on its own; it is not
+        # what this test is about, and CI turns warnings into errors. Filtering it here
+        # keeps this test about the schema, and leaves the duplicates to their own fix.
+        warnings.filterwarnings("ignore", message="Duplicate Operation ID")
+        schema = main.app.openapi()
+
+    assert schema["paths"], "the schema built but documents no paths"
+    assert "/api/chat" in schema["paths"]
+

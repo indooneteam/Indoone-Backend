@@ -265,7 +265,18 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    return _error_response_with_request_id(422, "VALIDATION_ERROR", "request validation failed", get_request_id() or str(getattr(request.state, "request_id", "")), {"errors": exc.errors()})
+    # Pydantic v2 puts the offending value under an "input" key. Echoing it back would
+    # return a credential that failed validation to whoever sent it, which is the opposite
+    # of what this handler is for. Only the shape of the failure goes out.
+    errors = [
+        {
+            "type": str(item.get("type", "")),
+            "loc": list(item.get("loc", ())),
+            "msg": str(item.get("msg", "")),
+        }
+        for item in exc.errors()
+    ]
+    return _error_response_with_request_id(422, "VALIDATION_ERROR", "request validation failed", get_request_id() or str(getattr(request.state, "request_id", "")), {"errors": errors})
 
 
 @app.exception_handler(Exception)

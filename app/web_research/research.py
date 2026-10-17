@@ -584,7 +584,10 @@ class GoogleNewsRssResearchProvider(ResearchProvider):
 
     async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
         from html import unescape
-        from xml.etree import ElementTree
+        # defusedxml refuses entity expansion; the stdlib parser performs it. This
+        # content comes from a remote feed, so a hostile response could expand
+        # exponentially. The size cap bounds the raw bytes, not what parsing does.
+        from defusedxml.ElementTree import fromstring as defused_xml_fromstring
 
         query = query.strip()
         if not query:
@@ -608,7 +611,7 @@ class GoogleNewsRssResearchProvider(ResearchProvider):
             content = response.content
 
         try:
-            root = ElementTree.fromstring(content)
+            root = defused_xml_fromstring(content)
         except ElementTree.ParseError as exc:
             raise RuntimeError("research response is not valid RSS/XML") from exc
 

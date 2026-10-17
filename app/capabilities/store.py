@@ -6,7 +6,7 @@ import json
 import os
 import sqlite3
 from contextlib import closing
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -176,17 +176,39 @@ def create_oauth_state(state: str, user_id: str, integration_id: str, redirect_u
 
 
 def consume_oauth_state(state: str, integration_id: str, max_age_seconds: int = 1800) -> dict[str, str] | None:
+    """Consume one OAuth state under a write lock.
+
+    This used to select the row and then delete it, with nothing holding the two
+    statements together. Two callbacks carrying the same state could both read it and both
+    go on to exchange the code. BEGIN IMMEDIATE takes the write lock before the read, so
+    the second caller finds the row already gone.
+
+    It also expires stale rows here rather than leaving that to the caller.
+
+    app/capabilities/db_runtime.py used to install this behaviour by rebinding the name on
+    the module object, which never took effect: every caller had already imported the
+    function by name. The behaviour now lives in the function itself, where the callers
+    actually look.
+    """
     initialize()
+    max_age_seconds = max(0, int(max_age_seconds))
     with closing(_connect()) as db:
+        db.execute("BEGIN IMMEDIATE")
+        cutoff = (datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)).isoformat()
+        db.execute("DELETE FROM oauth_states WHERE created_at < ?", (cutoff,))
         row = db.execute(
-            "SELECT * FROM oauth_states WHERE state = ? AND integration_id = ?",
+            "SELECT user_id, integration_id, redirect_uri, created_at FROM oauth_states WHERE state = ? AND integration_id = ?",
             (state, integration_id),
         ).fetchone()
         if row is None:
+            db.commit()
             return None
-        db.execute("DELETE FROM oauth_states WHERE state = ?", (state,))
+        db.execute("DELETE FROM oauth_states WHERE state = ? AND integration_id = ?", (state, integration_id))
         db.commit()
-    created = datetime.fromisoformat(str(row["created_at"]))
+    try:
+        created = datetime.fromisoformat(str(row["created_at"]))
+    except (TypeError, ValueError):
+        return None
     age = (datetime.now(timezone.utc) - created).total_seconds()
     if age > max_age_seconds:
         return None
@@ -618,16 +640,29 @@ def get_project(user_id: str, project_id: str) -> dict[str, Any] | None:
 
 
 def update_project(user_id: str, project_id: str, name: str | None = None, instructions: str | None = None, context: dict[str, Any] | None = None, archived: bool | None = None) -> dict[str, Any] | None:
+    """Merge a partial update into a project.
+
+    The read and the write happen on one connection inside one transaction. They used to
+    be two connections: the current row was fetched, the values were merged from that
+    snapshot, and a second connection wrote the result. Two overlapping partial updates
+    therefore each merged from the same stale row and the later write silently discarded
+    the other one's field.
+    """
     initialize()
-    current = get_project(user_id, project_id)
-    if current is None:
-        return None
     timestamp = _now()
-    next_name = current["name"] if name is None else name
-    next_instructions = current["instructions"] if instructions is None else instructions
-    next_context = current["context"] if context is None else context
-    next_archived = current["archived"] if archived is None else archived
     with closing(_connect()) as db:
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute(
+            "SELECT * FROM projects WHERE user_id = ? AND id = ?",
+            (user_id, project_id),
+        ).fetchone()
+        if row is None:
+            db.commit()
+            return None
+        next_name = row["name"] if name is None else name
+        next_instructions = row["instructions"] if instructions is None else instructions
+        next_context = json.loads(row["context"]) if context is None else context
+        next_archived = bool(row["archived"]) if archived is None else archived
         db.execute(
             "UPDATE projects SET name = ?, instructions = ?, context = ?, archived = ?, updated_at = ? WHERE user_id = ? AND id = ?",
             (next_name, next_instructions, json.dumps(next_context, ensure_ascii=False, sort_keys=True), 1 if next_archived else 0, timestamp, user_id, project_id),

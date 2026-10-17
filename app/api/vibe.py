@@ -320,9 +320,33 @@ def _google_error_detail(message: dict[str, object], api_key: str) -> str:
     return detail.replace("\n", " ").strip()[:300]
 
 
-async def _send_error(websocket: WebSocket, detail: str) -> None:
+async def _send_client(
+    websocket: WebSocket,
+    client_lock: asyncio.Lock,
+    payload: dict[str, object],
+) -> None:
+    """Write to the client socket under a lock.
+
+    Both relay directions write to this socket - the task forwarding what the client
+    sent, and the task forwarding what Gemini sent - and they run at the same time.
+    Without a lock two coroutines can be inside a send at once, which interleaves
+    frames the client cannot parse and can raise mid-send. The lock used for the
+    Gemini socket does not cover this: that is a different connection.
+    """
+    async with client_lock:
+        await websocket.send_json(payload)
+
+
+async def _send_error(
+    websocket: WebSocket,
+    detail: str,
+    client_lock: asyncio.Lock | None = None,
+) -> None:
     try:
-        await websocket.send_json({"type": "error", "detail": detail[:400]})
+        if client_lock is None:
+            await websocket.send_json({"type": "error", "detail": detail[:400]})
+        else:
+            await _send_client(websocket, client_lock, {"type": "error", "detail": detail[:400]})
         await websocket.close(code=1011, reason="live voice error")
     except Exception:
         # The client may have disconnected while the provider was failing.
@@ -396,11 +420,12 @@ async def _handle_gemini_message(
     gemini,
     send_lock: asyncio.Lock,
     tool_tasks: set[asyncio.Task],
+    client_lock: asyncio.Lock,
 ) -> bool:
     try:
         message = json.loads(raw_message)
     except (TypeError, ValueError):
-        await _send_error(websocket, "Gemini Live returned invalid JSON.")
+        await _send_error(websocket, "Gemini Live returned invalid JSON.", client_lock)
         return False
 
     if not isinstance(message, dict):
@@ -409,7 +434,7 @@ async def _handle_gemini_message(
     if "error" in message:
         # Keep the provider's wording in the log; the user gets our own message.
         logger.warning("Gemini Live error message: %s", _google_error_detail(message, api_key))
-        await _send_error(websocket, _VOICE_ERROR_MESSAGE)
+        await _send_error(websocket, _VOICE_ERROR_MESSAGE, client_lock)
         return False
 
     server_content = message.get("serverContent", message.get("server_content"))
@@ -419,7 +444,7 @@ async def _handle_gemini_message(
     if status:
         status_text = str(status).strip().upper()
         if status_text in {"IN_PROGRESS", "IDLE"}:
-            await websocket.send_json({
+            await _send_client(websocket, client_lock, {
                 "type": "status",
                 "interaction_status": status_text,
             })
@@ -519,7 +544,7 @@ async def _handle_gemini_message(
         })
 
     for event in [*events, *audio_events]:
-        await websocket.send_json(event)
+        await _send_client(websocket, client_lock, event)
 
     return True
 
@@ -527,22 +552,23 @@ async def _forward_client_messages(
     websocket: WebSocket,
     gemini,
     send_lock: asyncio.Lock,
+    client_lock: asyncio.Lock,
 ) -> None:
     while True:
         raw = await websocket.receive_text()
         try:
             message = json.loads(raw)
         except ValueError:
-            await websocket.send_json({"type": "error", "detail": "Message must be valid JSON."})
+            await _send_client(websocket, client_lock, {"type": "error", "detail": "Message must be valid JSON."})
             continue
 
         if not isinstance(message, dict):
-            await websocket.send_json({"type": "error", "detail": "Message must be a JSON object."})
+            await _send_client(websocket, client_lock, {"type": "error", "detail": "Message must be a JSON object."})
             continue
 
         message_type = str(message.get("type") or "").strip().lower()
         if message_type == "ping":
-            await websocket.send_json({"type": "pong", "request_id": message.get("request_id")})
+            await _send_client(websocket, client_lock, {"type": "pong", "request_id": message.get("request_id")})
             continue
 
         if message_type == "stop":
@@ -553,7 +579,7 @@ async def _forward_client_messages(
             except Exception:
                 pass
             try:
-                await websocket.send_json({"type": "stopped"})
+                await _send_client(websocket, client_lock, {"type": "stopped"})
                 await websocket.close(code=1000, reason="Vibe ended")
             except Exception:
                 pass
@@ -570,7 +596,7 @@ async def _forward_client_messages(
             if not text:
                 continue
             if len(text) > _MAX_TEXT_LENGTH:
-                await websocket.send_json({"type": "error", "detail": "Text message is too long."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "Text message is too long."})
                 continue
             await _send_gemini_message(
                 gemini, send_lock, {"realtimeInput": {"text": text}}
@@ -581,21 +607,21 @@ async def _forward_client_messages(
             audio_base64 = str(message.get("audio_base64") or "")
             mime_type = str(message.get("mime_type") or "audio/pcm;rate=16000").strip()
             if not audio_base64:
-                await websocket.send_json({"type": "error", "detail": "audio_base64 is required."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "audio_base64 is required."})
                 continue
             try:
                 audio_bytes = base64.b64decode(audio_base64, validate=True)
             except (binascii.Error, ValueError):
-                await websocket.send_json({"type": "error", "detail": "audio_base64 must be valid base64."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "audio_base64 must be valid base64."})
                 continue
             if not audio_bytes:
-                await websocket.send_json({"type": "error", "detail": "Audio chunk is empty."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "Audio chunk is empty."})
                 continue
             if len(audio_bytes) > _MAX_AUDIO_BYTES:
-                await websocket.send_json({"type": "error", "detail": "Audio chunk is too large."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "Audio chunk is too large."})
                 continue
             if not mime_type.lower().startswith("audio/pcm"):
-                await websocket.send_json({"type": "error", "detail": "Vibe requires raw PCM audio input."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "Vibe requires raw PCM audio input."})
                 continue
             await _send_gemini_message(gemini, send_lock, {
                 "realtimeInput": {
@@ -607,7 +633,7 @@ async def _forward_client_messages(
             })
             continue
 
-        await websocket.send_json({"type": "error", "detail": "Unsupported Vibe message type."})
+        await _send_client(websocket, client_lock, {"type": "error", "detail": "Unsupported Vibe message type."})
 
 async def _forward_gemini_messages(
     websocket: WebSocket,
@@ -616,11 +642,12 @@ async def _forward_gemini_messages(
     user_id: str,
     send_lock: asyncio.Lock,
     tool_tasks: set[asyncio.Task],
+    client_lock: asyncio.Lock,
 ) -> None:
     while True:
         message = await gemini.recv()
         if not await _handle_gemini_message(
-            websocket, message, api_key, user_id, gemini, send_lock, tool_tasks
+            websocket, message, api_key, user_id, gemini, send_lock, tool_tasks, client_lock
         ):
             return
 
@@ -628,10 +655,14 @@ async def _forward_gemini_messages(
 async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str, user_id: str) -> None:
     send_lock = asyncio.Lock()
     tool_tasks: set[asyncio.Task] = set()
-    client_task = asyncio.create_task(_forward_client_messages(websocket, gemini, send_lock))
+    # Both tasks below write to the client socket, so they share a lock for it.
+    client_lock = asyncio.Lock()
+    client_task = asyncio.create_task(
+        _forward_client_messages(websocket, gemini, send_lock, client_lock)
+    )
     gemini_task = asyncio.create_task(
         _forward_gemini_messages(
-            websocket, gemini, api_key, user_id, send_lock, tool_tasks
+            websocket, gemini, api_key, user_id, send_lock, tool_tasks, client_lock
         )
     )
     tasks = {client_task, gemini_task}

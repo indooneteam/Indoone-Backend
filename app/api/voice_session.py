@@ -20,7 +20,13 @@ async def voice_session(websocket: WebSocket) -> None:
     await websocket.send_json(ready_event(state))
     try:
         while not state.closed:
-            message = await websocket.receive_json()
+            try:
+                message = await websocket.receive_json()
+            except ValueError:
+                # receive_json raises json.JSONDecodeError, a ValueError, on one malformed
+                # frame. That used to escape the loop and close the whole session.
+                await websocket.send_json({"type": "error", "detail": "message must be valid JSON"})
+                continue
             if not isinstance(message, dict):
                 await websocket.send_json({"type": "error", "detail": "message must be an object"})
                 continue

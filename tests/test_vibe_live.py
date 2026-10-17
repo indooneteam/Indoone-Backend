@@ -324,6 +324,7 @@ def test_vibe_does_not_forward_gemini_parts_marked_as_internal_thought() -> None
             object(),
             asyncio.Lock(),
             set(),
+            asyncio.Lock(),
         )
 
     assert asyncio.run(run()) is True
@@ -557,6 +558,7 @@ def test_vibe_sends_its_own_message_when_gemini_reports_an_error() -> None:
             object(),
             asyncio.Lock(),
             set(),
+            asyncio.Lock(),
         )
 
     assert asyncio.run(run()) is False
@@ -585,6 +587,7 @@ def test_vibe_handles_a_cancelled_tool_call_without_crashing() -> None:
             object(),
             asyncio.Lock(),
             set(),
+            asyncio.Lock(),
         )
 
     assert asyncio.run(run()) is True

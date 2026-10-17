@@ -1,0 +1,38 @@
+# Indoone backend, as it runs on the Lightsail box.
+#
+# This file is the source of truth for the service definition. Install it with:
+#
+#   sudo cp deploy/indoone-backend.service /etc/systemd/system/indoone-backend.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now indoone-backend
+#
+# It holds no secrets. The environment comes from /etc/indoone/indoone.env, which is
+# created on the server and is NOT in this repository - see deploy/DEPLOY.md.
+
+[Unit]
+Description=Indoone backend (FastAPI, served by uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/Indoone-Backend
+
+# Every credential and setting lives here, outside the repository.
+EnvironmentFile=/etc/indoone/indoone.env
+
+# scripts/run_server.py is the entry point; it reads its host and port from the
+# environment file. Do not call uvicorn directly, or those settings are ignored.
+ExecStart=/home/ubuntu/Indoone-Backend/.venv/bin/python -m scripts.run_server
+
+Restart=always
+RestartSec=5
+
+# A little hardening, all of which the service runs fine with.
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

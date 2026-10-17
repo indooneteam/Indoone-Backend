@@ -115,6 +115,15 @@ def _decode_chat_attachments(body: ChatRequest) -> list[dict[str, object]]:
     if body.attachments and any(value is not None for value in legacy_fields):
         raise HTTPException(status_code=400, detail="use either attachments or the legacy single-attachment fields")
 
+    # Check the aggregate on the encoded sizes before decoding anything. Summing after
+    # the loop meant every attachment had already been decoded into memory, so the 20 MB
+    # budget could not prevent the work it exists to prevent.
+    encoded_total = sum(len(item.content_base64) for item in body.attachments)
+    if body.attachment_base64:
+        encoded_total += len(body.attachment_base64)
+    if encoded_total > ((MAX_CHAT_TOTAL_ATTACHMENT_BYTES + 2) // 3) * 4:
+        raise HTTPException(status_code=413, detail="Attachments together exceed the 20 MB upload limit.")
+
     for item in body.attachments:
         decoded = _decode_chat_attachment(
             ChatRequest(
@@ -199,7 +208,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         if text.strip():
-            document_context_parts.append(f"Content from attached text file {file_id}:\\n{text[:100_000]}")
+            document_context_parts.append(f"Content from attached text file {file_id}:\n{text[:100_000]}")
 
     gemini_enabled = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
     for attachment in attachments:
@@ -231,7 +240,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                         ),
                     )
                 document_context_parts.append(
-                    f"Readable text extracted from image {filename}:\\n{ocr_text[:100_000]}"
+                    f"Readable text extracted from image {filename}:\n{ocr_text[:100_000]}"
                 )
         elif mime_type in {PDF_MIME, DOCX_MIME}:
             try:
@@ -243,7 +252,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 media_attachments.append(attachment)
             elif document.text.strip():
                 document_context_parts.append(
-                    f"Extracted content from {filename}:\\n{document.text[:100_000]}"
+                    f"Extracted content from {filename}:\n{document.text[:100_000]}"
                 )
             else:
                 raise HTTPException(
@@ -254,7 +263,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                     ),
                 )
 
-    document_context = "\\n\\n".join(document_context_parts)[:120_000]
+    document_context = "\n\n".join(document_context_parts)[:120_000]
 
     try:
         tool_reply = None

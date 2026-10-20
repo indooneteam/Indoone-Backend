@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-20T17:12:37.906427+00:00",
+  "updated_at": "2026-10-20T21:39:56.594868+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -177,6 +177,22 @@
       "summary": "Photos taken using a microscope reveal the colorful, kaleidoscope-like crystal structure of a new NASA-made material that could be used for manufacturing during future space missions. Developed at NASA’s Glenn Research Center in Cleveland, the material could be created directly on the Moon or Mars, allowing NASA to pack fewer supplies — saving weight and […]",
       "published": "Tue, 29 Sep 2026 14:00:00 +0000",
       "fingerprint": "7e083e0e8d512bd0422d8f2f05514106012dcabd70c32127a65ac4c3eebfe464"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Conduct Low-Altitude Flights Over Texas Farmland",
+      "url": "https://www.nasa.gov/?p=1056679",
+      "summary": "Editor’s Note: This article was originally published on Oct. 15, 2026, and has been updated to correct the location of the flights. A NASA Dynamic Aviation A200 aircraft will conduct low-flying research flights over farmland near Amarillo, Texas, from Thursday, Oct. 22, through Monday, Nov. 9. These flights will measure gaseous and particulate emissions from […]",
+      "published": "Tue, 20 Oct 2026 20:21:36 +0000",
+      "fingerprint": "6278929a4a184cbfc9933a0475f2c1db652cca122017c6af3b2560b722a48c5e"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s SR-1 Freedom Advances with Progress on Nuclear Power Module",
+      "url": "https://www.nasa.gov/?p=1057550",
+      "summary": "Destined for Mars and beyond, NASA’s Space Reactor-1 (SR-1) Freedom will be humanity’s first fission-powered spacecraft to travel outside Earth’s orbit. Announced during NASA’s “Ignition” event, this mission will demonstrate nuclear electric propulsion in deep space, and progress is underway on its key element: the nuclear power module. To expedite development of the spacecraft, NASA […]",
+      "published": "Tue, 20 Oct 2026 18:11:33 +0000",
+      "fingerprint": "03a9a97e0695bc2cf0de9c78ee7beed76d7a53d22c15e0cd8040d828a19c93d2"
     },
     {
       "source": "NASA News",

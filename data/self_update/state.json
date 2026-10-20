@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-19T22:23:50.038912+00:00",
+  "updated_at": "2026-10-20T17:12:37.906427+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -177,6 +177,38 @@
       "summary": "Photos taken using a microscope reveal the colorful, kaleidoscope-like crystal structure of a new NASA-made material that could be used for manufacturing during future space missions. Developed at NASA’s Glenn Research Center in Cleveland, the material could be created directly on the Moon or Mars, allowing NASA to pack fewer supplies — saving weight and […]",
       "published": "Tue, 29 Sep 2026 14:00:00 +0000",
       "fingerprint": "7e083e0e8d512bd0422d8f2f05514106012dcabd70c32127a65ac4c3eebfe464"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Experimental Mars Helicopter Blade Designs Target Longer Flights",
+      "url": "https://www.nasa.gov/?p=1057581",
+      "summary": "NASA researchers are developing the future of flight on Mars, laying the groundwork for helicopters with the ability to fly higher and farther while conducting science on the Red Planet. Using high-fidelity computer simulations and wind tunnel tests, engineers are reimagining the rotorcraft blades that could carry the next generation of Mars flyers.",
+      "published": "Tue, 20 Oct 2026 16:02:35 +0000",
+      "fingerprint": "42861cedfb8ed0268d671ac70943ad473cfc14e336ca66a3567cac691158c854"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Provides Progress Update on Moon Base Rovers",
+      "url": "https://www.nasa.gov/?p=1055949",
+      "summary": "As NASA works to build the Moon Base, crewed and robotic lunar rovers will play a crucial role during early development through technology demonstrations, astronaut transport, terrain mapping, scientific investigations, and resource prospecting. Data from these early missions will inform future mobility systems and infrastructure needed for astronauts to live and work on the Moon. […]",
+      "published": "Tue, 20 Oct 2026 15:00:10 +0000",
+      "fingerprint": "44b655bd569c59b09fbd1808f2bc4ef783a2cb02508748db4d76cffe208b96c8"
+    },
+    {
+      "source": "NASA News",
+      "title": "Webb Captures Stellar Jets",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1057477",
+      "summary": "An image from NASA’s James Webb Space Telescope released on Oct. 6, 2026, reveals a cauldron of cosmic creation. Webb has unveiled numerous stars formerly hidden by clouds of dust in a stellar nursery known as NGC 7129, which resides about 3,300 light-years from Earth. Learn more about this region – and tour it in […]",
+      "published": "Tue, 20 Oct 2026 14:44:09 +0000",
+      "fingerprint": "7c1664c789c0f22f0969b74f3cd11a6166c0d4e30ad7df7643df2a518be95ca7"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Welcomes Uzbekistan as Newest Artemis Accords Signatory",
+      "url": "https://www.nasa.gov/?p=1057634",
+      "summary": "The Republic of Uzbekistan became the 77th signatory of the Artemis Accords during a ceremony in Samarkand on Monday, committing to the practical principles that guide safe, transparent, and responsible civil space exploration. “Uzbekistan joins the Artemis Accords at a pivotal moment,” said NASA Deputy Administrator Matt Anderson. “President Trump has directed NASA to build […]",
+      "published": "Tue, 20 Oct 2026 14:21:42 +0000",
+      "fingerprint": "44c10fa33f06ef0ca8a40de7d0bf77f82255be5cdabcc73819a782c6641503b3"
     },
     {
       "source": "NASA News",

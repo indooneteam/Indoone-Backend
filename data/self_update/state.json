@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-21T17:15:56.142216+00:00",
+  "updated_at": "2026-10-21T21:45:52.304013+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -25,6 +25,22 @@
       "summary": "This long-duration image shows star trails above Earth and the blue lights of fishing boats and the yellow lights of Indonesian cities stretching below the International Space Station as it orbited 258 miles above the Banda Sea on Sept. 20, 2026. Image credit: NASA/Anil Menon",
       "published": "Wed, 30 Sep 2026 17:50:50 +0000",
       "fingerprint": "8f322f461ca55b2cac30e801e8b7be9883878846d69765a94c3b0cac4b1723c5"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Conducts RS-25 Engine Test in Support of Future Artemis Missions",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1058381",
+      "summary": "NASA tested RS-25 engine No. 10001 on Oct. 21 on the Fred Haise Test Stand at NASA’s Stennis Space Center near Bay St. Louis, Mississippi. Test teams fired the developmental engine for almost eight-and-a-half minutes (500 seconds), the same amount of time RS-25 engines fire during launch of NASA’s SLS (Space Launch System) rocket. During […]",
+      "published": "Wed, 21 Oct 2026 20:51:50 +0000",
+      "fingerprint": "3c59306eb847ee06b903862cb7e3617b767de995e65269e0248d5f2c915652f4"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA JPL Looks to Next 90 Years of Innovation, Exploration",
+      "url": "https://www.nasa.gov/?p=1058236",
+      "summary": "Interstellar probes. Lunar drones. Helicopters on Mars. When a group of Caltech graduate students and enthusiasts began conducting rocket-propulsion tests in Pasadena’s Arroyo Seco on Oct. 31, 1936, they had no idea that their work marked the inception of the Jet Propulsion Laboratory. Ninety years later, the lab, now managed by Caltech for NASA, isn’t […]",
+      "published": "Wed, 21 Oct 2026 18:35:56 +0000",
+      "fingerprint": "bc5d7e10afff09af6d9effa85ae5820f644118ca550ef9dd20d262c9d52cfce3"
     },
     {
       "source": "NASA News",

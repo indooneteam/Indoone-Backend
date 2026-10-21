@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-20T21:39:56.594868+00:00",
+  "updated_at": "2026-10-21T17:15:56.142216+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -25,6 +25,22 @@
       "summary": "This long-duration image shows star trails above Earth and the blue lights of fishing boats and the yellow lights of Indonesian cities stretching below the International Space Station as it orbited 258 miles above the Banda Sea on Sept. 20, 2026. Image credit: NASA/Anil Menon",
       "published": "Wed, 30 Sep 2026 17:50:50 +0000",
       "fingerprint": "8f322f461ca55b2cac30e801e8b7be9883878846d69765a94c3b0cac4b1723c5"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Conduct NCAA Flyover, Engage Fans at University of Alabama",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1058161",
+      "summary": "As part of the agency’s Inspiration Tour, NASA will conduct a flyover at the University of Alabama vs. Texas A&M football game in Tuscaloosa, Alabama, on Saturday, Oct. 24. NASA Administrator Jared Isaacman will pilot one of three F-5 fighter jets during the flyover, highlighting NASA’s contributions to aeronautics and the agency’s continued commitment to […]",
+      "published": "Wed, 21 Oct 2026 16:31:11 +0000",
+      "fingerprint": "a6d73ec110cbcf129cd64abeb6b6d5de97eed229b5dc6ec19326cb1b3b5764a9"
+    },
+    {
+      "source": "NASA News",
+      "title": "Science on the Space Station with NASA Astronaut Jessica Watkins",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1057777",
+      "summary": "NASA astronaut and Expedition 75 flight engineer Jessica Watkins works inside the Kibo laboratory module’s Life Science Glovebox on Oct. 9, 2026, safely mixing living cell samples with a bioink and then filling a special cartridge with the cell‑ink mixture. The advanced research operations were part of the InSPA‑Auxilium Bioprinter‑Cell Printing investigation, which explores 3D […]",
+      "published": "Wed, 21 Oct 2026 15:05:08 +0000",
+      "fingerprint": "baef1f5922c0c6c78b2c097ecac85789c4b8177005d0c8dbeaf235b0348f0b82"
     },
     {
       "source": "NASA News",

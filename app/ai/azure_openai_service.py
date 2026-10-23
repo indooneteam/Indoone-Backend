@@ -179,6 +179,38 @@ def _build_messages(
     return messages
 
 
+
+# Gemini writes its schema types UPPERCASE - "STRING", "OBJECT", "NUMBER" - and
+# OpenAI rejects those with a 400. The app's tool declarations are written for
+# Gemini, so every tool-carrying request failed and the turn fell back to a plain
+# answer with no tools, which is why the assistant kept saying it had no access.
+# This walks the schema and lowercases the type names.
+_SCHEMA_TYPES = {
+    "STRING": "string",
+    "NUMBER": "number",
+    "INTEGER": "integer",
+    "BOOLEAN": "boolean",
+    "OBJECT": "object",
+    "ARRAY": "array",
+    "NULL": "null",
+}
+
+
+def lowercase_schema(value: Any) -> Any:
+    """Return the same schema with every type name lowercased, recursively."""
+    if isinstance(value, dict):
+        out: dict[str, Any] = {}
+        for key, item in value.items():
+            if key == "type" and isinstance(item, str) and item.upper() in _SCHEMA_TYPES:
+                out[key] = _SCHEMA_TYPES[item.upper()]
+            else:
+                out[key] = lowercase_schema(item)
+        return out
+    if isinstance(value, list):
+        return [lowercase_schema(item) for item in value]
+    return value
+
+
 def _openai_tools(tool_declarations: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Convert the declarations the caller already builds into OpenAI's shape.
 
@@ -194,10 +226,11 @@ def _openai_tools(tool_declarations: list[dict[str, Any]]) -> list[dict[str, Any
         if declaration.get("description"):
             function["description"] = declaration["description"]
         parameters = declaration.get("parameters")
-        function["parameters"] = parameters if isinstance(parameters, dict) else {
-            "type": "object",
-            "properties": {},
-        }
+        function["parameters"] = (
+            lowercase_schema(parameters)
+            if isinstance(parameters, dict)
+            else {"type": "object", "properties": {}}
+        )
         tools.append({"type": "function", "function": function})
     return tools
 

@@ -352,14 +352,25 @@ async def handle_github_chat_with_tools(
     if not user:
         return "Please sign in to Indoone before accessing GitHub."
 
-    if os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini":
-        from app.ai.gemini_service import generate_gemini_function_call_reply
+    # This used to be gemini-only, so with INDOONE_MODEL_BACKEND=azure the whole
+    # block was skipped and every GitHub question came back as "no access".
+    # The provider is chosen here the same way the unified tool loop chooses it.
+    _model_backend = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold()
+    if _model_backend in {"gemini", "azure"}:
+        if _model_backend == "azure":
+            from app.ai.azure_openai_service import (
+                generate_azure_function_call_reply as _run_provider_tool_loop,
+            )
+        else:
+            from app.ai.gemini_service import (
+                generate_gemini_function_call_reply as _run_provider_tool_loop,
+            )
 
         async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             return await _execute_github_tool(user, name, arguments)
 
         try:
-            return await generate_gemini_function_call_reply(
+            return await _run_provider_tool_loop(
                 message,
                 history=history,
                 tool_declarations=GITHUB_TOOL_DECLARATIONS,

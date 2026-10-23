@@ -237,8 +237,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         if text.strip():
             document_context_parts.append(f"Content from attached text file {file_id}:\n{text[:100_000]}")
 
-    _model_backend = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold()
-    gemini_enabled = _model_backend in {"gemini", "azure"}
+    gemini_enabled = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
     for attachment in attachments:
         filename = str(attachment["filename"])
         mime_type = str(attachment["mime_type"])

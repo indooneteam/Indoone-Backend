@@ -463,6 +463,21 @@ async def generate_azure_function_call_reply(
             executed_calls += 1
             logger.info("Azure OpenAI called tool: %s", name)
             result = await execute_tool(name, arguments)
+            # Log the outcome, never the payload: email and repository content is
+            # private. This is the line that says whether a tool worked or refused,
+            # which is the difference between "no tools offered" and "the tool
+            # itself answered with an error".
+            if isinstance(result, dict):
+                logger.info(
+                    "Azure OpenAI tool %s returned ok=%s code=%s error=%s keys=%s",
+                    name,
+                    result.get("ok"),
+                    result.get("code"),
+                    str(result.get("error"))[:200],
+                    ",".join(sorted(str(k) for k in result.keys()))[:300],
+                )
+            else:
+                logger.info("Azure OpenAI tool %s returned %s", name, type(result).__name__)
             messages.append(
                 {
                     "role": "tool",

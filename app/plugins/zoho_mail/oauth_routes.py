@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from app.capabilities.store import get_integration_token_metadata
+from app.api.errors import provider_failure
 from app.plugins.zoho_mail.oauth import (
     cancel_zoho_mail_authorization,
     disconnect_zoho_mail,
@@ -30,7 +31,7 @@ async def zoho_mail_auth_configuration() -> dict[str, object]:
     try:
         return zoho_mail_auth_config()
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("zoho mail authorization", exc, status_code=503) from exc
 
 
 @router.post("/integrations/zoho-mail/start")
@@ -40,7 +41,7 @@ async def zoho_mail_start(request: ZohoMailStartRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("zoho mail authorization", exc, status_code=503) from exc
 
 
 @router.get("/integrations/zoho-mail/callback", response_class=HTMLResponse)
@@ -53,7 +54,7 @@ async def zoho_mail_callback(request: Request) -> HTMLResponse:
     error = params.get("error", "").strip()
 
     if len(code) > 8_000 or len(state) > 512 or len(error) > 256:
-        raise HTTPException(status_code=400, detail="Zoho Mail callback parameters exceed allowed limits.")
+        raise HTTPException(status_code=400, detail="The callback parameters exceed the allowed limits.")
 
     if error:
         cancel_zoho_mail_authorization(state)
@@ -66,7 +67,7 @@ async def zoho_mail_callback(request: Request) -> HTMLResponse:
     if not code or not state:
         raise HTTPException(
             status_code=400,
-            detail="Zoho Mail callback is missing an authorization code or state.",
+            detail="The callback is missing an authorization code or state.",
         )
 
     try:
@@ -74,9 +75,9 @@ async def zoho_mail_callback(request: Request) -> HTMLResponse:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail="Zoho rejected the Mail authorization request") from exc
+        raise provider_failure("Zoho rejected the Mail authorization request", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("zoho mail authorization", exc, status_code=503) from exc
     return HTMLResponse(
         "<!doctype html><html><body><h2>Zoho Mail connected to Indoone</h2>"
         "<p>Authorization finished successfully. Return to Indoone and check the connection status.</p>"
@@ -92,7 +93,7 @@ async def zoho_mail_disconnect(request: ZohoMailStartRequest) -> dict[str, objec
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("zoho mail authorization", exc, status_code=503) from exc
 
 
 @router.get("/integrations/zoho-mail/status")

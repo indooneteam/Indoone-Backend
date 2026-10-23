@@ -387,9 +387,12 @@ async def list_github_repository_commits(
         commit = commit if isinstance(commit, dict) else {}
         author = commit.get("author")
         author = author if isinstance(author, dict) else {}
+        # A commit can have an empty or missing message. "".splitlines() is [], and
+        # indexing it raised IndexError, which the route turned into an unhandled 500.
+        message_lines = str(commit.get("message") or "").splitlines()
         commits.append({
             "sha": str(item.get("sha") or ""),
-            "message": str(commit.get("message") or "").splitlines()[0][:300],
+            "message": message_lines[0][:300] if message_lines else "",
             "author": str(author.get("name") or ""), "date": str(author.get("date") or ""),
             "html_url": str(item.get("html_url") or ""),
         })

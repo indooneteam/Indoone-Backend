@@ -1,4 +1,5 @@
 import base64
+import logging
 import os
 from pathlib import Path
 from uuid import uuid4
@@ -28,6 +29,7 @@ from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
 from app.ai.gemini_service import ModelBusyError
 from app.ai.tool_loop import needs_tools, run_tool_loop
+from app.ai.agent_async import execute_agent_async
 from app.capabilities.store import get_pending_email_action, list_memories
 from datetime import datetime, timedelta, timezone
 
@@ -39,6 +41,8 @@ from app.plugins.email_tools import (
     handle_email_chat_with_tools,
 )
 from app.plugins.github.chat_tools import handle_github_chat_with_tools
+
+logger = logging.getLogger("indoone.chat")
 
 router = APIRouter(tags=["chat"])
 _store = ConversationStore()
@@ -105,12 +109,47 @@ def _decode_chat_attachment(body: ChatRequest) -> dict[str, object] | None:
     return {"filename": filename, "mime_type": mime_type, "content": content}
 
 
+async def _agent_history_for_chat(
+    user_id: str,
+    message: str,
+    history: list[tuple[str, str]],
+    approval_tokens: list[str] | None,
+) -> list[tuple[str, str]] | None:
+    """Run the multi-step agent and return the history with its tool output appended.
+
+    Returns None when the agent planned nothing, so the caller can fall back to the
+    single-tool loop and the plugin paths exactly as before.
+
+    The agent plans its steps deterministically, so it does not need the model
+    backend to be enabled, and it can feed one step's result into the next. Its output
+    goes into the history as a tool turn, and the model then answers from it.
+    """
+    execution = await execute_agent_async(
+        message,
+        user_id=user_id,
+        approval_tokens=tuple(approval_tokens or ()),
+    )
+    if not execution.results:
+        return None
+    lines = [f"{result.name}: {result.output}" for result in execution.results]
+    return [*history, ("tool", "\n".join(lines))]
+
+
 def _decode_chat_attachments(body: ChatRequest) -> list[dict[str, object]]:
     legacy_fields = (body.attachment_filename, body.attachment_mime_type, body.attachment_base64)
     media_items: list[dict[str, object]] = []
 
     if body.attachments and any(value is not None for value in legacy_fields):
         raise HTTPException(status_code=400, detail="use either attachments or the legacy single-attachment fields")
+
+    # Check the aggregate on the encoded sizes before decoding anything. Summing after
+    # the loop meant every attachment had already been decoded into memory, so the 20 MB
+    # budget could not prevent the work it exists to prevent.
+    encoded_total = sum(len(item.content_base64) for item in body.attachments)
+    if body.attachment_base64:
+        encoded_total += len(body.attachment_base64)
+    if encoded_total > ((MAX_CHAT_TOTAL_ATTACHMENT_BYTES + 2) // 3) * 4:
+        raise HTTPException(status_code=413, detail="Attachments together exceed the 20 MB upload limit.")
 
     for item in body.attachments:
         decoded = _decode_chat_attachment(
@@ -196,9 +235,10 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         if text.strip():
-            document_context_parts.append(f"Content from attached text file {file_id}:\\n{text[:100_000]}")
+            document_context_parts.append(f"Content from attached text file {file_id}:\n{text[:100_000]}")
 
-    gemini_enabled = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
+    _model_backend = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold()
+    gemini_enabled = _model_backend in {"gemini", "azure"}
     for attachment in attachments:
         filename = str(attachment["filename"])
         mime_type = str(attachment["mime_type"])
@@ -228,7 +268,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                         ),
                     )
                 document_context_parts.append(
-                    f"Readable text extracted from image {filename}:\\n{ocr_text[:100_000]}"
+                    f"Readable text extracted from image {filename}:\n{ocr_text[:100_000]}"
                 )
         elif mime_type in {PDF_MIME, DOCX_MIME}:
             try:
@@ -240,7 +280,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 media_attachments.append(attachment)
             elif document.text.strip():
                 document_context_parts.append(
-                    f"Extracted content from {filename}:\\n{document.text[:100_000]}"
+                    f"Extracted content from {filename}:\n{document.text[:100_000]}"
                 )
             else:
                 raise HTTPException(
@@ -251,7 +291,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                     ),
                 )
 
-    document_context = "\\n\\n".join(document_context_parts)[:120_000]
+    document_context = "\n\n".join(document_context_parts)[:120_000]
 
     try:
         tool_reply = None
@@ -261,6 +301,35 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         extra_lines = [line for line in (_user_name_line(user_id), _now_line()) if line]
         extra_instruction = " ".join(extra_lines)
         if not attachments and not file_ids and not document_context.strip() and not media_attachments:
+            # The agent runs first. It plans its own tool steps and can chain one result
+            # into the next, and it is deterministic, so it does not depend on the model
+            # backend. What it gathers goes into the history and the model answers from
+            # it below. When it plans nothing, every path under this runs as it did.
+            agent_ran = False
+            # The agent decides. Every email tool is either gated on the user having
+            # connected that mailbox or gated on approval, so for an email request the
+            # agent either plans nothing or blocks the step it planned - and in both
+            # cases it produces no result, which leaves the request to the email path
+            # below. That path knows the provider the user actually connected and asks
+            # for the one confirmation.
+            #
+            # The pending check is still needed: once an action is waiting, the reply
+            # that confirms it may be a bare "yes", which is not a tool request at all.
+            email_owns_this = bool(get_pending_email_action(user_id, conversation_id))
+            # No needs_tools gate otherwise: that is a cost heuristic for the model
+            # call - a short greeting should not pay for the whole tool catalogue. The
+            # agent is deterministic and plans nothing for a greeting, so it costs
+            # almost nothing and catches the short requests the heuristic would miss.
+            if tool_reply is None and not email_owns_this:
+                agent_history = await _agent_history_for_chat(
+                    user_id,
+                    body.message,
+                    history,
+                    body.approval_tokens,
+                )
+                if agent_history is not None:
+                    history = agent_history
+                    agent_ran = True
             if gemini_enabled:
                 # A pending email confirmation must be resolved before anything else.
                 pending = get_pending_email_action(user_id, conversation_id)
@@ -278,8 +347,9 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                             "Reply CONFIRM to approve it or CANCEL to stop it before "
                             "starting another email action."
                         )
-                if tool_reply is None and needs_tools(body.message):
+                if tool_reply is None and not agent_ran and needs_tools(body.message):
                     # One loop, every tool: the model chooses whether and which to call.
+                    # This is the fallback for when the agent planned nothing.
                     try:
                         tool_reply = await run_tool_loop(
                             user_id,
@@ -307,7 +377,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                         "email service failed. Please retry shortly. I will not claim that "
                         "an email was sent or deleted unless the operation was confirmed."
                     )
-                if tool_reply is None:
+                if tool_reply is None and not agent_ran:
                     tool_reply = await handle_github_chat_with_tools(
                         user_id,
                         body.message,
@@ -346,7 +416,17 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             headers={"Retry-After": "20"},
         ) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # The failure is logged in full and the client gets wording of our own. The
+        # provider's error text must not travel: it names a third party and points at
+        # our configuration rather than at anything the user can act on.
+        logger.error("Chat generation failed: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Indoone AI could not complete this request. "
+                "Please try again in a moment."
+            ),
+        ) from exc
 
     reply, web_sources = split_grounded_sources(reply_with_sources)
 

@@ -399,6 +399,12 @@ def test_agent_routes_email_safety_request() -> None:
 
 
 def test_agent_routes_email_compose_request() -> None:
+    """A compose is planned, and like every other email write it needs approval.
+
+    The agent plans it, but it must not run it: with the step blocked the agent
+    produces no result, and the request stays with the email path, which knows the
+    provider the user connected and asks the one confirmation.
+    """
     steps = build_agent_steps(
         "compose an email to alex@example.com about tomorrow's meeting",
         user_id="user-1",
@@ -406,7 +412,7 @@ def test_agent_routes_email_compose_request() -> None:
     assert len(steps) == 1
     assert steps[0].tool == "gmail_compose"
     assert "tomorrow's meeting" in steps[0].payload
-    assert steps[0].requires_approval is False
+    assert steps[0].requires_approval is True
 
 
 def test_agent_routes_email_reply() -> None:

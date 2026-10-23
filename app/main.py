@@ -13,6 +13,7 @@ from app.ai.conversation_store import ConversationStore
 from app.api.approvals import router as approvals_router
 from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
+from app.api.agent_async import router as agent_async_router
 from app.web_research.api import router as web_research_router
 from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
@@ -25,7 +26,6 @@ from app.api.errors import error_response
 from app.api.facebook import router as facebook_router
 from app.api.google_photos import router as google_photos_router
 from app.api.integrations import router as integrations_router
-from app.plugins.gmail.oauth_routes import router as gmail_oauth_router
 from app.plugins.zoho_mail.oauth_routes import router as zoho_mail_oauth_router
 from app.plugins.zoho_mail.routes import router as zoho_mail_router
 from app.instagram.api.instagram import router as instagram_router
@@ -187,7 +187,19 @@ async def request_context_middleware(request: Request, call_next):
         request.method.upper() == "GET"
         and request.url.path in {"/health", "/ready"}
     )
-    authentication_exempt = provider_webhook or public_oauth_callback or public_health_check
+    # A CORS preflight carries no credentials, by design: the browser sends it
+    # before it will send the real request. This middleware runs before the CORS
+    # middleware, so refusing a preflight here means the browser never receives
+    # an allow-origin header - and then never sends the real call at all. The
+    # CORS middleware still decides whether the origin is allowed, and answers a
+    # preflight from an origin it does not allow without that header.
+    preflight = request.method.upper() == "OPTIONS"
+    authentication_exempt = (
+        provider_webhook
+        or public_oauth_callback
+        or public_health_check
+        or preflight
+    )
     principal = ""
     if authorization and not authentication_exempt:
         try:
@@ -253,7 +265,18 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
-    return _error_response_with_request_id(422, "VALIDATION_ERROR", "request validation failed", get_request_id() or str(getattr(request.state, "request_id", "")), {"errors": exc.errors()})
+    # Pydantic v2 puts the offending value under an "input" key. Echoing it back would
+    # return a credential that failed validation to whoever sent it, which is the opposite
+    # of what this handler is for. Only the shape of the failure goes out.
+    errors = [
+        {
+            "type": str(item.get("type", "")),
+            "loc": list(item.get("loc", ())),
+            "msg": str(item.get("msg", "")),
+        }
+        for item in exc.errors()
+    ]
+    return _error_response_with_request_id(422, "VALIDATION_ERROR", "request validation failed", get_request_id() or str(getattr(request.state, "request_id", "")), {"errors": errors})
 
 
 @app.exception_handler(Exception)
@@ -282,6 +305,7 @@ app.include_router(platform_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")
+app.include_router(agent_async_router, prefix="/api")
 app.include_router(web_research_router, prefix="/api")
 app.include_router(documents_router, prefix="/api")
 app.include_router(files_router, prefix="/api")
@@ -291,7 +315,6 @@ app.include_router(contacts_router, prefix="/api")
 app.include_router(phone_router, prefix="/api")
 app.include_router(approvals_router, prefix="/api")
 app.include_router(integrations_router, prefix="/api")
-app.include_router(gmail_oauth_router, prefix="/api")
 app.include_router(zoho_mail_router, prefix="/api")
 app.include_router(telegram_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")

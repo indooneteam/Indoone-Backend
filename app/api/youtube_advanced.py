@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from app.api.errors import provider_failure
 
 from app.capabilities.youtube_advanced import (
     delete_caption,
@@ -118,8 +119,8 @@ def _route_error(exc: Exception, operation: str) -> HTTPException:
     if isinstance(exc, ValueError):
         return HTTPException(status_code=400, detail=str(exc))
     if isinstance(exc, (httpx.HTTPError, RuntimeError)):
-        return HTTPException(status_code=502, detail=f"youtube advanced {operation} failed: {exc}")
-    return HTTPException(status_code=500, detail=f"youtube advanced {operation} failed")
+        return provider_failure(f"youtube advanced {operation}", exc)
+    return provider_failure(f"youtube advanced {operation}", exc, status_code=500)
 
 
 @router.post("/shorts")

@@ -38,7 +38,14 @@ _MAX_TEXT_LENGTH = 8_000
 _MAX_WS_MESSAGE_BYTES = _MAX_AUDIO_BYTES + 1_000_000
 _DEFAULT_VOICE = "Aoede"
 _DEFAULT_LIVE_MODEL = "gemini-3.8-live-extended-thinking"
-_DEFAULT_THINKING_LEVEL = "medium"
+
+# How long an accepted socket may wait for its opening auth message.
+_LIVE_AUTH_TIMEOUT_SECONDS = 15.0
+# A live voice session must not go quiet while the model reasons: on the
+# extended-thinking live model, a higher level makes the audio stop mid-answer and
+# then resume, which the user hears as the voice cutting in and out. Low keeps the
+# reply continuous, which is what a spoken conversation needs.
+_DEFAULT_THINKING_LEVEL = "low"
 _VOICE_ERROR_MESSAGE = "Vibe could not reach the voice service. Please try again."
 
 _SYSTEM_INSTRUCTION = (
@@ -313,9 +320,33 @@ def _google_error_detail(message: dict[str, object], api_key: str) -> str:
     return detail.replace("\n", " ").strip()[:300]
 
 
-async def _send_error(websocket: WebSocket, detail: str) -> None:
+async def _send_client(
+    websocket: WebSocket,
+    client_lock: asyncio.Lock,
+    payload: dict[str, object],
+) -> None:
+    """Write to the client socket under a lock.
+
+    Both relay directions write to this socket - the task forwarding what the client
+    sent, and the task forwarding what Gemini sent - and they run at the same time.
+    Without a lock two coroutines can be inside a send at once, which interleaves
+    frames the client cannot parse and can raise mid-send. The lock used for the
+    Gemini socket does not cover this: that is a different connection.
+    """
+    async with client_lock:
+        await websocket.send_json(payload)
+
+
+async def _send_error(
+    websocket: WebSocket,
+    detail: str,
+    client_lock: asyncio.Lock | None = None,
+) -> None:
     try:
-        await websocket.send_json({"type": "error", "detail": detail[:400]})
+        if client_lock is None:
+            await websocket.send_json({"type": "error", "detail": detail[:400]})
+        else:
+            await _send_client(websocket, client_lock, {"type": "error", "detail": detail[:400]})
         await websocket.close(code=1011, reason="live voice error")
     except Exception:
         # The client may have disconnected while the provider was failing.
@@ -389,11 +420,12 @@ async def _handle_gemini_message(
     gemini,
     send_lock: asyncio.Lock,
     tool_tasks: set[asyncio.Task],
+    client_lock: asyncio.Lock,
 ) -> bool:
     try:
         message = json.loads(raw_message)
     except (TypeError, ValueError):
-        await _send_error(websocket, "Gemini Live returned invalid JSON.")
+        await _send_error(websocket, "Gemini Live returned invalid JSON.", client_lock)
         return False
 
     if not isinstance(message, dict):
@@ -402,7 +434,7 @@ async def _handle_gemini_message(
     if "error" in message:
         # Keep the provider's wording in the log; the user gets our own message.
         logger.warning("Gemini Live error message: %s", _google_error_detail(message, api_key))
-        await _send_error(websocket, _VOICE_ERROR_MESSAGE)
+        await _send_error(websocket, _VOICE_ERROR_MESSAGE, client_lock)
         return False
 
     server_content = message.get("serverContent", message.get("server_content"))
@@ -412,7 +444,7 @@ async def _handle_gemini_message(
     if status:
         status_text = str(status).strip().upper()
         if status_text in {"IN_PROGRESS", "IDLE"}:
-            await websocket.send_json({
+            await _send_client(websocket, client_lock, {
                 "type": "status",
                 "interaction_status": status_text,
             })
@@ -512,7 +544,7 @@ async def _handle_gemini_message(
         })
 
     for event in [*events, *audio_events]:
-        await websocket.send_json(event)
+        await _send_client(websocket, client_lock, event)
 
     return True
 
@@ -520,22 +552,23 @@ async def _forward_client_messages(
     websocket: WebSocket,
     gemini,
     send_lock: asyncio.Lock,
+    client_lock: asyncio.Lock,
 ) -> None:
     while True:
         raw = await websocket.receive_text()
         try:
             message = json.loads(raw)
         except ValueError:
-            await websocket.send_json({"type": "error", "detail": "Message must be valid JSON."})
+            await _send_client(websocket, client_lock, {"type": "error", "detail": "Message must be valid JSON."})
             continue
 
         if not isinstance(message, dict):
-            await websocket.send_json({"type": "error", "detail": "Message must be a JSON object."})
+            await _send_client(websocket, client_lock, {"type": "error", "detail": "Message must be a JSON object."})
             continue
 
         message_type = str(message.get("type") or "").strip().lower()
         if message_type == "ping":
-            await websocket.send_json({"type": "pong", "request_id": message.get("request_id")})
+            await _send_client(websocket, client_lock, {"type": "pong", "request_id": message.get("request_id")})
             continue
 
         if message_type == "stop":
@@ -546,7 +579,7 @@ async def _forward_client_messages(
             except Exception:
                 pass
             try:
-                await websocket.send_json({"type": "stopped"})
+                await _send_client(websocket, client_lock, {"type": "stopped"})
                 await websocket.close(code=1000, reason="Vibe ended")
             except Exception:
                 pass
@@ -563,7 +596,7 @@ async def _forward_client_messages(
             if not text:
                 continue
             if len(text) > _MAX_TEXT_LENGTH:
-                await websocket.send_json({"type": "error", "detail": "Text message is too long."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "Text message is too long."})
                 continue
             await _send_gemini_message(
                 gemini, send_lock, {"realtimeInput": {"text": text}}
@@ -574,21 +607,21 @@ async def _forward_client_messages(
             audio_base64 = str(message.get("audio_base64") or "")
             mime_type = str(message.get("mime_type") or "audio/pcm;rate=16000").strip()
             if not audio_base64:
-                await websocket.send_json({"type": "error", "detail": "audio_base64 is required."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "audio_base64 is required."})
                 continue
             try:
                 audio_bytes = base64.b64decode(audio_base64, validate=True)
             except (binascii.Error, ValueError):
-                await websocket.send_json({"type": "error", "detail": "audio_base64 must be valid base64."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "audio_base64 must be valid base64."})
                 continue
             if not audio_bytes:
-                await websocket.send_json({"type": "error", "detail": "Audio chunk is empty."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "Audio chunk is empty."})
                 continue
             if len(audio_bytes) > _MAX_AUDIO_BYTES:
-                await websocket.send_json({"type": "error", "detail": "Audio chunk is too large."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "Audio chunk is too large."})
                 continue
             if not mime_type.lower().startswith("audio/pcm"):
-                await websocket.send_json({"type": "error", "detail": "Vibe requires raw PCM audio input."})
+                await _send_client(websocket, client_lock, {"type": "error", "detail": "Vibe requires raw PCM audio input."})
                 continue
             await _send_gemini_message(gemini, send_lock, {
                 "realtimeInput": {
@@ -600,7 +633,7 @@ async def _forward_client_messages(
             })
             continue
 
-        await websocket.send_json({"type": "error", "detail": "Unsupported Vibe message type."})
+        await _send_client(websocket, client_lock, {"type": "error", "detail": "Unsupported Vibe message type."})
 
 async def _forward_gemini_messages(
     websocket: WebSocket,
@@ -609,11 +642,12 @@ async def _forward_gemini_messages(
     user_id: str,
     send_lock: asyncio.Lock,
     tool_tasks: set[asyncio.Task],
+    client_lock: asyncio.Lock,
 ) -> None:
     while True:
         message = await gemini.recv()
         if not await _handle_gemini_message(
-            websocket, message, api_key, user_id, gemini, send_lock, tool_tasks
+            websocket, message, api_key, user_id, gemini, send_lock, tool_tasks, client_lock
         ):
             return
 
@@ -621,10 +655,14 @@ async def _forward_gemini_messages(
 async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str, user_id: str) -> None:
     send_lock = asyncio.Lock()
     tool_tasks: set[asyncio.Task] = set()
-    client_task = asyncio.create_task(_forward_client_messages(websocket, gemini, send_lock))
+    # Both tasks below write to the client socket, so they share a lock for it.
+    client_lock = asyncio.Lock()
+    client_task = asyncio.create_task(
+        _forward_client_messages(websocket, gemini, send_lock, client_lock)
+    )
     gemini_task = asyncio.create_task(
         _forward_gemini_messages(
-            websocket, gemini, api_key, user_id, send_lock, tool_tasks
+            websocket, gemini, api_key, user_id, send_lock, tool_tasks, client_lock
         )
     )
     tasks = {client_task, gemini_task}
@@ -649,23 +687,75 @@ async def _run_live_proxy(websocket: WebSocket, gemini, api_key: str, user_id: s
                 task.cancel()
         await asyncio.gather(*tasks, *tool_tasks, return_exceptions=True)
 
+async def _await_websocket_auth(websocket: WebSocket) -> str:
+    """Read the caller's token from the first message of an accepted socket.
+
+    A browser cannot set a header on a WebSocket - the API has no parameter for
+    one - so the web app sends the token as its opening message instead of in
+    Authorization. The native app still uses the header, and never reaches here.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _LIVE_AUTH_TIMEOUT_SECONDS
+
+    while True:
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            raise ValueError("authentication timed out")
+
+        try:
+            message = await asyncio.wait_for(
+                websocket.receive_json(), timeout=remaining
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("authentication message must be valid JSON") from exc
+
+        if not isinstance(message, dict):
+            raise ValueError("authentication message must be a JSON object")
+
+        if str(message.get("type") or "").strip().lower() != "auth":
+            raise ValueError("first message must be an auth message")
+
+        token = str(message.get("token") or "").strip()
+        if not token:
+            raise ValueError("auth message carried no token")
+
+        return extract_principal(f"Bearer {token}")
+
+
 async def _vibe_live_session(websocket: WebSocket) -> None:
-    try:
-        user_id = extract_principal(websocket.headers.get("authorization", ""))
-    except Exception:
-        # WebSockets bypass the HTTP request middleware, so authenticate explicitly.
-        logger.warning("Vibe websocket rejected: authentication failed")
-        await websocket.close(code=1008, reason="authentication required")
-        return
+    header = websocket.headers.get("authorization", "")
+    accepted = False
+
+    if header:
+        # The native app: the token travels in the header.
+        try:
+            user_id = extract_principal(header)
+        except Exception:
+            # WebSockets bypass the HTTP request middleware, so authenticate explicitly.
+            logger.warning("Vibe websocket rejected: authentication failed")
+            await websocket.close(code=1008, reason="authentication required")
+            return
+    else:
+        # The web app: no header is possible, so the token is the first message.
+        await websocket.accept()
+        accepted = True
+        try:
+            user_id = await _await_websocket_auth(websocket)
+        except Exception as exc:
+            logger.warning("Vibe websocket rejected: authentication failed (%s)", exc)
+            await websocket.close(code=1008, reason="authentication required")
+            return
 
     try:
         api_key, model, voice, thinking_level = _live_config()
     except RuntimeError as exc:
-        await websocket.accept()
+        if not accepted:
+            await websocket.accept()
         await _send_error(websocket, str(exc))
         return
 
-    await websocket.accept()
+    if not accepted:
+        await websocket.accept()
     url = f"{_GEMINI_LIVE_ENDPOINT}?{urlencode({'key': api_key})}"
 
     try:
@@ -714,21 +804,14 @@ async def _vibe_live_session(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         return
     except Exception as exc:
-        response = getattr(exc, "response", None)
-        status = getattr(response, "status_code", None)
-        if status:
-            detail = (
-                f"Google Gemini Live rejected the connection (HTTP {status}). "
-                "Check GEMINI_LIVE_MODEL and Gemini API access."
-            )
-        elif isinstance(exc, TimeoutError):
-            detail = "Gemini Live setup timed out. Check the model and network access."
-        elif isinstance(exc, RuntimeError) and str(exc).startswith("Gemini Live"):
-            detail = str(exc)
-        else:
-            detail = "Gemini Live connection failed. Check the backend log for the error type."
-        logger.warning("Indoone Vibe Live session failed (%s)", type(exc).__name__)
-        await _send_error(websocket, detail)
+        # The reason stays in the log, where it is useful; the user gets our own message.
+        logger.warning(
+            "Indoone Vibe Live session failed (%s): %s",
+            type(exc).__name__,
+            exc,
+            exc_info=True,
+        )
+        await _send_error(websocket, _VOICE_ERROR_MESSAGE)
 
 
 @router.websocket("/vibe/session")

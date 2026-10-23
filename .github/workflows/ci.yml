@@ -48,17 +48,13 @@ jobs:
           print("colab_notebook_python=valid")
           PY
 
+      # Nothing is excluded any more. The last three exclusions were tests whose subject
+      # had been removed from the code: a _memory_service in app/api/chat.py, and a
+      # research provider and a knowledge base inside app/ai/service.py. All three are
+      # gone, and the behaviour they were meant to cover - memory reaching the model - is
+      # covered by the agent suite.
       - name: Run tests
-        run: >-
-          python -m pytest -q -W error
-          --ignore-glob='tests/test_agent*.py'
-          --ignore=tests/test_intent.py
-          --ignore=tests/test_orchestrator_planner.py
-          --ignore=tests/test_platform_ai.py
-          --ignore=tests/test_code_sandbox.py
-          --ignore=tests/test_chat_memory.py
-          --ignore=tests/test_rag_service_integration.py
-          --ignore=tests/test_service_knowledge.py
+        run: python -m pytest -q -W error
 
       - name: Run production security smoke test
         run: python scripts/security_smoke.py

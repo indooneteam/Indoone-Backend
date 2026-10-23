@@ -3,6 +3,7 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
+from app.api.errors import provider_failure
 
 from app.instagram.capabilities.instagram_messaging import (
     get_message,
@@ -47,7 +48,7 @@ class SendMediaShareRequest(BaseModel):
 
 
 def _provider_error(exc: Exception) -> HTTPException:
-    return HTTPException(status_code=502, detail=f"instagram messaging provider failed: {exc}")
+    return provider_failure("instagram messaging provider", exc)
 
 
 @router.post("/conversations")

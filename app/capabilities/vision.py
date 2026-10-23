@@ -7,6 +7,9 @@ import subprocess
 from pathlib import Path
 
 MAX_IMAGE_BYTES = 5_000_000
+# The encoded length has a known relationship to the decoded length, so an oversize
+# payload can be refused before it is decoded rather than after.
+MAX_IMAGE_BASE64_CHARS = ((MAX_IMAGE_BYTES + 2) // 3) * 4
 ALLOWED_IMAGE_MIMES = {"image/jpeg", "image/png", "image/webp"}
 
 
@@ -64,6 +67,20 @@ def _run_tesseract(content: bytes) -> tuple[str, str | None]:
         return "", detail
     return completed.stdout.decode("utf-8", errors="replace").strip(), None
 
+def _require_image_signature(content: bytes, mime_type: str) -> None:
+    """Refuse bytes that are not the image the caller says they are.
+
+    The declared type decides which branch handles the upload and which size limit
+    applies, so it must be matched against the content, not trusted.
+    """
+    if mime_type == "image/png" and not content.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise ValueError("image content does not match the declared type")
+    if mime_type == "image/jpeg" and not content.startswith(b"\xff\xd8\xff"):
+        raise ValueError("image content does not match the declared type")
+    if mime_type == "image/webp" and not (content[:4] == b"RIFF" and content[8:12] == b"WEBP"):
+        raise ValueError("image content does not match the declared type")
+
+
 def analyze_image(filename: str, mime_type: str, content_base64: str) -> dict[str, object]:
     filename = Path(filename).name.strip()
     mime_type = mime_type.strip().lower()
@@ -71,6 +88,8 @@ def analyze_image(filename: str, mime_type: str, content_base64: str) -> dict[st
         raise ValueError("filename cannot be empty")
     if mime_type not in ALLOWED_IMAGE_MIMES:
         raise ValueError("unsupported image type")
+    if len(content_base64) > MAX_IMAGE_BASE64_CHARS:
+        raise ValueError("image exceeds 5 MB limit")
     try:
         content = base64.b64decode(content_base64, validate=True)
     except Exception as exc:
@@ -79,6 +98,7 @@ def analyze_image(filename: str, mime_type: str, content_base64: str) -> dict[st
         raise ValueError("image content cannot be empty")
     if len(content) > MAX_IMAGE_BYTES:
         raise ValueError("image exceeds 5 MB limit")
+    _require_image_signature(content, mime_type)
 
     width, height = _image_dimensions(content, mime_type)
     text, ocr_error = _run_tesseract(content)

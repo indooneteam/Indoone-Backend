@@ -222,6 +222,9 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         "gmail_compose",
         "Create an email draft with the local Indoone AI without sending it.",
         parameters=_object({"request": {"type": "STRING", "description": "What the draft should say."}}, ("request",)),
+        connector_id="gmail",
+        capability="messages.read",
+        requires_approval=True,
         categories=("gmail", "email", "external"),
     ),
     ToolSpec(

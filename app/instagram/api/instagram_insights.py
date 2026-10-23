@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.instagram.capabilities.instagram_insights import get_account_insights, get_media_insights
+from app.api.errors import provider_failure
 
 router = APIRouter(prefix="/integrations/instagram/insights", tags=["instagram-insights"])
 
@@ -36,7 +37,7 @@ async def account_insights(request: AccountInsightsRequest) -> dict[str, object]
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram insights provider failed: {exc}") from exc
+        raise provider_failure("instagram insights provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -48,6 +49,6 @@ async def media_insights(request: MediaInsightsRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram insights provider failed: {exc}") from exc
+        raise provider_failure("instagram insights provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

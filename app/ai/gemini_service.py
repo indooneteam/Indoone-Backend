@@ -251,9 +251,17 @@ async def _post_generate_content(
             # per minute or per day). Log it so the real limit is known.
             logger.warning("Gemini rate limit reached: %s", detail[:400])
             raise ModelBusyError(BUSY_MESSAGE)
+        # The provider's own text is logged here and never placed in the exception.
+        # This message travels to the client, so it must not carry a third party's
+        # error body. The status code is ours and is safe to keep.
+        logger.error(
+            "Gemini returned HTTP %s: %s",
+            response.status_code,
+            detail,
+        )
         if response.status_code in {401, 403}:
             raise RuntimeError("Gemini API authentication failed")
-        raise RuntimeError(f"Gemini API returned HTTP {response.status_code}: {detail}")
+        raise RuntimeError(f"Gemini API returned HTTP {response.status_code}")
 
     try:
         response_data = response.json()

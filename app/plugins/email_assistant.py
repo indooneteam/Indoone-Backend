@@ -38,22 +38,42 @@ from app.plugins.zoho_mail.service import (
     send_message,
 )
 
+from app.ai.language_detection import (
+    INDIC_CANCEL_WORDS,
+    INDIC_CONFIRM_WORDS,
+    INDIC_MAIL_WORDS,
+    indic_pattern,
+)
+
 logger = logging.getLogger(__name__)
 
 MAX_EMAIL_RESULTS = 10
 EMAIL_ADDRESS_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
+# The Indian-language words come from one shared table in app/ai/language_detection.py,
+# so a confirmation typed in Tamil and one typed in Kannada are recognised by the same
+# list instead of by hand-written patterns that only ever grew in one language. The
+# Kannada extras that were here before are kept alongside it.
+_INDIC_MAIL = indic_pattern(INDIC_MAIL_WORDS)
+_INDIC_CONFIRM = indic_pattern(INDIC_CONFIRM_WORDS)
+_INDIC_CANCEL = indic_pattern(INDIC_CANCEL_WORDS)
+
 EMAIL_CONTEXT_RE = re.compile(
     r"\b(email|emails|mail|mails|inbox|gmail|zoho|draft|drafts|unread)\b|"
-    r"ಮೇಲ್|ಮೇಲ್ಸ್|ಇಮೇಲ್|ಡ್ರಾಫ್ಟ್|ಜಿಮೇಲ್|ಜೋಹೋ|ಜೂಹೋ",
+    + _INDIC_MAIL
+    + r"|ಡ್ರಾಫ್ಟ್|ಜಿಮೇಲ್|ಜೋಹೋ|ಜೂಹೋ",
     re.IGNORECASE,
 )
 CONFIRM_RE = re.compile(
     r"^(yes|yes please|confirm|confirmed|do it|go ahead|send it|delete them|"
-    r"approve|approved|ಹೌದು|ಸರಿ|ಮಾಡು|ಕಳುಹಿಸು|ಡಿಲೀಟ್ ಮಾಡು)[.! ]*$",
+    r"approve|approved|"
+    + _INDIC_CONFIRM
+    + r"|ಮಾಡು|ಡಿಲೀಟ್ ಮಾಡು)[.! ]*$",
     re.IGNORECASE,
 )
 CANCEL_RE = re.compile(
-    r"^(no|no thanks|cancel|stop|don't|do not|ಬೇಡ|ರದ್ದು|ಕ್ಯಾನ್ಸಲ್)[.! ]*$",
+    r"^(no|no thanks|cancel|stop|don't|do not|"
+    + _INDIC_CANCEL
+    + r"|ಕ್ಯಾನ್ಸಲ್)[.! ]*$",
     re.IGNORECASE,
 )
 

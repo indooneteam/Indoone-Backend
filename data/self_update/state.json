@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-10T21:47:38.745716+00:00",
+  "updated_at": "2026-10-23T04:56:35.617076+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -25,6 +25,86 @@
       "summary": "This long-duration image shows star trails above Earth and the blue lights of fishing boats and the yellow lights of Indonesian cities stretching below the International Space Station as it orbited 258 miles above the Banda Sea on Sept. 20, 2026. Image credit: NASA/Anil Menon",
       "published": "Wed, 30 Sep 2026 17:50:50 +0000",
       "fingerprint": "8f322f461ca55b2cac30e801e8b7be9883878846d69765a94c3b0cac4b1723c5"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Conducts RS-25 Engine Test in Support of Future Artemis Missions",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1058381",
+      "summary": "NASA tested RS-25 engine No. 10001 on Oct. 21 on the Fred Haise Test Stand at NASA’s Stennis Space Center near Bay St. Louis, Mississippi. Test teams fired the developmental engine for almost eight-and-a-half minutes (500 seconds), the same amount of time RS-25 engines fire during launch of NASA’s SLS (Space Launch System) rocket. During […]",
+      "published": "Wed, 21 Oct 2026 20:51:50 +0000",
+      "fingerprint": "3c59306eb847ee06b903862cb7e3617b767de995e65269e0248d5f2c915652f4"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA JPL Looks to Next 90 Years of Innovation, Exploration",
+      "url": "https://www.nasa.gov/?p=1058236",
+      "summary": "Interstellar probes. Lunar drones. Helicopters on Mars. When a group of Caltech graduate students and enthusiasts began conducting rocket-propulsion tests in Pasadena’s Arroyo Seco on Oct. 31, 1936, they had no idea that their work marked the inception of the Jet Propulsion Laboratory. Ninety years later, the lab, now managed by Caltech for NASA, isn’t […]",
+      "published": "Wed, 21 Oct 2026 18:35:56 +0000",
+      "fingerprint": "bc5d7e10afff09af6d9effa85ae5820f644118ca550ef9dd20d262c9d52cfce3"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Conduct NCAA Flyover, Engage Fans at University of Alabama",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1058161",
+      "summary": "As part of the agency’s Inspiration Tour, NASA will conduct a flyover at the University of Alabama vs. Texas A&M football game in Tuscaloosa, Alabama, on Saturday, Oct. 24. NASA Administrator Jared Isaacman will pilot one of three F-5 fighter jets during the flyover, highlighting NASA’s contributions to aeronautics and the agency’s continued commitment to […]",
+      "published": "Wed, 21 Oct 2026 16:31:11 +0000",
+      "fingerprint": "a6d73ec110cbcf129cd64abeb6b6d5de97eed229b5dc6ec19326cb1b3b5764a9"
+    },
+    {
+      "source": "NASA News",
+      "title": "Science on the Space Station with NASA Astronaut Jessica Watkins",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1057777",
+      "summary": "NASA astronaut and Expedition 75 flight engineer Jessica Watkins works inside the Kibo laboratory module’s Life Science Glovebox on Oct. 9, 2026, safely mixing living cell samples with a bioink and then filling a special cartridge with the cell‑ink mixture. The advanced research operations were part of the InSPA‑Auxilium Bioprinter‑Cell Printing investigation, which explores 3D […]",
+      "published": "Wed, 21 Oct 2026 15:05:08 +0000",
+      "fingerprint": "baef1f5922c0c6c78b2c097ecac85789c4b8177005d0c8dbeaf235b0348f0b82"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Host News Conference Previewing US Spacewalks 100, 101",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1056475",
+      "summary": "NASA will preview two upcoming spacewalks to complete solar array installation and power augmentation of the International Space Station during a news conference at 2 p.m. EDT, Tuesday, Oct. 20, from NASA’s Johnson Space Center in Houston. NASA will stream the event through a variety of platforms. Learn where to watch online: https://www.nasa.gov/live NASA participants […]",
+      "published": "Wed, 14 Oct 2026 20:13:29 +0000",
+      "fingerprint": "49474dd15ead130d32c845f8916a5b6b35b8adaf3b0e1a62a3a4a2c316043ac5"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Astronauts to Answer Questions from Florida Students",
+      "url": "https://www.nasa.gov/?p=1056421",
+      "summary": "Editor’s Note: This article was updated Thursday, Oct. 15, 2026, to reflect a change to the event start time. Students in Florida will hear from NASA astronauts Jessica Watkins and Luke Delaney as they answer prerecorded STEM questions while aboard the International Space Station. The Earth-to-space call will begin at 12:30 p.m. EDT Friday, Oct. 16, […]",
+      "published": "Wed, 14 Oct 2026 19:12:51 +0000",
+      "fingerprint": "be18dcec1c873eb523e3f30216420e5d139fa637677fb3ed23a948bb117902d0"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Astronauts to Answer Questions from Florida Students",
+      "url": "https://www.nasa.gov/?p=1056421",
+      "summary": "Students in Florida will hear from NASA astronauts Jessica Watkins and Luke Delaney as they answer prerecorded STEM questions while aboard the International Space Station. The Earth-to-space call will begin at 12 p.m. EDT Friday, Oct. 16, and will stream live on the agency’s Learn With NASA YouTube channel. This event is hosted by Sally Ride Elementary School […]",
+      "published": "Wed, 14 Oct 2026 19:12:51 +0000",
+      "fingerprint": "71ca0b9a88f2af491fe4f95ece56f76dd4acd299cf411ae03f3f62acb1340def"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s Space X CRS-35 Launch Jellyfish",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1056002",
+      "summary": "Sunlight illuminates the exhaust plumes of a SpaceX Falcon 9 rocket carrying the company’s Dragon spacecraft on Oct. 13, 2026. This visual phenomenon is known as a “jellyfish”; it happens near sunrise or sunset when the exhaust plume from the rocket becomes brightly illuminated, creating a glowing shape resembling a jellyfish. The mission lifted off […]",
+      "published": "Wed, 14 Oct 2026 15:18:38 +0000",
+      "fingerprint": "07e5a0285d1a47f8cde8636eb6c283885442d1f53eb5d0f1604a3103b6c009eb"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Develops Batteries to Power Humanity’s Return to Moon",
+      "url": "https://www.nasa.gov/?p=1056228",
+      "summary": "If you’ve ever had your car start sluggishly, or not at all, on a particularly frigid winter morning, you know standard batteries do not like extreme cold. That’s why NASA researchers are working to develop a battery that could function in the brutal cold of the Moon’s South Pole, where nighttime temperatures plunge to minus […]",
+      "published": "Wed, 14 Oct 2026 14:41:21 +0000",
+      "fingerprint": "e187cffc80930d337c833a8fd7ba2e78f40868798066567dd505fda9a6b4ff49"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Discuss Artemis Acceleration, Status of Upcoming Moon Missions",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1056094",
+      "summary": "NASA will provide an update on its plans to return American astronauts to the surface of the Moon by 2028 at 2 p.m. EDT, Friday, Oct. 23, at the agency’s Kennedy Space Center in Florida. Learn where to watch online: https://www.nasa.gov/live Participants in the briefing include: The update will include details about NASA’s Artemis III […]",
+      "published": "Wed, 14 Oct 2026 13:32:25 +0000",
+      "fingerprint": "09778a8dea58269d2e8d41d706e4d261f92401d6acf8181598cd5651a87de82e"
     },
     {
       "source": "NASA News",
@@ -132,6 +212,94 @@
     },
     {
       "source": "NASA News",
+      "title": "NASA to Conduct Low-Altitude Flights Over Texas Farmland",
+      "url": "https://www.nasa.gov/?p=1056679",
+      "summary": "Editor’s Note: This article was originally published on Oct. 15, 2026, and has been updated to correct the location of the flights. A NASA Dynamic Aviation A200 aircraft will conduct low-flying research flights over farmland near Amarillo, Texas, from Thursday, Oct. 22, through Monday, Nov. 9. These flights will measure gaseous and particulate emissions from […]",
+      "published": "Tue, 20 Oct 2026 20:21:36 +0000",
+      "fingerprint": "6278929a4a184cbfc9933a0475f2c1db652cca122017c6af3b2560b722a48c5e"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s SR-1 Freedom Advances with Progress on Nuclear Power Module",
+      "url": "https://www.nasa.gov/?p=1057550",
+      "summary": "Destined for Mars and beyond, NASA’s Space Reactor-1 (SR-1) Freedom will be humanity’s first fission-powered spacecraft to travel outside Earth’s orbit. Announced during NASA’s “Ignition” event, this mission will demonstrate nuclear electric propulsion in deep space, and progress is underway on its key element: the nuclear power module. To expedite development of the spacecraft, NASA […]",
+      "published": "Tue, 20 Oct 2026 18:11:33 +0000",
+      "fingerprint": "03a9a97e0695bc2cf0de9c78ee7beed76d7a53d22c15e0cd8040d828a19c93d2"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Experimental Mars Helicopter Blade Designs Target Longer Flights",
+      "url": "https://www.nasa.gov/?p=1057581",
+      "summary": "NASA researchers are developing the future of flight on Mars, laying the groundwork for helicopters with the ability to fly higher and farther while conducting science on the Red Planet. Using high-fidelity computer simulations and wind tunnel tests, engineers are reimagining the rotorcraft blades that could carry the next generation of Mars flyers.",
+      "published": "Tue, 20 Oct 2026 16:02:35 +0000",
+      "fingerprint": "42861cedfb8ed0268d671ac70943ad473cfc14e336ca66a3567cac691158c854"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Provides Progress Update on Moon Base Rovers",
+      "url": "https://www.nasa.gov/?p=1055949",
+      "summary": "As NASA works to build the Moon Base, crewed and robotic lunar rovers will play a crucial role during early development through technology demonstrations, astronaut transport, terrain mapping, scientific investigations, and resource prospecting. Data from these early missions will inform future mobility systems and infrastructure needed for astronauts to live and work on the Moon. […]",
+      "published": "Tue, 20 Oct 2026 15:00:10 +0000",
+      "fingerprint": "44b655bd569c59b09fbd1808f2bc4ef783a2cb02508748db4d76cffe208b96c8"
+    },
+    {
+      "source": "NASA News",
+      "title": "Webb Captures Stellar Jets",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1057477",
+      "summary": "An image from NASA’s James Webb Space Telescope released on Oct. 6, 2026, reveals a cauldron of cosmic creation. Webb has unveiled numerous stars formerly hidden by clouds of dust in a stellar nursery known as NGC 7129, which resides about 3,300 light-years from Earth. Learn more about this region – and tour it in […]",
+      "published": "Tue, 20 Oct 2026 14:44:09 +0000",
+      "fingerprint": "7c1664c789c0f22f0969b74f3cd11a6166c0d4e30ad7df7643df2a518be95ca7"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Welcomes Uzbekistan as Newest Artemis Accords Signatory",
+      "url": "https://www.nasa.gov/?p=1057634",
+      "summary": "The Republic of Uzbekistan became the 77th signatory of the Artemis Accords during a ceremony in Samarkand on Monday, committing to the practical principles that guide safe, transparent, and responsible civil space exploration. “Uzbekistan joins the Artemis Accords at a pivotal moment,” said NASA Deputy Administrator Matt Anderson. “President Trump has directed NASA to build […]",
+      "published": "Tue, 20 Oct 2026 14:21:42 +0000",
+      "fingerprint": "44c10fa33f06ef0ca8a40de7d0bf77f82255be5cdabcc73819a782c6641503b3"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Names Astronaut Christina Koch Acting Deputy Chief Engineer",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1056041",
+      "summary": "NASA engineer and astronaut Christina Koch will serve as the agency’s acting deputy chief engineer beginning on Sunday, Nov. 1, following the retirement of Katherine Van Hooser, who will conclude more than 35 years of distinguished service to the agency on Wednesday, Oct. 21. In her new role, Koch will help lead NASA’s engineering community, […]",
+      "published": "Tue, 13 Oct 2026 20:41:11 +0000",
+      "fingerprint": "5a162a00cad275919775cf871e747821b4c9cd8ab161442765fc95d25f8d3eca"
+    },
+    {
+      "source": "NASA News",
+      "title": "Transporter-18 SmallSats Encapsulation",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1055919",
+      "summary": "Three NASA-supported small spacecraft, along with many commercial payloads, are shown before being encapsulated in a SpaceX Falcon 9 ahead of launch on Oct. 1, 2026. The ASCENT Propulsion Dual Mode CubeSat, the Supernova Remnants and Proxies for ReIonization Testbed Experiment (SPRITE) CubeSat, and the Small Spacecraft Propulsion and Inspection Capability (SSPICY) mission will demonstrate […]",
+      "published": "Tue, 13 Oct 2026 17:38:37 +0000",
+      "fingerprint": "97c8eabe78cddd90e1d25643acea56648c0b48a1f092b3510bc29d01c6d7b4d1"
+    },
+    {
+      "source": "NASA News",
+      "title": "TB 26-08 Complex Modes in Lightly Damped Structural Systems: A Two-Mode Interaction Perspective",
+      "url": "https://www.nasa.gov/?p=1055848",
+      "summary": "For more information, contact Joel W. Sills, Langley Research Center, joel.w.sills@nasa.gov Download the PDF version Complex mode shapes can emerge in a linear structure even when overall damping is low. This behavior can occur when two structural modes are closely spaced in frequency and are coupled through nonproportional damping. As the damping interaction increases, the […]",
+      "published": "Tue, 13 Oct 2026 15:02:21 +0000",
+      "fingerprint": "e0035366adbd4ded8b622734c853b656e7701a786d48ab87c5ff0c053c8ed4a0"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA JPL Testing Readies Voyager Technologies Lander for Moon Mission",
+      "url": "https://www.nasa.gov/?p=1055724",
+      "summary": "A commercial lander that will be at the forefront of NASA’s efforts to establish a Moon Base, humanity’s first lunar outpost, has passed a series of critical tests at the agency’s Jet Propulsion Laboratory in Southern California. The tests simulated the extreme temperatures and vacuum of space, as well as the intense shaking and ear-splitting […]",
+      "published": "Tue, 13 Oct 2026 13:00:00 +0000",
+      "fingerprint": "966e15448802e61afb361d4312386c1895369bbd0dec7dedc80f84178cda5deb"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Science, Cargo Launch on 35th SpaceX Resupply Mission to Station",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1055771",
+      "summary": "NASA’s SpaceX 35th commercial resupply mission lifted off at 6:33 a.m. EDT Tuesday aboard a Falcon 9 rocket from Space Launch Complex 40 at Cape Canaveral Space Force Station in Florida, carrying more than 6,300 pounds of supplies and hardware, bound for the International Space Station. Following its successful launch, the SpaceX Dragon spacecraft will […]",
+      "published": "Tue, 13 Oct 2026 11:12:18 +0000",
+      "fingerprint": "478dffa5d0a78de672f84b6938de2e023ff2c512065fba65495df240ed9c8944"
+    },
+    {
+      "source": "NASA News",
       "title": "NASA to Cover Northrop Grumman CRS-24 Spacecraft Departure",
       "url": "https://www.nasa.gov/?post_type=press-release&p=1053969",
       "summary": "After delivering more than 11,000 pounds of supplies, science experiments, and other cargo to the International Space Station for NASA, Northrop Grumman’s Cygnus XL spacecraft is scheduled to depart Friday, Oct. 9, as part of the company’s Commercial Resupply Services-24 mission, or Northrop Grumman CRS-24. Watch NASA’s live coverage of undocking and departure beginning at 12:30 […]",
@@ -169,6 +337,62 @@
       "summary": "A newly released panorama captured by NASA’s Curiosity rover offers the most detailed view yet of distant, wind-carved Martian cliffs, highlighting features the mission’s scientists have long been waiting to see up close. The scene was snapped at 8:30 a.m. local Mars time, showing striking blue hues in the foreground as bright morning light illuminates […]",
       "published": "Tue, 06 Oct 2026 15:30:07 +0000",
       "fingerprint": "d02dfe94a53b2ad3ead0f6a689058d99fd47908d0eb0e5ec1d57e55de02dac0b"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Invites Media to 2026 von Braun Space Exploration Symposium",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1058702",
+      "summary": "Members of the media are invited to join NASA at the 2026 von Braun Space Exploration Symposium from Monday, Oct. 26, to Wednesday, Oct. 28, at the University of Alabama in Huntsville. This year’s symposium is focused on humanity’s return to the Moon, sustainable lunar infrastructure, advanced space propulsion, and the evolving space workforce. Panels […]",
+      "published": "Thu, 22 Oct 2026 21:39:58 +0000",
+      "fingerprint": "60c418c61095349e448057eb8e784bfb7021353a0b0ef5f9add2f03e1c5e8e72"
+    },
+    {
+      "source": "NASA News",
+      "title": "Spiral’s Edge",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1058643",
+      "summary": "This NASA Hubble Space Telescope image released on Oct. 16, 2026, features the edge-on, intermediate spiral galaxy NGC 1827, located roughly 37 million light-years away in the constellation Columba, the Dove. Hubble captured the image as part of a survey looking at 260 satellite galaxies around 22 Milky Way-like host galaxies within a radius of […]",
+      "published": "Thu, 22 Oct 2026 21:35:38 +0000",
+      "fingerprint": "c822e612a6ff1ac9d04e1732c074d0b2057f27dae72463c475a0192df2849b29"
+    },
+    {
+      "source": "NASA News",
+      "title": "Power Up: Roll Out Solar Arrays Boost Space Station Power Supply",
+      "url": "https://www.nasa.gov/?p=1056401",
+      "summary": "From the International Space Station’s unique position 250 miles above Earth, the Sun is a vital source of energy. Solar power supports the station’s life support systems, daily activities, and hundreds of research investigations that improve life on Earth and prepare humans for deep space exploration. Over the past five years, NASA augmented the station’s […]",
+      "published": "Thu, 15 Oct 2026 17:30:00 +0000",
+      "fingerprint": "9019e1919e696fb9cbcc3cd16fc4163c04a7874dbd9dcbd230fc4a66aa4006e1"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA to Conduct Low-Altitude Flights Over Texas Farmland",
+      "url": "https://www.nasa.gov/?p=1056679",
+      "summary": "A NASA Dynamic Aviation A200 aircraft will conduct low-flying research flights over farmland near Transit, Texas, from Thursday, Oct. 22, through Monday, Nov. 9. These flights will measure gaseous and particulate emissions from animal feeding operations. Agricultural emissions represent an important and understudied part of Earth’s land and atmosphere systems. The FarmFlux mission will deploy […]",
+      "published": "Thu, 15 Oct 2026 16:42:10 +0000",
+      "fingerprint": "8d932aa3cd93132c4c2bb9498b070555ebf7ce7372ad20cd6c7906e20de98ae0"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Awards Enable Research, Technology to Build Future Workforce",
+      "url": "https://www.nasa.gov/?p=1056624",
+      "summary": "NASA has selected 12 U.S. institutions to receive $12 million to accelerate academic research and technology development in support of the agency’s priorities for exploring the Moon, Mars, and deep space. Through NASA’s Minority University Research and Education Project (MUREP) Space Technology Artemis Research (M‑STAR) initiative, selected institutions will each receive up to $1 million […]",
+      "published": "Thu, 15 Oct 2026 15:57:47 +0000",
+      "fingerprint": "036ed10a3840b8a94ee6ae55c6e6f6dd08f1aaea8721121f9d981bd78250d7db"
+    },
+    {
+      "source": "NASA News",
+      "title": "Rigorous Analysis Confirms NASA’s Artemis II Heat Shield Performance",
+      "url": "https://www.nasa.gov/?p=1056507",
+      "summary": "NASA’s Artemis II mission sent four astronauts around the Moon and brought them safely back to Earth, laying a foundation for crewed flights to the Moon’s surface. Additional engineering data analysis of the Orion spacecraft’s heat shield confirmed initial data showing the heat shield performed as expected. In particular, NASA measured whether the thermal protection […]",
+      "published": "Thu, 15 Oct 2026 14:57:21 +0000",
+      "fingerprint": "e6c5ee05c960deea14f33c8a0cc4eb90c6e3e50bc92f577277eefbe8fb0061fd"
+    },
+    {
+      "source": "NASA News",
+      "title": "Chandra Finds Possible Origin of ‘Treble Clef’ Waves",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1056389",
+      "summary": "A formation of radio waves looks remarkably like a treble clef in this Oct. 14, 2026, image from NASA’s Chandra X-Ray Observatory. Researchers used Chandra to find that the Treble Clef is likely caused by an outburst from a supermassive black hole, followed by a collision of two galaxy clusters. Read more about this discovery. […]",
+      "published": "Thu, 15 Oct 2026 14:19:06 +0000",
+      "fingerprint": "7371be435f77a1d2cf565e7f9274a0f82dd71e44cb203a180e1c3a7a3f49ff2c"
     },
     {
       "source": "NASA News",
@@ -284,6 +508,54 @@
     },
     {
       "source": "NASA News",
+      "title": "NASA Improves Shock, Vibration Analysis",
+      "url": "https://www.nasa.gov/?p=1056707",
+      "summary": "Rockets vibrate, shake, and flex intensely as they climb into space, and spacecraft packed with delicate scientific instruments must survive those forces. Before any rocket leaves the ground, NASA engineers work to predict how those stresses will affect every part of a spacecraft. To do that, engineers in the Dynamic Environments Group with NASA’s Launch […]",
+      "published": "Mon, 19 Oct 2026 19:28:32 +0000",
+      "fingerprint": "14663809805fe5a46f702c8bf01b153b9c6c236903918e291d38ce5bdbc71454"
+    },
+    {
+      "source": "NASA News",
+      "title": "Software",
+      "url": "https://www.nasa.gov/?p=1052302",
+      "summary": "Research teams at NASA’s Glenn Research Center are involved in developing theory and software to predict the noise from aircraft engines. This software helps engineers to design and analyze new and improved aircraft propulsion systems. Copies of our software can be requested from NASA’s Software Catalog. JeNo Development of jet noise prediction codes is multifaceted. […]",
+      "published": "Mon, 19 Oct 2026 18:11:40 +0000",
+      "fingerprint": "0d5e5111b917c901e0cd3bcfe4d1a500cdcca9c2748ddf7c596102caea5bf317"
+    },
+    {
+      "source": "NASA News",
+      "title": "Experimental Facilities",
+      "url": "https://www.nasa.gov/?p=1051790",
+      "summary": "Research teams at the NASA Glenn Research Center perform experiments in world-class facilities such as the 9- by 15-Foot Low-Speed Wind Tunnel (9 x15 LSWT), the Aero-Acoustic Propulsion Laboratory (AAPL), the Small Hot Jet Acoustic Rig (SHJAR), the Nozzle Acoustic Test Rig (NATR), the DGEN AeroPropulsion Research Turbofan (DART), and the Acoustical Testing Laboratory (ATL). […]",
+      "published": "Mon, 19 Oct 2026 18:08:52 +0000",
+      "fingerprint": "d17bd9687dbd48cae88f5013760df7ed312fdfe57ab53fa03b1e39e0155ed69f"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s Simulated Mars Crew Marks One Year Inside Habitat",
+      "url": "https://www.nasa.gov/?p=1057380",
+      "summary": "The four crew members in NASA’s simulated Mars mission have spent the past year living and working in isolation in a confined habitat at NASA’s Johnson Space Center in Houston.",
+      "published": "Mon, 19 Oct 2026 18:01:51 +0000",
+      "fingerprint": "bfd63680e883e9cea2fe05fa0011be6ad54b1a155349c6d3d344ef9c2a9d84a3"
+    },
+    {
+      "source": "NASA News",
+      "title": "Instrumentation",
+      "url": "https://www.nasa.gov/?p=1052279",
+      "summary": "To measure airflow and sound, research teams at the NASA Glenn Research Center use special instrumentation like particle image velocimetry, hot wire anemometry, Raman spectroscopy, microphones in phased arrays or continuously rotating rakes. The global aviation noise reduction community relies on data from NASA GRC experiments to validate theory and noise prediction software. Rotating Rake […]",
+      "published": "Mon, 19 Oct 2026 16:37:45 +0000",
+      "fingerprint": "7120cd161a6d0bafd2013de22f318c8e4bd931e35c0ad6d1ae554789d063550b"
+    },
+    {
+      "source": "NASA News",
+      "title": "Martian Dawn",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1057094",
+      "summary": "NASA’s Curiosity captures the dawn on Mars – as well as elongated ridges formed by wind erosion, or yardangs – in this close-up from a panorama released on Oct. 6, 2026. This is the most detailed view yet of distant, wind-carved Martian cliffs, highlighting features the mission’s scientists have long been waiting to see up […]",
+      "published": "Mon, 19 Oct 2026 16:03:51 +0000",
+      "fingerprint": "e512d820e669194ddf40e3a92aacbdc962cc845502c497652560c3d8d54223b4"
+    },
+    {
+      "source": "NASA News",
       "title": "NASA to Stream SpaceX Crew-12 Return, Splashdown Live",
       "url": "https://www.nasa.gov/?post_type=press-release&p=1053663",
       "summary": "NASA and SpaceX are targeting no earlier than 8:05 a.m. EDT, Wednesday, Oct. 7, for the undocking of the agency’s SpaceX Crew-12 mission from the International Space Station, pending weather conditions. An Oct. 7 undock puts NASA astronauts Jessica Meir and Jack Hathaway, ESA (European Space Agency) astronaut Sophie Adenot, and Roscosmos cosmonaut Andrey Fedyaev […]",
@@ -305,6 +577,30 @@
       "summary": "NASA is leveraging its expertise and enhancing its test facilities to help address a rare but persistent aviation hazard: icing that occurs when aircraft encounter unusually large, very cold water droplets in clouds. The problem, known as “supercooled large droplet icing,” occurs when aircraft fly through clouds containing unusually large drops of water that are […]",
       "published": "Mon, 05 Oct 2026 15:27:23 +0000",
       "fingerprint": "02dd6bc06d658946e4fabf3af179217bae545ab48331a4276a999b47a8c5234c"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Names Stephen Cash Marshall Space Flight Center Director",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1057238",
+      "summary": "NASA Administrator Jared Isaacman has named Stephen Cash director of the agency’s Marshall Space Flight Center in Huntsville, Alabama, effective Monday, Oct. 19. Cash, a veteran NASA engineer and aerospace executive, returns to lead the center where he began his career more than four decades ago. “Marshall contributions to NASA’s missions are historic and it’s […]",
+      "published": "Fri, 16 Oct 2026 20:14:39 +0000",
+      "fingerprint": "6b26561d6f4e46827e5e2412ece07f39134e78666b924a402f0cd8ef06fed39c"
+    },
+    {
+      "source": "NASA News",
+      "title": "Artemis II Heat Shield After Splashdown",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1057059",
+      "summary": "Shortly after NASA’s Artemis II mission splashed down on April 10, 2026, U.S. Navy divers captured underwater imagery of the Orion spacecraft’s heat shield. In the months after, the agency measured whether the thermal protection system effectively safeguarded the crew and Orion systems as the spacecraft reentered Earth’s atmosphere. This rigorous analysis confirmed that the […]",
+      "published": "Fri, 16 Oct 2026 16:28:01 +0000",
+      "fingerprint": "bf2b6a73c1ca879f2ab14ee5d48b907c01d54c5c26e2fea230d05ba47ea962c0"
+    },
+    {
+      "source": "NASA News",
+      "title": "I Am Artemis: Allison Mjoen",
+      "url": "https://www.nasa.gov/?p=1056996",
+      "summary": "As the supercooled propellant flowed into the core stage, and NASA’s SLS (Space Launch System) rocket roared to life, Allison Mjoen and her family watched with awe and pride. Mjoen, NASA’s operations manager for the agency’s Exploration Ground Systems Program, helped shape the systems and ground operations that will one day send humans back to […]",
+      "published": "Fri, 16 Oct 2026 14:24:29 +0000",
+      "fingerprint": "f4705dcdbc02880f075b381d2ac76554afb09d69fa0e7b8c360804631625720a"
     },
     {
       "source": "NASA News",

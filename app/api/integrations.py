@@ -21,6 +21,7 @@ from app.capabilities.integrations import (
 )
 from app.capabilities.store import create_oauth_state
 from secrets import token_urlsafe
+from app.api.errors import provider_failure
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 router.include_router(gmail_router)
@@ -110,9 +111,9 @@ async def integration_probe(integration_id: str, request: IntegrationProbeReques
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"integration provider failed: {exc}") from exc
+        raise provider_failure("integration provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-calendar/calendars")
@@ -122,9 +123,9 @@ async def google_calendar_calendars(request: GoogleCalendarListRequest) -> dict[
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+        raise provider_failure("google calendar provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-calendar/events")
@@ -134,9 +135,9 @@ async def google_calendar_events(request: GoogleCalendarEventsRequest) -> dict[s
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+        raise provider_failure("google calendar provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-calendar/event")
@@ -146,9 +147,9 @@ async def google_calendar_event(request: GoogleCalendarEventRequest) -> dict[str
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+        raise provider_failure("google calendar provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-calendar/create-event")
@@ -160,9 +161,9 @@ async def google_calendar_create_event(request: GoogleCalendarWriteRequest) -> d
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+        raise provider_failure("google calendar provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-calendar/update-event")
@@ -174,9 +175,9 @@ async def google_calendar_update_event(request: GoogleCalendarWriteRequest) -> d
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+        raise provider_failure("google calendar provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-calendar/delete-event")
@@ -188,9 +189,9 @@ async def google_calendar_delete_event(request: GoogleCalendarDeleteRequest) -> 
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"google calendar provider failed: {exc}") from exc
+        raise provider_failure("google calendar provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-drive/connect")
@@ -202,7 +203,7 @@ async def google_drive_connect(request: GoogleDriveConnectRequest) -> dict[str, 
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-drive/callback")
@@ -212,7 +213,7 @@ async def google_drive_callback(request: GoogleDriveCallbackRequest) -> dict[str
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (httpx.HTTPError, RuntimeError) as exc:
-        raise HTTPException(status_code=502, detail=f"google drive oauth failed: {exc}") from exc
+        raise provider_failure("google drive oauth", exc) from exc
 
 
 @router.post("/google-drive/files")
@@ -222,9 +223,9 @@ async def google_drive_files(request: GoogleDriveFilesRequest) -> dict[str, obje
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"google drive provider failed: {exc}") from exc
+        raise provider_failure("google drive provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-drive/file")
@@ -234,9 +235,9 @@ async def google_drive_file(request: GoogleDriveFileRequest) -> dict[str, object
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"google drive provider failed: {exc}") from exc
+        raise provider_failure("google drive provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 
 @router.post("/google-drive/upload")
@@ -249,8 +250,8 @@ async def google_drive_upload(request: GoogleDriveUploadRequest) -> dict[str, ob
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"google drive provider failed: {exc}") from exc
+        raise provider_failure("google drive provider", exc) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("integration", exc, status_code=503) from exc
 
 

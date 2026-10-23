@@ -10,6 +10,17 @@ from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 _PRODUCTION_ENVIRONMENTS = {"prod", "production"}
 _DEFAULT_ALLOWED_HOSTS = ("testserver", "localhost", "127.0.0.1")
 
+# The project's own web app, served from GitHub Pages. Its origin is fixed and
+# known, and without it the web app cannot reach this backend at all: a browser
+# refuses the call before it is sent. The native app is unaffected, because it
+# does not make cross-origin calls.
+#
+# This one is always allowed, alongside whatever INDOONE_ALLOWED_ORIGINS names.
+# It was tried as a fallback first, and that was not enough: the variable is
+# already set on the running server, and a set value won, so the web app stayed
+# blocked. The variable now adds to this origin rather than replacing it.
+_WEB_APP_ORIGIN = "https://indooneteam.github.io"
+
 
 def _csv_env(name: str) -> list[str]:
     raw = os.getenv(name, "")
@@ -28,7 +39,19 @@ def allowed_hosts() -> list[str]:
 
 
 def allowed_origins() -> list[str]:
-    return _csv_env("INDOONE_ALLOWED_ORIGINS")
+    """The project's own web origin, plus whatever the server configures.
+
+    The web origin is always present, so the web app works whether or not
+    INDOONE_ALLOWED_ORIGINS has been set. The variable adds any further
+    origins a deployment needs.
+    """
+    origins = [_WEB_APP_ORIGIN]
+
+    for origin in _csv_env("INDOONE_ALLOWED_ORIGINS"):
+        if origin not in origins:
+            origins.append(origin)
+
+    return origins
 
 
 def trusted_proxy_ips() -> list[str]:

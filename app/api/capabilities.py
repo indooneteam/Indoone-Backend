@@ -25,19 +25,15 @@ from app.capabilities.store import (
     delete_integration_token,
     create_project,
     create_task,
-    delete_memory,
     delete_project,
     get_agent_run,
     get_project,
     get_integration_token_metadata,
     list_agent_runs,
-    list_memories,
     list_projects,
     list_tasks,
-    search_memories,
     search_projects,
     update_project,
-    upsert_memory,
 )
 from app.capabilities.vision import analyze_image
 from app.capabilities.voice import synthesize_speech, transcribe_audio
@@ -50,22 +46,10 @@ from app.capabilities.voice_session import (
 )
 
 from app.plugins.gmail.oauth_routes import router as gmail_oauth_router
+from app.api.errors import provider_failure
 
 router = APIRouter(tags=["capabilities"])
 router.include_router(gmail_oauth_router)
-
-
-class MemoryRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    key: str = Field(min_length=1, max_length=128)
-    value: str = Field(min_length=1, max_length=4_000)
-    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    source: str = Field(default="user", min_length=1, max_length=128)
-
-
-class MemoryDeleteRequest(BaseModel):
-    user_id: str = Field(min_length=1, max_length=256)
-    memory_id: str = Field(min_length=1, max_length=128)
 
 
 class ProjectRequest(BaseModel):
@@ -113,6 +97,13 @@ class DocumentRequest(MediaRequest):
 
 class VisionRequest(MediaRequest):
     pass
+
+
+class AgentRequest(BaseModel):
+    message: str = Field(min_length=1, max_length=20_000)
+    user_id: str = Field(default="", max_length=256)
+    approved_tools: list[str] = Field(default_factory=list, max_length=8)
+    contacts: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
 
 
 class ImageGenerationRequest(BaseModel):
@@ -191,7 +182,7 @@ async def connect_integration(integration_id: str, request: IntegrationConnectRe
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("capability", exc, status_code=503) from exc
 
 
 @router.post("/integrations/{integration_id}/callback")
@@ -201,7 +192,7 @@ async def integration_callback(integration_id: str, request: IntegrationCallback
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except (RuntimeError, httpx.HTTPError) as exc:
-        raise HTTPException(status_code=502, detail=f"oauth exchange failed: {exc}") from exc
+        raise provider_failure("oauth exchange", exc) from exc
 
 
 @router.get("/integrations/{integration_id}/callback", response_class=HTMLResponse)
@@ -242,30 +233,6 @@ async def integration_status(integration_id: str, user_id: str = Query(..., min_
         raise HTTPException(status_code=404, detail="integration not found")
     metadata = get_integration_token_metadata(user_id, integration_id.strip().lower())
     return {"integration": integration_id.strip().lower(), "connected": metadata is not None, "metadata": metadata}
-
-
-@router.get("/memory")
-async def get_memories(
-    user_id: str = Query(..., min_length=1, max_length=256),
-    key_prefix: str = Query(default="", max_length=128),
-    source: str = Query(default="", max_length=128),
-    limit: int = Query(default=100, ge=1, le=500),
-    q: str = Query(default="", max_length=500),
-) -> dict[str, object]:
-    memories = search_memories(user_id, q, limit) if q.strip() else list_memories(user_id, key_prefix, source, limit)
-    return {"memories": memories}
-
-
-@router.post("/memory")
-async def write_memory(request: MemoryRequest) -> dict[str, object]:
-    return {"memory": upsert_memory(request.user_id, request.key, request.value, request.confidence, request.source)}
-
-
-@router.delete("/memory")
-async def remove_memory(request: MemoryDeleteRequest) -> dict[str, bool]:
-    if not delete_memory(request.user_id, request.memory_id):
-        raise HTTPException(status_code=404, detail="memory not found")
-    return {"deleted": True}
 
 
 @router.post("/projects")
@@ -383,7 +350,7 @@ async def image_generation(request: ImageGenerationRequest) -> dict[str, object]
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("capability", exc, status_code=503) from exc
     return {"result": {"provider": result.provider, "model": result.model, "mime_type": result.mime_type, "image_base64": result.image_base64, "metadata": result.metadata}}
 
 
@@ -394,7 +361,7 @@ async def voice_transcribe(request: VoiceTranscriptionRequest) -> dict[str, obje
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("capability", exc, status_code=503) from exc
     return {"result": {"text": result.text, "language": result.language, "provider": result.provider}}
 
 
@@ -405,7 +372,7 @@ async def voice_synthesize(request: VoiceSynthesisRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("capability", exc, status_code=503) from exc
     return {"result": {"audio_base64": result.audio_base64, "mime_type": result.mime_type, "language": result.language, "voice": result.voice, "provider": result.provider}}
 
 

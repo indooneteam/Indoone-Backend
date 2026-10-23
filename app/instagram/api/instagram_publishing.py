@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.instagram.capabilities.instagram_publishing import create_carousel_container, publish_ready_container
+from app.api.errors import provider_failure
 
 router = APIRouter(prefix="/integrations/instagram/publishing", tags=["instagram-publishing"])
 
@@ -36,7 +37,7 @@ async def carousel(request: CarouselRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram publishing provider failed: {exc}") from exc
+        raise provider_failure("instagram publishing provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -50,6 +51,6 @@ async def publish_ready(request: PublishRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"instagram publishing provider failed: {exc}") from exc
+        raise provider_failure("instagram publishing provider", exc) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

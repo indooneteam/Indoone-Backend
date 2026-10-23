@@ -6,6 +6,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 
 from app.instagram.ai_reply import process_instagram_webhook
 from app.instagram.capabilities.instagram_webhooks import normalize_event, verify_challenge, verify_signature
+from app.api.errors import provider_failure
 
 router = APIRouter(prefix="/integrations/instagram/webhook", tags=["instagram-webhooks"])
 
@@ -35,12 +36,12 @@ async def receive(request: Request, background_tasks: BackgroundTasks) -> dict[s
     except PermissionError as exc:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        raise HTTPException(status_code=400, detail="instagram webhook payload is invalid JSON") from exc
+        raise HTTPException(status_code=400, detail="The webhook payload is invalid JSON") from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     if not isinstance(payload, dict):
-        raise HTTPException(status_code=400, detail="instagram webhook payload must be an object")
+        raise HTTPException(status_code=400, detail="The webhook payload must be an object")
 
     try:
         normalized = normalize_event(payload)

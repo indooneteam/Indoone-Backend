@@ -13,6 +13,7 @@ from app.capabilities.facebook import (
     list_pages,
 )
 from app.capabilities.store import create_oauth_state
+from app.api.errors import provider_failure
 
 router = APIRouter(prefix="/integrations/facebook", tags=["facebook"])
 
@@ -52,7 +53,7 @@ async def connect(request: ConnectRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        raise provider_failure("facebook", exc, status_code=503) from exc
 
 
 @router.post("/callback")
@@ -62,7 +63,7 @@ async def callback(request: CallbackRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"facebook oauth failed: {exc}") from exc
+        raise provider_failure("facebook oauth", exc) from exc
 
 
 @router.post("/pages")
@@ -72,7 +73,7 @@ async def pages(request: UserRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"facebook provider failed: {exc}") from exc
+        raise provider_failure("facebook provider", exc) from exc
 
 
 @router.post("/posts")
@@ -82,7 +83,7 @@ async def posts(request: PagePostsRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"facebook provider failed: {exc}") from exc
+        raise provider_failure("facebook provider", exc) from exc
 
 
 @router.post("/publish")
@@ -94,4 +95,4 @@ async def publish(request: CreatePostRequest) -> dict[str, object]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"facebook provider failed: {exc}") from exc
+        raise provider_failure("facebook provider", exc) from exc

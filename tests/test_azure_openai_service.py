@@ -87,3 +87,40 @@ def test_azure_is_selected_only_by_its_own_value(monkeypatch):
     importlib.reload(service)
     assert service._azure_backend_enabled() is True
     assert service._gemini_backend_enabled() is False
+
+
+def test_schema_types_are_lowercased(azure_service):
+    """Gemini writes STRING/OBJECT; OpenAI rejects those with a 400.
+
+    This is the bug that made every tool-carrying request fail, so it is pinned.
+    """
+    tools = azure_service._openai_tools(
+        [
+            {
+                "name": "list_repos",
+                "description": "List repositories",
+                "parameters": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "owner": {"type": "STRING"},
+                        "limit": {"type": "NUMBER"},
+                        "private": {"type": "BOOLEAN"},
+                        "labels": {"type": "ARRAY", "items": {"type": "STRING"}},
+                    },
+                    "required": ["owner"],
+                },
+            }
+        ]
+    )
+    params = tools[0]["function"]["parameters"]
+    assert params["type"] == "object"
+    assert params["properties"]["owner"]["type"] == "string"
+    assert params["properties"]["limit"]["type"] == "number"
+    assert params["properties"]["private"]["type"] == "boolean"
+    assert params["properties"]["labels"]["type"] == "array"
+    assert params["properties"]["labels"]["items"]["type"] == "string"
+    # and nothing uppercase survives anywhere
+    import json
+
+    assert "STRING" not in json.dumps(params)
+    assert "OBJECT" not in json.dumps(params)

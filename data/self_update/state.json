@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-23T04:56:35.617076+00:00",
+  "updated_at": "2026-10-23T21:27:18.804047+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -577,6 +577,22 @@
       "summary": "NASA is leveraging its expertise and enhancing its test facilities to help address a rare but persistent aviation hazard: icing that occurs when aircraft encounter unusually large, very cold water droplets in clouds. The problem, known as “supercooled large droplet icing,” occurs when aircraft fly through clouds containing unusually large drops of water that are […]",
       "published": "Mon, 05 Oct 2026 15:27:23 +0000",
       "fingerprint": "02dd6bc06d658946e4fabf3af179217bae545ab48331a4276a999b47a8c5234c"
+    },
+    {
+      "source": "NASA News",
+      "title": "RS-25 Engine Tests at NASA Stennis",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1058887",
+      "summary": "Teams at NASA’s Stennis Space Center near Bay St. Louis, Mississippi tested RS-25 engine No. 10001 on Oct. 21, 2026. The hot fire test lasted for almost eight-and-a-half minutes (500 seconds), the same amount of time RS-25 engines fire during launch of NASA’s SLS (Space Launch System) rocket, with a 111% power level. For each […]",
+      "published": "Fri, 23 Oct 2026 18:57:04 +0000",
+      "fingerprint": "b13b98249194b509e3bf33920f64c99fe031fb70e47d36b21280a2f23e740106"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA, Virginia Launch Power Partnership for Energy Security",
+      "url": "https://www.nasa.gov/?p=1058847",
+      "summary": "NASA is helping to foster long-term energy security in Virginia. NASA’s Langley Research Center in Hampton, Virginia, is partnering with the Virginia Department of Energy to support informed decisions for effective energy generation, delivery and use by providing solar, meteorological, and future weather risk datasets for energy system modeling and planning purposes. Under a new […]",
+      "published": "Fri, 23 Oct 2026 17:50:21 +0000",
+      "fingerprint": "1d165574a9ed86b20b6bb06056aaf9c87f4cee66ade18daa9a83d41cabbb468a"
     },
     {
       "source": "NASA News",

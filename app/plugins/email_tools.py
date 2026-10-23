@@ -597,23 +597,12 @@ async def handle_email_chat_with_tools(
     if not EMAIL_CONTEXT_RE.search(text) and not has_recent_email_context:
         return None
 
-    # Keep the local-model fallback available. This used to be gemini-only, so
-    # with INDOONE_MODEL_BACKEND=azure every email request fell through to the
-    # legacy path and answered "no access". The provider is chosen here the same
-    # way the unified tool loop chooses it.
+    # Keep the local-model fallback available; Gemini is used only when explicitly selected.
     import os
-    _model_backend = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold()
-    if _model_backend not in {"gemini", "azure"}:
+    if os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() != "gemini":
         return await handle_email_chat(user, conversation, text)
 
-    if _model_backend == "azure":
-        from app.ai.azure_openai_service import (
-            generate_azure_function_call_reply as _run_provider_tool_loop,
-        )
-    else:
-        from app.ai.gemini_service import (
-            generate_gemini_function_call_reply as _run_provider_tool_loop,
-        )
+    from app.ai.gemini_service import generate_gemini_function_call_reply
 
     write_tools = {
         "create_email_draft",
@@ -660,7 +649,7 @@ async def handle_email_chat_with_tools(
             }
         return result
 
-    model_reply = await _run_provider_tool_loop(
+    model_reply = await generate_gemini_function_call_reply(
         text,
         history=history,
         tool_declarations=EMAIL_TOOL_DECLARATIONS,

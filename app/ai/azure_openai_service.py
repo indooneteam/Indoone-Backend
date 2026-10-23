@@ -53,6 +53,15 @@ _MAX_ATTEMPTS = 3
 _RETRY_DELAYS = (1.0, 2.0, 4.0)
 _TRANSIENT_STATUSES = {429, 500, 502, 503, 504}
 
+# Tools whose result carries private mail. Their content is never written to the
+# log; only the outcome is.
+_PRIVATE_PAYLOAD_TOOLS = {
+    "list_recent_emails", "count_inbox_emails", "search_emails", "read_email",
+    "list_email_drafts", "create_email_draft", "update_email_draft",
+    "prepare_email_to_send", "prepare_email_deletion", "prepare_email_reply",
+    "prepare_email_draft_deletion",
+}
+
 # Azure answers a spent quota or a throttled deployment with these. The caller
 # turns them into ModelBusyError so the user is asked to try again shortly.
 _BUSY_STATUS = {429, 503}
@@ -468,13 +477,21 @@ async def generate_azure_function_call_reply(
             # which is the difference between "no tools offered" and "the tool
             # itself answered with an error".
             if isinstance(result, dict):
+                # The tool's own status is not the whole story: ok=True only says the
+                # tool ran. What the model then answers depends on the content inside
+                # result, so that is logged too - truncated, and never for a tool whose
+                # payload is private mail.
+                _preview = ""
+                if name not in _PRIVATE_PAYLOAD_TOOLS:
+                    _preview = str(result.get("result"))[:600].replace("\n", " ")
                 logger.info(
-                    "Azure OpenAI tool %s returned ok=%s code=%s error=%s keys=%s",
+                    "Azure OpenAI tool %s returned ok=%s code=%s error=%s keys=%s preview=%s",
                     name,
                     result.get("ok"),
                     result.get("code"),
                     str(result.get("error"))[:200],
                     ",".join(sorted(str(k) for k in result.keys()))[:300],
+                    _preview,
                 )
             else:
                 logger.info("Azure OpenAI tool %s returned %s", name, type(result).__name__)

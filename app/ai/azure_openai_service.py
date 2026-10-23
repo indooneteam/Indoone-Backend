@@ -47,6 +47,12 @@ __all__ = [
 _DEFAULT_API_VERSION = "2024-10-21"
 _TIMEOUT_SECONDS = float(os.getenv("AZURE_OPENAI_TIMEOUT_SECONDS", "60"))
 
+# The same shape the Gemini transport uses: a few attempts, backing off, and the
+# provider's own message written to the log so a failure can be read later.
+_MAX_ATTEMPTS = 3
+_RETRY_DELAYS = (1.0, 2.0, 4.0)
+_TRANSIENT_STATUSES = {429, 500, 502, 503, 504}
+
 # Azure answers a spent quota or a throttled deployment with these. The caller
 # turns them into ModelBusyError so the user is asked to try again shortly.
 _BUSY_STATUS = {429, 503}
@@ -240,26 +246,60 @@ async def _post_chat(
     api_key: str,
     payload: dict[str, Any],
 ) -> dict[str, Any]:
+    """POST to Azure, retrying transient failures, logging the provider's own words.
+
+    This mirrors the Gemini transport: the provider's error text is written to the
+    log and never put into the exception, because that message travels to the
+    client and must not carry a third party's error body.
+    """
     headers = {
         "api-key": api_key,
         "content-type": "application/json",
     }
-    async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
-        response = await client.post(url, headers=headers, json=payload)
-
-    if response.status_code in _BUSY_STATUS:
-        raise ModelBusyError(BUSY_MESSAGE)
-    if response.status_code >= 400:
-        detail = ""
+    response = None
+    for attempt in range(_MAX_ATTEMPTS):
+        last_attempt = attempt + 1 >= _MAX_ATTEMPTS
         try:
-            detail = json.dumps(response.json())[:400]
-        except Exception:  # noqa: BLE001 - the body may not be JSON at all
-            detail = response.text[:400]
-        raise RuntimeError(
-            f"Azure OpenAI returned {response.status_code}: {detail}"
-        )
+            async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
+                response = await client.post(url, headers=headers, json=payload)
+        except httpx.HTTPError as exc:
+            if last_attempt:
+                logger.error("Azure OpenAI request failed: %s", exc)
+                raise RuntimeError("Azure OpenAI request failed") from exc
+            await asyncio.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
+            continue
 
-    return response.json()
+        if response.status_code not in _TRANSIENT_STATUSES or last_attempt:
+            break
+
+        logger.warning(
+            "Azure OpenAI returned HTTP %s; retrying (%d/%d)",
+            response.status_code,
+            attempt + 1,
+            _MAX_ATTEMPTS,
+        )
+        await asyncio.sleep(_RETRY_DELAYS[min(attempt, len(_RETRY_DELAYS) - 1)])
+
+    if response is None:
+        raise RuntimeError("Azure OpenAI request failed")
+
+    if response.status_code != 200:
+        detail = response.text[:500].replace("\n", " ").strip()
+        if response.status_code == 429:
+            logger.warning("Azure OpenAI rate limit reached: %s", detail[:400])
+            raise ModelBusyError(BUSY_MESSAGE)
+        logger.error("Azure OpenAI returned HTTP %s: %s", response.status_code, detail)
+        if response.status_code in {401, 403}:
+            raise RuntimeError("Azure OpenAI authentication failed")
+        raise RuntimeError(f"Azure OpenAI returned HTTP {response.status_code}")
+
+    try:
+        response_data = response.json()
+    except ValueError as exc:
+        raise RuntimeError("Azure OpenAI returned invalid JSON") from exc
+    if not isinstance(response_data, dict):
+        raise RuntimeError("Azure OpenAI returned invalid response data")
+    return response_data
 
 
 def _first_message(response_data: dict[str, Any]) -> dict[str, Any]:
@@ -364,17 +404,34 @@ async def generate_azure_function_call_reply(
 
     first_text: str | None = None
 
-    for round_index in range(max(1, max_tool_rounds)):
-        payload: dict[str, Any] = {"messages": messages, "tools": tools}
-        if tool_mode.upper() == "ANY" and round_index == 0:
-            # "required" is OpenAI's spelling of Gemini's ANY: at least one call.
-            payload["tool_choice"] = "required"
+    # The same bounds the Gemini loop uses: one extra round so the model can give
+    # a final answer after its tool calls, and a hard cap on total tool calls so a
+    # model that keeps calling cannot spin.
+    max_rounds = max(1, min(int(max_tool_rounds), 6))
+    max_total_calls = 8
+    executed_calls = 0
+
+    logger.info(
+        "Azure OpenAI tool round: %d tool(s) offered: %s",
+        len(tools),
+        ", ".join(t["function"]["name"] for t in tools) or "(none)",
+    )
+
+    for round_index in range(max_rounds + 1):
+        payload: dict[str, Any] = {"messages": messages}
+        # The final round carries no tools, so the model must answer in words.
+        if round_index < max_rounds:
+            payload["tools"] = tools
+            if tool_mode.upper() == "ANY" and round_index == 0:
+                # "required" is OpenAI's spelling of Gemini's ANY: at least one call.
+                payload["tool_choice"] = "required"
 
         response_data = await _post_chat(url, api_key, payload)
         assistant_message = _first_message(response_data)
         tool_calls = assistant_message.get("tool_calls") or []
 
         if not tool_calls:
+            logger.info("Azure OpenAI round %d: no tool called", round_index)
             text = _extract_text(response_data)
             if first_text is None:
                 first_text = text or None
@@ -403,6 +460,8 @@ async def generate_azure_function_call_reply(
             if not isinstance(arguments, dict):
                 arguments = {}
 
+            executed_calls += 1
+            logger.info("Azure OpenAI called tool: %s", name)
             result = await execute_tool(name, arguments)
             messages.append(
                 {
@@ -411,6 +470,10 @@ async def generate_azure_function_call_reply(
                     "content": json.dumps(result, default=str)[:20_000],
                 }
             )
+
+        if executed_calls >= max_total_calls:
+            logger.warning("Azure OpenAI tool call cap reached (%d)", max_total_calls)
+            break
 
         # A short pause between rounds, as the Gemini loop does, so a burst of
         # rounds does not hit the deployment's per-second limit.

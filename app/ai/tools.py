@@ -1424,11 +1424,16 @@ async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | N
         if remaining <= 0:
             raise TimeoutError("tool run budget exceeded")
         timeout_seconds = min(float(spec.timeout_seconds), remaining)
-        output = tool(payload)
-        if inspect.isawaitable(output):
-            output = await _run_async(output, timeout_seconds)
+        if inspect.iscoroutinefunction(tool):
+            output = await _run_async(tool(payload), timeout_seconds)
         else:
-            output = await asyncio.wait_for(asyncio.to_thread(_run_sync_with_timeout, tool, payload, timeout_seconds), timeout=timeout_seconds)
+            # A sync tool runs once, in a worker thread. Calling it here first would
+            # run it a second time on the event loop with no timeout, doubling the
+            # work and stalling every other request while it runs.
+            output = await asyncio.wait_for(
+                asyncio.to_thread(_run_sync_with_timeout, tool, payload, timeout_seconds),
+                timeout=timeout_seconds,
+            )
         if time.monotonic() - started > total_budget:
             raise TimeoutError("tool run budget exceeded")
         if not isinstance(output, str):

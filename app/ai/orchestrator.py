@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from app.ai.coding import build_code_tool_payload
 from app.ai.intent import Intent, classify_intent
 from app.ai.tool_registry import get_tool_spec, tool_names
 from app.ai.tools import ToolResult, run_tool
@@ -46,17 +47,21 @@ def _rule_plan(message: str, intent: Intent) -> Plan:
         if expression:
             return Plan(intent=intent, tool="calculator", tool_payload=expression, reason="arithmetic")
 
-    candidates: tuple[tuple[str, tuple[str, ...]], ...] = (
-        ("text_stats", ("text stats:", "analyze text:", "count words:", "count text:")),
-        ("json_summary", ("summarize json:", "json summary:", "summary of json:")),
-        ("code_analysis", ("code analysis:", "analyze code:", "review code:")),
-        ("code_fix_suggestions", ("fix suggestions:", "suggest fixes:", "debug code:")),
-        ("code_transform", ("transform code:", "normalize code:", "format code:")),
-        ("sandbox_execution", ("run code:", "execute code:", "sandbox code:")),
+    # The last four are coding tools: the captured text is bare code, which the
+    # executor does not accept, so it is wrapped in the {language, code} payload.
+    candidates: tuple[tuple[str, tuple[str, ...], bool], ...] = (
+        ("text_stats", ("text stats:", "analyze text:", "count words:", "count text:"), False),
+        ("json_summary", ("summarize json:", "json summary:", "summary of json:"), False),
+        ("code_analysis", ("code analysis:", "analyze code:", "review code:"), True),
+        ("code_fix_suggestions", ("fix suggestions:", "suggest fixes:", "debug code:"), True),
+        ("code_transform", ("transform code:", "normalize code:", "format code:"), True),
+        ("sandbox_execution", ("run code:", "execute code:", "sandbox code:"), True),
     )
-    for tool, prefixes in candidates:
+    for tool, prefixes, is_code in candidates:
         payload = _extract_payload(text, prefixes)
         if payload and tool in tool_names():
+            if is_code:
+                payload = build_code_tool_payload(payload)
             return Plan(intent=Intent("tool", needs_file_context=intent.needs_file_context), tool=tool, tool_payload=payload, reason="registry-rule")
 
     if any(term in lower for term in ("find contact ", "search contact ", "lookup contact ", "resolve contact ")):

@@ -415,6 +415,9 @@ async def _github_update_repository_file(payload: str) -> str:
         raise ValueError("the current file SHA is required when updating an existing file")
     if not validate_approval_token(approval_token, user_id, "github_update_repository_file"):
         raise PermissionError("a valid, current, server-issued GitHub file-update approval is required")
+    held = _hold_write(data, user_id, "github_update_repository_file")
+    if held is not None:
+        return held
     spec = get_tool_spec("github_update_repository_file")
     result = await _run_async(
         commit_github_repository_file(
@@ -1148,6 +1151,7 @@ def _approved_write(data: dict[str, object], user_id: str, tool: str) -> bool:
 
 # The wording the user is asked to confirm, one per write.
 _WRITE_INTENT = {
+    "github_update_repository_file": "commit that file change",
     "github_create_branch": "create a new branch",
     "github_delete_branch": "delete the branch",
     "github_create_pull_request": "open a pull request",

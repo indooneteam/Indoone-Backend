@@ -26,12 +26,27 @@ def _gemini_backend_enabled() -> bool:
     return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
 
 
+def _azure_backend_enabled() -> bool:
+    """Use Azure OpenAI as the primary provider when explicitly selected."""
+    return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "azure"
+
+
 def ai_provider_status() -> dict[str, object]:
     """Return safe provider/model configuration details for deploy readiness.
 
     Never include the API key value. The Gemini model ID is safe to report and
     makes it possible to verify that the deployed chat routes to the intended model.
     """
+    if _azure_backend_enabled():
+        from app.ai import azure_openai_service
+
+        return {
+            "provider": "azure",
+            "model": azure_openai_service.azure_model_name(),
+            "configuration_ready": azure_openai_service.azure_configuration_ready(),
+            "api_key_configured": bool(os.getenv("AZURE_OPENAI_API_KEY", "").strip()),
+        }
+
     if not _gemini_backend_enabled():
         return {
             "provider": "local",
@@ -236,34 +251,44 @@ class LocalAIService:
 
         # Keep the existing local-model path as the default. When explicitly configured,
         # Google Gemini handles the chat turn and can call the bounded free web-search tool.
-        if _gemini_backend_enabled():
-            from app.ai.gemini_service import generate_gemini_reply
+        if _gemini_backend_enabled() or _azure_backend_enabled():
+            from app.ai.gemini_service import generate_gemini_reply, run_with_provider_fallback
+            from app.ai.azure_openai_service import generate_azure_reply
 
-            if media_attachments:
-                return await generate_gemini_reply(
+            async def _reply_with(provider):
+                if media_attachments:
+                    return await provider(
+                        cleaned_message,
+                        history=history,
+                        document_context=document_context,
+                        media_attachments=media_attachments,
+                        extra_system_instruction=extra_system_instruction,
+                    )
+                if media_attachment is not None:
+                    return await provider(
+                        cleaned_message,
+                        history=history,
+                        document_context=document_context,
+                        media_attachment=media_attachment,
+                        extra_system_instruction=extra_system_instruction,
+                    )
+                return await provider(
                     cleaned_message,
                     history=history,
                     document_context=document_context,
-                    media_attachments=media_attachments,
                     extra_system_instruction=extra_system_instruction,
                 )
-            if media_attachment is not None:
-                return await generate_gemini_reply(
-                    cleaned_message,
-                    history=history,
-                    document_context=document_context,
-                    media_attachment=media_attachment,
-                    extra_system_instruction=extra_system_instruction,
-                )
-            return await generate_gemini_reply(
-                cleaned_message,
-                history=history,
-                document_context=document_context,
-                extra_system_instruction=extra_system_instruction,
+
+            _azure_first = _azure_backend_enabled()
+            return await run_with_provider_fallback(
+                lambda: _reply_with(generate_azure_reply if _azure_first else generate_gemini_reply),
+                lambda: _reply_with(generate_gemini_reply if _azure_first else generate_azure_reply),
             )
 
         if media_attachment is not None or media_attachments:
-            raise RuntimeError("multimodal attachment processing requires INDOONE_MODEL_BACKEND=gemini")
+            raise RuntimeError(
+                "multimodal attachment processing requires INDOONE_MODEL_BACKEND=gemini or =azure"
+            )
 
         prompt_parts = [cleaned_message]
 

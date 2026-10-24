@@ -51,20 +51,43 @@ def test_one_commit_routes_to_the_commit_tool():
     assert result[1]["sha"] == "093447c"
 
 
+@pytest.mark.parametrize("message,expected", [
+    ("ok alli terminal antha new branch create madi", "github_create_branch"),
+    ("create a branch called terminal", "github_create_branch"),
+])
+def test_a_write_IS_routed_by_the_parser(message, expected):
+    """A write must be answered here, not handed to the model.
+
+    It used to return None so the model would handle it. The model then asked for
+    permission over and over, because nothing held the request, and it invented
+    branch names when it claimed to have created one. The handler answers a write
+    deterministically instead: it holds it, asks in fixed words, and the same
+    conversation resolves it.
+    """
+    result = _action(message)
+    assert isinstance(result, tuple), result
+    assert result[0] == expected, result
+
+
 @pytest.mark.parametrize("message", [
-    "ok alli terminal anno branch create madi",
-    "create a branch called terminal",
     "github repo alli hosa branch madi",
     "branch delete madi",
 ])
-def test_a_write_is_never_routed_by_the_parser(message):
-    """A write must reach the model, which asks for confirmation.
+def test_a_write_with_no_name_asks_for_one(message):
+    """No branch name in the message means a question back, not a guess."""
+    result = _action(message)
+    assert isinstance(result, str), result
 
-    The parser cannot ask, so if it returned a write tool the write would either
-    run unconfirmed or fail with APPROVAL_REQUIRED. Both are wrong. It returns
-    None, the model handles it, and the model asks.
-    """
-    assert _action(message) is None, message
+
+@pytest.mark.parametrize("message,name", [
+    ("ok alli terminal antha new branch create madi", "terminal"),
+    ("create a branch called terminal", "terminal"),
+    ("create a branch called feature-x", "feature-x"),
+])
+def test_the_branch_name_is_taken_from_the_message(message, name):
+    result = _action(message)
+    assert isinstance(result, tuple), result
+    assert result[1]["branch"] == name, result
 
 
 @pytest.mark.parametrize("word", [

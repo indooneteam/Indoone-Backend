@@ -62,6 +62,8 @@ def _branch_name(text: str) -> str:
         "hosa", "hos", "hosa", "hosa-branch", "swalpa", "alli", "evaga",
         "one", "add", "also", "there", "then", "now", "me", "my", "nanna",
         "delete", "remove", "togo", "eshtu", "estu", "yavudu", "yava",
+        "pull", "request", "requests", "pr", "prs", "merge", "open", "raise",
+        "submit", "from", "to", "into", "onto", "checks", "check", "ci",
         "ಹೊಸ", "ಶಾಖೆ", "ಮಾಡು", "ಮಾಡಿ", "ರಚಿಸು", "ಬ್ರಾಂಚ್",
     }
     for pattern in patterns:
@@ -100,6 +102,7 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
         or re.search(r"\bgithub\b", recent_context, re.IGNORECASE)
         or re.search(r"\b(repo|repos|repository|repositories)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)", text, re.IGNORECASE)
         or re.search(r"\b(branch|branches|checks?)\b|ಶಾಖೆ|ಬ್ರಾಂಚ್|ಚೆಕ್", text, re.IGNORECASE)
+        or re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", text, re.IGNORECASE)
         or re.search(r"(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ", text, re.IGNORECASE)
         or _REPOSITORY_NAME_RE.search(text)
     )
@@ -117,6 +120,39 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
         if not number:
             return "Which pull request number should I look at?"
         return "github_list_pull_request_files", {"repository": repository, "repository_hint": repository_hint, "number": int(number.group(1)), "per_page": 30}
+    # A pull request that is being created or merged is a write, and is routed
+    # here so the handler answers it in fixed words - the same reason the branch
+    # is routed. Reading a pull request still falls through to the read tool.
+    if re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", text, re.IGNORECASE):
+        if re.search(r"\b(merge|merged|merge\s+it)\b|ವಿಲೀನ|ಮರ್ಜ್", text, re.IGNORECASE):
+            number = re.search(r"#?\s*(\d{1,9})", text)
+            if not number:
+                return "Which pull request number should I merge?"
+            return "github_merge_pull_request", {
+                "repository": repository, "repository_hint": repository_hint,
+                "number": int(number.group(1)), "method": "squash",
+            }
+        # "open a pull request" is a write; "show open pull requests" is a read.
+        # The verb has to sit next to the noun, or "open" as an adjective wins.
+        if re.search(
+            r"\b(?:create|open|raise|make|submit|new)\s+(?:a\s+)?(?:new\s+)?(?:pull\s*request|pr)\b"
+            r"|\b(?:pull\s*request|pr)\s+(?:create|open|raise|make|submit|madi|maadi|madu)\b"
+            r"|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್.*(?:ಮಾಡು|ಮಾಡಿ|ತೆರೆ|ರಚಿಸು)"
+            r"|(?:ಮಾಡು|ಮಾಡಿ|ತೆರೆ|ರಚಿಸು).*ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್",
+            text, re.IGNORECASE,
+        ):
+            refs = re.search(r"\bfrom\s+([A-Za-z0-9_.\-/]{1,80})\s+(?:to|into|onto)\s+([A-Za-z0-9_.\-/]{1,80})", text, re.IGNORECASE)
+            if refs:
+                head, base = refs.group(1), refs.group(2)
+            else:
+                head = _branch_name(text)
+                base = "main"
+            if not head:
+                return "Which branch should I open the pull request from?"
+            return "github_create_pull_request", {
+                "repository": repository, "repository_hint": repository_hint,
+                "title": f"Merge {head} into {base}", "head": head, "base": base, "body": "",
+            }
     if re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್|प्र pull request|पुल रिक्वेस्ट", text, re.IGNORECASE):
         if not repository and not repository_hint:
             return "Which GitHub repository should I check? Please provide its full owner/name, for example owner/repository."
@@ -351,6 +387,21 @@ async def _execute_github_tool(
         payload["ref"] = str(arguments.get("ref") or "")
     elif name == "github_get_commit":
         payload["sha"] = str(arguments.get("sha") or "")
+    elif name == "github_update_repository_file":
+        path = str(arguments.get("path") or "").strip()
+        content = str(arguments.get("content") or "")
+        if not path:
+            return {"ok": False, "code": "FILE_PATH_REQUIRED", "message": "Which file should I commit? Provide its path."}
+        if not content:
+            return {"ok": False, "code": "CONTENT_REQUIRED", "message": "What should the file contain?"}
+        payload.update({
+            "path": path,
+            "content": content,
+            "message": str(arguments.get("message") or "Update " + path)[:200],
+            "expected_sha": str(arguments.get("expected_sha") or ""),
+            "branch": str(arguments.get("branch") or ""),
+            "create": bool(arguments.get("create", False)),
+        })
     elif name == "github_create_branch":
         payload.update({
             "branch": str(arguments.get("branch") or ""),
@@ -627,6 +678,7 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
 _PENDING_CONVERSATION = "github-pending"
 
 _WRITE_INTENT = {
+    "github_update_repository_file": "commit that file change",
     "github_create_branch": "create a new branch",
     "github_delete_branch": "delete the branch",
     "github_create_pull_request": "open a pull request",
@@ -671,6 +723,7 @@ def _read_pending_payload(item: dict[str, Any]) -> dict[str, Any]:
 _WRITE_TOOLS = frozenset({
     "github_create_branch", "github_delete_branch",
     "github_create_pull_request", "github_merge_pull_request",
+    "github_update_repository_file",
 })
 
 
@@ -745,7 +798,10 @@ async def handle_github_chat_with_tools(
             extra_system_instruction=(
                 "You are using Indoone's authenticated GitHub integration. You have read tools for live "
                 "repository, file, code-search, commit, branch, check, assigned-issue, and pull-request data, "
-                "and you have write tools: create and delete a branch, open a pull request, and merge one. "
+                "and you have write tools: create and delete a branch, commit a file, open a pull request, "
+                "and merge one. The order of the work is: create a branch, commit the change to that branch, "
+                "open a pull request from it, read the checks, merge only when the checks are green, then "
+                "delete the branch. Follow that order unless the user asks for something else. "
                 "A write needs the user's explicit confirmation first - say exactly what you will do and ask "
                 "them to confirm; never claim a write happened until its tool result says so. "
                 "Never invent "

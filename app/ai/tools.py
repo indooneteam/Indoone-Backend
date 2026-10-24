@@ -1189,19 +1189,20 @@ def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
         return json.dumps({
             "ok": False,
             "code": "APPROVAL_UNAVAILABLE",
-            "message": (
-                "GitHub changes cannot be confirmed on this deployment. Tell the user that "
-                f"no change was made. ({type(exc).__name__})"
+            "reply": (
+                "GitHub changes cannot be confirmed on this deployment, so nothing was changed. "
+                "The approval secret is not configured."
             ),
         }, ensure_ascii=False, sort_keys=True)
+    # Written for the USER, because this text is the reply now - not a note to a
+    # model. Nothing has happened yet and it says so.
     return json.dumps({
         "ok": False,
         "code": "APPROVAL_REQUIRED",
-        "message": (
-            f"Nothing has been changed yet. Say to the user, in their language, that you will "
-            f"{_WRITE_INTENT.get(tool, 'make this change')} in "
-            f"{data.get('repository') or 'the repository'}, and ask them to reply CONFIRM to go "
-            f"ahead or CANCEL to stop. Do not claim anything happened."
+        "reply": (
+            f"I will {_WRITE_INTENT.get(tool, 'make this change')} in "
+            f"{data.get('repository') or 'the repository'}. "
+            f"Nothing has been changed yet. Reply CONFIRM to go ahead, or CANCEL to stop."
         ),
     }, ensure_ascii=False, sort_keys=True)
 

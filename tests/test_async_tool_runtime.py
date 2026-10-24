@@ -46,3 +46,50 @@ def test_async_tool_runtime_cancels_timed_out_coroutine(monkeypatch) -> None:
     assert result.retryable is True
     assert "timed out" in result.output.lower()
     assert cancelled is True
+
+
+def test_sync_tool_runs_exactly_once(monkeypatch) -> None:
+    """A sync tool must not be executed twice per call.
+
+    The async runtime used to call the tool inline and then again in the worker
+    thread, so every sync tool did its work twice - and the first run had no
+    timeout and blocked the event loop.
+    """
+    calls = {"count": 0}
+
+    def sync_tool(_: str) -> str:
+        calls["count"] += 1
+        return "ok"
+
+    monkeypatch.setitem(TOOLS, "text_stats", sync_tool)
+
+    async def scenario() -> None:
+        result = await run_tool_async("text_stats", "hello")
+        assert result.safe is True
+        assert result.output == "ok"
+
+    asyncio.run(scenario())
+    assert calls["count"] == 1, "a sync tool must run exactly once"
+
+
+def test_sync_tool_timeout_is_enforced_off_the_event_loop(monkeypatch) -> None:
+    """A slow sync tool must be cut off by its timeout, not run inline to completion."""
+    import time
+
+    def slow_sync_tool(_: str) -> str:
+        time.sleep(0.3)
+        return "done"
+
+    monkeypatch.setitem(TOOLS, "text_stats", slow_sync_tool)
+    monkeypatch.setattr(
+        "app.ai.tools.get_tool_spec",
+        lambda _: type("Spec", (), {"timeout_seconds": 0.02, "max_output_chars": 100})(),
+    )
+
+    started = time.monotonic()
+    result = asyncio.run(run_tool_async("text_stats", "hello", max_runtime_seconds=0.02))
+    elapsed = time.monotonic() - started
+
+    assert result.safe is False
+    assert "timed out" in result.output.lower()
+    assert elapsed < 0.25, "the call must not block until the tool finishes"

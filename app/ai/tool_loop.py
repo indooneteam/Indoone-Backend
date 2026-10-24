@@ -47,7 +47,30 @@ _EMAIL_WRITE_TOOLS = frozenset(
     }
 )
 # Approval-required tools whose executor needs the token in its own payload.
-_TOKEN_IN_PAYLOAD = frozenset({"github_update_repository_file"})
+# Every GitHub write executor validates the token from the payload, so an
+# approved call must carry it or the executor re-asks for approval it already has.
+_TOKEN_IN_PAYLOAD = frozenset(
+    {
+        "github_update_repository_file",
+        "github_create_branch",
+        "github_delete_branch",
+        "github_create_pull_request",
+        "github_merge_pull_request",
+    }
+)
+# Approval-required tools whose executor owns the hold: it stores the proposal and
+# issues the token itself. The dispatcher must NOT refuse these before the executor
+# runs, or the proposal is never stored and the user's CONFIRM has nothing to
+# replay. The executor still refuses to act without a valid token, so nothing runs
+# unapproved.
+_HOLDING_WRITE_TOOLS = frozenset(
+    {
+        "github_create_branch",
+        "github_delete_branch",
+        "github_create_pull_request",
+        "github_merge_pull_request",
+    }
+)
 _TEXT_ARG_KEYS = ("expression", "text", "json", "code")
 
 
@@ -269,7 +292,10 @@ async def dispatch_tool(
         }
 
     # A data-changing tool is a proposal until a server-issued approval arrives.
-    if spec.requires_approval:
+    # The GitHub writes hold the proposal themselves (and store it, so the user's
+    # CONFIRM can replay it), so they are not refused here; every other
+    # approval-required tool is refused until a valid token is presented.
+    if spec.requires_approval and name not in _HOLDING_WRITE_TOOLS:
         decision = decide_tool(name, approval_tokens=approval_tokens, user_id=user_id)
         if not decision.allowed:
             return {
@@ -302,6 +328,10 @@ async def dispatch_tool(
         data: Any = json.loads(result.output)
     except (TypeError, ValueError):
         data = result.output
+    # A held write already produced the user-facing proposal and stored itself for
+    # the confirmation, so return it as-is rather than burying it under ok:true.
+    if isinstance(data, dict) and data.get("code") in {"APPROVAL_REQUIRED", "APPROVAL_UNAVAILABLE"}:
+        return data
     return {"ok": True, "result": data}
 
 

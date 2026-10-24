@@ -286,6 +286,9 @@ async def dispatch_tool(
     # The authenticated identity is injected by the backend, never by the model.
     if user_id.strip():
         payload_arguments.setdefault("user_id", user_id)
+        # A GitHub write that needs confirmation is stored against the
+        # conversation, so the confirmation can find it again.
+        payload_arguments.setdefault("conversation_id", conversation_id)
     if name in _TOKEN_IN_PAYLOAD:
         token = _first_token(approval_tokens)
         if token:

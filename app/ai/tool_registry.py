@@ -368,7 +368,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         requires_approval=True,
         categories=("github", "external", "write"),
         connector_id="github",
-        capability="repos.write",
+        capability="branches.write",
     ),
     ToolSpec(
         "github_delete_branch",
@@ -384,7 +384,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         requires_approval=True,
         categories=("github", "external", "write"),
         connector_id="github",
-        capability="repos.write",
+        capability="branches.write",
     ),
     ToolSpec(
         "github_create_pull_request",
@@ -403,7 +403,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         requires_approval=True,
         categories=("github", "external", "write"),
         connector_id="github",
-        capability="repos.write",
+        capability="pull_requests.write",
     ),
     ToolSpec(
         "github_merge_pull_request",
@@ -420,7 +420,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         requires_approval=True,
         categories=("github", "external", "write"),
         connector_id="github",
-        capability="repos.write",
+        capability="pull_requests.write",
     ),
     ToolSpec(
         "github_list_assigned_issues",

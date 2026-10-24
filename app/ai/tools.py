@@ -11,7 +11,9 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable
 
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
-from app.ai.approval import validate_approval_token
+from datetime import datetime, timedelta, timezone
+
+from app.ai.approval import issue_approval_token, validate_approval_token
 from app.ai.code_sandbox import sandbox_execution_tool
 from app.ai.connector_authorization import authorize_tool
 from app.ai.tool_registry import get_tool_spec
@@ -1144,6 +1146,62 @@ def _approved_write(data: dict[str, object], user_id: str, tool: str) -> bool:
     return bool(validate_approval_token(token, user_id, tool))
 
 
+# The wording the user is asked to confirm, one per write.
+_WRITE_INTENT = {
+    "github_create_branch": "create a new branch",
+    "github_delete_branch": "delete the branch",
+    "github_create_pull_request": "open a pull request",
+    "github_merge_pull_request": "merge the pull request",
+}
+_PENDING_CONVERSATION = "github-pending"
+
+
+def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
+    """Hold an unapproved write and return the proposal, or None to let it run.
+
+    This lives in the executor because the executor is the one place a write is
+    guaranteed to pass, whichever path reached it. Putting it in the GitHub
+    handler was the earlier mistake: the handler returns before the model runs, so
+    a write never got there, nothing was stored, and no token was ever issued.
+    """
+    if _approved_write(data, user_id, tool):
+        return None
+    try:
+        token = issue_approval_token(user_id, tool, ttl_seconds=300)
+        from app.capabilities.integrations import _fernet
+        from app.capabilities.store import save_pending_github_action
+
+        stored = {
+            key: value for key, value in data.items()
+            if key not in {"user_id", "approval_token", "conversation_id"}
+        }
+        payload = _fernet().encrypt(
+            json.dumps({"tool": tool, "arguments": stored, "token": token}, separators=(",", ":")).encode("utf-8")
+        )
+        conversation = str(data.get("conversation_id") or "").strip() or _PENDING_CONVERSATION
+        expires_at = (datetime.now(timezone.utc) + timedelta(seconds=300)).isoformat()
+        save_pending_github_action(user_id, conversation, payload, expires_at)
+    except (RuntimeError, ValueError, ImportError) as exc:
+        return json.dumps({
+            "ok": False,
+            "code": "APPROVAL_UNAVAILABLE",
+            "message": (
+                "GitHub changes cannot be confirmed on this deployment. Tell the user that "
+                f"no change was made. ({type(exc).__name__})"
+            ),
+        }, ensure_ascii=False, sort_keys=True)
+    return json.dumps({
+        "ok": False,
+        "code": "APPROVAL_REQUIRED",
+        "message": (
+            f"Nothing has been changed yet. Say to the user, in their language, that you will "
+            f"{_WRITE_INTENT.get(tool, 'make this change')} in "
+            f"{data.get('repository') or 'the repository'}, and ask them to reply CONFIRM to go "
+            f"ahead or CANCEL to stop. Do not claim anything happened."
+        ),
+    }, ensure_ascii=False, sort_keys=True)
+
+
 async def _github_create_branch(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
@@ -1152,6 +1210,9 @@ async def _github_create_branch(payload: str) -> str:
     if not user_id:
         raise ValueError("user_id is required")
     spec = get_tool_spec("github_create_branch")
+    held = _hold_write(data, user_id, "github_create_branch")
+    if held is not None:
+        return held
     result = await _run_async(
         write_github_create_branch(
             user_id=user_id,
@@ -1173,6 +1234,9 @@ async def _github_delete_branch(payload: str) -> str:
     if not user_id:
         raise ValueError("user_id is required")
     spec = get_tool_spec("github_delete_branch")
+    held = _hold_write(data, user_id, "github_delete_branch")
+    if held is not None:
+        return held
     result = await _run_async(
         write_github_delete_branch(
             user_id=user_id,
@@ -1193,6 +1257,9 @@ async def _github_create_pull_request(payload: str) -> str:
     if not user_id:
         raise ValueError("user_id is required")
     spec = get_tool_spec("github_create_pull_request")
+    held = _hold_write(data, user_id, "github_create_pull_request")
+    if held is not None:
+        return held
     result = await _run_async(
         write_github_create_pull_request(
             user_id=user_id,
@@ -1216,6 +1283,9 @@ async def _github_merge_pull_request(payload: str) -> str:
     if not user_id:
         raise ValueError("user_id is required")
     spec = get_tool_spec("github_merge_pull_request")
+    held = _hold_write(data, user_id, "github_merge_pull_request")
+    if held is not None:
+        return held
     result = await _run_async(
         write_github_merge_pull_request(
             user_id=user_id,

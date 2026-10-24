@@ -115,43 +115,29 @@ _TOOL_HINTS = (
     "calendar", "event", "meeting", "schedule",
     "drive", "folder", "photo", "youtube", "video", "instagram", "facebook",
     "canva", "design", "post",
-    # A festival's date is year-specific, so these are current-information
-    # questions, not evergreen ones: the answer changes every year and the model
-    # must be given the tool catalogue to look it up.
-    "festival", "festivals", "holiday", "holidays", "deepavali", "diwali",
-    "dasara", "dussehra", "navratri", "ugadi", "yugadi", "sankranti",
-    "pongal", "onam", "ganesh", "chaturthi", "navami", "ekadashi", "purnima",
-    "amavasya", "puja", "pooja", "muhurta", "muhurtam", "panchang", "tithi",
-    "rahu", "shubha", "auspicious", "vrat", "vrata", "fasting", "eclipse",
-    # Romanised Kannada/Tamil/Hindi spellings, because that is how these are
-    # typed in chat: "ivattu yava habba ide" must reach the tools too.
-    "habba", "habbada", "parva", "parvada", "deepavali", "dipavali", "dassara",
-    "yugadi", "sankranthi", "pongal", "ganesh", "chaturthi", "pooja", "poojai",
-    "muhurtha", "muhurtam", "panchanga", "thithi", "amavase", "hunnime",
-    "ekadashi", "upavasa", "grahana", "shubhamuhurta",
     "check", "search", "find", "list", "show", "summar", "delete", "connect",
     "ಮೇಲ್", "ಇಮೇಲ್", "ಇನ್‌ಬಾಕ್ಸ್", "ಇನ್ಬಾಕ್ಸ್", "ಕಳುಹಿಸ", "ಓದ", "ನೋಡ",
     "ರೆಪೊ", "ಕಮಿಟ್", "ಇಷ್ಯೂ", "ಕ್ಯಾಲೆಂಡರ್", "ಫೋಟೋ", "ವಿಡಿಯೋ",
-    "ಹಬ್ಬ", "ಹಬ್ಬಗಳ", "ಪರ್ವ", "ದೀಪಾವಳಿ", "ದಸರಾ", "ಯುಗಾದಿ", "ಉಗಾದಿ",
-    "ಸಂಕ್ರಾಂತಿ", "ಪೊಂಗಲ್", "ಗಣೇಶ", "ಪೂಜೆ", "ಪೂಜಾ", "ಮುಹೂರ್ತ", "ಪಂಚಾಂಗ",
-    "ತಿಥಿ", "ಶುಭ", "ಅಮಾಸೆ", "ಹುಣ್ಣಿಮೆ", "ಏಕಾದಶಿ", "ಉಪವಾಸ", "ಗ್ರಹಣ",
-    "पूजा", "हब्बा", "त्योहार", "त्यौहार", "दीपावली", "दिवाली", "दशहरा",
-    "नवरात्रि", "मुहूर्त", "पंचांग", "तिथि", "व्रत", "एकादशी", "ग्रहण",
 ) + INDIC_MAIL_WORDS + INDIC_SEND_WORDS
 
 
 def _written_in_indic(message: str) -> bool:
     """Whether the message is written in any Indian script."""
     return any(pattern.search(message) for _, pattern in SCRIPT_RANGES)
-_SHORT_MESSAGE_WORDS = 6
+_SHORT_MESSAGE_WORDS = 2
 
 
 def needs_tools(message: str) -> bool:
     """Whether a message should carry the tool catalogue.
 
-    Every model call re-sends all declarations, so a short greeting must not pay
-    for them. Anything longer, or naming a service or an action, still goes
-    through the tool loop exactly as before.
+    Every model call re-sends all declarations, so a one-word greeting must not
+    pay for them. Everything else carries the catalogue and the model chooses.
+
+    This deliberately does NOT guess from topic words. A word list cannot cover
+    festivals, holidays, muhurta and the rest across twelve languages and eleven
+    scripts, and every word added for one language is a gap in the next. The
+    length of the message is the signal; the choice of tool is the model's, which
+    is the whole point of sending it the list.
     """
     text = " ".join(str(message).split()).strip().casefold()
     if not text:
@@ -162,6 +148,8 @@ def needs_tools(message: str) -> bool:
     # word. Matching it against a keyword list would mean keeping that list in twelve
     # languages and eleven scripts, and every language added later would be a gap until
     # somebody remembered it. The script is the reliable signal; the word list is not.
+    # The same reasoning applies to topic words like "festival": the model is given
+    # the catalogue and chooses, rather than us guessing from the wording.
     if _written_in_indic(str(message)) and len(text.split()) > 1:
         return True
     return len(text.split()) > _SHORT_MESSAGE_WORDS

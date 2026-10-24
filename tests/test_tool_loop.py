@@ -228,10 +228,17 @@ async def test_run_tool_loop_uses_auto_mode_and_the_users_declarations(monkeypat
 
 
 def test_plain_chat_does_not_carry_the_tool_catalogue() -> None:
-    """A greeting must not pay ~2,900 tokens for tools it cannot use."""
+    """A bare greeting must not pay ~2,900 tokens for tools it cannot use.
+
+    "how are you" used to be in this list. It is not any more, and that is
+    deliberate: a three-word question like "how are you" and a three-word
+    question like "nale enu special" are the same length, and only the model can
+    tell them apart. We send the catalogue and let it choose, rather than guess
+    from the wording and get it wrong.
+    """
     assert tool_loop.needs_tools("hi") is False
     assert tool_loop.needs_tools("thanks!") is False
-    assert tool_loop.needs_tools("how are you") is False
+    assert tool_loop.needs_tools("ok") is False
 
 
 def test_a_request_for_a_service_still_uses_tools() -> None:
@@ -274,10 +281,22 @@ def test_a_festival_question_gets_the_tools():
     ):
         assert needs_tools(question) is True, question
 
+def test_the_gate_does_not_guess_from_topic_words():
+    """The gate is about length, not about knowing every festival word.
 
-def test_the_festival_words_are_in_the_hint_list():
-    from app.ai.tool_loop import _TOOL_HINTS
+    A word list would need twelve languages and eleven scripts, and every word
+    added for one language is a gap in the next. Any real sentence carries the
+    catalogue and the model chooses; only a bare greeting is spared the cost.
+    """
+    from app.ai.tool_loop import _TOOL_HINTS, needs_tools
 
-    for word in ("festival", "holiday", "deepavali", "diwali", "dasara", "ugadi",
-                 "sankranti", "puja", "muhurta", "habba", "ಹಬ್ಬ", "ದೀಪಾವಳಿ", "ಪೂಜೆ"):
-        assert word in _TOOL_HINTS, word
+    for word in ("festival", "habba", "deepavali", "muhurta", "ಹಬ್ಬ", "ದೀಪಾವಳಿ"):
+        assert word not in _TOOL_HINTS, word
+
+    # and yet every one of these still gets the catalogue
+    for question in ("ivattu yava habba ide", "nale enu special", "when is diwali"):
+        assert needs_tools(question) is True, question
+
+    # a bare greeting is still spared
+    for greeting in ("hi", "ok", "thanks"):
+        assert needs_tools(greeting) is False, greeting

@@ -655,7 +655,6 @@ async def handle_email_chat_with_tools(
         return result
 
     _shared = dict(
-        text,
         history=history,
         tool_declarations=EMAIL_TOOL_DECLARATIONS,
         execute_tool=call_tool,

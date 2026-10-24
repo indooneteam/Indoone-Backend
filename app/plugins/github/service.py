@@ -447,3 +447,192 @@ async def compare_github_repository_commits(
 
 path = "app/plugins/github/service.py"
 message = "Fix GitHub API response robustness and commit-history fallback handling"
+
+
+# ---------------------------------------------------------------------------
+# The rest of the flow: branches, a pull request's files, checks, one commit.
+# Same shape as every read above: validate, call, normalise, never leak secrets.
+# ---------------------------------------------------------------------------
+
+
+async def list_github_branches(
+    user_id: str, repository: str, per_page: int = 30
+) -> dict[str, object]:
+    """List a repository's branches, so work can be started from the right one."""
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    repo = _validated_repository(repository)
+    if per_page < 1 or per_page > 100:
+        raise ValueError("per_page must be between 1 and 100")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_GITHUB_REPOS_BASE_URL}/{repo}/branches",
+            headers=_github_headers(_github_token(user)),
+            params={"per_page": per_page},
+        )
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, list):
+        raise RuntimeError("GitHub returned an invalid branch list")
+    branches: list[dict[str, object]] = []
+    for item in body[:100]:
+        if not isinstance(item, dict):
+            continue
+        commit = item.get("commit")
+        commit = commit if isinstance(commit, dict) else {}
+        branches.append({
+            "name": str(item.get("name") or ""),
+            "sha": str(commit.get("sha") or ""),
+            "protected": bool(item.get("protected")),
+        })
+    return {
+        "integration": "github", "repository": repo,
+        "branches": branches, "count": len(branches), "secrets_exposed": False,
+    }
+
+
+async def list_github_pull_request_files(
+    user_id: str, repository: str, number: int, per_page: int = 30
+) -> dict[str, object]:
+    """The diff of a pull request - which files changed, and the patch for each."""
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    repo = _validated_repository(repository)
+    if number < 1 or number > 100000000:
+        raise ValueError("pull request number is out of range")
+    if per_page < 1 or per_page > 100:
+        raise ValueError("per_page must be between 1 and 100")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_GITHUB_REPOS_BASE_URL}/{repo}/pulls/{number}/files",
+            headers=_github_headers(_github_token(user)),
+            params={"per_page": per_page},
+        )
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, list):
+        raise RuntimeError("GitHub returned an invalid pull-request file list")
+    files: list[dict[str, object]] = []
+    for item in body[:100]:
+        if not isinstance(item, dict):
+            continue
+        files.append({
+            "filename": str(item.get("filename") or ""),
+            "status": str(item.get("status") or ""),
+            "additions": int(item.get("additions") or 0),
+            "deletions": int(item.get("deletions") or 0),
+            "changes": int(item.get("changes") or 0),
+            # The patch is the point of this call, and it can hold code, not
+            # credentials - but it is still passed through the redactor.
+            "patch": _redact_repository_secrets(str(item.get("patch") or ""))[:20000],
+        })
+    return {
+        "integration": "github", "repository": repo, "number": number,
+        "files": files, "count": len(files), "secrets_exposed": False,
+    }
+
+
+async def list_github_check_runs(
+    user_id: str, repository: str, ref: str = ""
+) -> dict[str, object]:
+    """The CI status for a ref, so a change is not merged before it is green."""
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    repo = _validated_repository(repository)
+    normalized_ref = _validated_repository_ref(ref)
+    params: dict[str, object] = {"per_page": 50}
+    if normalized_ref:
+        params["ref"] = normalized_ref
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_GITHUB_REPOS_BASE_URL}/{repo}/commits/{quote(normalized_ref or 'HEAD', safe='')}/check-runs"
+            if normalized_ref else f"{_GITHUB_REPOS_BASE_URL}/{repo}/check-runs",
+            headers=_github_headers(_github_token(user)),
+            params=params,
+        )
+        if response.status_code == 404:
+            return {
+                "integration": "github", "repository": repo, "ref": normalized_ref,
+                "check_runs": [], "count": 0, "conclusion": "none", "secrets_exposed": False,
+            }
+        response.raise_for_status()
+        body = response.json()
+    if isinstance(body, dict):
+        items = body.get("check_runs")
+    else:
+        items = body
+    items = items if isinstance(items, list) else []
+    runs: list[dict[str, object]] = []
+    for item in items[:50]:
+        if not isinstance(item, dict):
+            continue
+        runs.append({
+            "name": str(item.get("name") or ""),
+            "status": str(item.get("status") or ""),
+            "conclusion": str(item.get("conclusion") or ""),
+            "html_url": str(item.get("html_url") or ""),
+        })
+    conclusions = {str(r.get("conclusion") or "") for r in runs}
+    if not runs:
+        overall = "none"
+    elif conclusions & {"failure", "timed_out", "cancelled", "action_required"}:
+        overall = "failure"
+    elif conclusions & {"", "neutral", "queued", "in_progress"}:
+        overall = "running"
+    else:
+        overall = "success"
+    return {
+        "integration": "github", "repository": repo, "ref": normalized_ref,
+        "check_runs": runs, "count": len(runs), "conclusion": overall,
+        "secrets_exposed": False,
+    }
+
+
+async def get_github_commit(
+    user_id: str, repository: str, sha: str
+) -> dict[str, object]:
+    """One commit, with its message and the files it touched."""
+    user = user_id.strip()
+    if not user:
+        raise ValueError("user_id is required")
+    repo = _validated_repository(repository)
+    normalized_sha = sha.strip()
+    if not re.fullmatch(r"[0-9a-fA-F]{7,40}", normalized_sha):
+        raise ValueError("sha must be a 7 to 40 character hex commit id")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.get(
+            f"{_GITHUB_REPOS_BASE_URL}/{repo}/commits/{quote(normalized_sha, safe='')}",
+            headers=_github_headers(_github_token(user)),
+        )
+        response.raise_for_status()
+        body = response.json()
+    if not isinstance(body, dict):
+        raise RuntimeError("GitHub returned an invalid commit response")
+    commit = body.get("commit")
+    commit = commit if isinstance(commit, dict) else {}
+    author = commit.get("author")
+    author = author if isinstance(author, dict) else {}
+    message_lines = str(commit.get("message") or "").splitlines()
+    files: list[dict[str, object]] = []
+    for item in (body.get("files") if isinstance(body.get("files"), list) else [])[:100]:
+        if not isinstance(item, dict):
+            continue
+        files.append({
+            "filename": str(item.get("filename") or ""),
+            "status": str(item.get("status") or ""),
+            "additions": int(item.get("additions") or 0),
+            "deletions": int(item.get("deletions") or 0),
+            "patch": _redact_repository_secrets(str(item.get("patch") or ""))[:20000],
+        })
+    return {
+        "integration": "github", "repository": repo,
+        "sha": str(body.get("sha") or ""),
+        "message": "\n".join(message_lines)[:4000],
+        "author": str(author.get("name") or ""),
+        "date": str(author.get("date") or ""),
+        "html_url": str(body.get("html_url") or ""),
+        "files": files, "count": len(files), "secrets_exposed": False,
+    }

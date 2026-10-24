@@ -40,10 +40,12 @@ def build_search_web_tools(model: str) -> list[dict[str, Any]]:
         "functionDeclarations": [{
             "name": _SEARCH_TOOL_NAME,
             "description": (
-                "Search public web sources only when the user needs current/recent facts, latest news, "
-                "prices, availability, or explicitly requests online research. Do not call for stable "
-                "evergreen questions. Never search private messages, email addresses, passwords, API keys, "
-                "access tokens, or secrets."
+                "Search public web sources when the user needs current or recent facts, latest news, "
+                "prices, availability, or explicitly requests online research. Festival and holiday dates, "
+                "religious dates, auspicious times (muhurta), tithi and panchang are current information "
+                "because they change every year - search for them rather than refusing. Do not call for "
+                "stable evergreen questions. Never search private messages, email addresses, passwords, "
+                "API keys, access tokens, or secrets."
             ),
             "parameters": {
                 "type": "OBJECT",

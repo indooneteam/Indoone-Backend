@@ -237,7 +237,10 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         if text.strip():
             document_context_parts.append(f"Content from attached text file {file_id}:\n{text[:100_000]}")
 
-    gemini_enabled = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
+    # Media handling needs a provider that accepts images. Both Gemini and Azure
+    # do, so this is a provider check, not a gemini-only one.
+    _model_backend = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold()
+    gemini_enabled = _model_backend in {"gemini", "azure"}
     for attachment in attachments:
         filename = str(attachment["filename"])
         mime_type = str(attachment["mime_type"])

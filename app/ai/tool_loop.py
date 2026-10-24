@@ -101,6 +101,10 @@ def _gemini_backend_enabled() -> bool:
     return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
 
 
+def _azure_backend_enabled() -> bool:
+    return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "azure"
+
+
 # A message that names a connected service, or an action on one, needs the tool
 # catalogue. A short greeting does not, and every call re-sends all declarations
 # (~2,900 tokens), so plain chat should not pay for them.
@@ -304,10 +308,14 @@ async def run_tool_loop(
     Returns the model's grounded answer when it used a tool, or ``None`` when it
     chose no tool (so the caller can fall back to the plain answer path).
     """
-    if not _gemini_backend_enabled() or not message.strip():
+    if not (_gemini_backend_enabled() or _azure_backend_enabled()) or not message.strip():
         return None
 
-    from app.ai.gemini_service import generate_gemini_function_call_reply
+    from app.ai.gemini_service import (
+        generate_gemini_function_call_reply,
+        run_with_provider_fallback,
+    )
+    from app.ai.azure_openai_service import generate_azure_function_call_reply
 
     tokens = tuple(approval_tokens or ())
     write_done = {"value": False}
@@ -331,8 +339,7 @@ async def run_tool_loop(
             write_done["value"] = True
         return result
 
-    return await generate_gemini_function_call_reply(
-        message,
+    _shared = dict(
         history=history,
         tool_declarations=model_tool_declarations(user_id),
         execute_tool=execute_tool,
@@ -343,4 +350,9 @@ async def run_tool_loop(
         tool_mode="AUTO",
         return_none_when_no_tool=True,
         reuse_first_text_when_no_tool=True,
+    )
+    _azure_first = _azure_backend_enabled()
+    return await run_with_provider_fallback(
+        lambda: (generate_azure_function_call_reply if _azure_first else generate_gemini_function_call_reply)(message, **_shared),
+        lambda: (generate_gemini_function_call_reply if _azure_first else generate_azure_function_call_reply)(message, **_shared),
     )

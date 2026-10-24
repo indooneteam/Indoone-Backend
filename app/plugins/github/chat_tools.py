@@ -647,6 +647,18 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
         return "\n".join(lines)
 
     # ---- the writes -------------------------------------------------------- #
+    if name == "github_update_repository_file":
+        detail = data.get("result")
+        detail = detail if isinstance(detail, dict) else {}
+        path = str(data.get("path") or detail.get("path") or "the file")
+        sha = str(detail.get("sha") or "")[:10]
+        verb = "created" if data.get("created") else "committed"
+        return (
+            f"{path} was {verb} in {data.get('repository', '')}"
+            + (f" on branch {data.get('branch')}" if data.get("branch") else "")
+            + (f" as {sha}." if sha else ".")
+        )
+
     if name == "github_create_branch":
         detail = data.get("result")
         detail = detail if isinstance(detail, dict) else {}

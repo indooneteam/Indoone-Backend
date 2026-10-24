@@ -23,6 +23,9 @@ from app.ai.tools import ToolResult, run_tool_async
 _GITHUB_TARGET_RE = re.compile(
     r"\b(repositories|repository|repos|repo|pull\s+requests?|prs?|issues?|assigned\s+issues|files?|folders?|directories|contents|code|commits?|history|compare|readme|branches?|checks?|ci|workflows?)\b"
     r"|ಶಾಖೆ|ಬ್ರಾಂಚ್|ಶಾಖೆಗಳು|ಬ್ರಾಂಚ್‌ಗಳು|ಚೆಕ್|ಚೆಕ್‌ಗಳು"
+    # a standalone alternative, so "branch" and "check" match on their own and
+    # cannot be swallowed by the group above
+    r"|\b(branch|branches|check|checks|ci)\b"
     r"|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)(?:ಗಳು|ಗಳನ್ನು|ಯನ್ನು)?"
     r"|(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ(?:ಗಳು|ಗಳನ್ನು)?|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್"
     r"|ಫೈಲ್|ಫೈಲ್ಗಳು|ಫೋಲ್ಡರ್|ಕೋಡ್|ಒಳಗ(?:ೆ|ಿರುವ|ಿನ|ಿದೆ)|ಕಮಿಟ್|ಹೋಲಿಸು"
@@ -36,6 +39,37 @@ _ACTION_RE = re.compile(
     re.IGNORECASE,
 )
 _REPOSITORY_NAME_RE = re.compile(r"\b([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)\b")
+
+
+def _branch_name(text: str) -> str:
+    """The branch name the user named, in any of the ways they name it.
+
+    "terminal antha branch create madi", "create a branch called terminal",
+    "branch terminal create madi" - the name is a single token next to the word
+    branch, or the word after "called"/"antha"/"named".
+    """
+    patterns = (
+        r"branch\s+(?:called|named)\s+([A-Za-z0-9_.\-/]{1,80})",
+        r"([A-Za-z0-9_.\-/]{1,80})\s+(?:antha|anta|annu|named|called)\b",
+        r"\b(?:called|named|antha|anta)\s+([A-Za-z0-9_.\-/]{1,80})",
+        r"branch\s+([A-Za-z0-9_.\-/]{1,80})",
+        r"([A-Za-z0-9_.\-/]{1,80})\s+branch",
+    )
+    noise = {
+        "branch", "branches", "new", "create", "make", "madi", "maadi", "madu",
+        "the", "a", "an", "in", "on", "for", "called", "named", "antha", "anta",
+        "github", "repo", "repository", "and", "to", "please", "ok", "okay",
+        "hosa", "hos", "hosa", "hosa-branch", "swalpa", "alli", "evaga",
+        "one", "add", "also", "there", "then", "now", "me", "my", "nanna",
+        "delete", "remove", "togo", "eshtu", "estu", "yavudu", "yava",
+        "ಹೊಸ", "ಶಾಖೆ", "ಮಾಡು", "ಮಾಡಿ", "ರಚಿಸು", "ಬ್ರಾಂಚ್",
+    }
+    for pattern in patterns:
+        for candidate in re.findall(pattern, text, re.IGNORECASE):
+            cleaned = str(candidate).strip().strip(".,!?`'\"")
+            if cleaned and cleaned.casefold() not in noise:
+                return cleaned
+    return ""
 
 
 def _repository_hint_from_message(text: str) -> str:
@@ -65,6 +99,7 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
         re.search(r"\bgithub\b", text, re.IGNORECASE)
         or re.search(r"\bgithub\b", recent_context, re.IGNORECASE)
         or re.search(r"\b(repo|repos|repository|repositories)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)", text, re.IGNORECASE)
+        or re.search(r"\b(branch|branches|checks?)\b|ಶಾಖೆ|ಬ್ರಾಂಚ್|ಚೆಕ್", text, re.IGNORECASE)
         or re.search(r"(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ", text, re.IGNORECASE)
         or _REPOSITORY_NAME_RE.search(text)
     )
@@ -136,11 +171,20 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     if file_list_intent:
         return "github_list_repository_contents", {"repository": repository, "repository_hint": repository_hint, "path": "", "ref": ""}
     if re.search(r"\b(branch(?:es)?)\b|ಶಾಖೆ|ಬ್ರಾಂಚ್", text, re.IGNORECASE):
-        # A write ("create a branch") is deliberately NOT handled here. The
-        # deterministic parser cannot ask for confirmation, and every write needs
-        # the user's yes - so it falls through to the model, which asks.
-        if re.search(r"\b(create|make|new|delete|remove|push)\b|\b(madi|maadi|madu|togo)\b|ರಚಿಸು|ಅಳಿಸು|ಹೊಸ", text, re.IGNORECASE):
-            return None
+        # A write IS routed here now. It used to return None so the model would
+        # handle it - but the model then looped on the confirmation and invented
+        # branch names. The handler answers it deterministically instead: it holds
+        # the write, asks in fixed words, and the same conversation resolves it.
+        if re.search(r"\b(delete|remove|togo)\b|ಅಳಿಸು", text, re.IGNORECASE):
+            name = _branch_name(text)
+            if not name:
+                return "Which branch should I delete?"
+            return "github_delete_branch", {"repository": repository, "repository_hint": repository_hint, "branch": name}
+        if re.search(r"\b(create|make|new|add)\b|\b(madi|maadi|madu|madu)\b|ರಚಿಸು|ಹೊಸ|ಮಾಡು|ಮಾಡಿ", text, re.IGNORECASE):
+            name = _branch_name(text)
+            if not name:
+                return "What should I call the new branch?"
+            return "github_create_branch", {"repository": repository, "repository_hint": repository_hint, "branch": name}
         return "github_list_branches", {"repository": repository, "repository_hint": repository_hint, "per_page": 30}
     if re.search(r"\b(checks?|ci|workflow\s+runs?|build\s+status)\b|ಚೆಕ್|ಸಿಐ", text, re.IGNORECASE):
         return "github_list_check_runs", {"repository": repository, "repository_hint": repository_hint, "ref": ""}
@@ -170,6 +214,7 @@ async def _execute_github_tool(
     name: str,
     arguments: dict[str, Any],
     approval_tokens: tuple[str, ...] = (),
+    conversation_id: str | None = None,
 ) -> dict[str, Any]:
     allowed = {
         "github_list_repositories", "github_list_assigned_issues", "github_list_pull_requests",
@@ -213,7 +258,7 @@ async def _execute_github_tool(
         ).isoformat()
         save_pending_github_action(
             user_id,
-            str(arguments.get("conversation_id") or "") or _PENDING_CONVERSATION,
+            str(conversation_id or arguments.get("conversation_id") or "") or _PENDING_CONVERSATION,
             _pending_payload({"tool": name, "arguments": arguments, "token": token}),
             expires_at,
         )
@@ -661,7 +706,9 @@ async def handle_github_chat_with_tools(
             stored_arguments = stored_arguments if isinstance(stored_arguments, dict) else {}
             stored_arguments["approval_token"] = str(stored.get("token") or "")
             delete_pending_github_action(user, conversation_key)
-            result = await _execute_github_tool(user, tool, stored_arguments)
+            result = await _execute_github_tool(
+                user, tool, stored_arguments, conversation_id=conversation_key
+            )
             return _format_github_result(tool, result)
         return (
             "You have a GitHub change waiting for your decision: reply CONFIRM to go "
@@ -685,7 +732,9 @@ async def handle_github_chat_with_tools(
         from app.ai.azure_openai_service import generate_azure_function_call_reply
 
         async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-            return await _execute_github_tool(user, name, arguments, approval_tokens)
+            return await _execute_github_tool(
+                user, name, arguments, approval_tokens, conversation_id
+            )
 
         _shared = dict(
             history=history,

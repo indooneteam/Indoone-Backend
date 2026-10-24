@@ -30,7 +30,11 @@ from app.api.dependencies import current_user_id
 from app.ai.gemini_service import ModelBusyError
 from app.ai.tool_loop import needs_tools, run_tool_loop
 from app.ai.agent_async import execute_agent_async
-from app.capabilities.store import get_pending_email_action, list_memories
+from app.capabilities.store import (
+    get_pending_email_action,
+    get_pending_github_action,
+    list_memories,
+)
 from datetime import datetime, timedelta, timezone
 
 _IST = timezone(timedelta(hours=5, minutes=30))
@@ -317,7 +321,24 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             #
             # The pending check is still needed: once an action is waiting, the reply
             # that confirms it may be a bare "yes", which is not a tool request at all.
-            email_owns_this = bool(get_pending_email_action(user_id, conversation_id))
+            # A pending GitHub write lives in the same store, so the email path
+            # must not claim it. Only an email integration's pending belongs here.
+            _pending_email = get_pending_email_action(user_id, conversation_id)
+            email_owns_this = bool(
+                _pending_email
+                and str(_pending_email.get("integration_id") or "").casefold() != "github"
+            )
+            # A GitHub write waiting on this conversation is resolved before the
+            # agent plans anything: a bare "ok create maadu" names no repository,
+            # so nothing else would reach the handler.
+            if get_pending_github_action(user_id, conversation_id) is not None:
+                tool_reply = await handle_github_chat_with_tools(
+                    user_id,
+                    body.message,
+                    history=history,
+                    approval_tokens=tuple(body.approval_tokens or ()),
+                    conversation_id=conversation_id,
+                )
             # No needs_tools gate otherwise: that is a cost heuristic for the model
             # call - a short greeting should not pay for the whole tool catalogue. The
             # agent is deterministic and plans nothing for a greeting, so it costs
@@ -385,6 +406,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                         body.message,
                         history=history,
                         approval_tokens=tuple(body.approval_tokens or ()),
+                        conversation_id=conversation_id,
                     )
 
         if tool_reply is not None:

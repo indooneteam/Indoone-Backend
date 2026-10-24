@@ -8,9 +8,16 @@ from __future__ import annotations
 import json
 import os
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.ai.approval import issue_approval_token
 from app.ai.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
+from app.capabilities.store import (
+    delete_pending_github_action,
+    get_pending_github_action,
+    save_pending_github_action,
+)
 from app.ai.tools import ToolResult, run_tool_async
 
 _GITHUB_TARGET_RE = re.compile(
@@ -162,6 +169,7 @@ async def _execute_github_tool(
     user_id: str,
     name: str,
     arguments: dict[str, Any],
+    approval_tokens: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     allowed = {
         "github_list_repositories", "github_list_assigned_issues", "github_list_pull_requests",
@@ -177,13 +185,46 @@ async def _execute_github_tool(
     }
     if name not in allowed:
         return {"ok": False, "code": "UNKNOWN_TOOL", "message": "This GitHub action is not available."}
-    if name in _WRITE_TOOLS and not approval_tokens:
+    # A token can arrive either way: in the request's approval_tokens (a client
+    # that asked the approvals endpoint), or inside the arguments (the replay of a
+    # write this handler held and the user then confirmed). Both are valid.
+    _supplied_token = approval_tokens or (str(arguments.get("approval_token") or "").strip(),)
+    if name in _WRITE_TOOLS and not any(_supplied_token):
+        # The model proposed a write. Nothing runs yet: hold it, issue the token,
+        # and tell the model what to say. The next message from the user confirms
+        # it, and that is what runs it - not the model's wording.
+        try:
+            token = issue_approval_token(user_id, name, ttl_seconds=300)
+        except (RuntimeError, ValueError):
+            # No approval secret configured, so a confirmation could never be
+            # verified. Say so plainly rather than proposing something that can
+            # never be confirmed.
+            return {
+                "ok": False,
+                "code": "APPROVAL_UNAVAILABLE",
+                "message": (
+                    "GitHub changes cannot be confirmed on this deployment because the "
+                    "approval secret is not configured. Tell the user that, and that no "
+                    "change was made."
+                ),
+            }
+        expires_at = (
+            datetime.now(timezone.utc) + timedelta(seconds=300)
+        ).isoformat()
+        save_pending_github_action(
+            user_id,
+            str(arguments.get("conversation_id") or "") or _PENDING_CONVERSATION,
+            _pending_payload({"tool": name, "arguments": arguments, "token": token}),
+            expires_at,
+        )
         return {
             "ok": False,
             "code": "APPROVAL_REQUIRED",
             "message": (
-                "This changes the repository, so it needs your confirmation first. "
-                "Ask me to do it and I will ask you to confirm before anything happens."
+                f"Nothing has been changed yet. Say exactly this to the user, in their "
+                f"language: you will {_WRITE_INTENT.get(name, 'make this change')} in "
+                f"{arguments.get('repository') or 'the repository'}, and ask them to reply "
+                f"CONFIRM to go ahead or CANCEL to stop. Do not claim anything happened."
             ),
         }
 
@@ -294,8 +335,8 @@ async def _execute_github_tool(
     # A write carries the server-issued approval token. The executor validates it
     # against this exact tool, so the model proposing a write is not the same as
     # the write happening - the user has to have confirmed.
-    if name in _WRITE_TOOLS and approval_tokens:
-        payload["approval_token"] = approval_tokens[0]
+    if name in _WRITE_TOOLS and any(_supplied_token):
+        payload["approval_token"] = next(t for t in _supplied_token if t)
 
     result = await run_tool_async(
         name, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), user_id=user_id,
@@ -538,6 +579,50 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
     return f"GitHub returned data for {name}:\n{rendered[:4000]}"
 
 
+_PENDING_CONVERSATION = "github-pending"
+
+_WRITE_INTENT = {
+    "github_create_branch": "create a new branch",
+    "github_delete_branch": "delete the branch",
+    "github_create_pull_request": "open a pull request",
+    "github_merge_pull_request": "merge the pull request",
+}
+
+# A confirmation is short and leads with the word: "ok", "sari", "haudu", or the
+# whole message. "ok create maadu" confirms - it does not have to be the only word,
+# because that is how people actually answer.
+_CONFIRM_RE = re.compile(
+    r"^\s*(?:ok(?:ay)?|k|yes|yep|yeah|ya|sure|confirm(?:ed)?|approve[d]?|go\s*ahead|"
+    r"do\s*it|proceed|"
+    r"haan|ha|sari|sare|hudu|howdu|aaytu|aytu|"
+    r"ಮಾಡು|ಮಾಡಿ|ಸರಿ|ಹೌದು|ಆಯ್ತು|ಆಗಲಿ|ಖಚಿತ)\b",
+    re.IGNORECASE,
+)
+_CANCEL_RE = re.compile(
+    r"^\s*(?:no|nope|cancel|stop|don'?t|do\s*not|abort|never\s*mind|"
+    r"beda|beeda|ille|illa|"
+    r"ಬೇಡ|ಇಲ್ಲ|ನಿಲ್ಲಿಸು|ರದ್ದು)\b",
+    re.IGNORECASE,
+)
+
+
+def _pending_payload(payload: dict[str, Any]) -> bytes:
+    """Encrypt a pending write, so a stored token is never sitting in the clear."""
+    from app.capabilities.integrations import _fernet
+
+    return _fernet().encrypt(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+
+
+def _read_pending_payload(item: dict[str, Any]) -> dict[str, Any]:
+    from app.capabilities.integrations import _fernet
+
+    raw = _fernet().decrypt(bytes(item.get("encrypted_payload") or b"")).decode("utf-8")
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError("pending github action is malformed")
+    return data
+
+
 _WRITE_TOOLS = frozenset({
     "github_create_branch", "github_delete_branch",
     "github_create_pull_request", "github_merge_pull_request",
@@ -549,9 +634,40 @@ async def handle_github_chat_with_tools(
     message: str,
     history: list[tuple[str, str]] | None = None,
     approval_tokens: tuple[str, ...] = (),
+    conversation_id: str | None = None,
 ) -> str | None:
     """Handle recognized GitHub read requests in the authenticated chat flow."""
     user = user_id.strip()
+    if not user:
+        return None
+
+    # A write that was proposed earlier is resolved here, before any parsing:
+    # a bare "ok create maadu" names no repository and no tool, so the parser
+    # would return nothing and the confirmation would be lost.
+    conversation_key = str(conversation_id or "") or _PENDING_CONVERSATION
+    pending = get_pending_github_action(user, conversation_key)
+    if pending is not None:
+        if _CANCEL_RE.search(message or ""):
+            delete_pending_github_action(user, conversation_key)
+            return "Understood - cancelled. Nothing was changed in your GitHub repository."
+        if _CONFIRM_RE.search(message or ""):
+            try:
+                stored = _read_pending_payload(pending)
+            except (ValueError, RuntimeError):
+                delete_pending_github_action(user, conversation_key)
+                return "That confirmation could not be read, so nothing was changed. Ask me again."
+            tool = str(stored.get("tool") or "")
+            stored_arguments = stored.get("arguments")
+            stored_arguments = stored_arguments if isinstance(stored_arguments, dict) else {}
+            stored_arguments["approval_token"] = str(stored.get("token") or "")
+            delete_pending_github_action(user, conversation_key)
+            result = await _execute_github_tool(user, tool, stored_arguments)
+            return _format_github_result(tool, result)
+        return (
+            "You have a GitHub change waiting for your decision: reply CONFIRM to go "
+            "ahead, or CANCEL to stop it. Nothing has been changed yet."
+        )
+
     request = _github_action(message, history)
     if request is None:
         return None
@@ -569,7 +685,7 @@ async def handle_github_chat_with_tools(
         from app.ai.azure_openai_service import generate_azure_function_call_reply
 
         async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
-            return await _execute_github_tool(user, name, arguments)
+            return await _execute_github_tool(user, name, arguments, approval_tokens)
 
         _shared = dict(
             history=history,

@@ -199,3 +199,169 @@ async def github_update_repository_file(
         "operation": "create_file" if create else "update_file",
         "secrets_exposed": False,
     }
+
+
+# ---------------------------------------------------------------------------
+# The rest of the flow: start a branch, open a pull request, merge it, clean up.
+# Every one of these goes through _validate, so approval is required and a
+# repository is always owner/name. Nothing here acts without it.
+# ---------------------------------------------------------------------------
+
+
+async def github_create_branch(
+    user_id: str,
+    repository: str,
+    branch: str,
+    from_ref: str = "",
+    approved: bool = False,
+) -> dict[str, object]:
+    """Create a branch from a ref, so a change can be made without touching main."""
+    user, repo = _validate(user_id, repository, approved)
+    branch_name = _validated_repository_ref(branch)
+    if not branch_name:
+        raise ValueError("branch is required")
+    source = _validated_repository_ref(from_ref) or "HEAD"
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        headers = _github_headers(_github_token(user))
+        # A branch is created from a commit sha, so resolve the ref first.
+        if re.fullmatch(r"[0-9a-fA-F]{40}", source):
+            base_sha = source.lower()
+        else:
+            ref_response = await client.get(
+                f"https://api.github.com/repos/{repo}/git/ref/heads/{quote(source, safe='')}",
+                headers=headers,
+            )
+            ref_response.raise_for_status()
+            ref_body = ref_response.json()
+            ref_object = ref_body.get("object") if isinstance(ref_body, dict) else None
+            ref_object = ref_object if isinstance(ref_object, dict) else {}
+            base_sha = str(ref_object.get("sha") or "")
+            if not re.fullmatch(r"[0-9a-f]{40}", base_sha):
+                raise RuntimeError("could not resolve the source branch to a commit")
+
+        response = await client.post(
+            f"https://api.github.com/repos/{repo}/git/refs",
+            headers=headers,
+            json={"ref": f"refs/heads/{branch_name}", "sha": base_sha},
+        )
+        response.raise_for_status()
+        result = response.json()
+    if not isinstance(result, dict):
+        raise RuntimeError("github provider returned invalid write response")
+    ref_object = result.get("object")
+    ref_object = ref_object if isinstance(ref_object, dict) else {}
+    return {
+        "integration": "github", "user_id": user, "repository": repo,
+        "operation": "create_branch",
+        "result": {"branch": branch_name, "sha": str(ref_object.get("sha") or ""), "from": source},
+        "secrets_exposed": False,
+    }
+
+
+async def github_delete_branch(
+    user_id: str, repository: str, branch: str, approved: bool = False
+) -> dict[str, object]:
+    """Delete a branch - the clean-up after a pull request is merged."""
+    user, repo = _validate(user_id, repository, approved)
+    branch_name = _validated_repository_ref(branch)
+    if not branch_name:
+        raise ValueError("branch is required")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.delete(
+            f"https://api.github.com/repos/{repo}/git/refs/heads/{quote(branch_name, safe='')}",
+            headers=_github_headers(_github_token(user)),
+        )
+        response.raise_for_status()
+    return {
+        "integration": "github", "user_id": user, "repository": repo,
+        "operation": "delete_branch", "result": {"branch": branch_name, "deleted": True},
+        "secrets_exposed": False,
+    }
+
+
+async def github_create_pull_request(
+    user_id: str,
+    repository: str,
+    title: str,
+    head: str,
+    base: str = "main",
+    body: str = "",
+    approved: bool = False,
+) -> dict[str, object]:
+    """Open a pull request from head into base."""
+    user, repo = _validate(user_id, repository, approved)
+    head_ref = _validated_repository_ref(head)
+    base_ref = _validated_repository_ref(base)
+    if not head_ref or not base_ref:
+        raise ValueError("head and base branches are required")
+    if head_ref == base_ref:
+        raise ValueError("head and base must be different branches")
+    payload = {
+        "title": _text(title, "title", 200),
+        "head": head_ref,
+        "base": base_ref,
+        "body": body.strip()[:20000],
+    }
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        response = await client.post(
+            f"{_GITHUB_BASE}/{repo}/pulls",
+            headers=_github_headers(_github_token(user)),
+            json=payload,
+        )
+        response.raise_for_status()
+        result = response.json()
+    if not isinstance(result, dict):
+        raise RuntimeError("github provider returned invalid write response")
+    return {
+        "integration": "github", "user_id": user, "repository": repo,
+        "operation": "create_pull_request",
+        "result": {
+            "number": result.get("number"), "html_url": result.get("html_url"),
+            "title": result.get("title"), "state": result.get("state"),
+            "head": head_ref, "base": base_ref,
+        },
+        "secrets_exposed": False,
+    }
+
+
+async def github_merge_pull_request(
+    user_id: str,
+    repository: str,
+    number: int,
+    method: str = "squash",
+    approved: bool = False,
+) -> dict[str, object]:
+    """Merge a pull request. Squash by default, as the team's own history is squashed."""
+    user, repo = _validate(user_id, repository, approved)
+    if number < 1 or number > 100000000:
+        raise ValueError("pull request number is out of range")
+    normalized_method = method.strip().lower() or "squash"
+    if normalized_method not in {"squash", "merge", "rebase"}:
+        raise ValueError("method must be squash, merge or rebase")
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        response = await client.put(
+            f"{_GITHUB_BASE}/{repo}/pulls/{number}/merge",
+            headers=_github_headers(_github_token(user)),
+            json={"merge_method": normalized_method},
+        )
+        if response.status_code in {405, 409}:
+            # Not mergeable: a conflict, or checks that have not passed. Say so
+            # plainly rather than reporting a generic failure.
+            raise RuntimeError(
+                "the pull request cannot be merged yet - it may have conflicts "
+                "or checks that have not passed"
+            )
+        response.raise_for_status()
+        result = response.json()
+    if not isinstance(result, dict):
+        raise RuntimeError("github provider returned invalid write response")
+    return {
+        "integration": "github", "user_id": user, "repository": repo,
+        "operation": "merge_pull_request",
+        "result": {
+            "number": number, "merged": bool(result.get("merged")),
+            "sha": str(result.get("sha") or ""), "message": str(result.get("message") or ""),
+            "method": normalized_method,
+        },
+        "secrets_exposed": False,
+    }

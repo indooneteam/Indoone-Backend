@@ -22,6 +22,10 @@ from app.capabilities.email_actions import compose_gmail_email
 from app.plugins.gmail.service import reply_gmail_message
 from app.capabilities.phone import build_call_action
 from app.plugins.github.service import (
+    get_github_commit as fetch_github_commit,
+    list_github_branches as fetch_github_branches,
+    list_github_check_runs as fetch_github_check_runs,
+    list_github_pull_request_files as fetch_github_pull_request_files,
     list_github_issues as fetch_github_issues,
     list_github_pull_requests as fetch_github_pull_requests,
     list_github_repositories as fetch_github_repositories,
@@ -31,7 +35,13 @@ from app.plugins.github.service import (
     list_github_repository_commits as fetch_github_repository_commits,
     compare_github_repository_commits as fetch_github_repository_compare,
 )
-from app.plugins.github.writes import github_update_repository_file as commit_github_repository_file
+from app.plugins.github.writes import (
+    github_create_branch as write_github_create_branch,
+    github_create_pull_request as write_github_create_pull_request,
+    github_delete_branch as write_github_delete_branch,
+    github_merge_pull_request as write_github_merge_pull_request,
+    github_update_repository_file as commit_github_repository_file,
+)
 from app.capabilities.google_calendar import (
     create_event as create_google_calendar_event,
     delete_event as delete_google_calendar_event,
@@ -1047,6 +1057,178 @@ async def _task_schedule_build(payload: str) -> str:
     )
 
 
+async def _github_list_branches(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_list_branches payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_list_branches")
+    result = await _run_async(
+        fetch_github_branches(
+            user_id=user_id,
+            repository=str(data.get("repository", "")),
+            per_page=max(1, min(int(data.get("per_page", 30)), 100)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_list_pull_request_files(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_list_pull_request_files payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_list_pull_request_files")
+    result = await _run_async(
+        fetch_github_pull_request_files(
+            user_id=user_id,
+            repository=str(data.get("repository", "")),
+            number=int(data.get("number", 0)),
+            per_page=max(1, min(int(data.get("per_page", 30)), 100)),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_list_check_runs(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_list_check_runs payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_list_check_runs")
+    result = await _run_async(
+        fetch_github_check_runs(
+            user_id=user_id,
+            repository=str(data.get("repository", "")),
+            ref=str(data.get("ref", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_get_commit(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_get_commit payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_get_commit")
+    result = await _run_async(
+        fetch_github_commit(
+            user_id=user_id,
+            repository=str(data.get("repository", "")),
+            sha=str(data.get("sha", "")),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+def _approved_write(data: dict[str, object], user_id: str, tool: str) -> bool:
+    """A write runs only with a server-issued approval token for this exact tool.
+
+    The model proposes; the user confirms; the backend issues the token. Without
+    it the tool refuses, so a hallucinated call cannot change a repository.
+    """
+    token = str(data.get("approval_token", "")).strip()
+    return bool(validate_approval_token(token, user_id, tool))
+
+
+async def _github_create_branch(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_create_branch payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_create_branch")
+    result = await _run_async(
+        write_github_create_branch(
+            user_id=user_id,
+            repository=str(data.get("repository", "")),
+            branch=str(data.get("branch", "")),
+            from_ref=str(data.get("from_ref", "")),
+            approved=_approved_write(data, user_id, "github_create_branch"),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_delete_branch(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_delete_branch payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_delete_branch")
+    result = await _run_async(
+        write_github_delete_branch(
+            user_id=user_id,
+            repository=str(data.get("repository", "")),
+            branch=str(data.get("branch", "")),
+            approved=_approved_write(data, user_id, "github_delete_branch"),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_create_pull_request(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_create_pull_request payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_create_pull_request")
+    result = await _run_async(
+        write_github_create_pull_request(
+            user_id=user_id,
+            repository=str(data.get("repository", "")),
+            title=str(data.get("title", "")),
+            head=str(data.get("head", "")),
+            base=str(data.get("base", "main")) or "main",
+            body=str(data.get("body", "")),
+            approved=_approved_write(data, user_id, "github_create_pull_request"),
+        ),
+        spec.timeout_seconds if spec else 20.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
+async def _github_merge_pull_request(payload: str) -> str:
+    data = json.loads(payload)
+    if not isinstance(data, dict):
+        raise ValueError("github_merge_pull_request payload must be an object")
+    user_id = str(data.get("user_id", "")).strip()
+    if not user_id:
+        raise ValueError("user_id is required")
+    spec = get_tool_spec("github_merge_pull_request")
+    result = await _run_async(
+        write_github_merge_pull_request(
+            user_id=user_id,
+            repository=str(data.get("repository", "")),
+            number=int(data.get("number", 0)),
+            method=str(data.get("method", "squash")) or "squash",
+            approved=_approved_write(data, user_id, "github_merge_pull_request"),
+        ),
+        spec.timeout_seconds if spec else 30.0,
+    )
+    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+
+
 TOOLS: dict[str, ToolCallable] = {
     "calculator": _calculate,
     "text_stats": _text_stats,
@@ -1061,6 +1243,14 @@ TOOLS: dict[str, ToolCallable] = {
     "phone_call_contact": _phone_call_contact,
     "gmail_search": _gmail_search,
     "github_list_repositories": _github_list_repositories,
+    "github_list_branches": _github_list_branches,
+    "github_list_pull_request_files": _github_list_pull_request_files,
+    "github_list_check_runs": _github_list_check_runs,
+    "github_get_commit": _github_get_commit,
+    "github_create_branch": _github_create_branch,
+    "github_delete_branch": _github_delete_branch,
+    "github_create_pull_request": _github_create_pull_request,
+    "github_merge_pull_request": _github_merge_pull_request,
     "github_list_assigned_issues": _github_list_assigned_issues,
     "github_list_pull_requests": _github_list_pull_requests,
     "github_list_repository_contents": _github_list_repository_contents,

@@ -183,6 +183,23 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
         or re.search(r"\bh?olag(?:e|ade)\b|\ben\s+(?:ide|ede)\b|\benu\s+(?:ide|ede)\b|\benella\s+(?:ide|ede)\b", text, re.IGNORECASE)
     )
 
+    # A commit is a write, and it must be routed BEFORE the file-read intent -
+    # otherwise a path in the message ("a.py file commit madi") is read as a
+    # request to READ that file, and the commit is never offered.
+    if re.search(
+        r"\b(commit|committed|save\s+the\s+change|push\s+the\s+change)\b"
+        r"|\b(commit\s+madi|commit\s+maadi|commit\s+madu)\b"
+        r"|ಕಮಿಟ್|ಉಳಿಸು|ಜಮೆ",
+        text, re.IGNORECASE,
+    ) and re.search(r"\b(file|files|change|changes|update|edit)\b|ಫೈಲ್|ಬದಲಾವಣೆ", text, re.IGNORECASE):
+        if not path:
+            return "Which file should I commit? Provide its path, for example README.md."
+        return "github_update_repository_file", {
+            "repository": repository, "repository_hint": repository_hint,
+            "path": path, "content": "", "message": "", "expected_sha": "",
+            "branch": _branch_name(text), "create": False,
+        }
+
     if search_intent:
         quoted = re.search(r'["\']([^"\']{1,256})["\']', text)
         query = quoted.group(1).strip() if quoted else ""
@@ -262,7 +279,7 @@ async def _execute_github_tool(
         "github_list_branches", "github_list_pull_request_files", "github_list_check_runs",
         "github_get_commit",
         "github_create_branch", "github_delete_branch", "github_create_pull_request",
-        "github_merge_pull_request",
+        "github_merge_pull_request", "github_update_repository_file",
     }
     if name not in allowed:
         return {"ok": False, "code": "UNKNOWN_TOOL", "message": "This GitHub action is not available."}

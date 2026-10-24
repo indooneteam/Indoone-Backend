@@ -892,3 +892,48 @@ def delete_channel_rule(user_id: str, rule_id: str) -> bool:
         )
         db.commit()
     return cursor.rowcount > 0
+
+
+# --------------------------------------------------------------------------- #
+# The same pending mechanism, for a GitHub write.
+# --------------------------------------------------------------------------- #
+# A GitHub write cannot run on the model's word alone: the user has to confirm.
+# This reuses the one pending store rather than adding a second table, and the
+# integration_id tells the two apart when a conversation is resolved.
+
+_PENDING_GITHUB_INTEGRATION = "github"
+_PENDING_GITHUB_ACTION = "github_write"
+
+
+def save_pending_github_action(
+    user_id: str,
+    conversation_id: str,
+    encrypted_payload: bytes,
+    expires_at: str,
+) -> None:
+    """Store one encrypted GitHub write awaiting the user's confirmation."""
+    save_pending_email_action(
+        user_id,
+        conversation_id,
+        _PENDING_GITHUB_INTEGRATION,
+        _PENDING_GITHUB_ACTION,
+        encrypted_payload,
+        expires_at,
+    )
+
+
+def get_pending_github_action(user_id: str, conversation_id: str) -> dict[str, Any] | None:
+    """The GitHub write waiting on this conversation, if any."""
+    item = get_pending_email_action(user_id, conversation_id)
+    if item is None:
+        return None
+    if str(item.get("integration_id") or "").casefold() != _PENDING_GITHUB_INTEGRATION:
+        return None
+    return item
+
+
+def delete_pending_github_action(user_id: str, conversation_id: str) -> bool:
+    """Drop a pending GitHub write - after it runs, or after a cancel."""
+    if get_pending_github_action(user_id, conversation_id) is None:
+        return False
+    return delete_pending_email_action(user_id, conversation_id)

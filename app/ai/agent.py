@@ -10,6 +10,7 @@ from typing import Any, Iterable
 from app.ai.agent_contracts import serialize_tool_result
 from app.ai.agent_policy import deadline_failure, remaining_budget, should_retry
 from app.ai.approval import decide_tool
+from app.ai.coding import build_code_tool_payload
 from app.ai.orchestrator import Plan, plan_request
 from app.ai.tool_registry import get_tool_spec, tool_names
 from app.ai.tools import ToolResult, run_tool
@@ -24,6 +25,8 @@ MAX_AGENT_RUNTIME_SECONDS = 15.0
 MAX_AGENT_APPROVAL_TOKENS = 16
 ALLOWED_AGENT_TOOLS = tool_names()
 _CHAIN_REFERENCE_PATTERN = re.compile(r"(?<!\w)\$(?:last|result\d+)(?!\w)")
+# The coding executors take a JSON {language, code} payload, not a bare string.
+_CODING_TOOLS = frozenset({"sandbox_execution", "code_transform", "code_fix_suggestions", "code_analysis"})
 
 @dataclass(frozen=True)
 class AgentStep:
@@ -53,7 +56,11 @@ def _extract_explicit_requests(message: str) -> list[tuple[int, str, str]]:
     matches: list[tuple[int, str, str]] = []
     for tool, pattern in patterns:
         for match in re.finditer(pattern, message, re.IGNORECASE | re.DOTALL):
-            matches.append((match.start(), tool, match.group(1).strip()))
+            payload = match.group(1).strip()
+            # The pattern captures bare code; the coding tools need {language, code}.
+            if tool in _CODING_TOOLS:
+                payload = build_code_tool_payload(payload)
+            matches.append((match.start(), tool, payload))
     matches.sort(key=lambda item: item[0])
     return matches[:MAX_AGENT_STEPS]
 

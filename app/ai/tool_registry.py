@@ -78,6 +78,16 @@ _CONTACT_ITEM = {
     },
 }
 
+# The coding executors (app/ai/coding.py, app/ai/code_sandbox.py) take a JSON
+# payload of {language, code} -- never a bare code string -- so every coding
+# tool declares `language` and sends it as JSON. The list mirrors
+# app.ai.coding.SUPPORTED_LANGUAGES.
+_CODE_LANGUAGE = {
+    "type": "STRING",
+    "description": "Language of the code.",
+    "enum": ["python", "javascript", "typescript", "java", "kotlin", "c", "cpp", "go", "rust", "bash", "sql"],
+}
+
 
 # --------------------------------------------------------------------------- #
 # The catalogue
@@ -113,29 +123,54 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ToolSpec(
         "code_analysis",
         "Perform safe static code analysis.",
-        parameters=_object({"code": {"type": "STRING", "description": "Source code to analyze."}}, ("code",)),
-        payload_style="text",
+        parameters=_object(
+            {
+                "language": _CODE_LANGUAGE,
+                "code": {"type": "STRING", "description": "Source code to analyze."},
+            },
+            ("language", "code"),
+        ),
         categories=("coding",),
     ),
     ToolSpec(
         "code_fix_suggestions",
         "Produce static repair guidance for code.",
-        parameters=_object({"code": {"type": "STRING", "description": "Source code to repair."}}, ("code",)),
-        payload_style="text",
+        parameters=_object(
+            {
+                "language": _CODE_LANGUAGE,
+                "code": {"type": "STRING", "description": "Source code to repair."},
+            },
+            ("language", "code"),
+        ),
         categories=("coding",),
     ),
     ToolSpec(
         "code_transform",
         "Apply deterministic code transformations.",
-        parameters=_object({"code": {"type": "STRING", "description": "Source code to transform."}}, ("code",)),
-        payload_style="text",
+        parameters=_object(
+            {
+                "language": _CODE_LANGUAGE,
+                "code": {"type": "STRING", "description": "Source code to transform."},
+                "operation": {
+                    "type": "STRING",
+                    "description": "Transformation to apply. Defaults to normalize.",
+                    "enum": ["normalize", "strip_trailing_whitespace", "ensure_final_newline"],
+                },
+            },
+            ("language", "code"),
+        ),
         categories=("coding",),
     ),
     ToolSpec(
         "sandbox_execution",
         "Execute guarded code in the sandbox.",
-        parameters=_object({"code": {"type": "STRING", "description": "Code to run in the sandbox."}}, ("code",)),
-        payload_style="text",
+        parameters=_object(
+            {
+                "language": _CODE_LANGUAGE,
+                "code": {"type": "STRING", "description": "Code to run in the sandbox."},
+            },
+            ("language", "code"),
+        ),
         risk="execution",
         requires_approval=True,
         categories=("coding", "execution"),

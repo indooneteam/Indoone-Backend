@@ -149,9 +149,25 @@ async def _execute_github_tool(
         "github_list_repositories", "github_list_assigned_issues", "github_list_pull_requests",
         "github_list_repository_contents", "github_read_repository_file", "github_search_repository_code",
         "github_list_repository_commits", "github_compare_repository_commits",
+        # The rest of the flow. Without these in the list the model is handed no
+        # branch or pull-request tool here and answers that it cannot see them,
+        # which is exactly what it was doing.
+        "github_list_branches", "github_list_pull_request_files", "github_list_check_runs",
+        "github_get_commit",
+        "github_create_branch", "github_delete_branch", "github_create_pull_request",
+        "github_merge_pull_request",
     }
     if name not in allowed:
         return {"ok": False, "code": "UNKNOWN_TOOL", "message": "This GitHub action is not available."}
+    if name in _WRITE_TOOLS and not approval_tokens:
+        return {
+            "ok": False,
+            "code": "APPROVAL_REQUIRED",
+            "message": (
+                "This changes the repository, so it needs your confirmation first. "
+                "Ask me to do it and I will ask you to confirm before anything happens."
+            ),
+        }
 
     payload: dict[str, Any] = {
         "user_id": user_id,
@@ -161,6 +177,9 @@ async def _execute_github_tool(
     repository_actions = {
         "github_list_pull_requests", "github_list_repository_contents", "github_read_repository_file",
         "github_search_repository_code", "github_list_repository_commits", "github_compare_repository_commits",
+        "github_list_branches", "github_list_pull_request_files", "github_list_check_runs",
+        "github_get_commit", "github_create_branch", "github_delete_branch",
+        "github_create_pull_request", "github_merge_pull_request",
     }
     if name in repository_actions:
         repository = str(arguments.get("repository") or "").strip()
@@ -217,12 +236,48 @@ async def _execute_github_tool(
         payload["query"] = query
     elif name == "github_list_repository_commits":
         payload["path"] = str(arguments.get("path") or "")
+    elif name == "github_list_branches":
+        payload["per_page"] = max(1, min(int(arguments.get("per_page", 30)), 100))
+    elif name == "github_list_pull_request_files":
+        payload.update({
+            "number": int(arguments.get("number", 0)),
+            "per_page": max(1, min(int(arguments.get("per_page", 30)), 100)),
+        })
+    elif name == "github_list_check_runs":
+        payload["ref"] = str(arguments.get("ref") or "")
+    elif name == "github_get_commit":
+        payload["sha"] = str(arguments.get("sha") or "")
+    elif name == "github_create_branch":
+        payload.update({
+            "branch": str(arguments.get("branch") or ""),
+            "from_ref": str(arguments.get("from_ref") or ""),
+        })
+    elif name == "github_delete_branch":
+        payload["branch"] = str(arguments.get("branch") or "")
+    elif name == "github_create_pull_request":
+        payload.update({
+            "title": str(arguments.get("title") or ""),
+            "head": str(arguments.get("head") or ""),
+            "base": str(arguments.get("base") or "main"),
+            "body": str(arguments.get("body") or ""),
+        })
+    elif name == "github_merge_pull_request":
+        payload.update({
+            "number": int(arguments.get("number", 0)),
+            "method": str(arguments.get("method") or "squash"),
+        })
     elif name == "github_compare_repository_commits":
         base = str(arguments.get("base") or "").strip()
         head = str(arguments.get("head") or "").strip()
         if not base or not head:
             return {"ok": False, "code": "COMPARE_REFS_REQUIRED", "message": "Provide both branch or commit references, for example main and develop."}
         payload.update({"base": base, "head": head})
+
+    # A write carries the server-issued approval token. The executor validates it
+    # against this exact tool, so the model proposing a write is not the same as
+    # the write happening - the user has to have confirmed.
+    if name in _WRITE_TOOLS and approval_tokens:
+        payload["approval_token"] = approval_tokens[0]
 
     result = await run_tool_async(
         name, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), user_id=user_id,
@@ -337,10 +392,17 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
     return "GitHub request completed."
 
 
+_WRITE_TOOLS = frozenset({
+    "github_create_branch", "github_delete_branch",
+    "github_create_pull_request", "github_merge_pull_request",
+})
+
+
 async def handle_github_chat_with_tools(
     user_id: str,
     message: str,
     history: list[tuple[str, str]] | None = None,
+    approval_tokens: tuple[str, ...] = (),
 ) -> str | None:
     """Handle recognized GitHub read requests in the authenticated chat flow."""
     user = user_id.strip()

@@ -597,12 +597,17 @@ async def handle_email_chat_with_tools(
     if not EMAIL_CONTEXT_RE.search(text) and not has_recent_email_context:
         return None
 
-    # Keep the local-model fallback available; Gemini is used only when explicitly selected.
+    # Keep the local-model fallback available; Gemini or Azure handles the tools.
     import os
-    if os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() != "gemini":
+    _model_backend = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold()
+    if _model_backend not in {"gemini", "azure"}:
         return await handle_email_chat(user, conversation, text)
 
-    from app.ai.gemini_service import generate_gemini_function_call_reply
+    from app.ai.gemini_service import (
+        generate_gemini_function_call_reply,
+        run_with_provider_fallback,
+    )
+    from app.ai.azure_openai_service import generate_azure_function_call_reply
 
     write_tools = {
         "create_email_draft",
@@ -649,7 +654,7 @@ async def handle_email_chat_with_tools(
             }
         return result
 
-    model_reply = await generate_gemini_function_call_reply(
+    _shared = dict(
         text,
         history=history,
         tool_declarations=EMAIL_TOOL_DECLARATIONS,
@@ -666,6 +671,11 @@ async def handle_email_chat_with_tools(
             "which only creates a pending confirmation. Never claim a message was sent or deleted until a later confirmed action reports success. "
             "If a tool returns an error, explain its message honestly and ask for only the needed next step."
         ),
+    )
+    _azure_first = _model_backend == "azure"
+    model_reply = await run_with_provider_fallback(
+        lambda: (generate_azure_function_call_reply if _azure_first else generate_gemini_function_call_reply)(text, **_shared),
+        lambda: (generate_gemini_function_call_reply if _azure_first else generate_azure_function_call_reply)(text, **_shared),
     )
     if pending_send is not None:
         if pending_send.get("is_reply") == "true":

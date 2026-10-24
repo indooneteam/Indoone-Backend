@@ -289,6 +289,139 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         connector_id="github",
         capability="repos.read",
     ),
+    # ---- GitHub: the rest of the flow ------------------------------------- #
+    # Reading a branch, a pull request's files, the checks and one commit. These
+    # are read-only, so they need no approval and belong in the list the model may
+    # call on its own.
+    ToolSpec(
+        "github_list_branches",
+        "List a repository's branches, so work can be started from the right one.",
+        parameters=_object(
+            {
+                "repository": {"type": "STRING", "description": "Repository as owner/name."},
+                "per_page": {"type": "INTEGER", "description": "Number of branches, 1 through 100."},
+            },
+            required=("repository",),
+        ),
+        categories=("github", "external"),
+        connector_id="github",
+        capability="repos.read",
+    ),
+    ToolSpec(
+        "github_list_pull_request_files",
+        "The diff of a pull request: which files changed, how much, and the patch for each.",
+        parameters=_object(
+            {
+                "repository": {"type": "STRING", "description": "Repository as owner/name."},
+                "number": {"type": "INTEGER", "description": "Pull request number."},
+                "per_page": {"type": "INTEGER", "description": "Number of files, 1 through 100."},
+            },
+            ("repository", "number"),
+        ),
+        categories=("github", "external"),
+        connector_id="github",
+        capability="repos.read",
+    ),
+    ToolSpec(
+        "github_list_check_runs",
+        "The CI status for a branch or commit, so a change is not merged before it is green. Reports an overall conclusion: success, failure, running or none.",
+        parameters=_object(
+            {
+                "repository": {"type": "STRING", "description": "Repository as owner/name."},
+                "ref": {"type": "STRING", "description": "Branch name or commit sha. Omit for the default branch."},
+            },
+            required=("repository",),
+        ),
+        categories=("github", "external"),
+        connector_id="github",
+        capability="repos.read",
+    ),
+    ToolSpec(
+        "github_get_commit",
+        "One commit: its message, author, and the files it touched with their patches.",
+        parameters=_object(
+            {
+                "repository": {"type": "STRING", "description": "Repository as owner/name."},
+                "sha": {"type": "STRING", "description": "The commit id, 7 to 40 hex characters."},
+            },
+            ("repository", "sha"),
+        ),
+        categories=("github", "external"),
+        connector_id="github",
+        capability="repos.read",
+    ),
+    # ---- GitHub: the writes the model may propose ------------------------- #
+    # Each of these changes a repository, so requires_approval is set. The model
+    # proposes; the user confirms. They are never reached without it.
+    ToolSpec(
+        "github_create_branch",
+        "Create a branch from a ref, so a change can be made without touching the default branch. Requires the user's explicit approval.",
+        parameters=_object(
+            {
+                "repository": {"type": "STRING", "description": "Repository as owner/name."},
+                "branch": {"type": "STRING", "description": "The new branch name."},
+                "from_ref": {"type": "STRING", "description": "Branch or commit to start from. Defaults to the default branch."},
+            },
+            ("repository", "branch"),
+        ),
+        risk="write",
+        requires_approval=True,
+        categories=("github", "external", "write"),
+        connector_id="github",
+        capability="repos.write",
+    ),
+    ToolSpec(
+        "github_delete_branch",
+        "Delete a branch, the clean-up after a pull request is merged. Requires the user's explicit approval.",
+        parameters=_object(
+            {
+                "repository": {"type": "STRING", "description": "Repository as owner/name."},
+                "branch": {"type": "STRING", "description": "The branch to delete."},
+            },
+            ("repository", "branch"),
+        ),
+        risk="write",
+        requires_approval=True,
+        categories=("github", "external", "write"),
+        connector_id="github",
+        capability="repos.write",
+    ),
+    ToolSpec(
+        "github_create_pull_request",
+        "Open a pull request from one branch into another. Requires the user's explicit approval.",
+        parameters=_object(
+            {
+                "repository": {"type": "STRING", "description": "Repository as owner/name."},
+                "title": {"type": "STRING", "description": "The pull request title."},
+                "head": {"type": "STRING", "description": "The branch with the change."},
+                "base": {"type": "STRING", "description": "The branch to merge into. Defaults to main."},
+                "body": {"type": "STRING", "description": "The description."},
+            },
+            ("repository", "title", "head"),
+        ),
+        risk="write",
+        requires_approval=True,
+        categories=("github", "external", "write"),
+        connector_id="github",
+        capability="repos.write",
+    ),
+    ToolSpec(
+        "github_merge_pull_request",
+        "Merge a pull request, squash by default. Only when its checks are green. Requires the user's explicit approval.",
+        parameters=_object(
+            {
+                "repository": {"type": "STRING", "description": "Repository as owner/name."},
+                "number": {"type": "INTEGER", "description": "The pull request number."},
+                "method": {"type": "STRING", "enum": ["squash", "merge", "rebase"], "description": "Merge method. Defaults to squash."},
+            },
+            ("repository", "number"),
+        ),
+        risk="write",
+        requires_approval=True,
+        categories=("github", "external", "write"),
+        connector_id="github",
+        capability="repos.write",
+    ),
     ToolSpec(
         "github_list_assigned_issues",
         "List open issues assigned to the authenticated GitHub user.",
@@ -903,6 +1036,21 @@ def function_declarations(
 # the schema can never drift from the spec.
 GITHUB_TOOL_DECLARATIONS: list[dict[str, Any]] = function_declarations(
     connector_id="github", read_only=True
+)
+
+
+# The GitHub writes the model may propose. requires_approval is set on each spec,
+# so function_declarations(read_only=True) above cannot pick them up by accident:
+# they live in their own list and are only ever reached through the approval path.
+GITHUB_WRITE_TOOL_DECLARATIONS: list[dict[str, Any]] = function_declarations(
+    names=(
+        "github_create_branch",
+        "github_delete_branch",
+        "github_create_pull_request",
+        "github_merge_pull_request",
+    ),
+    connector_id="github",
+    read_only=False,
 )
 
 

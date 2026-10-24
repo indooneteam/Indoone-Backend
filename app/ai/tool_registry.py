@@ -1048,6 +1048,10 @@ GITHUB_WRITE_TOOL_DECLARATIONS: list[dict[str, Any]] = function_declarations(
         "github_delete_branch",
         "github_create_pull_request",
         "github_merge_pull_request",
+        # The commit is the middle of the flow. Its spec and executor existed but
+        # it was in neither declaration list, so the model was never offered it -
+        # the app could make a branch and open a pull request with nothing in it.
+        "github_update_repository_file",
     ),
     connector_id="github",
     read_only=False,

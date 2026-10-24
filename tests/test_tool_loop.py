@@ -255,3 +255,29 @@ def test_tool_declarations_skip_connectors_the_user_has_not_connected(monkeypatc
     assert "canva_list_designs" not in names
     # Without a user context the whole catalogue is returned.
     assert len(tool_loop.model_tool_declarations()) > len(names)
+
+
+def test_a_festival_question_gets_the_tools():
+    """A festival's date is year-specific, so it is a current-information question.
+
+    Before this, a festival question carried no tools, the model had no way to look
+    the date up, and it answered that it did not know.
+    """
+    from app.ai.tool_loop import needs_tools
+
+    for question in (
+        "ivattu yava habba ide",
+        "when is diwali this year",
+        "deepavali date 2026",
+        "ಇವತ್ತು ಯಾವ ಹಬ್ಬ ಇದೆ",
+        "ಶುಭ ಮುಹೂರ್ತ ಯಾವಾಗ",
+    ):
+        assert needs_tools(question) is True, question
+
+
+def test_the_festival_words_are_in_the_hint_list():
+    from app.ai.tool_loop import _TOOL_HINTS
+
+    for word in ("festival", "holiday", "deepavali", "diwali", "dasara", "ugadi",
+                 "sankranti", "puja", "muhurta", "habba", "ಹಬ್ಬ", "ದೀಪಾವಳಿ", "ಪೂಜೆ"):
+        assert word in _TOOL_HINTS, word

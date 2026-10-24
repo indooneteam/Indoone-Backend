@@ -115,9 +115,28 @@ _TOOL_HINTS = (
     "calendar", "event", "meeting", "schedule",
     "drive", "folder", "photo", "youtube", "video", "instagram", "facebook",
     "canva", "design", "post",
+    # A festival's date is year-specific, so these are current-information
+    # questions, not evergreen ones: the answer changes every year and the model
+    # must be given the tool catalogue to look it up.
+    "festival", "festivals", "holiday", "holidays", "deepavali", "diwali",
+    "dasara", "dussehra", "navratri", "ugadi", "yugadi", "sankranti",
+    "pongal", "onam", "ganesh", "chaturthi", "navami", "ekadashi", "purnima",
+    "amavasya", "puja", "pooja", "muhurta", "muhurtam", "panchang", "tithi",
+    "rahu", "shubha", "auspicious", "vrat", "vrata", "fasting", "eclipse",
+    # Romanised Kannada/Tamil/Hindi spellings, because that is how these are
+    # typed in chat: "ivattu yava habba ide" must reach the tools too.
+    "habba", "habbada", "parva", "parvada", "deepavali", "dipavali", "dassara",
+    "yugadi", "sankranthi", "pongal", "ganesh", "chaturthi", "pooja", "poojai",
+    "muhurtha", "muhurtam", "panchanga", "thithi", "amavase", "hunnime",
+    "ekadashi", "upavasa", "grahana", "shubhamuhurta",
     "check", "search", "find", "list", "show", "summar", "delete", "connect",
     "ಮೇಲ್", "ಇಮೇಲ್", "ಇನ್‌ಬಾಕ್ಸ್", "ಇನ್ಬಾಕ್ಸ್", "ಕಳುಹಿಸ", "ಓದ", "ನೋಡ",
     "ರೆಪೊ", "ಕಮಿಟ್", "ಇಷ್ಯೂ", "ಕ್ಯಾಲೆಂಡರ್", "ಫೋಟೋ", "ವಿಡಿಯೋ",
+    "ಹಬ್ಬ", "ಹಬ್ಬಗಳ", "ಪರ್ವ", "ದೀಪಾವಳಿ", "ದಸರಾ", "ಯುಗಾದಿ", "ಉಗಾದಿ",
+    "ಸಂಕ್ರಾಂತಿ", "ಪೊಂಗಲ್", "ಗಣೇಶ", "ಪೂಜೆ", "ಪೂಜಾ", "ಮುಹೂರ್ತ", "ಪಂಚಾಂಗ",
+    "ತಿಥಿ", "ಶುಭ", "ಅಮಾಸೆ", "ಹುಣ್ಣಿಮೆ", "ಏಕಾದಶಿ", "ಉಪವಾಸ", "ಗ್ರಹಣ",
+    "पूजा", "हब्बा", "त्योहार", "त्यौहार", "दीपावली", "दिवाली", "दशहरा",
+    "नवरात्रि", "मुहूर्त", "पंचांग", "तिथि", "व्रत", "एकादशी", "ग्रहण",
 ) + INDIC_MAIL_WORDS + INDIC_SEND_WORDS
 
 

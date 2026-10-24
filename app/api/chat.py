@@ -384,6 +384,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                         user_id,
                         body.message,
                         history=history,
+                        approval_tokens=tuple(body.approval_tokens or ()),
                     )
 
         if tool_reply is not None:

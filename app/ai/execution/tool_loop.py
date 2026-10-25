@@ -27,6 +27,7 @@ from app.ai.gateway.ai_rules import (
 )
 from app.ai.execution.tool_registry import (
     EMAIL_TOOL_DECLARATIONS,
+    SEARCH_WEB_DECLARATION,
     GITHUB_TOOL_DECLARATIONS,
     TOOL_SPECS,
     get_tool_spec,
@@ -87,23 +88,6 @@ def email_read_tool_declarations() -> list[dict[str, Any]]:
         for declaration in EMAIL_TOOL_DECLARATIONS
         if declaration.get("name") not in _EMAIL_WRITE_TOOLS
     ]
-
-# Web search is not a registry tool (it returns evidence, not a resource), so it
-# is declared here and dispatched to the keyless public-research provider.
-_SEARCH_WEB_DECLARATION: dict[str, Any] = {
-    "name": "search_web",
-    "description": (
-        "Search public web sources only when the user needs current or recent facts, "
-        "latest news, prices, or availability, or explicitly asks for online research. "
-        "Do not use it for stable evergreen questions. Never search private data such as "
-        "email addresses, passwords, API keys, access tokens, or secrets."
-    ),
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {"query": {"type": "STRING", "description": "A concise public web query."}},
-        "required": ["query"],
-    },
-}
 
 def _gemini_backend_enabled() -> bool:
     return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "gemini"
@@ -168,7 +152,7 @@ def model_tool_declarations(
         declarations += [dict(item) for item in EMAIL_TOOL_DECLARATIONS if str(item["name"]) in wanted_names]
 
     if wanted_names is None or "search_web" in wanted_names:
-        declarations.append(dict(_SEARCH_WEB_DECLARATION))
+        declarations.append(dict(SEARCH_WEB_DECLARATION))
     return declarations
 
 

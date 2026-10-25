@@ -87,6 +87,27 @@ _CODE_LANGUAGE = {
 # The catalogue
 # --------------------------------------------------------------------------- #
 
+# Web search is not a registry ToolSpec: it returns evidence rather than a resource and
+# is dispatched by the tool loop to the public-research provider. Its declaration still
+# lives here, because this module is the one place a tool is described - and because
+# discovery has to be able to find it.
+SEARCH_WEB_DECLARATION: dict[str, Any] = {
+    "name": "search_web",
+    "description": (
+        "Search public web sources only when the user needs current or recent facts, "
+        "today's date or a date that changes every year (a festival, holiday or muhurta), "
+        "latest news, prices, or availability, or explicitly asks for online research. "
+        "Do not use it for stable evergreen questions. Never search private data such as "
+        "email addresses, passwords, API keys, access tokens, or secrets."
+    ),
+    "parameters": {
+        "type": "OBJECT",
+        "properties": {"query": {"type": "STRING", "description": "A concise public web query."}},
+        "required": ["query"],
+    },
+}
+
+
 TOOL_SPECS: tuple[ToolSpec, ...] = (
     # ---- discovery -------------------------------------------------------- #
     # The catalogue is no longer sent whole: the model gets a handful of tools and this
@@ -107,7 +128,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     # ---- local reasoning / text ------------------------------------------ #
     ToolSpec(
         "calculator",
-        "Evaluate safe numeric arithmetic.",
+        "Calculate the value of an arithmetic expression.",
         parameters=_object(
             {"expression": {"type": "STRING", "description": "Arithmetic expression, e.g. 12*(3+4)."}},
             ("expression",),
@@ -144,7 +165,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         "code_fix_suggestions",
-        "Produce static repair guidance for code.",
+        "Suggest fixes for code problems found by static analysis.",
         parameters=_object(
             {
                 "language": _CODE_LANGUAGE,
@@ -504,7 +525,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     # ---- Local helpers ---------------------------------------------------- #
     ToolSpec(
         "data_analysis",
-        "Summarize CSV, JSON, or TSV data: row count, numeric statistics, duplicates.",
+        "Analyze a dataset in CSV, JSON, or TSV: row count, numeric statistics, duplicates.",
         parameters=_object(
             {
                 "content": {"type": "STRING", "description": "The CSV/JSON/TSV text."},

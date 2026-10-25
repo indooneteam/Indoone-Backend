@@ -19,13 +19,20 @@ says it.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-from app.ai.execution.tool_registry import EMAIL_TOOL_DECLARATIONS, TOOL_SPECS
+from app.ai.execution.tool_registry import EMAIL_TOOL_DECLARATIONS, SEARCH_WEB_DECLARATION, TOOL_SPECS
 
 DEFAULT_LIMIT = 5
+
+# A query scores the sum of the weights of the words it matches. Below this it is not
+# a tool request at all - "explain what a pull request is" shares words with five
+# GitHub tools, but only the common ones, and the sum stays under the line. Tuned on
+# data/eval/tool_selection.jsonl; the gate in the tests keeps it honest.
+MIN_SCORE = 4.0
 
 # Words that carry no capability. Kept short and English-only: the query is written by
 # the model, and it writes English, so this list does not have to cover a language.
@@ -59,6 +66,12 @@ def _tokens(text: str) -> list[str]:
             continue
         if len(word) > 3 and word.endswith("s"):
             word = word[:-1]
+        # analyse / analyze, summarise / summarize: the user's spelling and the tool's
+        # description should not have to agree for a search to work.
+        if len(word) > 5 and word.endswith("ise"):
+            word = word[:-3] + "ize"
+        elif len(word) > 5 and word.endswith("yse"):
+            word = word[:-3] + "yze"
         if word:
             words.append(word)
     return words
@@ -92,7 +105,8 @@ def _catalogue(extra_declarations: Iterable[dict[str, Any]] = ()) -> list[_Entry
         for spec in TOOL_SPECS
         if getattr(spec, "model_facing", True)
     ]
-    for declaration in list(EMAIL_TOOL_DECLARATIONS) + list(extra_declarations):
+    declarations = [SEARCH_WEB_DECLARATION] + list(EMAIL_TOOL_DECLARATIONS) + list(extra_declarations)
+    for declaration in declarations:
         name = str(declaration.get("name") or "").strip()
         if name:
             entries.append(
@@ -111,14 +125,26 @@ def score_tools(
     wanted = _tokens(query)
     if not wanted:
         return []
+    catalogue = _catalogue(extra_declarations)
+    total = len(catalogue) or 1
+    # A word that appears in most descriptions separates nothing, so it is worth
+    # little; a word only one tool uses is worth a lot. Without this, "pull" and
+    # "request" make "explain what a pull request is" look like a GitHub request.
+    weights: dict[str, float] = {}
+    for token in wanted:
+        document_frequency = sum(
+            1 for entry in catalogue if token in entry.name_tokens or token in entry.text_tokens
+        )
+        weights[token] = math.log(1.0 + total / (1.0 + document_frequency))
     scored: list[tuple[str, float]] = []
-    for entry in _catalogue(extra_declarations):
+    for entry in catalogue:
         score = 0.0
         for token in wanted:
+            weight = weights[token]
             if token in entry.name_tokens:
-                score += 3.0
+                score += 2.0 * weight
             elif token in entry.text_tokens:
-                score += 1.0
+                score += weight
         if score > 0:
             scored.append((entry.name, score))
     scored.sort(key=lambda item: (-item[1], item[0]))
@@ -133,7 +159,11 @@ def search_tool_names(
 ) -> list[str]:
     """The names of the tools worth offering for this query, best first."""
 
-    return [name for name, _ in score_tools(query, extra_declarations=extra_declarations)[: max(1, limit)]]
+    return [
+        name
+        for name, score in score_tools(query, extra_declarations=extra_declarations)[: max(1, limit)]
+        if score >= MIN_SCORE
+    ]
 
 
 def tool_description(name: str, extra_declarations: Iterable[dict[str, Any]] = ()) -> str:

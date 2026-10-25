@@ -1,0 +1,151 @@
+{"id": "sel-0001", "language": "en", "message": "list my github repositories", "query": "list github repositories", "expected": "github_list_repositories"}
+{"id": "sel-0002", "language": "en", "message": "which repos do I have on github", "query": "list github repositories", "expected": "github_list_repositories"}
+{"id": "sel-0003", "language": "kn", "message": "ನನ್ನ ಗಿಟ್‌ಹಬ್ ರೆಪೊಗಳನ್ನು ತೋರಿಸು", "query": "list github repositories", "expected": "github_list_repositories"}
+{"id": "sel-0004", "language": "hi", "message": "मेरे github repositories दिखाओ", "query": "list github repositories", "expected": "github_list_repositories"}
+{"id": "sel-0005", "language": "ta", "message": "என் github repositories காட்டு", "query": "list github repositories", "expected": "github_list_repositories"}
+{"id": "sel-0006", "language": "mixed", "message": "github repo list maadu", "query": "list github repositories", "expected": "github_list_repositories"}
+{"id": "sel-0007", "language": "en", "message": "show the branches in that repo", "query": "list github branches", "expected": "github_list_branches"}
+{"id": "sel-0008", "language": "kn", "message": "ಆ ರೆಪೊದ ಬ್ರಾಂಚ್‌ಗಳು ಯಾವುವು", "query": "list github branches", "expected": "github_list_branches"}
+{"id": "sel-0009", "language": "hi", "message": "repo की branches दिखाओ", "query": "list github branches", "expected": "github_list_branches"}
+{"id": "sel-0010", "language": "en", "message": "list the open pull requests", "query": "list github pull requests", "expected": "github_list_pull_requests"}
+{"id": "sel-0011", "language": "kn", "message": "ಓಪನ್ ಪುಲ್ ರಿಕ್ವೆಸ್ಟ್‌ಗಳು ಯಾವುವು", "query": "list github pull requests", "expected": "github_list_pull_requests"}
+{"id": "sel-0012", "language": "hi", "message": "open pull requests दिखाओ", "query": "list github pull requests", "expected": "github_list_pull_requests"}
+{"id": "sel-0013", "language": "en", "message": "which files changed in pull request 42", "query": "files changed in a github pull request", "expected": "github_list_pull_request_files"}
+{"id": "sel-0014", "language": "kn", "message": "ಪುಲ್ ರಿಕ್ವೆಸ್ಟ್ 42 ರಲ್ಲಿ ಯಾವ ಫೈಲ್ ಬದಲಾಗಿದೆ", "query": "files changed in a github pull request", "expected": "github_list_pull_request_files"}
+{"id": "sel-0015", "language": "en", "message": "did the ci checks pass on that commit", "query": "github check runs for a commit", "expected": "github_list_check_runs"}
+{"id": "sel-0016", "language": "en", "message": "show the check runs for the last commit", "query": "github check runs for a commit", "expected": "github_list_check_runs"}
+{"id": "sel-0017", "language": "hi", "message": "commit के checks दिखाओ", "query": "github check runs for a commit", "expected": "github_list_check_runs"}
+{"id": "sel-0018", "language": "en", "message": "show me that commit", "query": "get a github commit", "expected": "github_get_commit"}
+{"id": "sel-0019", "language": "kn", "message": "ಆ ಕಮಿಟ್ ತೋರಿಸು", "query": "get a github commit", "expected": "github_get_commit"}
+{"id": "sel-0020", "language": "en", "message": "create a branch called release", "query": "create a github branch", "expected": "github_create_branch"}
+{"id": "sel-0021", "language": "kn", "message": "release ಎಂಬ ಬ್ರಾಂಚ್ ಮಾಡು", "query": "create a github branch", "expected": "github_create_branch"}
+{"id": "sel-0022", "language": "hi", "message": "नई branch बनाओ", "query": "create a github branch", "expected": "github_create_branch"}
+{"id": "sel-0023", "language": "en", "message": "delete that old branch", "query": "delete a github branch", "expected": "github_delete_branch"}
+{"id": "sel-0024", "language": "hi", "message": "पुरानी branch delete करो", "query": "delete a github branch", "expected": "github_delete_branch"}
+{"id": "sel-0025", "language": "en", "message": "open a pull request from this branch", "query": "create a github pull request", "expected": "github_create_pull_request"}
+{"id": "sel-0026", "language": "kn", "message": "ಈ ಬ್ರಾಂಚ್‌ನಿಂದ ಪುಲ್ ರಿಕ್ವೆಸ್ಟ್ ತೆರೆ", "query": "create a github pull request", "expected": "github_create_pull_request"}
+{"id": "sel-0027", "language": "hi", "message": "pull request खोलो", "query": "create a github pull request", "expected": "github_create_pull_request"}
+{"id": "sel-0028", "language": "en", "message": "merge pull request 12", "query": "merge a github pull request", "expected": "github_merge_pull_request"}
+{"id": "sel-0029", "language": "hi", "message": "pull request merge करो", "query": "merge a github pull request", "expected": "github_merge_pull_request"}
+{"id": "sel-0030", "language": "en", "message": "which issues are assigned to me", "query": "github issues assigned to me", "expected": "github_list_assigned_issues"}
+{"id": "sel-0031", "language": "kn", "message": "ನನಗೆ ನಿಗದಿಯಾದ ಇಷ್ಯೂಗಳು", "query": "github issues assigned to me", "expected": "github_list_assigned_issues"}
+{"id": "sel-0032", "language": "en", "message": "what files are in the src folder of that repo", "query": "list files in a github repository folder", "expected": "github_list_repository_contents"}
+{"id": "sel-0033", "language": "kn", "message": "ಆ ರೆಪೊದ src ಫೋಲ್ಡರ್‌ನಲ್ಲಿ ಏನಿದೆ", "query": "list files in a github repository folder", "expected": "github_list_repository_contents"}
+{"id": "sel-0034", "language": "en", "message": "read the readme from that repo", "query": "read a file from a github repository", "expected": "github_read_repository_file"}
+{"id": "sel-0035", "language": "hi", "message": "repo की readme पढ़ो", "query": "read a file from a github repository", "expected": "github_read_repository_file"}
+{"id": "sel-0036", "language": "en", "message": "search that repo for where the token is set", "query": "search code in a github repository", "expected": "github_search_repository_code"}
+{"id": "sel-0037", "language": "kn", "message": "ಆ ರೆಪೊದಲ್ಲಿ ಕೋಡ್ ಹುಡುಕು", "query": "search code in a github repository", "expected": "github_search_repository_code"}
+{"id": "sel-0038", "language": "en", "message": "show the recent commits on main", "query": "list github repository commits", "expected": "github_list_repository_commits"}
+{"id": "sel-0039", "language": "hi", "message": "recent commits दिखाओ", "query": "list github repository commits", "expected": "github_list_repository_commits"}
+{"id": "sel-0040", "language": "en", "message": "what changed between these two commits", "query": "compare two github commits", "expected": "github_compare_repository_commits"}
+{"id": "sel-0041", "language": "kn", "message": "ಈ ಎರಡು ಕಮಿಟ್ ನಡುವೆ ಏನು ಬದಲಾಗಿದೆ", "query": "compare two github commits", "expected": "github_compare_repository_commits"}
+{"id": "sel-0042", "language": "en", "message": "update the config file in that repo", "query": "update a file in a github repository", "expected": "github_update_repository_file"}
+{"id": "sel-0043", "language": "hi", "message": "repo में file update करो", "query": "update a file in a github repository", "expected": "github_update_repository_file"}
+{"id": "sel-0044", "language": "en", "message": "read the last email from ravi", "query": "read an email", "expected": "read_email"}
+{"id": "sel-0045", "language": "kn", "message": "ರವಿಯ ಇಮೇಲ್ ಓದು", "query": "read an email", "expected": "read_email"}
+{"id": "sel-0046", "language": "hi", "message": "ravi का email पढ़ो", "query": "read an email", "expected": "read_email"}
+{"id": "sel-0047", "language": "ta", "message": "ravi email படி", "query": "read an email", "expected": "read_email"}
+{"id": "sel-0048", "language": "en", "message": "show my recent emails", "query": "list recent emails", "expected": "list_recent_emails"}
+{"id": "sel-0049", "language": "kn", "message": "ಇತ್ತೀಚಿನ ಇಮೇಲ್‌ಗಳನ್ನು ತೋರಿಸು", "query": "list recent emails", "expected": "list_recent_emails"}
+{"id": "sel-0050", "language": "hi", "message": "हाल के emails दिखाओ", "query": "list recent emails", "expected": "list_recent_emails"}
+{"id": "sel-0051", "language": "en", "message": "how many emails are in my inbox", "query": "count inbox emails", "expected": "count_inbox_emails"}
+{"id": "sel-0052", "language": "kn", "message": "ಇನ್‌ಬಾಕ್ಸ್‌ನಲ್ಲಿ ಎಷ್ಟು ಇಮೇಲ್ ಇದೆ", "query": "count inbox emails", "expected": "count_inbox_emails"}
+{"id": "sel-0053", "language": "hi", "message": "inbox में कितने emails हैं", "query": "count inbox emails", "expected": "count_inbox_emails"}
+{"id": "sel-0054", "language": "en", "message": "find the invoice email from zoho", "query": "search emails", "expected": "search_emails"}
+{"id": "sel-0055", "language": "kn", "message": "ಇನ್ವಾಯ್ಸ್ ಇಮೇಲ್ ಹುಡುಕು", "query": "search emails", "expected": "search_emails"}
+{"id": "sel-0056", "language": "hi", "message": "invoice email खोजो", "query": "search emails", "expected": "search_emails"}
+{"id": "sel-0057", "language": "en", "message": "show my drafts", "query": "list email drafts", "expected": "list_email_drafts"}
+{"id": "sel-0058", "language": "kn", "message": "ನನ್ನ ಡ್ರಾಫ್ಟ್‌ಗಳನ್ನು ತೋರಿಸು", "query": "list email drafts", "expected": "list_email_drafts"}
+{"id": "sel-0059", "language": "en", "message": "write a draft email to ravi about the meeting", "query": "create an email draft", "expected": "create_email_draft"}
+{"id": "sel-0060", "language": "kn", "message": "ರವಿಗೆ ಡ್ರಾಫ್ಟ್ ಇಮೇಲ್ ಬರೆ", "query": "create an email draft", "expected": "create_email_draft"}
+{"id": "sel-0061", "language": "hi", "message": "ravi को draft email लिखो", "query": "create an email draft", "expected": "create_email_draft"}
+{"id": "sel-0062", "language": "en", "message": "change the draft to say monday", "query": "update an email draft", "expected": "update_email_draft"}
+{"id": "sel-0063", "language": "hi", "message": "draft में बदलाव करो", "query": "update an email draft", "expected": "update_email_draft"}
+{"id": "sel-0064", "language": "en", "message": "send an email to ravi", "query": "send an email", "expected": "prepare_email_to_send"}
+{"id": "sel-0065", "language": "kn", "message": "ರವಿಗೆ ಇಮೇಲ್ ಕಳುಹಿಸು", "query": "send an email", "expected": "prepare_email_to_send"}
+{"id": "sel-0066", "language": "hi", "message": "ravi को email भेजो", "query": "send an email", "expected": "prepare_email_to_send"}
+{"id": "sel-0067", "language": "mixed", "message": "ravi ge email send maadu", "query": "send an email", "expected": "prepare_email_to_send"}
+{"id": "sel-0068", "language": "en", "message": "reply to that email", "query": "reply to an email", "expected": "prepare_email_reply"}
+{"id": "sel-0069", "language": "kn", "message": "ಆ ಇಮೇಲ್‌ಗೆ ಉತ್ತರಿಸು", "query": "reply to an email", "expected": "prepare_email_reply"}
+{"id": "sel-0070", "language": "hi", "message": "उस email का reply करो", "query": "reply to an email", "expected": "prepare_email_reply"}
+{"id": "sel-0071", "language": "en", "message": "delete that email", "query": "delete an email", "expected": "prepare_email_deletion"}
+{"id": "sel-0072", "language": "kn", "message": "ಆ ಇಮೇಲ್ ಅಳಿಸು", "query": "delete an email", "expected": "prepare_email_deletion"}
+{"id": "sel-0073", "language": "hi", "message": "वह email delete करो", "query": "delete an email", "expected": "prepare_email_deletion"}
+{"id": "sel-0074", "language": "en", "message": "delete the draft", "query": "delete an email draft", "expected": "prepare_email_draft_deletion"}
+{"id": "sel-0075", "language": "hi", "message": "draft delete करो", "query": "delete an email draft", "expected": "prepare_email_draft_deletion"}
+{"id": "sel-0076", "language": "en", "message": "what is the gold rate today", "query": "current gold price today", "expected": "search_web"}
+{"id": "sel-0077", "language": "kn", "message": "ಇವತ್ತು ಚಿನ್ನದ ಬೆಲೆ ಎಷ್ಟು", "query": "current gold price today", "expected": "search_web"}
+{"id": "sel-0078", "language": "hi", "message": "आज सोने का भाव क्या है", "query": "current gold price today", "expected": "search_web"}
+{"id": "sel-0079", "language": "en", "message": "when is diwali this year", "query": "diwali date this year", "expected": "search_web"}
+{"id": "sel-0080", "language": "kn", "message": "ಈ ವರ್ಷ ದೀಪಾವಳಿ ಯಾವಾಗ", "query": "diwali date this year", "expected": "search_web"}
+{"id": "sel-0081", "language": "hi", "message": "इस साल diwali कब है", "query": "diwali date this year", "expected": "search_web"}
+{"id": "sel-0082", "language": "en", "message": "latest news about the budget", "query": "latest budget news", "expected": "search_web"}
+{"id": "sel-0083", "language": "ta", "message": "இன்றைய செய்தி", "query": "latest news today", "expected": "search_web"}
+{"id": "sel-0084", "language": "en", "message": "what is 18 percent of 2450", "query": "calculate arithmetic", "expected": "calculator"}
+{"id": "sel-0085", "language": "kn", "message": "2450 ರ 18 ಪ್ರತಿಶತ ಎಷ್ಟು", "query": "calculate arithmetic", "expected": "calculator"}
+{"id": "sel-0086", "language": "hi", "message": "2450 का 18 प्रतिशत", "query": "calculate arithmetic", "expected": "calculator"}
+{"id": "sel-0087", "language": "en", "message": "how many words is this paragraph", "query": "count words in text", "expected": "text_stats"}
+{"id": "sel-0088", "language": "kn", "message": "ಈ ಪ್ಯಾರಾದಲ್ಲಿ ಎಷ್ಟು ಪದಗಳು", "query": "count words in text", "expected": "text_stats"}
+{"id": "sel-0089", "language": "en", "message": "summarise the structure of this json", "query": "summarize json structure", "expected": "json_summary"}
+{"id": "sel-0090", "language": "hi", "message": "json की structure बताओ", "query": "summarize json structure", "expected": "json_summary"}
+{"id": "sel-0091", "language": "en", "message": "check this python code for problems", "query": "static code analysis", "expected": "code_analysis"}
+{"id": "sel-0092", "language": "kn", "message": "ಈ ಕೋಡ್ ಪರಿಶೀಲಿಸು", "query": "static code analysis", "expected": "code_analysis"}
+{"id": "sel-0093", "language": "en", "message": "how do I fix this code", "query": "suggest fixes for code", "expected": "code_fix_suggestions"}
+{"id": "sel-0094", "language": "hi", "message": "इस code को कैसे ठीक करूँ", "query": "suggest fixes for code", "expected": "code_fix_suggestions"}
+{"id": "sel-0095", "language": "en", "message": "convert this python to javascript", "query": "transform code to another language", "expected": "code_transform"}
+{"id": "sel-0096", "language": "kn", "message": "ಈ ಕೋಡ್ javascript ಗೆ ಬದಲಿಸು", "query": "transform code to another language", "expected": "code_transform"}
+{"id": "sel-0097", "language": "en", "message": "run this script and show the output", "query": "run code in a sandbox", "expected": "sandbox_execution"}
+{"id": "sel-0098", "language": "hi", "message": "यह script चलाओ", "query": "run code in a sandbox", "expected": "sandbox_execution"}
+{"id": "sel-0099", "language": "en", "message": "analyse this csv and tell me the totals", "query": "analyse a dataset", "expected": "data_analysis"}
+{"id": "sel-0100", "language": "kn", "message": "ಈ csv ವಿಶ್ಲೇಷಿಸು", "query": "analyse a dataset", "expected": "data_analysis"}
+{"id": "sel-0101", "language": "hi", "message": "इस csv का analysis करो", "query": "analyse a dataset", "expected": "data_analysis"}
+{"id": "sel-0102", "language": "en", "message": "show the instagram profile", "query": "instagram profile", "expected": "instagram_get_profile"}
+{"id": "sel-0103", "language": "kn", "message": "ಇನ್‌ಸ್ಟಾಗ್ರಾಮ್ ಪ್ರೊಫೈಲ್ ತೋರಿಸು", "query": "instagram profile", "expected": "instagram_get_profile"}
+{"id": "sel-0104", "language": "en", "message": "list my instagram posts", "query": "list instagram media", "expected": "instagram_list_media"}
+{"id": "sel-0105", "language": "hi", "message": "instagram posts दिखाओ", "query": "list instagram media", "expected": "instagram_list_media"}
+{"id": "sel-0106", "language": "en", "message": "how many likes did that instagram post get", "query": "instagram media details", "expected": "instagram_get_media_details"}
+{"id": "sel-0107", "language": "kn", "message": "ಆ ಪೋಸ್ಟ್‌ಗೆ ಎಷ್ಟು ಲೈಕ್", "query": "instagram media details", "expected": "instagram_get_media_details"}
+{"id": "sel-0108", "language": "en", "message": "schedule a training build for tonight", "query": "schedule a build task", "expected": "task_schedule_build"}
+{"id": "sel-0109", "language": "hi", "message": "रात के लिए build schedule करो", "query": "schedule a build task", "expected": "task_schedule_build"}
+{"id": "sel-0110", "language": "en", "message": "write a story about a king", "query": "write a story about a king", "expected": null}
+{"id": "sel-0111", "language": "en", "message": "write a poem about the rain in kannada", "query": "write a poem about the rain in kannada", "expected": null}
+{"id": "sel-0112", "language": "en", "message": "how are you", "query": "how are you", "expected": null}
+{"id": "sel-0113", "language": "en", "message": "who are you", "query": "who are you", "expected": null}
+{"id": "sel-0114", "language": "en", "message": "thank you", "query": "thank you", "expected": null}
+{"id": "sel-0115", "language": "en", "message": "explain photosynthesis", "query": "explain photosynthesis", "expected": null}
+{"id": "sel-0116", "language": "en", "message": "explain what a pull request is", "query": "explain what a pull request is", "expected": null}
+{"id": "sel-0117", "language": "en", "message": "what is the difference between a list and a tuple", "query": "what is the difference between a list and a tuple", "expected": null}
+{"id": "sel-0118", "language": "en", "message": "what is 2 plus 2", "query": "what is 2 plus 2", "expected": null}
+{"id": "sel-0119", "language": "en", "message": "tell me a joke", "query": "tell me a joke", "expected": null}
+{"id": "sel-0120", "language": "en", "message": "summarise this paragraph in one line", "query": "summarise this paragraph in one line", "expected": null}
+{"id": "sel-0121", "language": "en", "message": "translate good morning into kannada", "query": "translate good morning into kannada", "expected": null}
+{"id": "sel-0122", "language": "en", "message": "give me ideas for a birthday speech", "query": "give me ideas for a birthday speech", "expected": null}
+{"id": "sel-0123", "language": "en", "message": "what should I cook for dinner", "query": "what should I cook for dinner", "expected": null}
+{"id": "sel-0124", "language": "en", "message": "is it going to rain tomorrow", "query": "is it going to rain tomorrow", "expected": null}
+{"id": "sel-0125", "language": "en", "message": "recommend a good book", "query": "recommend a good book", "expected": null}
+{"id": "sel-0126", "language": "kn", "message": "ಒಂದು ಕಥೆ ಬರೆ", "query": "ಒಂದು ಕಥೆ ಬರೆ", "expected": null}
+{"id": "sel-0127", "language": "kn", "message": "ನಮಸ್ಕಾರ", "query": "ನಮಸ್ಕಾರ", "expected": null}
+{"id": "sel-0128", "language": "kn", "message": "ನೀನು ಯಾರು", "query": "ನೀನು ಯಾರು", "expected": null}
+{"id": "sel-0129", "language": "kn", "message": "ಧನ್ಯವಾದ", "query": "ಧನ್ಯವಾದ", "expected": null}
+{"id": "sel-0130", "language": "kn", "message": "ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆ ವಿವರಿಸು", "query": "ದ್ಯುತಿಸಂಶ್ಲೇಷಣೆ ವಿವರಿಸು", "expected": null}
+{"id": "sel-0131", "language": "kn", "message": "ಪುಲ್ ರಿಕ್ವೆಸ್ಟ್ ಎಂದರೇನು", "query": "ಪುಲ್ ರಿಕ್ವೆಸ್ಟ್ ಎಂದರೇನು", "expected": null}
+{"id": "sel-0132", "language": "kn", "message": "ಒಂದು ಕವನ ಬರೆ", "query": "ಒಂದು ಕವನ ಬರೆ", "expected": null}
+{"id": "sel-0133", "language": "kn", "message": "ಇವತ್ತು ಏನು ಅಡುಗೆ ಮಾಡಲಿ", "query": "ಇವತ್ತು ಏನು ಅಡುಗೆ ಮಾಡಲಿ", "expected": null}
+{"id": "sel-0134", "language": "kn", "message": "ಒಳ್ಳೆಯ ಪುಸ್ತಕ ಸೂಚಿಸು", "query": "ಒಳ್ಳೆಯ ಪುಸ್ತಕ ಸೂಚಿಸು", "expected": null}
+{"id": "sel-0135", "language": "hi", "message": "एक कहानी लिखो", "query": "एक कहानी लिखो", "expected": null}
+{"id": "sel-0136", "language": "hi", "message": "नमस्ते", "query": "नमस्ते", "expected": null}
+{"id": "sel-0137", "language": "hi", "message": "तुम कौन हो", "query": "तुम कौन हो", "expected": null}
+{"id": "sel-0138", "language": "hi", "message": "धन्यवाद", "query": "धन्यवाद", "expected": null}
+{"id": "sel-0139", "language": "hi", "message": "प्रकाश संश्लेषण समझाओ", "query": "प्रकाश संश्लेषण समझाओ", "expected": null}
+{"id": "sel-0140", "language": "hi", "message": "pull request क्या है", "query": "pull request क्या है", "expected": null}
+{"id": "sel-0141", "language": "hi", "message": "एक कविता लिखो", "query": "एक कविता लिखो", "expected": null}
+{"id": "sel-0142", "language": "hi", "message": "आज खाने में क्या बनाऊँ", "query": "आज खाने में क्या बनाऊँ", "expected": null}
+{"id": "sel-0143", "language": "hi", "message": "अच्छी किताब बताओ", "query": "अच्छी किताब बताओ", "expected": null}
+{"id": "sel-0144", "language": "ta", "message": "ஒரு கதை எழுது", "query": "ஒரு கதை எழுது", "expected": null}
+{"id": "sel-0145", "language": "ta", "message": "வணக்கம்", "query": "வணக்கம்", "expected": null}
+{"id": "sel-0146", "language": "ta", "message": "நீ யார்", "query": "நீ யார்", "expected": null}
+{"id": "sel-0147", "language": "ta", "message": "நன்றி", "query": "நன்றி", "expected": null}
+{"id": "sel-0148", "language": "mixed", "message": "story write maadu", "query": "story write maadu", "expected": null}
+{"id": "sel-0149", "language": "mixed", "message": "namaskara hegiddiya", "query": "namaskara hegiddiya", "expected": null}
+{"id": "sel-0150", "language": "mixed", "message": "ondu poem bare", "query": "ondu poem bare", "expected": null}
+{"id": "sel-0151", "language": "mixed", "message": "thanks guru", "query": "thanks guru", "expected": null}

@@ -1,16 +1,13 @@
-OT = Path(__file__).resolve().parents[2]
-UNIT_FILE = PROJECT_ROOT / "deploy" / "indoone-backend.service"
-DEPLOY_DOC = PROJECT_ROOT / "deploy" / "DEPLOY.md"
-DEPLOY_SCRIPT = PROJECT_ROOT / "scripts" / "ops" / "deploy.sh"
+and_script_agree_with_the_unit() -> None:
+    match = _MODULE_ARGUMENT.search(_unit_text())
+    assert match is not None
+    documented = _MODULE_ARGUMENT.findall(DEPLOY_DOC.read_text(encoding="utf-8"))
 
-_MODULE_ARGUMENT = re.compile(r"-m\s+([A-Za-z_][A-Za-z0-9_.]*)")
-
-
-def _unit_text() -> str:
-    assert UNIT_FILE.is_file(), "deploy/indoone-backend.service is missing"
-    return UNIT_FILE.read_text(encoding="utf-8")
-
-
-def test_the_unit_names_the_expected_entry_point() -> None:
-    executables = [line for line in _unit_text().splitlines() if line.startswith("ExecStart=")]
-    assert len(executables) == 1,
+    assert match.group(1) in documented, (
+        f"deploy/DEPLOY.md does not mention {match.group(1)}; it mentions {documented}"
+    )
+    assert DEPLOY_SCRIPT.is_file(), "scripts/ops/deploy.sh is missing"
+    assert "deploy/indoone-backend.service" in DEPLOY_SCRIPT.read_text(encoding="utf-8"), (
+        "the deploy script must install the unit from the repository, or a unit change "
+        "never reaches the box"
+   

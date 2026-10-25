@@ -9,8 +9,8 @@ from __future__ import annotations
 import asyncio
 import time
 
-from app.ai import agent_async
-from app.ai.tools import ToolResult
+from app.ai.agents import agent_async
+from app.ai.execution.tools import ToolResult
 
 
 def test_the_retry_keeps_the_user_id(monkeypatch):

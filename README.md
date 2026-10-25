@@ -69,7 +69,7 @@ The processed dataset is a generated training artifact and should not be committ
 ## Project structure
 
 - `app/api/` — HTTP API routes
-- `app/ai/` — local AI runtime and domain modules; `app/ai/training/` contains model training and evaluation
+- `app/ai/` — the assistant: gateway, execution, agents, memory, quality, language, local model and training; `app/ai/training/` contains model training and evaluation
 - `app/web_research/` — free public search providers, model-selected search tool, evidence validation, source formatting, and research-specific tests
 - `data/raw/` — source training documents
 - `data/knowledge/` — approved local knowledge sources

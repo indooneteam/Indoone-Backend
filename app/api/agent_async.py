@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from app.ai.agent import MAX_AGENT_STEPS
-from app.ai.agent_async import execute_agent_async
+from app.ai.agents.agent import MAX_AGENT_STEPS
+from app.ai.agents.agent_async import execute_agent_async
 from app.api.capabilities import AgentRequest
 
 router = APIRouter(tags=["capabilities"])

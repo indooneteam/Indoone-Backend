@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import asyncio
 
-from app.ai.agent_async import execute_agent_async
-from app.ai.tools import ToolResult
+from app.ai.agents.agent_async import execute_agent_async
+from app.ai.execution.tools import ToolResult
 
 
 def test_async_agent_uses_current_event_loop(monkeypatch) -> None:
     async def fake_run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None, user_id: str = "") -> ToolResult:
         return ToolResult(name, str(asyncio.get_running_loop()), safe=True)
 
-    monkeypatch.setattr("app.ai.agent_async.run_tool_async", fake_run_tool_async)
+    monkeypatch.setattr("app.ai.agents.agent_async.run_tool_async", fake_run_tool_async)
 
     async def scenario() -> None:
         loop = asyncio.get_running_loop()
@@ -32,7 +32,7 @@ def test_async_agent_retries_retryable_result(monkeypatch) -> None:
             return ToolResult(name, "temporary", safe=False, retryable=True)
         return ToolResult(name, "recovered", safe=True)
 
-    monkeypatch.setattr("app.ai.agent_async.run_tool_async", fake_run_tool_async)
+    monkeypatch.setattr("app.ai.agents.agent_async.run_tool_async", fake_run_tool_async)
 
     async def scenario() -> None:
         execution = await execute_agent_async("text stats: hello")
@@ -45,13 +45,13 @@ def test_async_agent_retries_retryable_result(monkeypatch) -> None:
 
 def test_async_agent_records_timeout_status_when_budget_expires(monkeypatch) -> None:
     recorded: dict[str, object] = {}
-    monkeypatch.setattr("app.ai.agent_async.MAX_AGENT_RUNTIME_SECONDS", -1.0)
-    monkeypatch.setattr("app.ai.agent_async.create_agent_run", lambda user_id, message: {"id": "run-1"})
+    monkeypatch.setattr("app.ai.agents.agent_async.MAX_AGENT_RUNTIME_SECONDS", -1.0)
+    monkeypatch.setattr("app.ai.agents.agent_async.create_agent_run", lambda user_id, message: {"id": "run-1"})
 
     def capture_update(**kwargs):
         recorded.update(kwargs)
 
-    monkeypatch.setattr("app.ai.agent_async.update_agent_run", capture_update)
+    monkeypatch.setattr("app.ai.agents.agent_async.update_agent_run", capture_update)
 
     async def scenario() -> None:
         execution = await execute_agent_async("text stats: hello", user_id="user-one")

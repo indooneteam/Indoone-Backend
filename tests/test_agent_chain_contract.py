@@ -1,5 +1,5 @@
-from app.ai.agent import _chain_payload, _unresolved_chain_references, execute_agent
-from app.ai.tools import ToolResult
+from app.ai.agents.agent import _chain_payload, _unresolved_chain_references, execute_agent
+from app.ai.execution.tools import ToolResult
 
 
 def _result(output: str) -> ToolResult:
@@ -35,7 +35,7 @@ def test_agent_blocks_execution_for_unresolved_chain_reference(monkeypatch) -> N
         calls.append(payload)
         return ToolResult(name, "unexpected", safe=True, retryable=False)
 
-    monkeypatch.setattr("app.ai.agent.run_tool", should_not_run)
+    monkeypatch.setattr("app.ai.agents.agent.run_tool", should_not_run)
     execution = execute_agent("calculate $result2 + 4")
     assert execution.results
     assert execution.results[0].safe is False

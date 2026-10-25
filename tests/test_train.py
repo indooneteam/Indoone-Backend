@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 import torch
 
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.tokenizer import BPETokenizer
 from app.ai.training.training_data import format_instruction_prompt
 import app.ai.training.train as train_module
 from app.ai.training.train import _instruction_batchify, _prepare_instruction_examples, train

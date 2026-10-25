@@ -1,7 +1,7 @@
 import time
 
-from app.ai.agent_policy import deadline_failure, remaining_budget, should_retry
-from app.ai.tools import ToolResult
+from app.ai.agents.agent_policy import deadline_failure, remaining_budget, should_retry
+from app.ai.execution.tools import ToolResult
 
 
 def test_remaining_budget_is_non_negative() -> None:

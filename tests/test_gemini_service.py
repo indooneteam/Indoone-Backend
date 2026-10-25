@@ -4,10 +4,8 @@ import asyncio
 
 import pytest
 
-from app.ai import gemini_service
-from app.ai import tool_loop
-
-
+from app.ai.gateway import gemini_service
+from app.ai.execution import tool_loop
 def _response(parts: list[dict[str, object]]) -> dict[str, object]:
     return {
         "candidates": [

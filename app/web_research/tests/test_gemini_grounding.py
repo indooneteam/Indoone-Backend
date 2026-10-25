@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
-from app.ai import gemini_service
+from app.ai.gateway import gemini_service
 from app.web_research.research import ResearchResult
 from app.web_research.tools import SearchWebToolResult
 

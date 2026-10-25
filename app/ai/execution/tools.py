@@ -11,15 +11,15 @@ import time
 from dataclasses import dataclass
 from typing import Awaitable, Callable
 
-from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
+from app.ai.agents.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
 from datetime import datetime, timedelta, timezone
 
-from app.ai.observability import track
-from app.ai.ai_rules import CONFIRM_OR_CANCEL
-from app.ai.approval import issue_approval_token, validate_approval_token
-from app.ai.code_sandbox import sandbox_execution_tool
-from app.ai.connector_authorization import authorize_tool
-from app.ai.tool_registry import get_tool_spec
+from app.ai.gateway.observability import track
+from app.ai.gateway.ai_rules import CONFIRM_OR_CANCEL
+from app.ai.execution.approval import issue_approval_token, validate_approval_token
+from app.ai.agents.code_sandbox import sandbox_execution_tool
+from app.ai.execution.connector_authorization import authorize_tool
+from app.ai.execution.tool_registry import get_tool_spec
 from app.plugins.github.service import (
     get_github_commit as fetch_github_commit,
     list_github_branches as fetch_github_branches,

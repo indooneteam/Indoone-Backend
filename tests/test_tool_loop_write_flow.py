@@ -18,9 +18,9 @@ from types import SimpleNamespace
 import pytest
 from cryptography.fernet import Fernet
 
-from app.ai import tool_loop
-from app.ai import tools as ai_tools
-from app.ai.approval import issue_approval_token
+from app.ai.execution import tool_loop
+from app.ai.execution import tools as ai_tools
+from app.ai.execution.approval import issue_approval_token
 from app.capabilities import store
 from app.plugins.github import chat_tools
 
@@ -39,9 +39,9 @@ def _env(tmp_path, monkeypatch):
     # executor is reached. Authorization itself is covered by its own tests. The
     # module is imported into each caller, so every binding is patched.
     allow = lambda *args, **kwargs: SimpleNamespace(allowed=True, reason="")  # noqa: E731
-    monkeypatch.setattr("app.ai.connector_authorization.authorize_tool", allow)
-    monkeypatch.setattr("app.ai.tools.authorize_tool", allow)
-    monkeypatch.setattr("app.ai.approval.authorize_tool", allow)
+    monkeypatch.setattr("app.ai.execution.connector_authorization.authorize_tool", allow)
+    monkeypatch.setattr("app.ai.execution.tools.authorize_tool", allow)
+    monkeypatch.setattr("app.ai.execution.approval.authorize_tool", allow)
     store.initialize()
     yield
 

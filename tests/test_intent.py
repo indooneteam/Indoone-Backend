@@ -1,4 +1,4 @@
-from app.ai.intent import classify_intent
+from app.ai.agents.intent import classify_intent
 
 
 def test_current_questions_use_fresh_research() -> None:
@@ -21,7 +21,7 @@ def test_stable_general_question_does_not_force_web() -> None:
 
 
 def test_lightweight_understanding_handles_romanized_kannada() -> None:
-    from app.ai.question_understanding import understand_question
+    from app.ai.language.question_understanding import understand_question
 
     understood = understand_question("gravity andre enu?")
     assert understood.language == "Kannada"
@@ -31,7 +31,7 @@ def test_lightweight_understanding_handles_romanized_kannada() -> None:
 
 
 def test_standalone_kannada_price_marker_still_triggers_research() -> None:
-    from app.ai.question_understanding import understand_question
+    from app.ai.language.question_understanding import understand_question
 
     understood = understand_question("ದರ ಎಷ್ಟು?")
 
@@ -39,7 +39,7 @@ def test_standalone_kannada_price_marker_still_triggers_research() -> None:
 
 
 def test_kannada_definition_is_not_misclassified_as_research() -> None:
-    from app.ai.question_understanding import understand_question
+    from app.ai.language.question_understanding import understand_question
 
     understood = understand_question("ಗ್ರಾವಿಟಿ ಎಂದರೇನು")
 
@@ -49,7 +49,7 @@ def test_kannada_definition_is_not_misclassified_as_research() -> None:
 
 
 def test_lightweight_understanding_extracts_english_topic_from_question() -> None:
-    from app.ai.question_understanding import understand_question
+    from app.ai.language.question_understanding import understand_question
 
     understood = understand_question("What is gravity?")
     assert understood.language == "English"
@@ -58,7 +58,7 @@ def test_lightweight_understanding_extracts_english_topic_from_question() -> Non
 
 
 def test_lightweight_understanding_routes_current_question_without_model() -> None:
-    from app.ai.question_understanding import understand_question
+    from app.ai.language.question_understanding import understand_question
 
     understood = understand_question("what is the latest India news today?")
     assert understood.intent == "research"
@@ -67,7 +67,7 @@ def test_lightweight_understanding_routes_current_question_without_model() -> No
 
 
 def test_lightweight_understanding_handles_typo_without_changing_unknown_topic() -> None:
-    from app.ai.question_understanding import understand_question
+    from app.ai.language.question_understanding import understand_question
 
     understood = understand_question("wat is gravty?")
     assert understood.intent == "general"

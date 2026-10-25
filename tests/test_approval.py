@@ -4,7 +4,7 @@ import time
 
 import pytest
 
-from app.ai.approval import decide_tool, issue_approval_token, validate_approval_token
+from app.ai.execution.approval import decide_tool, issue_approval_token, validate_approval_token
 
 
 SECRET = "b" * 32

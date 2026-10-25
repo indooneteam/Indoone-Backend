@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
-from app.ai.knowledge import LocalKnowledgeBase
+from app.ai.memory.knowledge import LocalKnowledgeBase
 
 
 @dataclass(frozen=True)

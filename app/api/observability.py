@@ -19,7 +19,7 @@ import os
 
 from fastapi import APIRouter, Header, HTTPException
 
-from app.ai.observability import reset, snapshot
+from app.ai.gateway.observability import reset, snapshot
 
 router = APIRouter(tags=["observability"])
 

@@ -14,13 +14,13 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.auth import extract_principal
 from app.api.chat import _now_line, _user_name_line
-from app.ai.tool_loop import (
+from app.ai.execution.tool_loop import (
     _GITHUB_TOOL_NAMES,
     dispatch_tool,
     email_read_tool_declarations,
     model_tool_declarations,
 )
-from app.ai.tool_registry import function_declarations
+from app.ai.execution.tool_registry import function_declarations
 from app.capabilities.store import get_integration_token_metadata
 from app.plugins.github.chat_tools import _format_github_result
 

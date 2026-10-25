@@ -13,7 +13,7 @@ import pytest
 
 @pytest.fixture()
 def bridge():
-    return importlib.import_module("app.ai.gemini_service")
+    return importlib.import_module("app.ai.gateway.gemini_service")
 
 
 def test_the_primary_answer_is_returned(bridge):
@@ -56,7 +56,7 @@ def test_a_real_error_is_not_swallowed(bridge):
 def test_the_transport_speaks_azure(monkeypatch):
     monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "https://example.openai.azure.com")
     monkeypatch.setenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o")
-    azure = importlib.import_module("app.ai.azure_openai_service")
+    azure = importlib.import_module("app.ai.gateway.azure_openai_service")
     url = azure._chat_url("https://example.openai.azure.com", "gpt-4o", "2024-10-21")
     assert url.startswith("https://example.openai.azure.com/openai/deployments/gpt-4o/chat/completions")
     assert "api-version=" in url

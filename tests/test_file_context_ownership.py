@@ -2,9 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai import file_context
-
-
+from app.ai.memory import file_context
 def test_uploaded_file_requires_matching_owner(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(file_context, "FILE_ROOT", tmp_path)
     saved = file_context.save_text_file("note.txt", b"hello", user_id="user-one")

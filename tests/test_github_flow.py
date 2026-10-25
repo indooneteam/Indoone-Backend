@@ -176,7 +176,7 @@ def test_a_failed_result_reports_its_message():
 # --------------------------------------------------------------------------- #
 
 def test_the_write_tools_are_declared_and_offered():
-    from app.ai.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
+    from app.ai.execution.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
 
     read_names = {d["name"] for d in GITHUB_TOOL_DECLARATIONS}
     write_names = {d["name"] for d in GITHUB_WRITE_TOOL_DECLARATIONS}
@@ -188,7 +188,7 @@ def test_the_write_tools_are_declared_and_offered():
 
 
 def test_the_write_tools_are_marked_as_needing_approval():
-    from app.ai.tool_registry import TOOL_SPECS
+    from app.ai.execution.tool_registry import TOOL_SPECS
 
     for spec in TOOL_SPECS:
         if spec.name in {"github_create_branch", "github_delete_branch",

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-from app.ai import service
+from app.ai.gateway import service
 from app.main import app
 
 

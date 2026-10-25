@@ -63,7 +63,7 @@ def main() -> None:
     if args.temperature < 0:
         raise SystemExit("--temperature must be non-negative")
 
-    from app.ai.inference import LocalModelRuntime
+    from app.ai.local.inference import LocalModelRuntime
 
     engine = LocalModelRuntime(model_path, tokenizer_path)
     prompts = load_prompts(args.prompts)

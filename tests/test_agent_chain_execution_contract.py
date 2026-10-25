@@ -1,5 +1,5 @@
-from app.ai.agent import execute_agent
-from app.ai.tools import ToolResult
+from app.ai.agents.agent import execute_agent
+from app.ai.execution.tools import ToolResult
 
 
 def test_unresolved_chain_step_is_blocked_not_executed() -> None:
@@ -19,7 +19,7 @@ def test_truncated_chain_result_cannot_feed_next_tool(monkeypatch) -> None:
             return ToolResult("text_stats", "partial-output", safe=True, truncated=True)
         return ToolResult(tool, "done", safe=True)
 
-    monkeypatch.setattr("app.ai.agent.run_tool", fake_run_tool)
+    monkeypatch.setattr("app.ai.agents.agent.run_tool", fake_run_tool)
     execution = execute_agent("text stats: hello; summarize json: {\"ok\":true}")
 
     assert calls == [("text_stats", "hello")]

@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from app.ai import tool_loop
-from app.ai.approval import issue_approval_token
-from app.ai.tools import ToolResult
+from app.ai.execution import tool_loop
+from app.ai.execution.approval import issue_approval_token
+from app.ai.execution.tools import ToolResult
 
 
 @pytest.mark.asyncio
@@ -117,7 +117,7 @@ async def test_write_tool_token_is_passed_into_the_payload(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "s" * 40)
     # Pretend the GitHub connector is connected and authorized for the write.
     monkeypatch.setattr(
-        "app.ai.approval.authorize_tool",
+        "app.ai.execution.approval.authorize_tool",
         lambda *args, **kwargs: SimpleNamespace(allowed=True, reason=""),
     )
     token = issue_approval_token("u1", "github_update_repository_file")
@@ -176,7 +176,7 @@ async def test_run_tool_loop_uses_auto_mode_and_the_users_declarations(monkeypat
         return "done"
 
     monkeypatch.setattr(
-        "app.ai.gemini_service.generate_gemini_function_call_reply", fake_gemini
+        "app.ai.gateway.gemini_service.generate_gemini_function_call_reply", fake_gemini
     )
 
     out = await tool_loop.run_tool_loop("u1", "c1", "list my repositories", history=[])
@@ -230,7 +230,7 @@ def test_a_festival_question_gets_the_tools():
     Before this, a festival question carried no tools, the model had no way to look
     the date up, and it answered that it did not know.
     """
-    from app.ai.tool_loop import needs_tools
+    from app.ai.execution.tool_loop import needs_tools
 
     for question in (
         "ivattu yava habba ide",
@@ -248,7 +248,7 @@ def test_the_gate_does_not_guess_from_topic_words():
     added for one language is a gap in the next. Any real sentence carries the
     catalogue and the model chooses; only a bare greeting is spared the cost.
     """
-    from app.ai.tool_loop import _TOOL_HINTS, needs_tools
+    from app.ai.execution.tool_loop import _TOOL_HINTS, needs_tools
 
     for word in ("festival", "habba", "deepavali", "muhurta", "ಹಬ್ಬ", "ದೀಪಾವಳಿ"):
         assert word not in _TOOL_HINTS, word

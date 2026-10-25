@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from html import unescape
 from typing import Any
 
-from app.ai.service import generate_reply
+from app.ai.gateway.service import generate_reply
 from app.capabilities.integrations import _fernet
 from app.capabilities.store import (
     delete_pending_email_action,
@@ -28,7 +28,7 @@ from app.plugins.zoho_mail.service import (
     send_message,
 )
 
-from app.ai.language_detection import (
+from app.ai.language.language_detection import (
     INDIC_CANCEL_WORDS,
     INDIC_CONFIRM_WORDS,
     INDIC_MAIL_WORDS,

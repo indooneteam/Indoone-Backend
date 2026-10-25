@@ -30,9 +30,9 @@ import httpx
 # One source of truth for the assistant's own words and for the error the rest of
 # the code catches. Both live with the Gemini service today; reusing them here
 # means the two providers cannot drift apart, and the Gemini file is untouched.
-from app.ai.gemini_service import BUSY_MESSAGE, ModelBusyError
-from app.ai.observability import add_model_usage, measured_model_call, set_model
-from app.ai.ai_rules import (
+from app.ai.gateway.gemini_service import BUSY_MESSAGE, ModelBusyError
+from app.ai.gateway.observability import add_model_usage, measured_model_call, set_model
+from app.ai.gateway.ai_rules import (
     ANSWER_SYSTEM_INSTRUCTION as _SYSTEM_INSTRUCTION,
     FUNCTION_DECLARATIONS_REQUIRED,
     INVALID_TOOL_RESULT,

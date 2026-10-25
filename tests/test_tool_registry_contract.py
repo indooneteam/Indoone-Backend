@@ -1,11 +1,11 @@
-from app.ai.tool_registry import (
+from app.ai.execution.tool_registry import (
     EMAIL_TOOL_DECLARATIONS,
     GITHUB_TOOL_DECLARATIONS,
     TOOL_SPECS,
     get_tool_spec,
     tool_names,
 )
-from app.ai.tools import TOOLS
+from app.ai.execution.tools import TOOLS
 
 
 def test_every_registered_tool_has_runtime_implementation() -> None:
@@ -84,7 +84,7 @@ def test_every_declared_array_parameter_has_items() -> None:
     rejected request makes the whole tool loop fail and the app silently falls
     back to a plain answer with no tools.
     """
-    from app.ai.tool_loop import model_tool_declarations
+    from app.ai.execution.tool_loop import model_tool_declarations
 
     problems: list[str] = []
     for declaration in model_tool_declarations():

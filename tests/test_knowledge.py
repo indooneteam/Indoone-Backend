@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.knowledge import KnowledgeDocument, LocalKnowledgeBase, build_context, format_hits
+from app.ai.memory.knowledge import KnowledgeDocument, LocalKnowledgeBase, build_context, format_hits
 
 
 def test_local_knowledge_search_ranks_relevant_documents() -> None:
@@ -75,7 +75,7 @@ def test_metadata_filter_and_relevance_threshold() -> None:
 
 
 def test_large_documents_and_chunk_counts_are_bounded() -> None:
-    from app.ai.knowledge import MAX_DOCUMENT_CHARS, MAX_TOTAL_CHUNKS
+    from app.ai.memory.knowledge import MAX_DOCUMENT_CHARS, MAX_TOTAL_CHUNKS
 
     oversized = "knowledge " * (MAX_DOCUMENT_CHARS // 10 + 1)
     knowledge = LocalKnowledgeBase([KnowledgeDocument("huge", "Huge", oversized)])

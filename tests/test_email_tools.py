@@ -310,9 +310,9 @@ def test_only_one_write_operation_is_allowed_in_a_single_chat_turn(monkeypatch) 
         assert second["code"] == "MULTIPLE_WRITES_BLOCKED"
         return "A single draft was saved."
 
-    import app.ai.gemini_service
+    import app.ai.gateway.gemini_service
 
-    monkeypatch.setattr(app.ai.gemini_service, "generate_gemini_function_call_reply", fake_model)
+    monkeypatch.setattr(app.ai.gateway.gemini_service, "generate_gemini_function_call_reply", fake_model)
 
     result = asyncio.run(
         email_tools.handle_email_chat_with_tools(
@@ -362,9 +362,9 @@ def test_send_preparation_cannot_be_reported_as_sent_by_model(monkeypatch) -> No
         # Simulate the model's exact bug: claiming success before confirmation.
         return "Email sent successfully to customer@example.com."
 
-    import app.ai.gemini_service
+    import app.ai.gateway.gemini_service
 
-    monkeypatch.setattr(app.ai.gemini_service, "generate_gemini_function_call_reply", fake_model)
+    monkeypatch.setattr(app.ai.gateway.gemini_service, "generate_gemini_function_call_reply", fake_model)
 
     result = asyncio.run(
         email_tools.handle_email_chat_with_tools(

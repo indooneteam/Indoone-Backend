@@ -7,15 +7,15 @@ from __future__ import annotations
 
 import logging
 
-from app.ai.ai_rules import EMAIL_PENDING_ACTION
-from app.ai.language_detection import INDIC_NEGATION_WORDS, INDIC_SEND_WORDS
-from app.ai.tool_registry import EMAIL_TOOL_DECLARATIONS
+from app.ai.gateway.ai_rules import EMAIL_PENDING_ACTION
+from app.ai.language.language_detection import INDIC_NEGATION_WORDS, INDIC_SEND_WORDS
+from app.ai.execution.tool_registry import EMAIL_TOOL_DECLARATIONS
 import re
 from typing import Any
 
 import httpx
 
-from app.ai.service import generate_reply
+from app.ai.gateway.service import generate_reply
 from app.capabilities.store import get_integration_token_metadata, get_pending_email_action
 from app.plugins.email_assistant import (
     CANCEL_RE,
@@ -554,11 +554,11 @@ async def handle_email_chat_with_tools(
     if _model_backend not in {"gemini", "azure"}:
         return await handle_email_chat(user, conversation, text)
 
-    from app.ai.gemini_service import (
+    from app.ai.gateway.gemini_service import (
         generate_gemini_function_call_reply,
         run_with_provider_fallback,
     )
-    from app.ai.azure_openai_service import generate_azure_function_call_reply
+    from app.ai.gateway.azure_openai_service import generate_azure_function_call_reply
 
     write_tools = {
         "create_email_draft",

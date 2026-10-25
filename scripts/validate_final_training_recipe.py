@@ -12,7 +12,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import torch
 
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.tokenizer import BPETokenizer
 from app.ai.training.train import (
     CURATED_INSTRUCTION_WEIGHT,
     DEFAULT_BATCH_SIZE,

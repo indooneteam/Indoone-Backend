@@ -5,8 +5,8 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, HTTPException
 
-from app.ai.approval import validate_approval_token
-from app.ai.connector_authorization import authorize_tool
+from app.ai.execution.approval import validate_approval_token
+from app.ai.execution.connector_authorization import authorize_tool
 from pydantic import BaseModel, Field
 from app.api.errors import provider_failure
 

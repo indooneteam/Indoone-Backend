@@ -11,7 +11,7 @@ import json
 import pytest
 from cryptography.fernet import Fernet
 
-from app.ai.tools import ToolResult
+from app.ai.execution.tools import ToolResult
 
 from app.capabilities import store
 from app.plugins.github import chat_tools
@@ -142,7 +142,7 @@ def test_a_pending_is_per_conversation(monkeypatch):
 
 def test_the_write_intents_are_all_known():
     """Every write tool must have wording, or the proposal reads wrong."""
-    from app.ai.tool_registry import GITHUB_WRITE_TOOL_DECLARATIONS
+    from app.ai.execution.tool_registry import GITHUB_WRITE_TOOL_DECLARATIONS
 
     for declaration in GITHUB_WRITE_TOOL_DECLARATIONS:
         assert declaration["name"] in chat_tools._WRITE_INTENT, declaration["name"]

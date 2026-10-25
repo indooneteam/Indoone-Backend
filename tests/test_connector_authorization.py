@@ -1,7 +1,7 @@
 import pytest
 
-from app.ai.approval import decide_tool
-from app.ai.connector_authorization import authorize_connector, authorize_tool, scope_allows
+from app.ai.execution.approval import decide_tool
+from app.ai.execution.connector_authorization import authorize_connector, authorize_tool, scope_allows
 from app.capabilities.connector_registry import allows_capability
 from app.capabilities.store import upsert_integration_token
 
@@ -65,7 +65,7 @@ def test_tool_decision_still_allows_local_tool() -> None:
 
 @pytest.mark.parametrize("scope", ["public_repo", "read:user public_repo", "repo"])
 def test_github_read_tools_are_granted_only_read_aliases(scope: str) -> None:
-    from app.ai.connector_authorization import scope_allows
+    from app.ai.execution.connector_authorization import scope_allows
 
     for capability in (
         "repos.read", "repo.contents.read", "repo.files.read",
@@ -75,7 +75,7 @@ def test_github_read_tools_are_granted_only_read_aliases(scope: str) -> None:
 
 
 def test_github_read_scope_does_not_grant_write_capabilities() -> None:
-    from app.ai.connector_authorization import scope_allows
+    from app.ai.execution.connector_authorization import scope_allows
 
     assert scope_allows("github", "public_repo", "issues.write") is False
     assert scope_allows("github", "public_repo", "comments.write") is False

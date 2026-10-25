@@ -156,7 +156,7 @@ def _behavior_gate(
         [
             sys.executable,
             "-m",
-            "app.ai.behavior_eval",
+            "app.ai.quality.behavior_eval",
             "--cases",
             str(behavior_cases),
             "--checkpoint",

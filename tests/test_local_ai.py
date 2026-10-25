@@ -1,9 +1,9 @@
 import torch
 import pytest
 
-from app.ai.inference import LocalModelRuntime
-from app.ai.model import MODEL_VERSION, IndooneTransformer
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.inference import LocalModelRuntime
+from app.ai.local.model import MODEL_VERSION, IndooneTransformer
+from app.ai.local.tokenizer import BPETokenizer
 from app.ai.training.train import train
 
 

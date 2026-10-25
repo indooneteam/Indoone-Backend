@@ -13,10 +13,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.ai import tool_loop
-from app.ai import tools as ai_tools
-from app.ai.approval import issue_approval_token
-from app.ai.tools import TOOLS, ToolResult, run_tool
+from app.ai.execution import tool_loop
+from app.ai.execution import tools as ai_tools
+from app.ai.execution.approval import issue_approval_token
+from app.ai.execution.tools import TOOLS, ToolResult, run_tool
 from app.plugins.github import chat_tools
 
 
@@ -25,8 +25,8 @@ def _allow_connectors(monkeypatch):
     # Authorization is exercised by its own tests; here it must not hide the
     # validation and executor behaviour under test.
     allow = lambda *args, **kwargs: SimpleNamespace(allowed=True, reason="")  # noqa: E731
-    monkeypatch.setattr("app.ai.tools.authorize_tool", allow)
-    monkeypatch.setattr("app.ai.approval.authorize_tool", allow)
+    monkeypatch.setattr("app.ai.execution.tools.authorize_tool", allow)
+    monkeypatch.setattr("app.ai.execution.approval.authorize_tool", allow)
 
 
 @pytest.fixture

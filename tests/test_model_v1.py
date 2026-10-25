@@ -1,6 +1,6 @@
 import torch
 
-from app.ai.model import IndooneTransformer, MODEL_VERSION
+from app.ai.local.model import IndooneTransformer, MODEL_VERSION
 
 
 def test_model_v1_config_and_forward_shape() -> None:

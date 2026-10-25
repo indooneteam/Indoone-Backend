@@ -8,12 +8,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.ai.answer_quality import assess_answer
-from app.ai.tool_loop import run_tool_loop
-from app.ai.conversation_store import ConversationStore
-from app.ai.file_context import read_text_file
-from app.ai.memory import extract_memory_candidates
-from app.ai.service import generate_reply
+from app.ai.quality.answer_quality import assess_answer
+from app.ai.execution.tool_loop import run_tool_loop
+from app.ai.memory.conversation_store import ConversationStore
+from app.ai.memory.file_context import read_text_file
+from app.ai.memory.memory import extract_memory_candidates
+from app.ai.gateway.service import generate_reply
 from app.api.errors import REQUEST_FAILED_MESSAGE, provider_failure
 
 router = APIRouter(tags=["platform"])

@@ -5,7 +5,7 @@ import base64
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.ai.file_context import MAX_TEXT_BYTES, save_text_file
+from app.ai.memory.file_context import MAX_TEXT_BYTES, save_text_file
 from app.api.dependencies import current_user_id
 
 router = APIRouter(tags=["files"])

@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 
 from fastapi.testclient import TestClient
 
-from app.ai.agent import (
+from app.ai.agents.agent import (
     ALLOWED_AGENT_TOOLS,
     MAX_AGENT_MESSAGE_LENGTH,
     MAX_AGENT_PAYLOAD_LENGTH,
@@ -14,7 +14,7 @@ from app.ai.agent import (
     build_agent_steps,
     execute_agent,
 )
-from app.ai.approval import issue_approval_token
+from app.ai.execution.approval import issue_approval_token
 from app.main import app
 from app.capabilities.store import get_agent_run, upsert_memory
 
@@ -95,14 +95,14 @@ def test_agent_retries_transient_failures(monkeypatch) -> None:
     calls = {"count": 0}
 
     def flaky_tool(name: str, payload: str):
-        from app.ai.tools import ToolResult
+        from app.ai.execution.tools import ToolResult
 
         calls["count"] += 1
         if calls["count"] == 1:
             return ToolResult(name, "temporary failure", safe=False, retryable=True)
         return ToolResult(name, "recovered", safe=True, retryable=False)
 
-    monkeypatch.setattr("app.ai.agent.run_tool", flaky_tool)
+    monkeypatch.setattr("app.ai.agents.agent.run_tool", flaky_tool)
     execution = execute_agent("text stats: hello")
     assert execution.results[0].output == "recovered"
     assert execution.retry_counts == (1,)
@@ -113,12 +113,12 @@ def test_agent_retries_are_bounded(monkeypatch) -> None:
     calls = {"count": 0}
 
     def always_flaky(name: str, payload: str):
-        from app.ai.tools import ToolResult
+        from app.ai.execution.tools import ToolResult
 
         calls["count"] += 1
         return ToolResult(name, "temporary failure", safe=False, retryable=True)
 
-    monkeypatch.setattr("app.ai.agent.run_tool", always_flaky)
+    monkeypatch.setattr("app.ai.agents.agent.run_tool", always_flaky)
     execution = execute_agent("text stats: hello")
     assert execution.results[0].safe is False
     assert execution.retry_counts == (1,)
@@ -129,12 +129,12 @@ def test_agent_aborts_remaining_steps_after_unsafe_result(monkeypatch) -> None:
     calls: list[str] = []
 
     def failing_tool(name: str, payload: str):
-        from app.ai.tools import ToolResult
+        from app.ai.execution.tools import ToolResult
 
         calls.append(payload)
         return ToolResult(name, "invalid result", safe=False, retryable=False)
 
-    monkeypatch.setattr("app.ai.agent.run_tool", failing_tool)
+    monkeypatch.setattr("app.ai.agents.agent.run_tool", failing_tool)
     execution = execute_agent("calculate 10 / 0, 2 + 3")
     assert len(execution.results) == 1
     assert len(execution.steps) == 1

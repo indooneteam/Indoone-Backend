@@ -3,8 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from app.ai.memory import extract_memory_candidates, rank_memory_matches, resolve_memory_update
-from app.ai.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value, should_store
+from app.ai.memory.memory import extract_memory_candidates, rank_memory_matches, resolve_memory_update
+from app.ai.memory.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value, should_store
 from app.capabilities import store
 
 

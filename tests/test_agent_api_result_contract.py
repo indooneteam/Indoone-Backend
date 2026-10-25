@@ -16,10 +16,10 @@ def test_agent_api_exposes_result_execution_metadata() -> None:
 
 
 def test_agent_api_exposes_truncated_result_metadata(monkeypatch) -> None:
-    from app.ai.tools import ToolResult
+    from app.ai.execution.tools import ToolResult
 
     async def fake_execute_agent_async(*args, **kwargs):
-        from app.ai.agent import AgentExecution, AgentStep
+        from app.ai.agents.agent import AgentExecution, AgentStep
 
         step = AgentStep(index=1, tool="text_stats", payload="hello")
         result = ToolResult("text_stats", "partial", safe=True, truncated=True)

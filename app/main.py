@@ -8,8 +8,8 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.ai import service as ai_service
-from app.ai.conversation_store import ConversationStore
+from app.ai.gateway import service as ai_service
+from app.ai.memory.conversation_store import ConversationStore
 from app.api.approvals import router as approvals_router
 from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
@@ -37,7 +37,7 @@ from app.api.observability import router as observability_router
 from app.api.notifications import initialize as initialize_notification_store
 from app.api.notifications import router as notifications_router
 from app.api.platform import router as platform_router
-from app.ai.observability import begin_request, record_request
+from app.ai.gateway.observability import begin_request, record_request
 from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
 from app.api.network_security import configure_network_security, validate_network_security_config
 from app.api.environment_security import validate_environment_security_config

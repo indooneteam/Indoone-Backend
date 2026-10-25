@@ -5,7 +5,7 @@ import time
 
 from fastapi.testclient import TestClient
 
-from app.ai.conversation_store import ConversationStore
+from app.ai.memory.conversation_store import ConversationStore
 from app.api.conversations import _store
 from app.main import app
 

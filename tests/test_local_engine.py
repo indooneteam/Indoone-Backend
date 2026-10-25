@@ -2,9 +2,9 @@ from pathlib import Path
 
 import torch
 
-from app.ai.local_engine import LocalAIEngine
-from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.local_engine import LocalAIEngine
+from app.ai.local.model import IndooneTransformer
+from app.ai.local.tokenizer import BPETokenizer
 
 
 def test_local_engine_loads_checkpoint_with_model_version(tmp_path: Path) -> None:

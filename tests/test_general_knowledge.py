@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 import httpx
 
-from app.ai.general_knowledge import (
+from app.ai.language.general_knowledge import (
     DEFAULT_USER_AGENT,
     WikipediaAnswer,
     WikipediaKnowledgeProvider,
@@ -94,7 +94,7 @@ async def test_wikipedia_provider_returns_summary(monkeypatch: pytest.MonkeyPatc
             )
 
     monkeypatch.setattr(
-        "app.ai.general_knowledge.httpx.AsyncClient",
+        "app.ai.language.general_knowledge.httpx.AsyncClient",
         lambda **kwargs: FakeClient(**kwargs),
     )
 
@@ -164,7 +164,7 @@ async def test_wikipedia_provider_uses_direct_summary_when_search_is_forbidden(
             )
 
     monkeypatch.setattr(
-        "app.ai.general_knowledge.httpx.AsyncClient",
+        "app.ai.language.general_knowledge.httpx.AsyncClient",
         lambda **kwargs: FakeClient(**kwargs),
     )
 
@@ -178,7 +178,7 @@ async def test_wikipedia_provider_uses_direct_summary_when_search_is_forbidden(
 
 
 def test_question_like_detection_catches_unlisted_question_forms() -> None:
-    from app.ai.general_knowledge import is_question_like
+    from app.ai.language.general_knowledge import is_question_like
 
     assert is_question_like("ನೀನು ಯಾರು?")
     assert is_question_like("How can solar panels work?")
@@ -240,7 +240,7 @@ async def test_wikipedia_provider_prefers_relevant_search_title(monkeypatch: pyt
             )
 
     monkeypatch.setattr(
-        "app.ai.general_knowledge.httpx.AsyncClient",
+        "app.ai.language.general_knowledge.httpx.AsyncClient",
         lambda **kwargs: FakeClient(**kwargs),
     )
 

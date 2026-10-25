@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from app.ai.agent import MAX_AGENT_APPROVAL_TOKENS, _bounded_approval_tokens
+from app.ai.agents.agent import MAX_AGENT_APPROVAL_TOKENS, _bounded_approval_tokens
 
 
 def test_approval_token_materialization_is_bounded() -> None:

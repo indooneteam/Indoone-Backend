@@ -490,8 +490,7 @@ def test_vibe_handles_a_cancelled_tool_call_without_crashing() -> None:
 
 def _pretend_connected(monkeypatch: pytest.MonkeyPatch, connected: set[str]) -> None:
     """Make both the chat catalogue and Vibe see only these connectors."""
-    from app.ai import tool_loop as tool_loop_api
-
+    from app.ai.execution import tool_loop as tool_loop_api
     def lookup(user_id: str, connector_id: str):
         return {"integration_id": connector_id} if connector_id in connected else None
 

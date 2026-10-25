@@ -5,10 +5,10 @@ import re
 
 import torch
 
-from app.ai.language_detection import SCRIPT_RANGES
+from app.ai.language.language_detection import SCRIPT_RANGES
 
-from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.model import IndooneTransformer
+from app.ai.local.tokenizer import BPETokenizer
 from app.ai.training.training_data import format_instruction_prompt
 
 DEFAULT_MAX_NEW_TOKENS = 192

@@ -163,8 +163,8 @@ async def test_github_repository_file_commit_rejects_embedded_credentials(monkey
 
 
 def test_github_file_edit_tool_requires_approval():
-    from app.ai.tool_registry import get_tool_spec, requires_approval
-    from app.ai.connector_authorization import scope_allows
+    from app.ai.execution.tool_registry import get_tool_spec, requires_approval
+    from app.ai.execution.connector_authorization import scope_allows
 
     spec = get_tool_spec("github_update_repository_file")
     assert spec is not None
@@ -178,7 +178,7 @@ def test_github_file_edit_tool_requires_approval():
 @pytest.mark.asyncio
 async def test_github_update_tool_rejects_invalid_approval_token(monkeypatch):
     import json
-    from app.ai.tools import _github_update_repository_file
+    from app.ai.execution.tools import _github_update_repository_file
 
     monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "a" * 32)
     payload = {

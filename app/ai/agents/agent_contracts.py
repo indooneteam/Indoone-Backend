@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from app.ai.tool_registry import get_tool_spec
-from app.ai.tools import ToolResult
+from app.ai.execution.tool_registry import get_tool_spec
+from app.ai.execution.tools import ToolResult
 
 
 @dataclass(frozen=True)

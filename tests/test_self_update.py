@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.ai.self_update import FeedItem, SourceDefinition, collect_and_update, parse_feed
+from app.ai.local.self_update import FeedItem, SourceDefinition, collect_and_update, parse_feed
 
 
 def source() -> SourceDefinition:

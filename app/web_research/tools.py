@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 
 from app.web_research.research import ResearchResult, build_free_research_provider
-from app.ai.ai_rules import SEARCH_INVALID_QUERY, SEARCH_NO_RESULTS, SEARCH_UNAVAILABLE
+from app.ai.gateway.ai_rules import SEARCH_INVALID_QUERY, SEARCH_NO_RESULTS, SEARCH_UNAVAILABLE
 
 MAX_SEARCH_QUERY_LENGTH = 500
 MAX_SEARCH_RESULTS = 8

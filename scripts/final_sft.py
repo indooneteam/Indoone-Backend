@@ -14,8 +14,8 @@ if str(PROJECT_ROOT) not in sys.path:
 import torch
 from torch import nn
 
-from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.model import IndooneTransformer
+from app.ai.local.tokenizer import BPETokenizer
 from app.ai.training.train import (
     CURATED_INSTRUCTION_WEIGHT,
     GENERATED_INSTRUCTION_WEIGHT,

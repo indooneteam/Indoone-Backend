@@ -10,8 +10,8 @@ from pathlib import Path
 import torch
 from torch import nn
 
-from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.model import IndooneTransformer
+from app.ai.local.tokenizer import BPETokenizer
 from app.ai.training.training_data import TrainingExample, format_instruction_prompt, load_examples, write_corpus
 
 

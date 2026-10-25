@@ -4,8 +4,8 @@ import hashlib
 import logging
 import os
 
-from app.ai.service import generate_reply
-from app.ai.conversation_store import ConversationStore
+from app.ai.gateway.service import generate_reply
+from app.ai.memory.conversation_store import ConversationStore
 
 logger = logging.getLogger("indoone.channel")
 

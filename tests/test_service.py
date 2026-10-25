@@ -1,8 +1,6 @@
 import pytest
 
-from app.ai import service
-
-
+from app.ai.gateway import service
 @pytest.mark.asyncio
 async def test_service_sends_the_actual_request_directly_to_the_model(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
@@ -48,8 +46,7 @@ async def test_service_only_adds_explicit_conversation_and_document_context(monk
 
 @pytest.mark.asyncio
 async def test_configured_gemini_backend_uses_gemini_chat_and_preserves_context(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.ai import gemini_service
-
+    from app.ai.gateway import gemini_service
     captured: dict[str, object] = {}
 
     async def fake_generate_gemini_reply(message, history=None, document_context="", extra_system_instruction=""):
@@ -132,8 +129,7 @@ def test_model_artifacts_require_indoone_model_release(monkeypatch: pytest.Monke
 @pytest.mark.asyncio
 async def test_generate_reply_forwards_the_extra_instruction(monkeypatch: pytest.MonkeyPatch) -> None:
     """The name line must reach the model on the plain-answer path too."""
-    from app.ai import gemini_service
-
+    from app.ai.gateway import gemini_service
     captured: dict[str, object] = {}
 
     async def fake_generate_gemini_reply(message, history=None, document_context="", extra_system_instruction=""):

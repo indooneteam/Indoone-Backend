@@ -7,13 +7,13 @@ import re
 import time
 from typing import Any, Iterable
 
-from app.ai.agent_contracts import serialize_tool_result
-from app.ai.agent_policy import deadline_failure, remaining_budget, should_retry
-from app.ai.approval import decide_tool
-from app.ai.coding import build_code_tool_payload
-from app.ai.orchestrator import Plan, plan_request
-from app.ai.tool_registry import get_tool_spec, tool_names
-from app.ai.tools import ToolResult, run_tool
+from app.ai.agents.agent_contracts import serialize_tool_result
+from app.ai.agents.agent_policy import deadline_failure, remaining_budget, should_retry
+from app.ai.execution.approval import decide_tool
+from app.ai.agents.coding import build_code_tool_payload
+from app.ai.agents.orchestrator import Plan, plan_request
+from app.ai.execution.tool_registry import get_tool_spec, tool_names
+from app.ai.execution.tools import ToolResult, run_tool
 from app.capabilities.store import create_agent_run, search_memories, update_agent_run
 
 MAX_AGENT_STEPS = 4

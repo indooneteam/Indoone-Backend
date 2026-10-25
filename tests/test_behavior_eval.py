@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from app.ai.behavior_eval import load_cases, score_case, score_response
+from app.ai.quality.behavior_eval import load_cases, score_case, score_response
 
 
 def test_load_behavior_cases() -> None:

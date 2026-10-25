@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.local_engine import LocalAIEngine
-from app.ai.service import LocalAIService
+from app.ai.local.local_engine import LocalAIEngine
+from app.ai.gateway.service import LocalAIService
 
 
 def test_local_engine_rejects_empty_message(tmp_path: Path) -> None:

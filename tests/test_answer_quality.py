@@ -1,6 +1,6 @@
 import pytest
 
-from app.ai.answer_quality import assess_answer
+from app.ai.quality.answer_quality import assess_answer
 
 
 @pytest.mark.parametrize(

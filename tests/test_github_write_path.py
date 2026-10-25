@@ -11,8 +11,8 @@ import json
 import pytest
 from cryptography.fernet import Fernet
 
-from app.ai import tools as ai_tools
-from app.ai.tools import ToolResult
+from app.ai.execution import tools as ai_tools
+from app.ai.execution.tools import ToolResult
 from app.capabilities import store
 from app.plugins.github import chat_tools
 

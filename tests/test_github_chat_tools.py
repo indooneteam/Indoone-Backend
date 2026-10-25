@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from app.ai.tool_registry import get_tool_spec, requires_approval
-from app.ai.tools import ToolResult
+from app.ai.execution.tool_registry import get_tool_spec, requires_approval
+from app.ai.execution.tools import ToolResult
 from app.plugins.github import chat_tools
 
 

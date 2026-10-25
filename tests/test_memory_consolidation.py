@@ -1,8 +1,8 @@
 import pytest
 
-from app.ai.memory import extract_memory_candidates, rank_memory_matches, resolve_memory_update
-from app.ai.memory_analyzer import extract_memory
-from app.ai.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value, should_store
+from app.ai.memory.memory import extract_memory_candidates, rank_memory_matches, resolve_memory_update
+from app.ai.memory.memory_analyzer import extract_memory
+from app.ai.memory.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value, should_store
 
 
 def test_canonical_extractor_and_legacy_adapter_match():

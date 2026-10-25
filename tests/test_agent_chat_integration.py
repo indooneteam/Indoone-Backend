@@ -7,8 +7,8 @@ from fastapi.testclient import TestClient
 
 import pytest
 
-from app.ai.agent import AgentExecution, AgentStep
-from app.ai.tools import ToolResult
+from app.ai.agents.agent import AgentExecution, AgentStep
+from app.ai.execution.tools import ToolResult
 from app.main import app
 
 

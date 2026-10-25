@@ -5,7 +5,7 @@ import json
 import math
 from pathlib import Path
 
-from app.ai.behavior_eval import CATEGORIES, run_behavioral_eval
+from app.ai.quality.behavior_eval import CATEGORIES, run_behavioral_eval
 from app.ai.training.evaluate import evaluate_checkpoint
 
 DEFAULT_CHECKPOINT = Path("models/indoone-small/indoone-small.pt")

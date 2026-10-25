@@ -11,8 +11,7 @@ import json
 
 import pytest
 
-from app.ai import azure_openai_service as az
-
+from app.ai.gateway import azure_openai_service as az
 _DECLARATIONS = [
     {
         "name": "calculator",

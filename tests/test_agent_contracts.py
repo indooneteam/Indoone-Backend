@@ -1,7 +1,7 @@
 import pytest
 
-from app.ai.agent_contracts import ToolExecutionContract, ToolInvocation, serialize_tool_result
-from app.ai.tools import ToolResult
+from app.ai.agents.agent_contracts import ToolExecutionContract, ToolInvocation, serialize_tool_result
+from app.ai.execution.tools import ToolResult
 
 
 def test_tool_invocation_normalizes_registered_tool() -> None:

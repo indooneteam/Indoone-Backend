@@ -1,130 +1,18 @@
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-# filler line for a size probe
-#
+"""The unit in the repository must name an entry point that exists.
+
+This test exists because it did not, and the service went down for it. When scripts/
+was grouped into folders the entry point moved, every reference was updated except the
+one in deploy/indoone-backend.service - which is not a Python file, so the sweep did not
+look at it. The box then restarted every five seconds with a missing module error.
+
+A unit file that names a module nobody has is a silent, total outage. This makes it a
+red build instead.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import re
+from pathlib import Path
+
+PROJECT_RO

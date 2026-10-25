@@ -364,7 +364,7 @@ async def _github_update_repository_file(payload: str) -> str:
         ),
         spec.timeout_seconds if spec else 30.0,
     )
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+    return await _verified_write_result(user_id, "github_update_repository_file", data, result)
 
 
 async def _instagram_get_profile(payload: str) -> str:
@@ -639,6 +639,23 @@ def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
     }, ensure_ascii=False, sort_keys=True)
 
 
+async def _verified_write_result(user_id: str, tool: str, data: dict[str, object], result: object) -> str:
+    """A write's result, with the state read back before anything says it worked.
+
+    The write returning ok only means the provider accepted the call. The reply must be
+    about what is actually there, so every write is followed by an ordinary read and the
+    result carries what that read saw.
+    """
+    from app.plugins.github.verify import verify_write
+
+    payload = dict(result) if isinstance(result, dict) else {"result": result}
+    verification = await verify_write(user_id, tool, data, payload)
+    payload["verified"] = verification.confirmed
+    payload["checked"] = verification.checked
+    payload["verification"] = verification.detail
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
 async def _github_create_branch(payload: str) -> str:
     data = json.loads(payload)
     if not isinstance(data, dict):
@@ -660,7 +677,7 @@ async def _github_create_branch(payload: str) -> str:
         ),
         spec.timeout_seconds if spec else 20.0,
     )
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+    return await _verified_write_result(user_id, "github_create_branch", data, result)
 
 
 async def _github_delete_branch(payload: str) -> str:
@@ -683,7 +700,7 @@ async def _github_delete_branch(payload: str) -> str:
         ),
         spec.timeout_seconds if spec else 20.0,
     )
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+    return await _verified_write_result(user_id, "github_delete_branch", data, result)
 
 
 async def _github_create_pull_request(payload: str) -> str:
@@ -709,7 +726,7 @@ async def _github_create_pull_request(payload: str) -> str:
         ),
         spec.timeout_seconds if spec else 20.0,
     )
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+    return await _verified_write_result(user_id, "github_create_pull_request", data, result)
 
 
 async def _github_merge_pull_request(payload: str) -> str:
@@ -736,7 +753,7 @@ async def _github_merge_pull_request(payload: str) -> str:
         ),
         spec.timeout_seconds if spec else 30.0,
     )
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
+    return await _verified_write_result(user_id, "github_merge_pull_request", data, result)
 
 
 def _find_tools(query: str) -> str:

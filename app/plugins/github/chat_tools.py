@@ -495,6 +495,16 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
     if str(data.get("code") or "") in {"APPROVAL_REQUIRED", "APPROVAL_UNAVAILABLE"}:
         return str(data.get("reply") or data.get("message") or "Nothing has been changed yet.")
 
+    # A write is only reported as done when the state was read back and found. The
+    # sentence comes from the read, not from the fact that the call returned.
+    verification = str(result.get("verification") or "").strip()
+    if result.get("verified") is False:
+        return (
+            "I could not confirm that it went through: "
+            + (verification or "the check could not read the state back.")
+            + " Nothing is being claimed as done."
+        )
+
     if name == "github_list_repositories":
         items = data.get("repositories")
         repos = items if isinstance(items, list) else []

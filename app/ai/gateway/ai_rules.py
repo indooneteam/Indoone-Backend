@@ -51,6 +51,9 @@ _TOOL_ONLY_RULES = (
     "explicit approval; if one is refused, ask for confirmation and never claim the "
     "action happened. "
     "If a tool errors, explain it honestly and ask only for the next needed step. "
+    "A write tool answers with verified true or false: true only when the change was read "
+    "back and found. Never say a change was made unless it is true. When it is false, say "
+    "what you could not confirm and stop - do not retry on your own. "
     "If the request needs something none of the tools you have can do, call find_tools "
     "with a short English query, then use what it returns."
 )

@@ -143,8 +143,14 @@ def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tu
             r"^(?:call|phone|dial|ಕರೆ|ಫೋನ್|ಕರೆಮಾಡು)\s+(?:to\s+|ge\s+|ಗೆ\s+|maadu\s+|ಮಾಡು\s+)?(.+)$",
         ),
         (
+            # Only an explicit contact request. The bare find/search/lookup/resolve
+            # alternatives matched any message that began with those verbs -
+            # "search my github repositories", "find my repos", "search my gmail for
+            # invoices" - planned a contact lookup, and the empty contact result then
+            # suppressed the model's tool loop. That is why the assistant answered
+            # "I don't have access" instead of calling the GitHub tool.
             "contact_resolve",
-            r"^(?:find\s+contact|search\s+contact|lookup\s+contact|resolve\s+contact|contact|find|search|lookup|resolve|ಹುಡುಕು|ಕಾಂಟ್ಯಾಕ್ಟ್)\s+(.+)$",
+            r"^(?:find\s+contact|search\s+contact|lookup\s+contact|resolve\s+contact|contact|ಕಾಂಟ್ಯಾಕ್ಟ್)\s+(.+)$",
         ),
     )
     for tool, pattern in patterns:

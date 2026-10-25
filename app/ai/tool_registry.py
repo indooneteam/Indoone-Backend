@@ -55,6 +55,11 @@ class ToolSpec:
     capability: str | None = None
     # Where the executor lives, for maintainers.
     module: str = "app.ai.tools"
+    # Whether the model may be offered this tool. False for a tool whose input the
+    # model cannot have -- a client-supplied contact snapshot, which the model
+    # must never invent -- so it is left out of the model catalogue but stays
+    # reachable from the deterministic agent path and the client API.
+    model_facing: bool = True
 
 
 def _object(properties: dict[str, Any], required: tuple[str, ...] = ()) -> dict[str, Any]:
@@ -187,6 +192,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             },
             ("query",),
         ),
+        model_facing=False,
         categories=("contacts",),
     ),
     ToolSpec(
@@ -199,6 +205,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             },
             ("query",),
         ),
+        model_facing=False,
         categories=("contacts",),
     ),
     ToolSpec(
@@ -227,6 +234,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         ),
         risk="external",
         requires_approval=True,
+        model_facing=False,
         categories=("phone", "external"),
     ),
     # ---- Gmail (legacy deterministic agent path) -------------------------- #
@@ -1025,6 +1033,7 @@ def describe_tools() -> list[dict[str, Any]]:
             "connector_id": item.connector_id,
             "capability": item.capability,
             "module": item.module,
+            "model_facing": item.model_facing,
         }
         for item in TOOL_SPECS
     ]

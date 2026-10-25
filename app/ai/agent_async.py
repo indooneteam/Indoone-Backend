@@ -35,7 +35,10 @@ async def _run_with_retry_async(tool: str, payload: str, deadline: float, user_i
         if remaining <= 0:
             return deadline_failure(tool), retry_count
         retry_count += 1
-        result = await run_tool_async(tool, payload, max_runtime_seconds=remaining)
+        # The user id must travel on the retry too, or a connector tool is refused
+        # by the authorization layer ("authenticated user is required") instead of
+        # being retried.
+        result = await run_tool_async(tool, payload, max_runtime_seconds=remaining, user_id=user_id)
     return result, retry_count
 
 

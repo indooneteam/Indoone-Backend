@@ -48,10 +48,10 @@ _DEFAULT_BURST = 10
 # person types, and it is the number that bounds what one account can cost.
 _DEFAULT_DAILY_QUOTA = 500
 
-_ENV_ENABLED = "INDOONE_CHAT_LIMITS_ENABLED"
-_ENV_PER_MINUTE = "INDOONE_CHAT_RATE_PER_MINUTE"
-_ENV_BURST = "INDOONE_CHAT_RATE_BURST"
-_ENV_DAILY_QUOTA = "INDOONE_CHAT_DAILY_QUOTA"
+# The variable names are written at each call site rather than kept in constants on
+# purpose: tests/ops/test_env_documentation.py scans the source for a literal name
+# passed to the environment lookup and fails the build when one is not in
+# .env.example. A constant would hide a new variable from that guard.
 
 RATE_LIMITED = "RATE_LIMITED"
 DAILY_QUOTA_EXCEEDED = "DAILY_QUOTA_EXCEEDED"
@@ -97,20 +97,20 @@ def limits_enabled() -> bool:
     would mean every existing deployment silently keeps the gap this module closes.
     """
 
-    raw = os.getenv(_ENV_ENABLED, "").strip().casefold()
+    raw = os.getenv("INDOONE_CHAT_LIMITS_ENABLED", "").strip().casefold()
     return raw not in {"0", "false", "no", "off"}
 
 
 def _per_minute() -> float:
-    return _env_float(_ENV_PER_MINUTE, _DEFAULT_PER_MINUTE)
+    return _env_float("INDOONE_CHAT_RATE_PER_MINUTE", _DEFAULT_PER_MINUTE)
 
 
 def _burst() -> int:
-    return max(1, _env_int(_ENV_BURST, _DEFAULT_BURST))
+    return max(1, _env_int("INDOONE_CHAT_RATE_BURST", _DEFAULT_BURST))
 
 
 def daily_quota() -> int:
-    return max(1, _env_int(_ENV_DAILY_QUOTA, _DEFAULT_DAILY_QUOTA))
+    return max(1, _env_int("INDOONE_CHAT_DAILY_QUOTA", _DEFAULT_DAILY_QUOTA))
 
 
 # ---- the burst limiter ----------------------------------------------------- #

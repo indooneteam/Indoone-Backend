@@ -35,16 +35,15 @@ INTEGRATIONS: tuple[Integration, ...] = (
     # Keep GitHub OAuth on the least-privilege public_repo scope.
     # Private repository access can be added later through a narrowly permissioned GitHub App.
     Integration("github", "GitHub", "developer", "ready", "oauth2", ("read:user", "public_repo"), "https://github.com/login/oauth/authorize", bool(os.getenv("INDOONE_GITHUB_CLIENT_ID"))),
-    Integration("google_calendar", "Google Calendar", "productivity", "ready", "oauth2", ("calendar:read", "calendar:write"), "https://accounts.google.com/o/oauth2/v2/auth", bool(os.getenv("INDOONE_GOOGLE_CLIENT_ID"))),
     Integration("gmail", "Gmail", "communication", "ready", "oauth2", ("gmail:read", "gmail:send"), "https://accounts.google.com/o/oauth2/v2/auth", bool(os.getenv("INDOONE_GOOGLE_CLIENT_ID"))),
     Integration("zoho_mail", "Zoho Mail", "communication", "ready", "oauth2", ("ZohoMail.accounts.READ", "ZohoMail.folders.READ", "ZohoMail.messages.READ", "ZohoMail.messages.CREATE", "ZohoMail.messages.DELETE"), f"{os.getenv('INDOONE_ZOHO_ACCOUNTS_BASE_URL', 'https://accounts.zoho.in').rstrip('/')}/oauth/v2/auth", bool(os.getenv("INDOONE_ZOHO_CLIENT_ID"))),
     Integration("slack", "Slack", "communication", "ready", "oauth2", ("channels:read", "messages:read", "messages:write"), "https://slack.com/oauth/v2/authorize", bool(os.getenv("INDOONE_SLACK_CLIENT_ID"))),
 )
 
-_CLIENT_ID_ENV = {"github": "INDOONE_GITHUB_CLIENT_ID", "google_calendar": "INDOONE_GOOGLE_CLIENT_ID", "gmail": "INDOONE_GOOGLE_CLIENT_ID", "zoho_mail": "INDOONE_ZOHO_CLIENT_ID", "slack": "INDOONE_SLACK_CLIENT_ID"}
-_CLIENT_SECRET_ENV = {"github": "INDOONE_GITHUB_CLIENT_SECRET", "google_calendar": "INDOONE_GOOGLE_CLIENT_SECRET", "gmail": "INDOONE_GOOGLE_CLIENT_SECRET", "zoho_mail": "INDOONE_ZOHO_CLIENT_SECRET", "slack": "INDOONE_SLACK_CLIENT_SECRET"}
-_TOKEN_URLS = {"github": "https://github.com/login/oauth/access_token", "google_calendar": "https://oauth2.googleapis.com/token", "gmail": "https://oauth2.googleapis.com/token", "zoho_mail": f"{os.getenv('INDOONE_ZOHO_ACCOUNTS_BASE_URL', 'https://accounts.zoho.in').rstrip('/')}/oauth/v2/token", "slack": "https://slack.com/api/oauth.v2.access"}
-_PROBE_URLS = {"github": "https://api.github.com/user", "google_calendar": "https://www.googleapis.com/calendar/v3/users/me/calendarList", "gmail": "https://gmail.googleapis.com/gmail/v1/users/me/profile", "zoho_mail": f"{os.getenv('INDOONE_ZOHO_MAIL_API_BASE_URL', 'https://mail.zoho.in/api').rstrip('/')}/accounts", "slack": "https://slack.com/api/auth.test"}
+_CLIENT_ID_ENV = {"github": "INDOONE_GITHUB_CLIENT_ID", "gmail": "INDOONE_GOOGLE_CLIENT_ID", "zoho_mail": "INDOONE_ZOHO_CLIENT_ID", "slack": "INDOONE_SLACK_CLIENT_ID"}
+_CLIENT_SECRET_ENV = {"github": "INDOONE_GITHUB_CLIENT_SECRET", "gmail": "INDOONE_GOOGLE_CLIENT_SECRET", "zoho_mail": "INDOONE_ZOHO_CLIENT_SECRET", "slack": "INDOONE_SLACK_CLIENT_SECRET"}
+_TOKEN_URLS = {"github": "https://github.com/login/oauth/access_token", "gmail": "https://oauth2.googleapis.com/token", "zoho_mail": f"{os.getenv('INDOONE_ZOHO_ACCOUNTS_BASE_URL', 'https://accounts.zoho.in').rstrip('/')}/oauth/v2/token", "slack": "https://slack.com/api/oauth.v2.access"}
+_PROBE_URLS = {"github": "https://api.github.com/user", "gmail": "https://gmail.googleapis.com/gmail/v1/users/me/profile", "zoho_mail": f"{os.getenv('INDOONE_ZOHO_MAIL_API_BASE_URL', 'https://mail.zoho.in/api').rstrip('/')}/accounts", "slack": "https://slack.com/api/auth.test"}
 
 
 def list_integrations() -> list[dict[str, object]]:
@@ -77,10 +76,10 @@ def build_oauth_authorization(integration_id: str, state: str, redirect_uri: str
     params = {"client_id": client_id, "redirect_uri": redirect_uri.strip(), "state": state.strip()}
     if normalized == "github":
         params["scope"] = " ".join(integration.permissions)
-    elif normalized in {"google_calendar", "gmail"}:
+    elif normalized == "gmail":
         params.update({"response_type": "code", "access_type": "offline"})
         params["prompt"] = "consent"
-        params["scope"] = "https://www.googleapis.com/auth/calendar" if normalized == "google_calendar" else "https://www.googleapis.com/auth/gmail.modify"
+        params["scope"] = "https://www.googleapis.com/auth/gmail.modify"
     elif normalized == "zoho_mail":
         params.update({"response_type": "code", "access_type": "offline", "prompt": "consent"})
         params["scope"] = ",".join(integration.permissions)
@@ -242,7 +241,7 @@ async def exchange_oauth_code(integration_id: str, state: str, code: str) -> dic
         raise ValueError("invalid or expired oauth state")
     client_id, client_secret = _secret(normalized)
     payload = {"client_id": client_id, "client_secret": client_secret, "code": code.strip(), "redirect_uri": state_data["redirect_uri"]}
-    if normalized in {"google_calendar", "gmail", "zoho_mail"}:
+    if normalized in {"gmail", "zoho_mail"}:
         payload["grant_type"] = "authorization_code"
     if normalized == "zoho_mail":
         payload["scope"] = ",".join(integration.permissions)
@@ -264,9 +263,6 @@ async def exchange_oauth_code(integration_id: str, state: str, code: str) -> dic
 def _provider_probe_summary(integration_id: str, payload: dict[str, object]) -> dict[str, object]:
     if integration_id == "github":
         return {"login": payload.get("login"), "name": payload.get("name"), "id": payload.get("id")}
-    if integration_id == "google_calendar":
-        items = payload.get("items")
-        return {"calendar_count": len(items) if isinstance(items, list) else 0}
     if integration_id == "gmail":
         return {"email_address": payload.get("emailAddress"), "messages_total": payload.get("messagesTotal"), "threads_total": payload.get("threadsTotal")}
     if integration_id == "zoho_mail":

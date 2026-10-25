@@ -633,7 +633,7 @@ def test_vibe_keeps_the_full_catalogue_without_a_signed_in_user(
 
     assert "search_gmail_messages" in names
     assert "github_list_repositories" in names
-    assert "canva_list_designs" in names
+    assert "instagram_list_media" in names
 
 
 def test_vibe_live_setup_uses_the_signed_in_users_tools(

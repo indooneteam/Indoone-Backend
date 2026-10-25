@@ -15,7 +15,7 @@ def test_integrations_list_is_safe_metadata(monkeypatch) -> None:
         response = client.get("/api/integrations")
     assert response.status_code == 200
     items = response.json()["integrations"]
-    assert {item["id"] for item in items} >= {"github", "google_calendar", "gmail", "slack"}
+    assert {item["id"] for item in items} >= {"github", "gmail", "slack"}
     assert all(item["configured"] is False for item in items)
     assert all("token" not in item and "secret" not in item for item in items)
 

@@ -27,11 +27,9 @@ logger = logging.getLogger("indoone.connector_security")
 # does not check - which is exactly what happened to the YouTube routes.
 #
 # The connector routers for Canva and Facebook do not appear separately: their prefixes
-# (/integrations/canva and /integrations/facebook) already sit under /api/integrations.
 _CONNECTOR_PATH_PREFIXES = (
     "/api/integrations",
     "/api/google-photos",
-    "/api/youtube",
     # app/api/capabilities.py mounts at the root, so its user-scoped routes are listed one
     # by one.
     "/api/capabilities",

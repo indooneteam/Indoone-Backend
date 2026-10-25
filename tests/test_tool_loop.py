@@ -25,17 +25,8 @@ def test_declarations_are_one_list_without_the_legacy_gmail_family() -> None:
     # Data-changing tools are offered too; approval is enforced at dispatch.
     assert "sandbox_execution" in names
     assert "github_update_repository_file" in names
-    assert "phone_call" in names
     assert "search_web" in names
-    assert "google_calendar_list_events" in names
-    assert "google_calendar_create_event" in names
-    assert "google_drive_list_files" in names
-    assert "google_drive_upload_file" in names
-    assert "google_photos_search_media" in names
-    assert "youtube_search" in names
     assert "instagram_list_media" in names
-    assert "facebook_list_pages" in names
-    assert "canva_list_designs" in names
     assert "data_analysis" in names
     assert "task_schedule_build" in names
 

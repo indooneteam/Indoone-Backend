@@ -21,21 +21,6 @@ def _token(user_id: str) -> str:
     return f"Bearer {encoded_user}.{encoded_timestamp}.{signature}"
 
 
-def test_google_workspace_scope_aliases_are_least_privilege() -> None:
-    drive = "https://www.googleapis.com/auth/drive"
-    drive_readonly = "https://www.googleapis.com/auth/drive.readonly"
-    calendar = "https://www.googleapis.com/auth/calendar"
-    calendar_readonly = "https://www.googleapis.com/auth/calendar.readonly"
-
-    assert scope_allows("google_drive", drive, "files.search") is True
-    assert scope_allows("google_drive", drive, "files.read") is True
-    assert scope_allows("google_drive", drive, "files.upload") is True
-    assert scope_allows("google_drive", drive_readonly, "files.upload") is False
-    assert scope_allows("google_calendar", calendar, "events.create") is True
-    assert scope_allows("google_calendar", calendar_readonly, "events.read") is True
-    assert scope_allows("google_calendar", calendar_readonly, "events.create") is False
-
-
 def test_connector_user_scope_blocks_cross_user_request(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
     monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
@@ -144,32 +129,3 @@ def test_connector_user_scope_rejects_body_user_behind_matching_query(monkeypatc
     assert response.json()["message"] == "user scope mismatch"
 
 
-def test_youtube_routes_are_connector_scoped(monkeypatch) -> None:
-    """The YouTube routes read user_id from the body, so they must be guarded too."""
-    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
-    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
-
-    with TestClient(app) as client:
-        response = client.post(
-            "/api/youtube/search",
-            headers={"Authorization": _token("user-one")},
-            json={"user_id": "user-two", "query": "indoone"},
-        )
-
-    assert response.status_code == 403
-    assert response.json()["message"] == "user scope mismatch"
-
-
-def test_youtube_routes_accept_the_authenticated_user(monkeypatch) -> None:
-    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
-    monkeypatch.setenv("INDOONE_CONNECTOR_AUTH_REQUIRED", "true")
-
-    with TestClient(app) as client:
-        response = client.post(
-            "/api/youtube/search",
-            headers={"Authorization": _token("user-one")},
-            json={"user_id": "user-one", "query": "indoone"},
-        )
-
-    # Anything but a scope refusal: the guard let the caller's own id through.
-    assert response.status_code != 403

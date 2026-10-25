@@ -238,7 +238,7 @@ def _consume_daily(user_id: str, *, window: str | None = None) -> Admission:
         ).fetchone()
         db.commit()
 
-    used = int(row[0]) if row is not None else 1
+    used = int(row["used"]) if row is not None else 1
     if used > quota:
         # The counter keeps climbing past the limit so the next request is refused
         # immediately rather than re-testing; it resets with the window.
@@ -276,7 +276,7 @@ def usage_today(user_id: str, *, window: str | None = None) -> int:
             ).fetchone()
     except Exception:
         return 0
-    return int(row[0]) if row is not None else 0
+    return int(row["used"]) if row is not None else 0
 
 
 # ---- the one function the request path calls ------------------------------- #

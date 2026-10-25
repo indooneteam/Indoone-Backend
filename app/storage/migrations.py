@@ -89,7 +89,10 @@ def current_revision(url: str | None = None) -> str | None:
         return None
     if row is None:
         return None
-    return str(row[0])
+    # By column name, not by position: the Postgres connection returns rows keyed by
+    # column name while SQLite's sqlite3.Row happens to support both, and an index
+    # access is a KeyError on Postgres.
+    return str(row["version_num"])
 
 
 def upgrade_to_head(url: str | None = None) -> str | None:

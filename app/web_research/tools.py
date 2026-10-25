@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from app.web_research.research import ResearchResult, build_free_research_provider
+from app.ai.ai_rules import SEARCH_INVALID_QUERY, SEARCH_NO_RESULTS, SEARCH_UNAVAILABLE
 
 MAX_SEARCH_QUERY_LENGTH = 500
 MAX_SEARCH_RESULTS = 8
@@ -123,11 +124,11 @@ def build_search_web_function_response(
         ],
     }
     if result.status == "unavailable":
-        response["message"] = "Public web search was unavailable. Do not claim current facts were verified."
+        response["message"] = SEARCH_UNAVAILABLE
     elif result.status == "no_results":
-        response["message"] = "No relevant public sources were found. Do not invent sources."
+        response["message"] = SEARCH_NO_RESULTS
     elif result.status == "invalid_query":
-        response["message"] = "The query was invalid or contained private data. Do not search it."
+        response["message"] = SEARCH_INVALID_QUERY
     function_response: dict[str, Any] = {"name": _SEARCH_TOOL_NAME, "response": response}
     if call.call_id:
         function_response["id"] = call.call_id

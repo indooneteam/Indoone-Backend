@@ -35,6 +35,7 @@ from app.channels.instagram.api.instagram_automation import router as instagram_
 from app.api.content.memory import router as memory_router
 from app.api.ops.observability import router as observability_router
 from app.api.chat.notifications import initialize as initialize_notification_store
+from app.ai.execution.limits import initialize as initialize_usage_limits
 from app.api.chat.notifications import router as notifications_router
 from app.api.chat.platform import router as platform_router
 from app.ai.gateway.observability import begin_request, record_request
@@ -153,6 +154,10 @@ async def lifespan(_: FastAPI):
     configure_sqlite_runtime()
     initialize_capability_store()
     initialize_notification_store()
+    # The daily quota counter lives in the same store as everything else; creating it
+    # on every start is what keeps a fresh deployment from refusing every message with
+    # a missing-table error instead of admitting them.
+    initialize_usage_limits()
     cleanup_task = asyncio.create_task(_conversation_cleanup_loop())
     try:
         yield

@@ -31,6 +31,7 @@ from app.api.security.dependencies import current_user_id
 from app.ai.gateway.gemini_service import ModelBusyError
 from app.ai.execution.account_context import accounts_instruction, without_stale_refusals
 from app.ai.execution.confirmation import classify_reply_async
+from app.ai.execution import limits as chat_limits
 from app.ai.execution.tool_loop import run_tool_loop
 from app.ai.agents.agent_async import execute_agent_async
 from app.capabilities.connectors.store import (
@@ -201,9 +202,36 @@ def _principal(request: Request) -> str:
     return current_user_id(request)
 
 
+def _client_ip(request: Request) -> str:
+    """The caller's address, for the case where there is no authenticated user."""
+
+    client = getattr(request, "client", None)
+    return str(getattr(client, "host", "") or "")
+
+
+def _admit(request: Request, user_id: str) -> None:
+    """Refuse a request before it spends anything, or let it through.
+
+    This runs before any attachment is decoded, any history is read and any model is
+    called, so a refused request costs a dictionary lookup and one counter write. The
+    ``Retry-After`` header is always set on a refusal, so a client can back off without
+    guessing.
+    """
+
+    admission = chat_limits.admit(user_id, client_ip=_client_ip(request))
+    if admission.allowed:
+        return
+    raise HTTPException(
+        status_code=429,
+        detail=admission.message or "Too many requests. Try again shortly.",
+        headers={"Retry-After": str(max(1, admission.retry_after))},
+    )
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     user_id = _principal(request)
+    _admit(request, user_id)
     is_new_conversation = body.conversation_id is None
     conversation_id = body.conversation_id or str(uuid4())
 

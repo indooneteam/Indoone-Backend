@@ -11,6 +11,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.ai.ai_rules import CONFIRM_OR_CANCEL
 from app.ai.approval import issue_approval_token
 from app.ai.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
 from app.capabilities.store import (
@@ -324,7 +325,7 @@ async def _execute_github_tool(
             "reply": (
                 f"I will {_WRITE_INTENT.get(name, 'make this change')} in "
                 f"{arguments.get('repository') or 'the repository'}. "
-                f"Nothing has been changed yet. Reply CONFIRM to go ahead, or CANCEL to stop."
+                f"{CONFIRM_OR_CANCEL}"
             ),
         }
 

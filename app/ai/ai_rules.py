@@ -77,6 +77,14 @@ EVIDENCE_SUFFIX = (
     "Do not reproduce the evidence block or source formatting."
 )
 
+# ---- Confirmations the user is asked for ------------------------------------
+
+CONFIRM_OR_CANCEL = "Nothing has been changed yet. Reply CONFIRM to go ahead, or CANCEL to stop."
+EMAIL_PENDING_ACTION = (
+    "There is a pending email action awaiting your decision. "
+    "Reply CONFIRM to approve it or CANCEL to stop it before starting another email action."
+)
+
 # ---- Web search results -----------------------------------------------------
 
 SEARCH_UNAVAILABLE = "Public web search was unavailable. Do not claim current facts were verified."

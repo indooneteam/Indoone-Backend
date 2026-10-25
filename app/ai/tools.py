@@ -14,6 +14,7 @@ from typing import Awaitable, Callable
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
 from datetime import datetime, timedelta, timezone
 
+from app.ai.ai_rules import CONFIRM_OR_CANCEL
 from app.ai.approval import issue_approval_token, validate_approval_token
 from app.ai.code_sandbox import sandbox_execution_tool
 from app.ai.connector_authorization import authorize_tool
@@ -623,7 +624,7 @@ def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
         "reply": (
             f"I will {_WRITE_INTENT.get(tool, 'make this change')} in "
             f"{data.get('repository') or 'the repository'}. "
-            f"Nothing has been changed yet. Reply CONFIRM to go ahead, or CANCEL to stop."
+            f"{CONFIRM_OR_CANCEL}"
         ),
     }, ensure_ascii=False, sort_keys=True)
 

@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.ai.ai_rules import EMAIL_PENDING_ACTION
 from app.ai.conversation_store import ConversationStore
 from app.ai.file_context import read_text_file
 from app.ai.service import generate_reply
@@ -366,9 +367,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                         tool_reply = await handle_email_chat(user_id, conversation_id, body.message)
                     else:
                         tool_reply = (
-                            "There is a pending email action awaiting your decision. "
-                            "Reply CONFIRM to approve it or CANCEL to stop it before "
-                            "starting another email action."
+                            EMAIL_PENDING_ACTION
                         )
                 if tool_reply is None and not agent_ran and needs_tools(body.message):
                     # One loop, every tool: the model chooses whether and which to call.

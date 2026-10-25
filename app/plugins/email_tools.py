@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 
+from app.ai.ai_rules import EMAIL_PENDING_ACTION
 from app.ai.language_detection import INDIC_NEGATION_WORDS, INDIC_SEND_WORDS
 from app.ai.tool_registry import EMAIL_TOOL_DECLARATIONS
 import re
@@ -533,7 +534,7 @@ async def handle_email_chat_with_tools(
         action_type = str(pending.get("action_type") or "")
         if action_type == "await_recipient" or CONFIRM_RE.fullmatch(text) or CANCEL_RE.fullmatch(text):
             return await handle_email_chat(user, conversation, text)
-        return "There is a pending email action awaiting your decision. Reply CONFIRM to approve it or CANCEL to stop it before starting another email action."
+        return EMAIL_PENDING_ACTION
 
     previous_user_message = next(
         (

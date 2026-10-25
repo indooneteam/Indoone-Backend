@@ -53,10 +53,10 @@ def test_a_proposed_write_is_held_and_stored(monkeypatch):
         calls.append(kwargs)
         return _branch_result(kwargs["repository"], kwargs["branch"])
 
-    monkeypatch.setattr(ai_tools, "write_github_create_branch", _fake_write)
+    monkeypatch.setattr(ai_tools, "write_github_delete_branch", _fake_write)
 
     result = asyncio.run(tool_loop.dispatch_tool(
-        "u-1", "c-1", "github_create_branch",
+        "u-1", "c-1", "github_delete_branch",
         {"repository": "o/r", "branch": "terminal"},
     ))
 
@@ -73,11 +73,11 @@ def test_an_approved_write_runs_and_carries_the_token(monkeypatch):
         seen.append(kwargs)
         return _branch_result(kwargs["repository"], kwargs["branch"])
 
-    monkeypatch.setattr(ai_tools, "write_github_create_branch", _fake_write)
-    token = issue_approval_token("u-2", "github_create_branch")
+    monkeypatch.setattr(ai_tools, "write_github_delete_branch", _fake_write)
+    token = issue_approval_token("u-2", "github_delete_branch")
 
     result = asyncio.run(tool_loop.dispatch_tool(
-        "u-2", "c-2", "github_create_branch",
+        "u-2", "c-2", "github_delete_branch",
         {"repository": "o/r", "branch": "terminal"},
         approval_tokens=[token],
     ))
@@ -95,10 +95,10 @@ def test_the_full_loop_holds_then_runs_on_confirm(monkeypatch):
         calls.append(kwargs)
         return _branch_result(kwargs["repository"], kwargs["branch"])
 
-    monkeypatch.setattr(ai_tools, "write_github_create_branch", _fake_write)
+    monkeypatch.setattr(ai_tools, "write_github_delete_branch", _fake_write)
 
     proposed = asyncio.run(tool_loop.dispatch_tool(
-        "u-3", "c-3", "github_create_branch",
+        "u-3", "c-3", "github_delete_branch",
         {"repository": "o/r", "branch": "terminal"},
     ))
     assert proposed["code"] == "APPROVAL_REQUIRED"
@@ -114,14 +114,18 @@ def test_the_full_loop_holds_then_runs_on_confirm(monkeypatch):
     assert store.get_pending_github_action("u-3", "c-3") is None
 
 
-def test_a_write_that_does_not_hold_is_still_refused_without_a_token():
-    """github_update_repository_file is gated at dispatch, not held."""
+def test_a_reversible_write_runs_without_a_token():
+    """Writing a file changes nothing that cannot be written again.
+
+    It used to be gated at dispatch. That meant a question the user had already
+    answered - do this - came back as another question, which is the loop this whole
+    change removes.
+    """
     result = asyncio.run(tool_loop.dispatch_tool(
         "u-4", "c-4", "github_update_repository_file",
         {"repository": "o/r", "path": "a.py", "content": "x", "message": "m"},
     ))
-    assert result["ok"] is False
-    assert result["code"] == "APPROVAL_REQUIRED"
+    assert result.get("code") != "APPROVAL_REQUIRED"
 
 
 def test_every_write_tool_forwards_the_token_into_the_payload(monkeypatch):

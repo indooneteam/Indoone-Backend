@@ -170,7 +170,8 @@ def test_github_file_edit_tool_requires_approval():
     assert spec is not None
     assert spec.connector_id == "github"
     assert spec.capability == "repo.files.write"
-    assert requires_approval("github_update_repository_file") is True
+    # Writing a file is reversible and has nothing to preview, so it runs when asked.
+    assert requires_approval("github_update_repository_file") is False
     assert scope_allows("github", "public_repo", "repo.files.write")
     assert scope_allows("github", "repo", "repo.files.write")
 

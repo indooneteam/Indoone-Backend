@@ -38,7 +38,7 @@ def test_a_write_without_a_token_is_held_not_run(monkeypatch):
 
     result = asyncio.run(chat_tools._execute_github_tool(
         "user-1",
-        "github_create_branch",
+        "github_delete_branch",
         {"repository": "o/r", "branch": "terminal", "conversation_id": "c-1"},
     ))
 
@@ -65,7 +65,7 @@ def test_confirming_runs_the_write_it_held(monkeypatch):
 
     asyncio.run(chat_tools._execute_github_tool(
         "user-2",
-        "github_create_branch",
+        "github_delete_branch",
         {"repository": "o/r", "branch": "terminal", "conversation_id": "c-2"},
     ))
 
@@ -75,7 +75,7 @@ def test_confirming_runs_the_write_it_held(monkeypatch):
 
     assert calls, "the write should have run after the confirmation"
     name, payload = calls[0]
-    assert name == "github_create_branch"
+    assert name == "github_delete_branch"
     assert payload["branch"] == "terminal"
     assert payload.get("approval_token"), "the held token must travel with the replay"
     assert "terminal" in answer
@@ -94,7 +94,7 @@ def test_cancelling_drops_it_without_running_anything(monkeypatch):
 
     asyncio.run(chat_tools._execute_github_tool(
         "user-3",
-        "github_create_branch",
+        "github_delete_branch",
         {"repository": "o/r", "branch": "x", "conversation_id": "c-3"},
     ))
     answer = asyncio.run(chat_tools.handle_github_chat_with_tools(
@@ -114,8 +114,8 @@ def test_anything_else_reminds_the_user_and_holds_it(monkeypatch):
 
     asyncio.run(chat_tools._execute_github_tool(
         "user-4",
-        "github_create_pull_request",
-        {"repository": "o/r", "title": "t", "head": "h", "conversation_id": "c-4"},
+        "github_delete_branch",
+        {"repository": "o/r", "branch": "x", "conversation_id": "c-4"},
     ))
     answer = asyncio.run(chat_tools.handle_github_chat_with_tools(
         "user-4", "what is the weather", history=None, conversation_id="c-4",
@@ -136,7 +136,7 @@ def test_a_pending_is_per_conversation(monkeypatch):
 
     asyncio.run(chat_tools._execute_github_tool(
         "user-5",
-        "github_create_branch",
+        "github_delete_branch",
         {"repository": "o/r", "branch": "x", "conversation_id": "c-5a"},
     ))
     assert store.get_pending_github_action("user-5", "c-5a") is not None
@@ -144,9 +144,15 @@ def test_a_pending_is_per_conversation(monkeypatch):
 
 
 def test_the_write_intents_are_all_known():
-    """Every write tool must have wording, or the proposal reads wrong."""
+    """Every declared write tool has wording, and the held ones are a subset of them.
+
+    Creating and updating run as soon as they are asked for; deleting a branch and
+    merging a pull request are held, so those two are the held set.
+    """
     from app.ai.execution.tool_registry import GITHUB_WRITE_TOOL_DECLARATIONS
 
-    for declaration in GITHUB_WRITE_TOOL_DECLARATIONS:
-        assert declaration["name"] in chat_tools._WRITE_INTENT, declaration["name"]
-        assert declaration["name"] in chat_tools._WRITE_TOOLS, declaration["name"]
+    declared = {declaration["name"] for declaration in GITHUB_WRITE_TOOL_DECLARATIONS}
+    for name in declared:
+        assert name in chat_tools._WRITE_INTENT, name
+    assert chat_tools._WRITE_TOOLS == {"github_delete_branch", "github_merge_pull_request"}
+    assert chat_tools._WRITE_TOOLS <= declared

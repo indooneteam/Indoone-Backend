@@ -11,7 +11,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.ai.execution.confirmation import CANCEL, CONFIRM, classify_reply, waiting_prompt
+from app.ai.execution.confirmation import CANCEL, CONFIRM, classify_reply_async, waiting_prompt
 from app.ai.gateway.ai_rules import CONFIRM_OR_CANCEL
 from app.ai.execution.approval import issue_approval_token
 from app.ai.execution.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
@@ -747,10 +747,13 @@ def _read_pending_payload(item: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+# Creating a branch, opening a pull request and writing a file run as soon as the user
+# asks for them: there is nothing to preview, and a second question is a second question.
+# Deleting a branch and merging a pull request are held, because neither can be undone -
+# a merge that lands on the wrong branch cannot be un-merged, and a deleted branch takes
+# its commits with it.
 _WRITE_TOOLS = frozenset({
-    "github_create_branch", "github_delete_branch",
-    "github_create_pull_request", "github_merge_pull_request",
-    "github_update_repository_file",
+    "github_delete_branch", "github_merge_pull_request",
 })
 
 
@@ -772,7 +775,7 @@ async def handle_github_chat_with_tools(
     conversation_key = str(conversation_id or "") or _PENDING_CONVERSATION
     pending = get_pending_github_action(user, conversation_key)
     if pending is not None:
-        decision = classify_reply(message)
+        decision = await classify_reply_async(message)
         if decision == CANCEL:
             delete_pending_github_action(user, conversation_key)
             return "Understood - cancelled. Nothing was changed in your GitHub repository."

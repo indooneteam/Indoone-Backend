@@ -28,7 +28,7 @@ from app.plugins.zoho_mail.service import (
     send_message,
 )
 
-from app.ai.execution.confirmation import CANCEL, CONFIRM, classify_reply, waiting_prompt
+from app.ai.execution.confirmation import CANCEL, CONFIRM, classify_reply_async, waiting_prompt
 from app.ai.language.language_detection import (
     INDIC_MAIL_WORDS,
     indic_pattern,
@@ -641,11 +641,11 @@ async def handle_email_chat(user_id: str, conversation_id: str, message: str) ->
                     user, conversation, provider, str(data["request"]),
                     recipient_match.group(0), bool(data.get("sending")),
                 )
-            if classify_reply(text) == CANCEL:
+            if await classify_reply_async(text) == CANCEL:
                 delete_pending_email_action(user, conversation)
                 return "Cancelled. Nothing was sent or saved."
             return "Please reply with the recipient email address, or CANCEL."
-        decision = classify_reply(text)
+        decision = await classify_reply_async(text)
         if decision == CONFIRM:
             delete_pending_email_action(user, conversation)
             try:

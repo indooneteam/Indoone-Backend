@@ -9,7 +9,7 @@ import logging
 
 from app.ai.gateway.ai_rules import EMAIL_PENDING_ACTION
 from app.ai.language.language_detection import INDIC_NEGATION_WORDS, INDIC_SEND_WORDS
-from app.ai.execution.confirmation import classify_reply
+from app.ai.execution.confirmation import classify_reply_async
 from app.ai.execution.tool_registry import EMAIL_TOOL_DECLARATIONS
 import re
 from typing import Any
@@ -531,7 +531,7 @@ async def handle_email_chat_with_tools(
     pending = get_pending_email_action(user, conversation)
     if pending:
         action_type = str(pending.get("action_type") or "")
-        if action_type == "await_recipient" or classify_reply(text) in {"confirm", "cancel"}:
+        if action_type == "await_recipient" or await classify_reply_async(text) in {"confirm", "cancel"}:
             return await handle_email_chat(user, conversation, text)
         return EMAIL_PENDING_ACTION
 

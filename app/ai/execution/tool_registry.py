@@ -287,7 +287,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     # proposes; the user confirms. They are never reached without it.
     ToolSpec(
         "github_create_branch",
-        "Create a branch from a ref, so a change can be made without touching the default branch. Requires the user's explicit approval.",
+        "Create a branch from a ref, so a change can be made without touching the default branch.",
         parameters=_object(
             {
                 "repository": {"type": "STRING", "description": "Repository as owner/name."},
@@ -297,7 +297,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             ("repository", "branch"),
         ),
         risk="write",
-        requires_approval=True,
         categories=("github", "external", "write"),
         connector_id="github",
         capability="branches.write",
@@ -320,7 +319,7 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
     ),
     ToolSpec(
         "github_create_pull_request",
-        "Open a pull request from one branch into another. Requires the user's explicit approval.",
+        "Open a pull request from one branch into another.",
         parameters=_object(
             {
                 "repository": {"type": "STRING", "description": "Repository as owner/name."},
@@ -332,7 +331,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             ("repository", "title", "head"),
         ),
         risk="write",
-        requires_approval=True,
         categories=("github", "external", "write"),
         connector_id="github",
         capability="pull_requests.write",
@@ -480,7 +478,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
             ("repository", "path", "content", "message"),
         ),
         risk="external",
-        requires_approval=True,
         max_output_chars=4000,
         categories=("github", "external", "write"),
         connector_id="github",
@@ -617,7 +614,8 @@ def function_declarations(
 
     ``names``        restrict to these tool names (in catalogue order).
     ``connector_id`` restrict to tools for one connector.
-    ``read_only``    exclude tools that require approval.
+    ``read_only``    exclude tools that change something, whether or not they
+                     are held for approval.
     """
     wanted = set(names) if names is not None else None
     declarations: list[dict[str, Any]] = []
@@ -626,7 +624,9 @@ def function_declarations(
             continue
         if connector_id is not None and spec.connector_id != connector_id:
             continue
-        if read_only and spec.requires_approval:
+        # "read-only" is about whether the tool changes anything, not about whether it
+        # asks first. A branch create no longer asks, and it is still not read-only.
+        if read_only and (spec.requires_approval or spec.risk != "read"):
             continue
         declarations.append(tool_declaration(spec))
     return declarations

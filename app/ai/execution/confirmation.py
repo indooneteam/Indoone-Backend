@@ -95,7 +95,13 @@ _HARMLESS_NO = re.compile(
 
 
 def classify_reply(message: str | None) -> str:
-    """``confirm``, ``cancel`` or ``other`` for the message answering a held action."""
+    """The fast path: a yes or no word we already know, in any script.
+
+    It is deliberately not the only path. A word list cannot hold how Kannada is spoken
+    in Mandya, in north Karnataka and in Tulu Nadu, let alone twelve languages, and every
+    word it misses sends the user back to the same question. ``classify_reply_async``
+    asks the model for the rest.
+    """
 
     text = _HARMLESS_NO.sub("", " ".join(str(message or "").split()).strip())
     if not text:
@@ -138,3 +144,54 @@ def waiting_prompt(action: str = "the change") -> str:
         f"Nothing has happened yet: {action} is still waiting for your go-ahead.\n"
         "Reply 1 (or yes) to do it now, or 2 (or cancel) to drop it."
     )
+
+
+_INSTRUCTION = (
+    "You are reading one short reply from a user. The assistant is holding an action and "
+    "asked them to go ahead or drop it. Decide what this reply means and answer with "
+    "exactly one word, nothing else:\n"
+    "CONFIRM - they agree, or tell you to do it, in any language or dialect, however "
+    "indirectly.\n"
+    "CANCEL - they refuse, stop it, or say no.\n"
+    "OTHER - they are asking a question, changing the subject, or it is not clear.\n"
+    "Examples of CONFIRM in Indian languages: sari, aaytu, haan bhejo, haudu, sare, "
+    "theek hai, pannu, chey, karo, bhejo. Dialect words you have not seen are still "
+    "CONFIRM when the meaning is agreement."
+)
+
+
+def _read_verdict(answer: str) -> str:
+    """The verdict out of a model reply, or OTHER when it is not one of the three."""
+    text = str(answer or "").strip().upper()
+    for verdict in (CONFIRM, CANCEL, OTHER):
+        if text.startswith(verdict):
+            return verdict
+    return OTHER
+
+
+async def classify_reply_async(message: str | None) -> str:
+    """``confirm``, ``cancel`` or ``other`` - by meaning, not by a word list.
+
+    The known words answer instantly. Anything else is put to the model with a one-word
+    question, because a dialect the list has never seen still means yes when it means yes.
+    A model that cannot answer leaves the verdict at ``other``: the action stays held and
+    the user is told so, which is the only safe reading when we do not know.
+    """
+    fast = classify_reply(message)
+    if fast != OTHER:
+        return fast
+    text = " ".join(str(message or "").split()).strip()
+    if not text:
+        return OTHER
+
+    from app.ai.gateway.service import generate_reply
+
+    try:
+        answer = await generate_reply(
+            text,
+            history=None,
+            extra_system_instruction=_INSTRUCTION,
+        )
+    except Exception:
+        return OTHER
+    return _read_verdict(answer)

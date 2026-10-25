@@ -218,6 +218,18 @@ def _run_sync_with_timeout(tool: ToolCallable, payload: str, timeout_seconds: fl
 
     result: list[object] = []
     errors: list[BaseException] = []
+    release_lock = threading.Lock()
+    released = {"value": False}
+
+    def release_once() -> None:
+        # A worker that outlives its timeout is abandoned, but its slot must still be
+        # returned - exactly once - or eight hung tools would exhaust the pool for
+        # the life of the process.
+        with release_lock:
+            if released["value"]:
+                return
+            released["value"] = True
+        _SYNC_TOOL_SEMAPHORE.release()
 
     def runner() -> None:
         try:
@@ -228,12 +240,13 @@ def _run_sync_with_timeout(tool: ToolCallable, payload: str, timeout_seconds: fl
         except BaseException as exc:
             errors.append(exc)
         finally:
-            _SYNC_TOOL_SEMAPHORE.release()
+            release_once()
 
     thread = threading.Thread(target=runner, daemon=True, name="indoone-sync-tool")
     thread.start()
     thread.join(bounded_timeout)
     if thread.is_alive():
+        release_once()
         raise TimeoutError("tool execution timed out")
     if errors:
         raise errors[0]
@@ -415,9 +428,6 @@ async def _github_update_repository_file(payload: str) -> str:
         raise ValueError("the current file SHA is required when updating an existing file")
     if not validate_approval_token(approval_token, user_id, "github_update_repository_file"):
         raise PermissionError("a valid, current, server-issued GitHub file-update approval is required")
-    held = _hold_write(data, user_id, "github_update_repository_file")
-    if held is not None:
-        return held
     spec = get_tool_spec("github_update_repository_file")
     result = await _run_async(
         commit_github_repository_file(
@@ -609,7 +619,12 @@ async def _google_calendar_create_event(payload: str) -> str:
         raise ValueError("event is required")
     spec = get_tool_spec("google_calendar_create_event")
     result = await _run_async(
-        create_google_calendar_event(user_id, str(data.get("calendar_id", "primary")) or "primary", event, approved=True),
+        create_google_calendar_event(
+            user_id,
+            str(data.get("calendar_id", "primary")) or "primary",
+            event,
+            approved=bool(data.get("approved", False)),
+        ),
         spec.timeout_seconds if spec else 20.0,
     )
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
@@ -630,7 +645,13 @@ async def _google_calendar_update_event(payload: str) -> str:
         raise ValueError("event is required")
     spec = get_tool_spec("google_calendar_update_event")
     result = await _run_async(
-        update_google_calendar_event(user_id, str(data.get("calendar_id", "primary")) or "primary", event_id, event, approved=True),
+        update_google_calendar_event(
+            user_id,
+            str(data.get("calendar_id", "primary")) or "primary",
+            event_id,
+            event,
+            approved=bool(data.get("approved", False)),
+        ),
         spec.timeout_seconds if spec else 20.0,
     )
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
@@ -648,7 +669,12 @@ async def _google_calendar_delete_event(payload: str) -> str:
         raise ValueError("event_id is required")
     spec = get_tool_spec("google_calendar_delete_event")
     result = await _run_async(
-        delete_google_calendar_event(user_id, str(data.get("calendar_id", "primary")) or "primary", event_id, approved=True),
+        delete_google_calendar_event(
+            user_id,
+            str(data.get("calendar_id", "primary")) or "primary",
+            event_id,
+            approved=bool(data.get("approved", False)),
+        ),
         spec.timeout_seconds if spec else 20.0,
     )
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
@@ -717,7 +743,7 @@ async def _google_drive_upload_file(payload: str) -> str:
             mime_type,
             content.encode("utf-8"),
             parent_id=str(data.get("parent_id", "")),
-            approved=True,
+            approved=bool(data.get("approved", False)),
         ),
         spec.timeout_seconds if spec else 20.0,
     )
@@ -1018,7 +1044,12 @@ async def _canva_create_export_job(payload: str) -> str:
         raise ValueError("format is required")
     spec = get_tool_spec("canva_create_export_job")
     result = await _run_async(
-        create_canva_export_job(user_id, design_id, format_payload, approved=True),
+        create_canva_export_job(
+            user_id,
+            design_id,
+            format_payload,
+            approved=bool(data.get("approved", False)),
+        ),
         spec.timeout_seconds if spec else 20.0,
     )
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
@@ -1088,12 +1119,15 @@ async def _github_list_pull_request_files(payload: str) -> str:
     user_id = str(data.get("user_id", "")).strip()
     if not user_id:
         raise ValueError("user_id is required")
+    number = int(data.get("number", 0))
+    if number < 1:
+        raise ValueError("pull request number is required")
     spec = get_tool_spec("github_list_pull_request_files")
     result = await _run_async(
         fetch_github_pull_request_files(
             user_id=user_id,
             repository=str(data.get("repository", "")),
-            number=int(data.get("number", 0)),
+            number=number,
             per_page=max(1, min(int(data.get("per_page", 30)), 100)),
         ),
         spec.timeout_seconds if spec else 20.0,
@@ -1127,12 +1161,15 @@ async def _github_get_commit(payload: str) -> str:
     user_id = str(data.get("user_id", "")).strip()
     if not user_id:
         raise ValueError("user_id is required")
+    sha = str(data.get("sha", "")).strip()
+    if not sha:
+        raise ValueError("commit sha is required")
     spec = get_tool_spec("github_get_commit")
     result = await _run_async(
         fetch_github_commit(
             user_id=user_id,
             repository=str(data.get("repository", "")),
-            sha=str(data.get("sha", "")),
+            sha=sha,
         ),
         spec.timeout_seconds if spec else 20.0,
     )
@@ -1287,6 +1324,9 @@ async def _github_merge_pull_request(payload: str) -> str:
     user_id = str(data.get("user_id", "")).strip()
     if not user_id:
         raise ValueError("user_id is required")
+    number = int(data.get("number", 0))
+    if number < 1:
+        raise ValueError("pull request number is required")
     spec = get_tool_spec("github_merge_pull_request")
     held = _hold_write(data, user_id, "github_merge_pull_request")
     if held is not None:
@@ -1295,7 +1335,7 @@ async def _github_merge_pull_request(payload: str) -> str:
         write_github_merge_pull_request(
             user_id=user_id,
             repository=str(data.get("repository", "")),
-            number=int(data.get("number", 0)),
+            number=number,
             method=str(data.get("method", "squash")) or "squash",
             approved=_approved_write(data, user_id, "github_merge_pull_request"),
         ),

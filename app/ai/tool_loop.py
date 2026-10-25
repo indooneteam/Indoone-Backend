@@ -269,6 +269,7 @@ async def dispatch_tool(
         }
 
     # A data-changing tool is a proposal until a server-issued approval arrives.
+    approval_granted = False
     if spec.requires_approval:
         decision = decide_tool(name, approval_tokens=approval_tokens, user_id=user_id)
         if not decision.allowed:
@@ -281,8 +282,15 @@ async def dispatch_tool(
                     "confirm. Do not claim the action happened."
                 ),
             }
+        approval_granted = True
 
     payload_arguments = dict(arguments)
+    # The model never asserts that a write is approved; the backend does, and only
+    # when the decision above allowed it. A write executor reads this flag, so it
+    # refuses on its own instead of trusting whichever caller reached it.
+    payload_arguments.pop("approved", None)
+    if approval_granted:
+        payload_arguments["approved"] = True
     # The authenticated identity is injected by the backend, never by the model.
     if user_id.strip():
         payload_arguments.setdefault("user_id", user_id)

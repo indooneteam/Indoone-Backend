@@ -1,0 +1,83 @@
+name: Nightly tool-selection eval
+
+# What this catches that the pull-request gate cannot
+# ---------------------------------------------------
+# `ci.yml` runs the golden set against the *search*: given the English query, is the
+# right tool in the shortlist. That is free and fast, so it runs on every pull request.
+# It cannot see the failure users actually report - the model answering from memory
+# instead of calling a tool - because that path never reaches the search.
+#
+# This job runs a language-balanced sample of the same set against the live provider
+# and fails when the accuracy drops below the threshold. Every case is a paid model
+# call, which is why it runs nightly instead of per pull request.
+
+on:
+  schedule:
+    # 20:30 UTC is 02:00 IST: the night's run is waiting when the team starts.
+    - cron: "30 20 * * *"
+  workflow_dispatch:
+    inputs:
+      sample:
+        description: "How many cases to run"
+        required: false
+        default: "40"
+      threshold:
+        description: "Accuracy required to pass, 0-1"
+        required: false
+        default: "0.90"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-tool-eval
+  cancel-in-progress: false
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run the live evaluation
+        id: eval
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          INDOONE_MODEL_BACKEND: gemini
+          INDOONE_EVAL_SAMPLE: ${{ github.event.inputs.sample || vars.INDOONE_EVAL_SAMPLE || '40' }}
+          INDOONE_EVAL_THRESHOLD: ${{ github.event.inputs.threshold || vars.INDOONE_EVAL_THRESHOLD || '0.90' }}
+          INDOONE_EVAL_SEED: ${{ vars.INDOONE_EVAL_SEED || '0' }}
+          INDOONE_EVAL_REPORT: eval-report.json
+        run: python scripts/eval/live_tool_selection.py
+
+      # The report is uploaded even when the gate fails: the list of misses is the
+      # whole reason to look, and it must not be behind a passing run.
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tool-selection-eval
+          path: eval-report.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Fail with the reason
+        if: failure()
+        run: |
+          echo "The live tool-selection evaluation did not meet its threshold."
+          echo "Read the 'Run the live evaluation' log for the per-case misses, and the"
+          echo "uploaded eval-report.json for the accuracy broken down by language."
+          echo "A miss means the model answered without calling the tool, or called the"
+          echo "wrong one - not that the search failed, which the pull-request gate covers."

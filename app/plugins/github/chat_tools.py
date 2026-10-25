@@ -18,7 +18,7 @@ from app.capabilities.store import (
     get_pending_github_action,
     save_pending_github_action,
 )
-from app.ai.tools import ToolResult, run_tool_async
+from app.ai.tools import ToolResult, _explicit_write_intent, run_tool_async
 
 _GITHUB_TARGET_RE = re.compile(
     r"\b(repositories|repository|repos|repo|pull\s+requests?|prs?|issues?|assigned\s+issues|files?|folders?|directories|contents|code|commits?|history|compare|readme|branches?|checks?|ci|workflows?)\b"
@@ -268,6 +268,7 @@ async def _execute_github_tool(
     arguments: dict[str, Any],
     approval_tokens: tuple[str, ...] = (),
     conversation_id: str | None = None,
+    message: str = "",
 ) -> dict[str, Any]:
     allowed = {
         "github_list_repositories", "github_list_assigned_issues", "github_list_pull_requests",
@@ -287,10 +288,12 @@ async def _execute_github_tool(
     # that asked the approvals endpoint), or inside the arguments (the replay of a
     # write this handler held and the user then confirmed). Both are valid.
     _supplied_token = approval_tokens or (str(arguments.get("approval_token") or "").strip(),)
-    if name in _WRITE_TOOLS and not any(_supplied_token):
-        # The model proposed a write. Nothing runs yet: hold it, issue the token,
-        # and tell the model what to say. The next message from the user confirms
-        # it, and that is what runs it - not the model's wording.
+    if name in _WRITE_TOOLS and not any(_supplied_token) and not _explicit_write_intent(name, message):
+        # The model proposed a write and the user did not ask for it themselves.
+        # Nothing runs yet: hold it, issue the token, and tell the model what to
+        # say. The next message from the user confirms it, and that is what runs it
+        # - not the model's wording. An explicit request in the user's own message
+        # needs no second confirmation and is not held.
         try:
             token = issue_approval_token(user_id, name, ttl_seconds=300)
         except (RuntimeError, ValueError):
@@ -446,11 +449,13 @@ async def _execute_github_tool(
             return {"ok": False, "code": "COMPARE_REFS_REQUIRED", "message": "Provide both branch or commit references, for example main and develop."}
         payload.update({"base": base, "head": head})
 
-    # A write carries the server-issued approval token. The executor validates it
-    # against this exact tool, so the model proposing a write is not the same as
-    # the write happening - the user has to have confirmed.
-    if name in _WRITE_TOOLS and any(_supplied_token):
-        payload["approval_token"] = next(t for t in _supplied_token if t)
+    # A write carries the server-issued approval token, or the user's own wording
+    # when they asked for it themselves. The executor validates both.
+    if name in _WRITE_TOOLS:
+        if any(_supplied_token):
+            payload["approval_token"] = next(t for t in _supplied_token if t)
+        if message.strip():
+            payload["original_message"] = message
 
     result = await run_tool_async(
         name, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), user_id=user_id,
@@ -463,6 +468,10 @@ async def _execute_github_tool(
         return {"ok": False, "code": "INVALID_TOOL_RESULT", "message": "GitHub returned an unreadable result."}
     if not isinstance(data, dict):
         return {"ok": False, "code": "INVALID_TOOL_RESULT", "message": "GitHub returned an invalid result."}
+    # A held write is a proposal, not a result: pass it through as it is, so the
+    # formatter can never present it as something that happened.
+    if str(data.get("code") or "") in {"APPROVAL_REQUIRED", "APPROVAL_UNAVAILABLE"}:
+        return data
     return {"ok": True, "result": data}
 
 
@@ -480,6 +489,9 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
     data = result.get("result")
     if not isinstance(data, dict):
         return "GitHub returned no usable data."
+    # Belt and braces: a held write must never be reported as done.
+    if str(data.get("code") or "") in {"APPROVAL_REQUIRED", "APPROVAL_UNAVAILABLE"}:
+        return str(data.get("reply") or data.get("message") or "Nothing has been changed yet.")
 
     if name == "github_list_repositories":
         items = data.get("repositories")
@@ -791,7 +803,7 @@ async def handle_github_chat_with_tools(
             stored_arguments["approval_token"] = str(stored.get("token") or "")
             delete_pending_github_action(user, conversation_key)
             result = await _execute_github_tool(
-                user, tool, stored_arguments, conversation_id=conversation_key
+                user, tool, stored_arguments, conversation_id=conversation_key, message=message
             )
             return _format_github_result(tool, result)
         return (
@@ -817,7 +829,7 @@ async def handle_github_chat_with_tools(
     # the real list, and the model summarised it. Nothing that reaches the user
     # goes through a model any more.
     tool_name, tool_arguments = request
-    result = await _execute_github_tool(user, tool_name, tool_arguments, (), conversation_id)
+    result = await _execute_github_tool(user, tool_name, tool_arguments, (), conversation_id, message=message)
     return _format_github_result(tool_name, result)
 
     tool_name, arguments = request

@@ -23,9 +23,9 @@ WorkingDirectory=/home/ubuntu/Indoone-Backend
 # Every credential and setting lives here, outside the repository.
 EnvironmentFile=/etc/indoone/indoone.env
 
-# scripts/run_server.py is the entry point; it reads its host and port from the
+# scripts/ops/run_server.py is the entry point; it reads its host and port from the
 # environment file. Do not call uvicorn directly, or those settings are ignored.
-ExecStart=/home/ubuntu/Indoone-Backend/.venv/bin/python -m scripts.run_server
+ExecStart=/home/ubuntu/Indoone-Backend/.venv/bin/python -m scripts.ops.run_server
 
 Restart=always
 RestartSec=5

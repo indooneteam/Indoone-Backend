@@ -135,31 +135,6 @@ def _extract_gmail_request(message: str, user_id: str) -> tuple[str, dict[str, A
                 return tool, {"user_id": user_id, "message_id": value}
     return None
 
-def _extract_contact_request(message: str, contacts: list[dict[str, Any]]) -> tuple[str, dict[str, Any]] | None:
-    text = message.strip()
-    patterns = (
-        (
-            "phone_call_contact",
-            r"^(?:call|phone|dial|ಕರೆ|ಫೋನ್|ಕರೆಮಾಡು)\s+(?:to\s+|ge\s+|ಗೆ\s+|maadu\s+|ಮಾಡು\s+)?(.+)$",
-        ),
-        (
-            # Only an explicit contact request. The bare find/search/lookup/resolve
-            # alternatives matched any message that began with those verbs -
-            # "search my github repositories", "find my repos", "search my gmail for
-            # invoices" - planned a contact lookup, and the empty contact result then
-            # suppressed the model's tool loop. That is why the assistant answered
-            # "I don't have access" instead of calling the GitHub tool.
-            "contact_resolve",
-            r"^(?:find\s+contact|search\s+contact|lookup\s+contact|resolve\s+contact|contact|ಕಾಂಟ್ಯಾಕ್ಟ್)\s+(.+)$",
-        ),
-    )
-    for tool, pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            query = match.group(1).strip(" .?!")
-            if query:
-                return tool, {"contacts": contacts, "query": query}
-    return None
 def build_agent_steps(message: str, user_id: str = "", contacts: list[dict[str, Any]] | None = None) -> tuple[AgentStep, ...]:
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH: return ()
@@ -170,10 +145,6 @@ def build_agent_steps(message: str, user_id: str = "", contacts: list[dict[str, 
         tool, payload = gmail_request
         return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
     if _gmail_request_matches(normalized): return ()
-    contact_request = _extract_contact_request(normalized, contacts or [])
-    if contact_request is not None:
-        tool, payload = contact_request
-        return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
     expressions = _extract_calculations(normalized)
     if expressions: return tuple(_step("calculator", expression, index) for index, expression in enumerate(expressions, start=1))
     plan: Plan = plan_request(normalized)

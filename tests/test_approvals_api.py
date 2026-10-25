@@ -26,7 +26,7 @@ def _auth_headers(user_id: str = "user-one") -> dict[str, str]:
 def test_issue_approval_requires_authentication(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
     monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "y" * 32)
-    response = client.post("/api/approvals/issue", json={"tool": "phone_call"})
+    response = client.post("/api/approvals/issue", json={"tool": "sandbox_execution"})
     assert response.status_code == 401
     assert response.json()["code"] == "HTTP_401"
 
@@ -44,12 +44,12 @@ def test_issue_approval_binds_token_to_authenticated_user(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "y" * 32)
     response = client.post(
         "/api/approvals/issue",
-        json={"tool": "phone_call", "ttl_seconds": 120},
+        json={"tool": "sandbox_execution", "ttl_seconds": 120},
         headers=_auth_headers("user-one"),
     )
     assert response.status_code == 200
     payload = response.json()
-    assert payload["tool"] == "phone_call"
+    assert payload["tool"] == "sandbox_execution"
     assert payload["expires_in_seconds"] == 120
     assert payload["approval_token"]
 

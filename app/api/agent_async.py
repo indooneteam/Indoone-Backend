@@ -15,7 +15,6 @@ async def agent(request: AgentRequest) -> dict[str, object]:
         request.message,
         user_id=request.user_id,
         approved_tools=frozenset(request.approved_tools),
-        contacts=request.contacts,
     )
     if not execution.steps and not execution.blocked_steps:
         return {

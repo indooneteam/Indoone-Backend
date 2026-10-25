@@ -21,15 +21,9 @@ class ConnectorSpec:
 
 CONNECTORS: tuple[ConnectorSpec, ...] = (
     ConnectorSpec("gmail", "Gmail", "communication", "oauth2", ("messages.search", "messages.read"), ("messages.send",)),
-    ConnectorSpec("google_calendar", "Google Calendar", "productivity", "oauth2", ("events.read",), ("events.create", "events.update", "events.delete")),
-    ConnectorSpec("google_drive", "Google Drive", "storage", "oauth2", ("files.search", "files.read"), ("files.upload",)),
-    ConnectorSpec("google_photos", "Google Photos", "media", "oauth2", ("media.search", "media.read"), ("media.upload",)),
     ConnectorSpec("telegram", "Telegram", "communication", "bot", ("messages.read",), ("messages.send",)),
     ConnectorSpec("whatsapp", "WhatsApp", "communication", "oauth2", ("messages.read",), ("messages.send",)),
-    ConnectorSpec("youtube", "YouTube", "media", "oauth2", ("search.read", "videos.read")),
     ConnectorSpec("instagram", "Instagram", "social", "oauth2", ("profile.read", "media.read"), ("media.publish", "messages.send")),
-    ConnectorSpec("facebook", "Facebook", "social", "oauth2", ("profile.read", "pages.read"), ("posts.publish", "messages.send")),
-    ConnectorSpec("canva", "Canva", "productivity", "oauth2", ("designs.read",), ("designs.write", "exports.create")),
     ConnectorSpec("github", "GitHub", "developer", "oauth2", ("repos.read", "issues.read", "pull_requests.read", "repo.contents.read", "repo.files.read", "repo.code.search", "repo.history.read", "repo.compare.read"), ("issues.write", "comments.write", "repo.files.write", "branches.write", "pull_requests.write")),
 )
 

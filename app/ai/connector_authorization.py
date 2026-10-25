@@ -45,21 +45,6 @@ _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
         "https://www.googleapis.com/auth/gmail.readonly": frozenset(("messages.search", "messages.read")),
         "https://www.googleapis.com/auth/gmail.send": frozenset(("messages.send",)),
     },
-    "google_calendar": {
-        "https://www.googleapis.com/auth/calendar": frozenset(("events.read", "events.create", "events.update", "events.delete")),
-        "https://www.googleapis.com/auth/calendar.readonly": frozenset(("events.read",)),
-        "https://www.googleapis.com/auth/calendar.events": frozenset(("events.read", "events.create", "events.update", "events.delete")),
-        "https://www.googleapis.com/auth/calendar.events.readonly": frozenset(("events.read",)),
-    },
-    "google_drive": {
-        "https://www.googleapis.com/auth/drive": frozenset(("files.search", "files.read", "files.upload")),
-        "https://www.googleapis.com/auth/drive.readonly": frozenset(("files.search", "files.read")),
-        "https://www.googleapis.com/auth/drive.file": frozenset(("files.search", "files.read", "files.upload")),
-    },
-    "google_photos": {
-        "https://www.googleapis.com/auth/photoslibrary.readonly": frozenset(("media.search", "media.read")),
-        "https://www.googleapis.com/auth/photoslibrary.appendonly": frozenset(("media.upload",)),
-    },
 }
 
 

@@ -15,16 +15,12 @@ from app.api.auth import extract_principal, validate_production_security_config
 from app.api.capabilities import router as capabilities_router
 from app.api.agent_async import router as agent_async_router
 from app.web_research.api import router as web_research_router
-from app.api.canva import router as canva_router
 from app.api.chat import router as chat_router
 from app.api.connector_security import enforce_connector_user_scope
-from app.api.contacts import router as contacts_router
 from app.api.conversations import router as conversations_router
 from app.api.documents import router as documents_router
 from app.api.files import router as files_router
 from app.api.errors import error_response
-from app.api.facebook import router as facebook_router
-from app.api.google_photos import router as google_photos_router
 from app.api.integrations import router as integrations_router
 from app.plugins.zoho_mail.oauth_routes import router as zoho_mail_oauth_router
 from app.plugins.zoho_mail.routes import router as zoho_mail_router
@@ -39,17 +35,12 @@ from app.instagram.api.instagram_automation import router as instagram_automatio
 from app.api.memory import router as memory_router
 from app.api.notifications import initialize as initialize_notification_store
 from app.api.notifications import router as notifications_router
-from app.api.phone import router as phone_router
 from app.api.platform import router as platform_router
 from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
 from app.api.network_security import configure_network_security, validate_network_security_config
 from app.api.environment_security import validate_environment_security_config
 from app.telegram.api import router as telegram_router
 from app.whatsapp.api import router as whatsapp_router
-from app.api.youtube import router as youtube_router
-from app.api.youtube_analytics import router as youtube_analytics_router
-from app.api.youtube_live import router as youtube_live_router
-from app.api.youtube_advanced import router as youtube_advanced_router
 from app.api.voice_session import router as voice_session_router
 from app.api.vibe import router as vibe_router
 from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
@@ -311,17 +302,11 @@ app.include_router(documents_router, prefix="/api")
 app.include_router(files_router, prefix="/api")
 app.include_router(voice_session_router, prefix="/api")
 app.include_router(vibe_router, prefix="/api")
-app.include_router(contacts_router, prefix="/api")
-app.include_router(phone_router, prefix="/api")
 app.include_router(approvals_router, prefix="/api")
 app.include_router(integrations_router, prefix="/api")
 app.include_router(zoho_mail_router, prefix="/api")
 app.include_router(telegram_router, prefix="/api")
 app.include_router(whatsapp_router, prefix="/api")
-app.include_router(youtube_router, prefix="/api")
-app.include_router(youtube_analytics_router, prefix="/api")
-app.include_router(youtube_live_router, prefix="/api")
-app.include_router(youtube_advanced_router, prefix="/api")
 app.include_router(instagram_router, prefix="/api")
 app.include_router(instagram_insights_router, prefix="/api")
 app.include_router(instagram_comments_router, prefix="/api")
@@ -330,9 +315,6 @@ app.include_router(instagram_advanced_router, prefix="/api")
 app.include_router(instagram_publishing_router, prefix="/api")
 app.include_router(instagram_webhooks_router, prefix="/api")
 app.include_router(instagram_automation_router, prefix="/api")
-app.include_router(facebook_router, prefix="/api")
-app.include_router(google_photos_router, prefix="/api")
-app.include_router(canva_router, prefix="/api")
 
 
 @app.get("/health")

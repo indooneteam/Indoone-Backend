@@ -232,7 +232,7 @@ async def _search_gmail_for_voice(user_id: str, args: dict[str, Any]) -> dict[st
     return {"ok": True, "query": query, "count": len(emails), "emails": emails}
 
 
-_VOICE_CONNECTOR_PREFIXES = ("github_", "google_", "youtube_", "instagram_", "facebook_", "canva_")
+_VOICE_CONNECTOR_PREFIXES = ("github_", "instagram_")
 
 
 def _connector_is_connected(user_id: str, connector_id: str) -> bool:

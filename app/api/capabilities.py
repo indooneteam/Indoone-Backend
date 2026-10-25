@@ -103,7 +103,6 @@ class AgentRequest(BaseModel):
     message: str = Field(min_length=1, max_length=20_000)
     user_id: str = Field(default="", max_length=256)
     approved_tools: list[str] = Field(default_factory=list, max_length=8)
-    contacts: list[dict[str, Any]] = Field(default_factory=list, max_length=500)
 
 
 class ImageGenerationRequest(BaseModel):
@@ -216,8 +215,6 @@ async def integration_callback_browser(
     integration_name = {
         "github": "GitHub",
         "gmail": "Gmail",
-        "google_calendar": "Google Calendar",
-        "google_drive": "Google Drive",
         "zoho_mail": "Zoho Mail",
         "slack": "Slack",
     }.get(integration_id.strip().lower(), "Service")

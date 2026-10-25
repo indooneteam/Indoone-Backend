@@ -64,9 +64,6 @@ def _rule_plan(message: str, intent: Intent) -> Plan:
                 payload = build_code_tool_payload(payload)
             return Plan(intent=Intent("tool", needs_file_context=intent.needs_file_context), tool=tool, tool_payload=payload, reason="registry-rule")
 
-    if any(term in lower for term in ("find contact ", "search contact ", "lookup contact ", "resolve contact ")):
-        return Plan(intent=Intent("tool"), tool="contacts_search", tool_payload=text, reason="contact-lookup")
-
     if lower.startswith(("search gmail", "find in gmail", "list gmail")):
         payload = _extract_payload(text, ("search gmail", "find in gmail", "list gmail"))
         if payload:

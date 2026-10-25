@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from app.api.errors import REQUEST_FAILED_MESSAGE, provider_failure
+from app.api.security.errors import REQUEST_FAILED_MESSAGE, provider_failure
 
 from app.plugins.zoho_mail.service import (
     get_message_content,

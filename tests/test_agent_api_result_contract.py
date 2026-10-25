@@ -27,7 +27,7 @@ def test_agent_api_exposes_truncated_result_metadata(monkeypatch) -> None:
 
     # /api/agent is served by the async agent router, which is registered
     # before the legacy capabilities router.
-    monkeypatch.setattr("app.api.agent_async.execute_agent_async", fake_execute_agent_async)
+    monkeypatch.setattr("app.api.chat.agent_async.execute_agent_async", fake_execute_agent_async)
 
     with TestClient(app) as client:
         response = client.post("/api/agent", json={"message": "text stats: hello"})

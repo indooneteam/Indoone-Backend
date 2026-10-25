@@ -3,7 +3,7 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from app.api.errors import provider_failure
+from app.api.security.errors import provider_failure
 
 from app.instagram.capabilities.instagram_comments import (
     create_media_comment,

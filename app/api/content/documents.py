@@ -5,7 +5,7 @@ import base64
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.api.dependencies import current_user_id
+from app.api.security.dependencies import current_user_id
 from app.capabilities.document_extract import MAX_DOCUMENT_BYTES, extract_document
 
 

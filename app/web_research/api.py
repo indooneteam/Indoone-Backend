@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.web_research.research import build_free_research_provider
-from app.api.errors import REQUEST_FAILED_MESSAGE, provider_failure
+from app.api.security.errors import REQUEST_FAILED_MESSAGE, provider_failure
 
 router = APIRouter(tags=["web-research"])
 

@@ -11,7 +11,7 @@ from app.capabilities.integrations import (
 )
 from app.capabilities.store import create_oauth_state
 from secrets import token_urlsafe
-from app.api.errors import provider_failure
+from app.api.security.errors import provider_failure
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
 router.include_router(github_router)

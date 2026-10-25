@@ -2,7 +2,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.capabilities.integrations import build_oauth_authorization
-from app.api import capabilities as capabilities_api
+from app.api.content import capabilities as capabilities_api
 from app.main import app
 
 

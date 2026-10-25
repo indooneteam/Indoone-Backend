@@ -6,7 +6,7 @@ import time
 from fastapi.testclient import TestClient
 
 from app.ai.memory.conversation_store import ConversationStore
-from app.api.conversations import _store
+from app.api.chat.conversations import _store
 from app.main import app
 
 client = TestClient(app)
@@ -30,7 +30,7 @@ def test_conversation_routes_require_auth(monkeypatch) -> None:
 def test_conversation_list_close_delete_are_owner_scoped(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
     store = ConversationStore(tmp_path / "conversations.sqlite3")
-    monkeypatch.setattr("app.api.conversations._store", store)
+    monkeypatch.setattr("app.api.chat.conversations._store", store)
     store.append("c1", [("user", "private")], user_id="user-one")
 
     mine = client.get("/api/conversations", headers=_auth_headers("user-one"))

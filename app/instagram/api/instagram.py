@@ -14,7 +14,7 @@ from app.instagram.capabilities.instagram import (
     publish_media,
 )
 from app.capabilities.store import create_oauth_state
-from app.api.errors import provider_failure
+from app.api.security.errors import provider_failure
 
 router = APIRouter(prefix="/integrations/instagram", tags=["instagram"])
 

@@ -4,8 +4,8 @@ import asyncio
 
 from fastapi import Request
 
-from app.api import chat as chat_api
-from app.api.chat import ChatRequest
+from app.api.chat import chat as chat_api
+from app.api.chat.chat import ChatRequest
 
 
 def test_chat_returns_grounded_sources_and_persists_full_reply(monkeypatch) -> None:

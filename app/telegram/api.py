@@ -4,7 +4,7 @@ from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.telegram.ai_reply import process_telegram_update
-from app.api.errors import provider_failure
+from app.api.security.errors import provider_failure
 from app.telegram.service import (
     delete_webhook,
     get_updates,

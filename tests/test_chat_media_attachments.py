@@ -5,7 +5,7 @@ import base64
 import pytest
 from fastapi import HTTPException
 
-from app.api.chat import ChatRequest, _decode_chat_attachment
+from app.api.chat.chat import ChatRequest, _decode_chat_attachment
 
 
 def test_decode_chat_image_attachment() -> None:
@@ -27,8 +27,7 @@ def test_decode_chat_image_attachment() -> None:
 
 
 def test_chat_rejects_images_over_five_mb(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.api import chat as chat_api
-
+    from app.api.chat import chat as chat_api
     monkeypatch.setattr(chat_api, "MAX_IMAGE_BYTES", 5)
     body = ChatRequest(
         message="Describe this image",
@@ -120,7 +119,7 @@ def test_decode_multiple_chat_attachments() -> None:
         ],
     )
 
-    from app.api.chat import _decode_chat_attachments
+    from app.api.chat.chat import _decode_chat_attachments
 
     decoded = _decode_chat_attachments(body)
 
@@ -129,7 +128,7 @@ def test_decode_multiple_chat_attachments() -> None:
 
 
 def test_chat_rejects_more_than_ten_total_attachments() -> None:
-    from app.api.chat import _decode_chat_attachments
+    from app.api.chat.chat import _decode_chat_attachments
 
     body = ChatRequest(
         message="Review these files",
@@ -151,8 +150,7 @@ def test_chat_rejects_more_than_ten_total_attachments() -> None:
 
 
 def test_chat_rejects_aggregate_attachment_bytes_over_limit(monkeypatch) -> None:
-    from app.api import chat as chat_api
-
+    from app.api.chat import chat as chat_api
     monkeypatch.setattr(chat_api, "MAX_CHAT_TOTAL_ATTACHMENT_BYTES", 5)
     body = ChatRequest(
         message="Review these photos",

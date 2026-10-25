@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.ai.execution.approval import issue_approval_token
 from app.ai.execution.tool_registry import get_tool_spec
-from app.api.dependencies import current_user_id
+from app.api.security.dependencies import current_user_id
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 

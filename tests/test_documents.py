@@ -4,8 +4,8 @@ import base64
 
 import pytest
 
-import app.api.documents as documents
-from app.api.documents import DocumentItem, _decode_document
+import app.api.content.documents as documents
+from app.api.content.documents import DocumentItem, _decode_document
 
 
 

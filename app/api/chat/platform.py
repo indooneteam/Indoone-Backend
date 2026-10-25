@@ -14,7 +14,7 @@ from app.ai.memory.conversation_store import ConversationStore
 from app.ai.memory.file_context import read_text_file
 from app.ai.memory.memory import extract_memory_candidates
 from app.ai.gateway.service import generate_reply
-from app.api.errors import REQUEST_FAILED_MESSAGE, provider_failure
+from app.api.security.errors import REQUEST_FAILED_MESSAGE, provider_failure
 
 router = APIRouter(tags=["platform"])
 _stream_store = ConversationStore()

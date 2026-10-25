@@ -2,7 +2,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from app.api.network_security import (
+from app.api.security.network_security import (
     allowed_origins,
     configure_network_security,
     validate_network_security_config,

@@ -8,6 +8,42 @@ MAX_CODE_LENGTH = 12_000
 SUPPORTED_LANGUAGES = frozenset({"python", "javascript", "typescript", "java", "kotlin", "c", "cpp", "go", "rust", "bash", "sql"})
 SUPPORTED_TRANSFORMS = frozenset({"normalize", "strip_trailing_whitespace", "ensure_final_newline"})
 
+# Markers that identify a language, most specific first. The deterministic agent
+# and the planner receive a bare code string with no language, while the coding
+# tools require one; this maps the obvious markers and treats anything
+# unrecognised as Python, the common case.
+_LANGUAGE_MARKERS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("rust", ("fn ", "println!", "let mut ")),
+    ("go", ("package main", "func ", "fmt.")),
+    ("kotlin", ("fun ", "val ", "var ")),
+    ("java", ("public class", "public static void main", "system.out.println")),
+    ("cpp", ("std::", "cout <<", "#include <iostream")),
+    ("c", ("#include", "printf(", "int main")),
+    ("typescript", ("interface ", ": string", ": number")),
+    ("javascript", ("function ", "console.log", "=>", "const ")),
+    ("bash", ("#!/bin/bash", "#!/usr/bin/env bash", "echo ")),
+    ("sql", ("select ", "insert into", "create table")),
+    ("python", ("def ", "import ", "print(", "self.")),
+)
+
+
+def detect_language(code: str) -> str:
+    """Best-effort language guess for a code snippet, defaulting to Python."""
+    text = code.casefold()
+    for language, markers in _LANGUAGE_MARKERS:
+        if any(marker in text for marker in markers):
+            return language
+    return "python"
+
+
+def build_code_tool_payload(code: str) -> str:
+    """Wrap a bare code string in the {language, code} payload every coding tool expects."""
+    return json.dumps(
+        {"language": detect_language(code), "code": code},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+
 
 @dataclass(frozen=True)
 class CodeIssue:

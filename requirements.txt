@@ -3,6 +3,10 @@ uvicorn[standard]>=0.34,<1.0
 pydantic>=2.0,<3.0
 httpx>=0.27,<1.0
 cryptography>=44,<46
+# Schema migrations. The schema is Alembic's: one baseline revision plus one
+# per change, so a database has a version and a change can be reviewed before
+# it runs. See migrations/ and app/storage/migrations.py.
+alembic>=1.13,<2.0
 pytest>=8.0,<9.0
 pytest-asyncio>=0.26,<1.0
 --extra-index-url https://download.pytorch.org/whl/cpu

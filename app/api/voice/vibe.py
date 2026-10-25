@@ -21,7 +21,7 @@ from app.ai.execution.tool_loop import (
     model_tool_declarations,
 )
 from app.ai.execution.tool_registry import function_declarations
-from app.capabilities.store import get_integration_token_metadata
+from app.capabilities.connectors.store import get_integration_token_metadata
 from app.plugins.github.chat_tools import _format_github_result
 
 logger = logging.getLogger("indoone.vibe")

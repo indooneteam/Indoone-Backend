@@ -5,8 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from app.ai.execution.tool_registry import get_tool_spec
-from app.capabilities.connector_registry import get_connector
-from app.capabilities.store import get_integration_token_metadata
+from app.capabilities.connectors.connector_registry import get_connector
+from app.capabilities.connectors.store import get_integration_token_metadata
 
 logger = logging.getLogger("indoone.connector_authorization")
 

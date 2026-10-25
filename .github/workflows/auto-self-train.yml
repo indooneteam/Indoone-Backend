@@ -7,8 +7,8 @@ on:
     branches:
       - main
     paths:
-      - "scripts/self_train_and_promote.py"
-      - "scripts/merge_auto_web_training.py"
+      - "scripts/training/self_train_and_promote.py"
+      - "scripts/training/merge_auto_web_training.py"
       - ".github/workflows/auto-self-train.yml"
       - "data/self_update/state.json"
   workflow_dispatch:
@@ -44,7 +44,7 @@ jobs:
 
       - name: Run gated self-training
         run: |
-          python scripts/self_train_and_promote.py             --min-new-items 20             --steps 500             --batch-size 16             --learning-rate 0.00003             --eval-interval 100             --seed 4242
+          python scripts/training/self_train_and_promote.py             --min-new-items 20             --steps 500             --batch-size 16             --learning-rate 0.00003             --eval-interval 100             --seed 4242
 
       - name: Commit promotion metadata
         run: |

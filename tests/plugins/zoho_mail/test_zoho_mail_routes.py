@@ -103,7 +103,7 @@ def test_zoho_mail_oauth_routes_are_mounted(monkeypatch) -> None:
 
 
 def test_zoho_mail_generic_integration_registry_supports_oauth() -> None:
-    from app.capabilities.integrations import get_integration
+    from app.capabilities.connectors.integrations import get_integration
 
     integration = get_integration("zoho_mail")
     assert integration is not None

@@ -19,19 +19,19 @@ from app.plugins.github.service import (
     _validated_repository_path,
 )
 from app.plugins.github.edit_suggestions import build_code_edit_prompt, parse_code_edit_suggestion
-from app.capabilities.document_extract import (
+from app.capabilities.media.document_extract import (
     DOCX_MIME,
     MAX_DOCUMENT_BYTES,
     PDF_MIME,
     extract_document,
 )
-from app.capabilities.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
+from app.capabilities.media.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
 from app.web_research.grounding import split_grounded_sources
 from app.api.security.dependencies import current_user_id
 from app.ai.gateway.gemini_service import ModelBusyError
 from app.ai.execution.tool_loop import needs_tools, run_tool_loop
 from app.ai.agents.agent_async import execute_agent_async
-from app.capabilities.store import (
+from app.capabilities.connectors.store import (
     get_pending_email_action,
     get_pending_github_action,
     list_memories,
@@ -39,7 +39,7 @@ from app.capabilities.store import (
 from datetime import datetime, timedelta, timezone
 
 _IST = timezone(timedelta(hours=5, minutes=30))
-from app.plugins.email_tools import (
+from app.plugins.email.email_tools import (
     CANCEL_RE,
     CONFIRM_RE,
     handle_email_chat,

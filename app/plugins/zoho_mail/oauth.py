@@ -11,8 +11,8 @@ from urllib.parse import urlencode, urlsplit
 
 import httpx
 
-from app.capabilities.integrations import _fernet
-from app.capabilities.store import (
+from app.capabilities.connectors.integrations import _fernet
+from app.capabilities.connectors.store import (
     consume_oauth_state,
     delete_integration_token,
     create_oauth_state,

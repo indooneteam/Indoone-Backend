@@ -46,25 +46,25 @@ jobs:
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
       - name: Build balanced Indian-language training pack
-        run: python scripts/build_multilingual_training_pack.py
+        run: python scripts/dataset/build_multilingual_training_pack.py
 
       - name: Audit final training data sources
         run: |
-          python scripts/audit_dataset.py --json             --corpus data/processed/generated_multilingual_corpus.txt             --instructions data/raw/indoone_instructions.jsonl             --instructions data/raw/core_instruction_seed.jsonl             --instructions data/raw/indoone_multilingual_examples.jsonl             --instructions data/processed/generated_multilingual_examples.jsonl             --multilingual data/processed/generated_multilingual_examples.jsonl
+          python scripts/dataset/audit_dataset.py --json             --corpus data/processed/generated_multilingual_corpus.txt             --instructions data/raw/indoone_instructions.jsonl             --instructions data/raw/core_instruction_seed.jsonl             --instructions data/raw/indoone_multilingual_examples.jsonl             --instructions data/processed/generated_multilingual_examples.jsonl             --multilingual data/processed/generated_multilingual_examples.jsonl
 
       - name: Assemble curated training dataset
         run: |
-          python scripts/assemble_training_dataset.py             --source data/raw/indoone_instructions.jsonl             --source data/raw/core_instruction_seed.jsonl             --source data/raw/indoone_multilingual_examples.jsonl             --output data/processed/curated_instructions.jsonl             --validation-output data/processed/instructions_validation.jsonl
+          python scripts/dataset/assemble_training_dataset.py             --source data/raw/indoone_instructions.jsonl             --source data/raw/core_instruction_seed.jsonl             --source data/raw/indoone_multilingual_examples.jsonl             --output data/processed/curated_instructions.jsonl             --validation-output data/processed/instructions_validation.jsonl
 
       - name: Validate final curated and generated data
         run: |
-          python scripts/validate_dataset_quality.py             --source data/processed/curated_instructions.jsonl             --source data/processed/instructions_validation.jsonl             --source data/processed/generated_multilingual_examples.jsonl
+          python scripts/dataset/validate_dataset_quality.py             --source data/processed/curated_instructions.jsonl             --source data/processed/instructions_validation.jsonl             --source data/processed/generated_multilingual_examples.jsonl
 
       - name: Validate training manifest
-        run: python scripts/validate_training_manifest.py
+        run: python scripts/dataset/validate_training_manifest.py
 
       - name: Validate final training recipe
-        run: python scripts/validate_final_training_recipe.py
+        run: python scripts/dataset/validate_final_training_recipe.py
 
 
   train_and_promote:
@@ -86,7 +86,7 @@ jobs:
         run: python -m pip install --upgrade pip && pip install -r requirements.txt
 
       - name: Build balanced Indian-language training pack
-        run: python scripts/build_multilingual_training_pack.py
+        run: python scripts/dataset/build_multilingual_training_pack.py
 
       - name: Report training runtime
         run: |
@@ -103,7 +103,7 @@ jobs:
           INDOONE_GIT_SHA: ${{ github.sha }}
           INDOONE_ALLOW_CPU_TRAINING: "true"
         run: |
-          python scripts/run_training_pipeline.py \
+          python scripts/training/run_training_pipeline.py \
             --steps 8000 \
             --batch-size 16 \
             --checkpoint-interval 500 \
@@ -125,7 +125,7 @@ jobs:
           MODEL_VERSION: "v1"
           MODEL_REVISION: "${{ github.sha }}"
         run: |
-          python scripts/promote_model.py \
+          python scripts/training/promote_model.py \
             --version "$MODEL_VERSION" \
             --revision "$MODEL_REVISION" \
             --model-dir models/indoone-small \

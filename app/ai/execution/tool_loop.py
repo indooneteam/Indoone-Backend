@@ -38,7 +38,7 @@ from app.ai.execution.tool_registry import (
     tool_declaration,
 )
 from app.ai.execution.tools import run_tool_async
-from app.capabilities.store import get_integration_token_metadata
+from app.capabilities.connectors.store import get_integration_token_metadata
 
 _EMAIL_TOOL_NAMES = frozenset(item["name"] for item in EMAIL_TOOL_DECLARATIONS)
 _GITHUB_TOOL_NAMES = frozenset(item["name"] for item in GITHUB_TOOL_DECLARATIONS)
@@ -239,7 +239,7 @@ async def dispatch_tool(
 ) -> dict[str, Any]:
     """Run one model-chosen tool and return a JSON-able result for the model."""
     if name in _EMAIL_TOOL_NAMES:
-        from app.plugins.email_tools import execute_email_tool
+        from app.plugins.email.email_tools import execute_email_tool
 
         return await execute_email_tool(
             user_id, conversation_id, name, arguments, original_message=original_message

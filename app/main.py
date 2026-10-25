@@ -24,14 +24,14 @@ from app.api.security.errors import error_response
 from app.api.connectors.integrations import router as integrations_router
 from app.plugins.zoho_mail.oauth_routes import router as zoho_mail_oauth_router
 from app.plugins.zoho_mail.routes import router as zoho_mail_router
-from app.instagram.api.instagram import router as instagram_router
-from app.instagram.api.instagram_comments import router as instagram_comments_router
-from app.instagram.api.instagram_insights import router as instagram_insights_router
-from app.instagram.api.instagram_messaging import router as instagram_messaging_router
-from app.instagram.api.instagram_advanced import router as instagram_advanced_router
-from app.instagram.api.instagram_publishing import router as instagram_publishing_router
-from app.instagram.api.instagram_webhooks import router as instagram_webhooks_router
-from app.instagram.api.instagram_automation import router as instagram_automation_router
+from app.channels.instagram.api.instagram import router as instagram_router
+from app.channels.instagram.api.instagram_comments import router as instagram_comments_router
+from app.channels.instagram.api.instagram_insights import router as instagram_insights_router
+from app.channels.instagram.api.instagram_messaging import router as instagram_messaging_router
+from app.channels.instagram.api.instagram_advanced import router as instagram_advanced_router
+from app.channels.instagram.api.instagram_publishing import router as instagram_publishing_router
+from app.channels.instagram.api.instagram_webhooks import router as instagram_webhooks_router
+from app.channels.instagram.api.instagram_automation import router as instagram_automation_router
 from app.api.content.memory import router as memory_router
 from app.api.ops.observability import router as observability_router
 from app.api.chat.notifications import initialize as initialize_notification_store
@@ -41,12 +41,12 @@ from app.ai.gateway.observability import begin_request, record_request
 from app.api.security.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
 from app.api.security.network_security import configure_network_security, validate_network_security_config
 from app.api.security.environment_security import validate_environment_security_config
-from app.telegram.api import router as telegram_router
-from app.whatsapp.api import router as whatsapp_router
+from app.channels.telegram.api import router as telegram_router
+from app.channels.whatsapp.api import router as whatsapp_router
 from app.api.voice.voice_session import router as voice_session_router
 from app.api.voice.vibe import router as vibe_router
-from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
-from app.capabilities.store import initialize as initialize_capability_store
+from app.capabilities.connectors.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
+from app.capabilities.connectors.store import initialize as initialize_capability_store
 
 logger = logging.getLogger("indoone.api")
 

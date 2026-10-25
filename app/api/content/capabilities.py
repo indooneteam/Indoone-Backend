@@ -9,18 +9,18 @@ from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconn
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
-from app.capabilities.data_analysis import analyze_payload
-from app.capabilities.document_extract import extract_document
-from app.capabilities.image_generation import generate_image
-from app.capabilities.integrations import (
+from app.capabilities.media.data_analysis import analyze_payload
+from app.capabilities.media.document_extract import extract_document
+from app.capabilities.media.image_generation import generate_image
+from app.capabilities.connectors.integrations import (
     build_oauth_authorization,
     exchange_oauth_code,
     get_integration,
     list_integrations,
 )
-from app.capabilities.media import save_media
-from app.capabilities.registry import list_capabilities
-from app.capabilities.store import (
+from app.capabilities.media.media import save_media
+from app.capabilities.platform.registry import list_capabilities
+from app.capabilities.connectors.store import (
     create_oauth_state,
     delete_integration_token,
     create_project,
@@ -35,9 +35,9 @@ from app.capabilities.store import (
     search_projects,
     update_project,
 )
-from app.capabilities.vision import analyze_image
-from app.capabilities.voice import synthesize_speech, transcribe_audio
-from app.capabilities.voice_session import (
+from app.capabilities.media.vision import analyze_image
+from app.capabilities.voice.voice import synthesize_speech, transcribe_audio
+from app.capabilities.voice.voice_session import (
     VoiceSessionState,
     handle_audio_message,
     handle_speak_message,

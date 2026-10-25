@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.api.security.dependencies import current_user_id
-from app.capabilities.document_extract import MAX_DOCUMENT_BYTES, extract_document
+from app.capabilities.media.document_extract import MAX_DOCUMENT_BYTES, extract_document
 
 
 router = APIRouter(prefix="/documents", tags=["documents"])

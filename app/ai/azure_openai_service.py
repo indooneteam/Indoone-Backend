@@ -410,6 +410,7 @@ async def generate_azure_function_call_reply(
         _system_instruction(extra_system_instruction),
     )
     tools = _openai_tools(tool_declarations)
+    tool_names = {str(item["function"]["name"]) for item in tools}
 
     first_text: str | None = None
 
@@ -469,9 +470,38 @@ async def generate_azure_function_call_reply(
             if not isinstance(arguments, dict):
                 arguments = {}
 
+            # The same guards the Gemini loop applies: a call counts against the cap
+            # before it runs, an undeclared tool is refused, and a tool that raises
+            # becomes a safe result instead of failing the whole request.
+            if executed_calls >= max_total_calls:
+                result: dict[str, Any] = {
+                    "ok": False,
+                    "code": "TOOL_LIMIT_REACHED",
+                    "message": "The maximum number of tool calls for one user message was reached. Summarize only verified results already received.",
+                }
+            elif name not in tool_names:
+                result = {
+                    "ok": False,
+                    "code": "UNKNOWN_TOOL",
+                    "message": "That tool is not available. Choose only from the declared tools.",
+                }
+            else:
+                logger.info("Azure OpenAI called tool: %s", name)
+                try:
+                    result = await execute_tool(name, arguments)
+                    if not isinstance(result, dict):
+                        result = {
+                            "ok": False,
+                            "code": "INVALID_TOOL_RESULT",
+                            "message": "The backend did not return a valid tool result. Do not claim success.",
+                        }
+                except Exception:
+                    result = {
+                        "ok": False,
+                        "code": "TOOL_EXECUTION_FAILED",
+                        "message": "The backend tool failed. Do not claim that the operation succeeded.",
+                    }
             executed_calls += 1
-            logger.info("Azure OpenAI called tool: %s", name)
-            result = await execute_tool(name, arguments)
             # Log the outcome, never the payload: email and repository content is
             # private. This is the line that says whether a tool worked or refused,
             # which is the difference between "no tools offered" and "the tool

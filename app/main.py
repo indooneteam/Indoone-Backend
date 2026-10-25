@@ -10,18 +10,18 @@ from fastapi.responses import JSONResponse
 
 from app.ai.gateway import service as ai_service
 from app.ai.memory.conversation_store import ConversationStore
-from app.api.approvals import router as approvals_router
-from app.api.auth import extract_principal, validate_production_security_config
-from app.api.capabilities import router as capabilities_router
-from app.api.agent_async import router as agent_async_router
+from app.api.chat.approvals import router as approvals_router
+from app.api.security.auth import extract_principal, validate_production_security_config
+from app.api.content.capabilities import router as capabilities_router
+from app.api.chat.agent_async import router as agent_async_router
 from app.web_research.api import router as web_research_router
-from app.api.chat import router as chat_router
-from app.api.connector_security import enforce_connector_user_scope
-from app.api.conversations import router as conversations_router
-from app.api.documents import router as documents_router
-from app.api.files import router as files_router
-from app.api.errors import error_response
-from app.api.integrations import router as integrations_router
+from app.api.chat.chat import router as chat_router
+from app.api.connectors.connector_security import enforce_connector_user_scope
+from app.api.chat.conversations import router as conversations_router
+from app.api.content.documents import router as documents_router
+from app.api.content.files import router as files_router
+from app.api.security.errors import error_response
+from app.api.connectors.integrations import router as integrations_router
 from app.plugins.zoho_mail.oauth_routes import router as zoho_mail_oauth_router
 from app.plugins.zoho_mail.routes import router as zoho_mail_router
 from app.instagram.api.instagram import router as instagram_router
@@ -32,19 +32,19 @@ from app.instagram.api.instagram_advanced import router as instagram_advanced_ro
 from app.instagram.api.instagram_publishing import router as instagram_publishing_router
 from app.instagram.api.instagram_webhooks import router as instagram_webhooks_router
 from app.instagram.api.instagram_automation import router as instagram_automation_router
-from app.api.memory import router as memory_router
-from app.api.observability import router as observability_router
-from app.api.notifications import initialize as initialize_notification_store
-from app.api.notifications import router as notifications_router
-from app.api.platform import router as platform_router
+from app.api.content.memory import router as memory_router
+from app.api.ops.observability import router as observability_router
+from app.api.chat.notifications import initialize as initialize_notification_store
+from app.api.chat.notifications import router as notifications_router
+from app.api.chat.platform import router as platform_router
 from app.ai.gateway.observability import begin_request, record_request
-from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
-from app.api.network_security import configure_network_security, validate_network_security_config
-from app.api.environment_security import validate_environment_security_config
+from app.api.security.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
+from app.api.security.network_security import configure_network_security, validate_network_security_config
+from app.api.security.environment_security import validate_environment_security_config
 from app.telegram.api import router as telegram_router
 from app.whatsapp.api import router as whatsapp_router
-from app.api.voice_session import router as voice_session_router
-from app.api.vibe import router as vibe_router
+from app.api.voice.voice_session import router as voice_session_router
+from app.api.voice.vibe import router as vibe_router
 from app.capabilities.db_runtime import configure_sqlite_runtime, sqlite_runtime_status
 from app.capabilities.store import initialize as initialize_capability_store
 

@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 from app.ai.memory.memory_policy import MemoryPolicy
 from app.ai.memory.memory_service import MemoryService
-from app.api.dependencies import current_user_id
+from app.api.security.dependencies import current_user_id
 
 router = APIRouter(tags=["memory"])
 _memory_service = MemoryService(policy=MemoryPolicy(allow_automatic_write=False))

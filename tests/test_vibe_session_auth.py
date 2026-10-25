@@ -7,9 +7,7 @@ import asyncio
 
 import pytest
 
-from app.api import vibe as vibe_module
-
-
+from app.api.voice import vibe as vibe_module
 class FakeSocket:
     """Stands in for a WebSocket, recording what it was asked for."""
 

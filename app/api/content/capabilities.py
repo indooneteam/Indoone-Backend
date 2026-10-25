@@ -45,7 +45,7 @@ from app.capabilities.voice_session import (
     ready_event,
 )
 
-from app.api.errors import provider_failure
+from app.api.security.errors import provider_failure
 
 router = APIRouter(tags=["capabilities"])
 

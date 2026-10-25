@@ -27,7 +27,7 @@ from app.capabilities.document_extract import (
 )
 from app.capabilities.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
 from app.web_research.grounding import split_grounded_sources
-from app.api.dependencies import current_user_id
+from app.api.security.dependencies import current_user_id
 from app.ai.gateway.gemini_service import ModelBusyError
 from app.ai.execution.tool_loop import needs_tools, run_tool_loop
 from app.ai.agents.agent_async import execute_agent_async

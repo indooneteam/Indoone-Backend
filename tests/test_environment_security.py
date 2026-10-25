@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from cryptography.fernet import Fernet
 
-from app.api.environment_security import validate_environment_security_config
+from app.api.security.environment_security import validate_environment_security_config
 
 
 def _set_production(monkeypatch) -> None:

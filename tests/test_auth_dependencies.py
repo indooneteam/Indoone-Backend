@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from app.api.dependencies import current_user_id, enforce_user_match, require_owned_file
+from app.api.security.dependencies import current_user_id, enforce_user_match, require_owned_file
 
 
 def test_current_user_id_requires_principal() -> None:

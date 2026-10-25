@@ -18,7 +18,7 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 
-from app.api.dependencies import enforce_user_match
+from app.api.security.dependencies import enforce_user_match
 
 logger = logging.getLogger("indoone.connector_security")
 

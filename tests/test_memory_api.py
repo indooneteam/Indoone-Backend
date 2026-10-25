@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 
-import app.api.memory as memory_api
+import app.api.content.memory as memory_api
 
 
 @pytest.mark.asyncio

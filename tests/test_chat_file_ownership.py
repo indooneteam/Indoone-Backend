@@ -1,9 +1,7 @@
 import pytest
 from fastapi import Request
 
-from app.api import chat as chat_api
-
-
+from app.api.chat import chat as chat_api
 def test_chat_reads_file_with_authenticated_owner(monkeypatch) -> None:
     captured: dict[str, str] = {}
 

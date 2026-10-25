@@ -12,7 +12,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from app.api.request_context import get_request_id
+from app.api.security.request_context import get_request_id
 
 logger = logging.getLogger("indoone.errors")
 

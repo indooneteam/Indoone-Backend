@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from app.ai.memory.conversation_store import ConversationStore
-from app.api.dependencies import current_user_id
+from app.api.security.dependencies import current_user_id
 
 router = APIRouter(tags=["conversations"])
 _store = ConversationStore()

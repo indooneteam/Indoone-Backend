@@ -7,8 +7,8 @@ import pytest
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
-from app.api import auth as auth_module
-from app.api.auth import extract_principal, validate_production_security_config
+from app.api.security import auth as auth_module
+from app.api.security.auth import extract_principal, validate_production_security_config
 
 
 def _encode(value: bytes) -> str:

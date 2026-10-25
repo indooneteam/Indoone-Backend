@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.ai.memory.conversation_store import ConversationStore
-from app.api.request_context import clear_principal_id, get_principal_id, require_principal_id, set_principal_id
+from app.api.security.request_context import clear_principal_id, get_principal_id, require_principal_id, set_principal_id
 from app.main import app
 
 
@@ -124,7 +124,7 @@ def test_chat_returns_ai_reply(monkeypatch) -> None:
         return f"test reply: {message}"
 
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
-    monkeypatch.setattr("app.api.chat.generate_reply", fake_reply)
+    monkeypatch.setattr("app.api.chat.chat.generate_reply", fake_reply)
 
     response = client.post("/api/chat", json={"message": "Hello Indoone"}, headers=_auth_headers())
 
@@ -152,7 +152,7 @@ def test_chat_does_not_leak_the_provider_error_to_the_client(monkeypatch, caplog
         )
 
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
-    monkeypatch.setattr("app.api.chat.generate_reply", failing_reply)
+    monkeypatch.setattr("app.api.chat.chat.generate_reply", failing_reply)
 
     with caplog.at_level(logging.ERROR, logger="indoone.chat"):
         response = client.post(
@@ -185,9 +185,9 @@ def test_chat_reuses_conversation_context(monkeypatch, tmp_path: Path) -> None:
         return f"reply: {message}"
 
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
-    monkeypatch.setattr("app.api.chat.generate_reply", fake_reply)
+    monkeypatch.setattr("app.api.chat.chat.generate_reply", fake_reply)
     monkeypatch.setattr(
-        "app.api.chat._store",
+        "app.api.chat.chat._store",
         ConversationStore(tmp_path / "api-conversations.sqlite3"),
     )
 
@@ -222,7 +222,7 @@ def test_chat_returns_grounded_research_sources(monkeypatch) -> None:
         )
 
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
-    monkeypatch.setattr("app.api.chat.generate_reply", fake_reply)
+    monkeypatch.setattr("app.api.chat.chat.generate_reply", fake_reply)
 
     response = client.post(
         "/api/chat",
@@ -239,8 +239,7 @@ def test_chat_returns_grounded_research_sources(monkeypatch) -> None:
 
 def test_user_name_line_uses_the_stored_name_only(monkeypatch) -> None:
     """Only the name reaches the prompt; nothing else stored about the user does."""
-    from app.api import chat
-
+    from app.api.chat import chat
     monkeypatch.setattr(
         chat,
         "list_memories",
@@ -262,8 +261,7 @@ def test_user_name_line_uses_the_stored_name_only(monkeypatch) -> None:
 
 def test_now_line_gives_today_in_ist() -> None:
     """The model must be told today's date, or it answers from training memory."""
-    from app.api import chat
-
+    from app.api.chat import chat
     line = chat._now_line()
     assert line.startswith("Today is ")
     assert line.endswith(" IST.")

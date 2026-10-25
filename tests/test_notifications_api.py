@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-import app.api.notifications as notifications_api
+import app.api.chat.notifications as notifications_api
 
 
 OWNER = "user-one"

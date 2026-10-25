@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-import app.api.files as files_api
+import app.api.content.files as files_api
 
 
 OWNER = "user-one"

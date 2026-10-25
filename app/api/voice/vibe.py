@@ -12,8 +12,8 @@ from urllib.parse import urlencode
 import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.api.auth import extract_principal
-from app.api.chat import _now_line, _user_name_line
+from app.api.security.auth import extract_principal
+from app.api.chat.chat import _now_line, _user_name_line
 from app.ai.execution.tool_loop import (
     _GITHUB_TOOL_NAMES,
     dispatch_tool,

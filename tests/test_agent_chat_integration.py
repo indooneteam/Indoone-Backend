@@ -38,8 +38,8 @@ def test_chat_uses_model_for_tool_requests(monkeypatch) -> None:
         captured_history.extend(history or [])
         return "The trained model summarized the tool result."
 
-    monkeypatch.setattr("app.api.chat.execute_agent_async", fake_execute_agent_async)
-    monkeypatch.setattr("app.api.chat.generate_reply", fake_generate_reply)
+    monkeypatch.setattr("app.api.chat.chat.execute_agent_async", fake_execute_agent_async)
+    monkeypatch.setattr("app.api.chat.chat.generate_reply", fake_generate_reply)
 
     with TestClient(app) as client:
         response = client.post(
@@ -73,7 +73,7 @@ def test_an_email_request_reaches_the_email_handler(monkeypatch, tmp_path) -> No
         handled.append(message)
         return "The email path handled this."
 
-    monkeypatch.setattr("app.api.chat.handle_email_chat_with_tools", fake_email_handler)
+    monkeypatch.setattr("app.api.chat.chat.handle_email_chat_with_tools", fake_email_handler)
 
     with TestClient(app) as client:
         response = client.post(

@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException
 from app.ai.execution.approval import validate_approval_token
 from app.ai.execution.connector_authorization import authorize_tool
 from pydantic import BaseModel, Field
-from app.api.errors import provider_failure
+from app.api.security.errors import provider_failure
 
 from app.plugins.github.service import (
     list_github_issues,

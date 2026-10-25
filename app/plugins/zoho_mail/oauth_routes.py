@@ -9,7 +9,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from app.capabilities.store import get_integration_token_metadata
-from app.api.errors import provider_failure
+from app.api.security.errors import provider_failure
 from app.plugins.zoho_mail.oauth import (
     cancel_zoho_mail_authorization,
     disconnect_zoho_mail,

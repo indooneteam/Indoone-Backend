@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from app.api import vibe as vibe_api
+from app.api.voice import vibe as vibe_api
 from app.main import app
 
 

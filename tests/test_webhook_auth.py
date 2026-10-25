@@ -83,7 +83,7 @@ def test_github_browser_oauth_callback_is_public_but_exchanges_state(monkeypatch
         captured.update({"integration_id": integration_id, "state": state, "code": code})
         return {"integration": integration_id, "connected": True}
 
-    monkeypatch.setattr("app.api.capabilities.exchange_oauth_code", fake_exchange_oauth_code)
+    monkeypatch.setattr("app.api.content.capabilities.exchange_oauth_code", fake_exchange_oauth_code)
 
     with TestClient(app) as client:
         response = client.get(

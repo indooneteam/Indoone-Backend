@@ -347,8 +347,23 @@ async def _github_update_repository_file(payload: str) -> str:
         raise ValueError("user_id, repository, path, content and commit message are required")
     if not create and not expected_sha:
         raise ValueError("the current file SHA is required when updating an existing file")
-    if not validate_approval_token(approval_token, user_id, "github_update_repository_file"):
-        raise PermissionError("a valid, current, server-issued GitHub file-update approval is required")
+
+    # The target branch decides whether this is a reversible edit or a write to
+    # something that other people and the deploy depend on. A protected branch needs a
+    # confirmation even though the edit itself can be undone.
+    from app.plugins.github.branch_protection import protected_branch_reason
+
+    protected_reason = await protected_branch_reason(user_id, repository, str(data.get("branch", "")))
+    held = _hold_write(
+        data, user_id, "github_update_repository_file", protected_reason=protected_reason
+    )
+    if held is not None:
+        return held
+    # Past the hold, the guard above has already decided this write may run: either a
+    # valid token arrived, or the branch is not protected and the edit is reversible.
+    # The old unconditional token check here refused the reversible case and reached the
+    # user as a failed tool with nothing to confirm - it was the one write whose
+    # executor disagreed with its own spec about whether approval was required.
     spec = get_tool_spec("github_update_repository_file")
     result = await _run_async(
         commit_github_repository_file(
@@ -576,23 +591,34 @@ def _explicit_write_intent(tool: str, message: str) -> bool:
     return bool(re.search(pattern, message, re.IGNORECASE))
 
 
-def _write_approved(data: dict[str, object], user_id: str, tool: str) -> bool:
+def _write_approved(
+    data: dict[str, object], user_id: str, tool: str, *, protected_reason: str = ""
+) -> bool:
     """Whether this write may run now.
 
     Three ways, in order: the tool's own policy says it runs when asked (creating a
     branch, opening a pull request, writing a file), a server-issued token arrived, or
     the user's own message asked for it. Deleting a branch and merging a pull request
     are not in the first group - they still need the token.
+
+    ``protected_reason`` is the fourth case and it overrides the first and the third:
+    when the target branch is protected, neither "this tool is reversible" nor "the
+    user asked for it" is enough. Only a token is. Reversibility says the change can be
+    undone; it says nothing about what breaks while it is applied.
     """
+    if _approved_write(data, user_id, tool):
+        return True
+    if protected_reason:
+        return False
     spec = get_tool_spec(tool)
     if spec is not None and not spec.requires_approval:
-        return True
-    if _approved_write(data, user_id, tool):
         return True
     return _explicit_write_intent(tool, str(data.get("original_message") or ""))
 
 
-def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
+def _hold_write(
+    data: dict[str, object], user_id: str, tool: str, *, protected_reason: str = ""
+) -> str | None:
     """Hold an unapproved write and return the proposal, or None to let it run.
 
     This lives in the executor because the executor is the one place a write is
@@ -600,7 +626,7 @@ def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
     handler was the earlier mistake: the handler returns before the model runs, so
     a write never got there, nothing was stored, and no token was ever issued.
     """
-    if _write_approved(data, user_id, tool):
+    if _write_approved(data, user_id, tool, protected_reason=protected_reason):
         return None
     try:
         token = issue_approval_token(user_id, tool, ttl_seconds=300)
@@ -628,13 +654,15 @@ def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
         }, ensure_ascii=False, sort_keys=True)
     # Written for the USER, because this text is the reply now - not a note to a
     # model. Nothing has happened yet and it says so.
+    reason = protected_reason.strip()
     return json.dumps({
         "ok": False,
         "code": "APPROVAL_REQUIRED",
         "reply": (
             f"I will {_WRITE_INTENT.get(tool, 'make this change')} in "
             f"{data.get('repository') or 'the repository'}. "
-            f"{CONFIRM_OR_CANCEL}"
+            + (f"{reason} " if reason else "")
+            + CONFIRM_OR_CANCEL
         ),
     }, ensure_ascii=False, sort_keys=True)
 

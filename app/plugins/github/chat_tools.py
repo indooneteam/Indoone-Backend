@@ -290,7 +290,24 @@ async def _execute_github_tool(
     # that asked the approvals endpoint), or inside the arguments (the replay of a
     # write this handler held and the user then confirmed). Both are valid.
     _supplied_token = approval_tokens or (str(arguments.get("approval_token") or "").strip(),)
-    if name in _WRITE_TOOLS and not any(_supplied_token) and not _explicit_write_intent(name, message):
+    # A write to a protected branch is confirmed even when the user asked for it in
+    # their own words: reversibility says the change can be undone, not that nothing
+    # breaks while it is applied. Best effort here - the repository may still be a
+    # hint at this point - and the executor checks again with the resolved name.
+    protected_reason = ""
+    if name in _PROTECTED_BRANCH_WRITES and not any(_supplied_token):
+        from app.plugins.github.branch_protection import protected_branch_reason
+
+        protected_reason = await protected_branch_reason(
+            user_id,
+            str(arguments.get("repository") or arguments.get("repository_hint") or ""),
+            str(arguments.get("branch") or arguments.get("ref") or ""),
+        )
+    if (
+        name in _WRITE_TOOLS
+        and not any(_supplied_token)
+        and (protected_reason or not _explicit_write_intent(name, message))
+    ):
         # The model proposed a write and the user did not ask for it themselves.
         # Nothing runs yet: hold it, issue the token, and tell the model what to
         # say. The next message from the user confirms it, and that is what runs it
@@ -326,7 +343,8 @@ async def _execute_github_tool(
             "reply": (
                 f"I will {_WRITE_INTENT.get(name, 'make this change')} in "
                 f"{arguments.get('repository') or 'the repository'}. "
-                f"{CONFIRM_OR_CANCEL}"
+                + (f"{protected_reason} " if protected_reason else "")
+                + CONFIRM_OR_CANCEL
             ),
         }
 
@@ -762,6 +780,12 @@ def _read_pending_payload(item: dict[str, Any]) -> dict[str, Any]:
 # Deleting a branch and merging a pull request are held, because neither can be undone -
 # a merge that lands on the wrong branch cannot be un-merged, and a deleted branch takes
 # its commits with it.
+# Writes whose target can be a protected branch. A branch creation does not modify
+# anything that exists, and a pull request does not either, so neither is here.
+_PROTECTED_BRANCH_WRITES = frozenset(
+    {"github_update_repository_file", "github_delete_branch", "github_merge_pull_request"}
+)
+
 _WRITE_TOOLS = frozenset({
     "github_delete_branch", "github_merge_pull_request",
 })

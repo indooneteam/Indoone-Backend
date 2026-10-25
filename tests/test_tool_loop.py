@@ -7,37 +7,6 @@ from app.ai.approval import issue_approval_token
 from app.ai.tools import ToolResult
 
 
-def test_declarations_are_one_list_without_the_legacy_gmail_family() -> None:
-    declarations = tool_loop.model_tool_declarations()
-    names = [item["name"] for item in declarations]
-
-    # The legacy gmail_* family is not exposed; the email plugin supersedes it.
-    assert "gmail_send" not in names
-    assert "gmail_compose" not in names
-
-    # GitHub read tools, email plugin tools and local tools are all present.
-    assert "github_list_repositories" in names
-    assert "github_read_repository_file" in names
-    assert "search_emails" in names
-    assert "prepare_email_to_send" in names
-    assert "calculator" in names
-
-    # Data-changing tools are offered too; approval is enforced at dispatch.
-    assert "sandbox_execution" in names
-    assert "github_update_repository_file" in names
-    assert "search_web" in names
-    assert "instagram_list_media" in names
-    assert "data_analysis" in names
-    assert "task_schedule_build" in names
-
-    # No duplicates, and every entry is fully described. No-argument tools
-    # legitimately omit the parameter schema.
-    assert len(names) == len(set(names))
-    for item in declarations:
-        assert item["description"]
-        assert isinstance(item.get("parameters", {}), dict)
-
-
 @pytest.mark.asyncio
 async def test_dispatch_routes_github_tools(monkeypatch) -> None:
     seen = {}

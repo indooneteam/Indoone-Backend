@@ -57,7 +57,7 @@ def test_non_string_payload_is_rejected() -> None:
 
 def test_connector_tool_requires_explicit_execution_identity() -> None:
     payload = '{"user_id":"user-one","query":"from:alice"}'
-    result = run_tool("gmail_search", payload)
+    result = run_tool("github_list_repositories", payload)
     assert result.safe is False
     assert "authenticated user is required" in result.output.lower()
 
@@ -65,49 +65,9 @@ def test_connector_tool_requires_explicit_execution_identity() -> None:
 def test_connector_tool_requires_connected_identity(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     payload = '{"user_id":"user-one","query":"from:alice"}'
-    result = run_tool("gmail_search", payload, user_id="user-one")
+    result = run_tool("github_list_repositories", payload, user_id="user-one")
     assert result.safe is False
     assert "not connected for this user" in result.output.lower()
-
-
-def test_gmail_send_tool_is_external_and_approval_gated() -> None:
-    spec = get_tool_spec("gmail_send")
-    assert spec is not None
-    assert spec.connector_id == "gmail"
-    assert spec.capability == "messages.send"
-    assert spec.risk == "external"
-    assert spec.requires_approval is True
-
-
-def test_gmail_send_tool_executes_through_guarded_connector_path(monkeypatch) -> None:
-    class Allowed:
-        allowed = True
-        reason = "allowed"
-
-    async def fake_send_gmail_message(*, user_id: str, to: str, subject: str, body: str, approved: bool = False):
-        assert user_id == "user-one"
-        assert to == "dest@example.com"
-        assert subject == "Indoone test"
-        assert body == "hello"
-        assert approved is True
-        return {"integration": "gmail", "operation": "send", "result": {"id": "m1", "thread_id": "t1"}}
-
-    monkeypatch.setattr("app.ai.tools.authorize_tool", lambda user_id, tool_name: Allowed())
-    monkeypatch.setattr("app.ai.tools.send_gmail_message", fake_send_gmail_message)
-
-    result = run_tool(
-        "gmail_send",
-        json.dumps({
-            "user_id": "user-one",
-            "to": "dest@example.com",
-            "subject": "Indoone test",
-            "body": "hello",
-        }),
-        user_id="user-one",
-    )
-
-    assert result.safe is True
-    assert json.loads(result.output)["operation"] == "send"
 
 
 def test_sync_tool_timeout_is_bounded(monkeypatch) -> None:

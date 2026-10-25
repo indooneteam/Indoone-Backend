@@ -16,16 +16,6 @@ from app.capabilities.store import (
     get_pending_email_action,
     save_pending_email_action,
 )
-from app.plugins.gmail.service import (
-    create_gmail_draft,
-    delete_gmail_message,
-    get_gmail_message,
-    list_gmail_drafts,
-    list_gmail_messages,
-    update_gmail_draft,
-    delete_gmail_draft,
-    send_gmail_message,
-)
 from app.plugins.zoho_mail.service import (
     delete_message,
     get_message_content,
@@ -58,7 +48,7 @@ _INDIC_CONFIRM = indic_pattern(INDIC_CONFIRM_WORDS)
 _INDIC_CANCEL = indic_pattern(INDIC_CANCEL_WORDS)
 
 EMAIL_CONTEXT_RE = re.compile(
-    r"\b(email|emails|mail|mails|inbox|gmail|zoho|draft|drafts|unread)\b|"
+    r"\b(email|emails|mail|mails|inbox|zoho|draft|drafts|unread)\b|"
     + _INDIC_MAIL
     + r"|ಡ್ರಾಫ್ಟ್|ಜಿಮೇಲ್|ಜೋಹೋ|ಜೂಹೋ",
     re.IGNORECASE,
@@ -108,67 +98,6 @@ def _zoho_accounts(payload: dict[str, Any]) -> list[dict[str, str]]:
         if account_id:
             accounts.append({"id": account_id, "email": address})
     return accounts
-
-
-def _gmail_headers(message: dict[str, Any]) -> dict[str, str]:
-    payload = message.get("payload")
-    raw_headers = payload.get("headers", []) if isinstance(payload, dict) else []
-    headers: dict[str, str] = {}
-    if isinstance(raw_headers, list):
-        for item in raw_headers:
-            if isinstance(item, dict):
-                name = str(item.get("name") or "").strip().casefold()
-                value = str(item.get("value") or "").strip()
-                if name and value:
-                    headers[name] = value
-    return headers
-
-
-def _gmail_body(payload: object) -> str:
-    found: list[tuple[int, str]] = []
-
-    def walk(part: object) -> None:
-        if not isinstance(part, dict):
-            return
-        mime = str(part.get("mimeType") or "").casefold()
-        body = part.get("body")
-        raw = body.get("data") if isinstance(body, dict) else None
-        if isinstance(raw, str) and raw:
-            try:
-                decoded = base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)).decode("utf-8", "replace")
-            except (ValueError, UnicodeDecodeError):
-                decoded = ""
-            if decoded:
-                found.append((0 if mime == "text/plain" else 1, decoded))
-        parts = part.get("parts")
-        if isinstance(parts, list):
-            for child in parts:
-                walk(child)
-
-    walk(payload)
-    for priority, text in sorted(found, key=lambda item: item[0]):
-        value = re.sub(r"<[^>]+>", " ", text) if priority else text
-        value = unescape(re.sub(r"\s+", " ", value)).strip()
-        if value:
-            return value[:4000]
-    return ""
-
-
-def _gmail_summary(row: dict[str, Any], detail: dict[str, Any]) -> dict[str, str]:
-    message = detail.get("message")
-    message = message if isinstance(message, dict) else {}
-    headers = _gmail_headers(message)
-    return {
-        "id": str(row.get("id") or message.get("id") or ""),
-        "account_id": "",
-        "folder_id": "",
-        "subject": headers.get("subject", str(row.get("subject") or "(No subject)")),
-        "from": headers.get("from", str(row.get("from") or "Unknown sender")),
-        "date": headers.get("date", ""),
-        "to": headers.get("to", ""),
-        "snippet": str(message.get("snippet") or row.get("snippet") or ""),
-        "body": _gmail_body(message.get("payload")),
-    }
 
 
 def _format_zoho_timestamp(value: Any) -> str:
@@ -276,8 +205,6 @@ def _provider_requested(message: str) -> str:
     lowered = message.casefold()
     if "zoho" in lowered or "ಜೋಹೋ" in lowered or "ಜೂಹೋ" in lowered:
         return "zoho_mail"
-    if "gmail" in lowered or "ಜಿಮೇಲ್" in lowered:
-        return "gmail"
     return ""
 
 
@@ -323,7 +250,7 @@ def _search_query(message: str) -> str:
         if index >= 0:
             value = message[index + len(marker):]
             value = re.sub(
-                r"\b(please|can you|could you|in my|in the|my|the|emails?|mails?|inbox|zoho|gmail)\b",
+                r"\b(please|can you|could you|in my|in the|my|the|emails?|mails?|inbox|zoho)\b",
                 " ",
                 value,
                 flags=re.IGNORECASE,
@@ -332,7 +259,7 @@ def _search_query(message: str) -> str:
             if value:
                 return value[:120]
     cleaned = re.sub(
-        r"\b(please|find|search|show|look for|check|read|open|emails?|mails?|inbox|my|the|zoho|gmail|recent|latest|new|delete|remove|trash)\b",
+        r"\b(please|find|search|show|look for|check|read|open|emails?|mails?|inbox|my|the|zoho|recent|latest|new|delete|remove|trash)\b",
         " ",
         message,
         flags=re.IGNORECASE,
@@ -366,24 +293,7 @@ async def _list_mail(
     recent: bool = False,
     limit: int = MAX_EMAIL_RESULTS,
 ) -> list[dict[str, str]]:
-    # Zoho Mail allows up to 200 messages per request; Gmail caps at 100.
-    max_limit = 200 if provider == "zoho_mail" else 100
-    limit = max(1, min(int(limit), max_limit))
-    if provider == "gmail":
-        # A recent-mail request means newest Inbox messages, not any message
-        # from an arbitrary seven-day period.
-        gmail_query = "in:inbox" if recent else query.strip()
-        if recent and "unread" in query.casefold():
-            gmail_query = "is:unread in:inbox"
-        listed = await list_gmail_messages(user_id, query=gmail_query, max_results=limit)
-        items = listed.get("messages")
-        result: list[dict[str, str]] = []
-        for row in items if isinstance(items, list) else []:
-            if not isinstance(row, dict) or not row.get("id"):
-                continue
-            details = await get_gmail_message(user_id, str(row["id"]))
-            result.append(_gmail_summary(row, details))
-        return result
+    limit = max(1, min(int(limit), 200))
 
     accounts = _zoho_accounts(await list_accounts(user_id))
     if not accounts:
@@ -435,10 +345,6 @@ async def _list_mail(
 
 
 async def _read_body(user_id: str, provider: str, row: dict[str, str]) -> str:
-    if provider == "gmail":
-        details = await get_gmail_message(user_id, row["id"])
-        message = details.get("message")
-        return _gmail_body(message.get("payload")) if isinstance(message, dict) else ""
     details = await get_message_content(user_id, row["account_id"], row["folder_id"], row["id"])
     data = details.get("data")
     if isinstance(data, dict):
@@ -502,14 +408,11 @@ async def _draft_or_confirm_send(
             "Prepared an email to " + recipient + ".\nSubject: " + subject + "\n\n" + body
             + "\n\nI have not sent it yet. Reply CONFIRM to send, or CANCEL."
         )
-    if provider == "gmail":
-        await create_gmail_draft(user_id, recipient, subject, body)
-    else:
-        accounts = _zoho_accounts(await list_accounts(user_id))
-        if not accounts or not accounts[0]["email"]:
-            raise RuntimeError("Zoho Mail did not return the sender email address needed to save a draft.")
-        await save_draft(user_id, accounts[0]["id"], accounts[0]["email"], recipient, subject, body)
-    return "Draft saved in " + ("Gmail" if provider == "gmail" else "Zoho Mail") + ".\nSubject: " + subject
+    accounts = _zoho_accounts(await list_accounts(user_id))
+    if not accounts or not accounts[0]["email"]:
+        raise RuntimeError("Zoho Mail did not return the sender email address needed to save a draft.")
+    await save_draft(user_id, accounts[0]["id"], accounts[0]["email"], recipient, subject, body)
+    return "Draft saved in " + "Zoho Mail" + ".\nSubject: " + subject
 
 
 def _is_edit_draft(message: str) -> bool:
@@ -520,24 +423,6 @@ def _is_edit_draft(message: str) -> bool:
 
 
 async def _list_drafts(user_id: str, provider: str) -> list[dict[str, str]]:
-    if provider == "gmail":
-        result = await list_gmail_drafts(user_id, max_results=MAX_EMAIL_RESULTS)
-        drafts = result.get("drafts")
-        rows: list[dict[str, str]] = []
-        for item in drafts if isinstance(drafts, list) else []:
-            if not isinstance(item, dict):
-                continue
-            draft_id = str(item.get("id") or "").strip()
-            message = item.get("message")
-            message_id = str(message.get("id") or "").strip() if isinstance(message, dict) else ""
-            if not draft_id or not message_id:
-                continue
-            details = await get_gmail_message(user_id, message_id)
-            row = _gmail_summary({"id": message_id}, details)
-            row["draft_id"] = draft_id
-            rows.append(row)
-        return rows
-
     accounts = _zoho_accounts(await list_accounts(user_id))
     if not accounts:
         return []
@@ -584,7 +469,7 @@ async def _edit_draft(
 ) -> str:
     rows = await _list_drafts(user_id, provider)
     if not rows:
-        return "I couldn't find any drafts in " + ("Gmail" if provider == "gmail" else "Zoho Mail") + "."
+        return "I couldn't find any drafts in " + "Zoho Mail" + "."
     query = _draft_query(message)
     matches = [
         row for row in rows
@@ -607,9 +492,6 @@ async def _edit_draft(
         "Requested edits: " + message[:4000]
     )
     subject, body = await _compose_fields(instructions, recipient)
-    if provider == "gmail":
-        await update_gmail_draft(user_id, row["draft_id"], recipient, subject, body)
-        return "Updated the Gmail draft: " + subject
     accounts = _zoho_accounts(await list_accounts(user_id))
     if not accounts or not accounts[0]["email"] or not row.get("folder_id") or not row.get("draft_id"):
         return "I found the Zoho draft but could not verify the folder/account needed to safely replace it. Nothing was changed."
@@ -635,7 +517,7 @@ async def _delete_drafts(
 ) -> str:
     rows = await _list_drafts(user_id, provider)
     if not rows:
-        return "No drafts were found in " + ("Gmail" if provider == "gmail" else "Zoho Mail") + "."
+        return "No drafts were found in " + "Zoho Mail" + "."
     query = _draft_query(message)
     matches = [
         row for row in rows
@@ -653,7 +535,7 @@ async def _delete_drafts(
             "folder_id": row.get("folder_id", ""),
         })
     _save_pending(user_id, conversation_id, provider, "delete_drafts", {"items": items})
-    preview = _format_results(matches, "Gmail drafts" if provider == "gmail" else "Zoho Mail drafts")
+    preview = _format_results(matches, "Zoho Mail drafts")
     return preview + "\n\nNothing has been deleted yet. Reply CONFIRM to delete these draft(s), or CANCEL."
 
 
@@ -685,40 +567,28 @@ async def _execute_pending(user_id: str, provider: str, action_type: str, payloa
         return "Reply sent successfully through Zoho Mail."
 
     if action_type == "send_email":
-        if provider == "gmail":
-            result = await send_gmail_message(
-                user_id,
-                str(payload["to"]),
-                str(payload["subject"]),
-                str(payload["body"]),
-                approved=True,
-            )
-            send_result = result.get("result") if isinstance(result, dict) else None
-            if not isinstance(send_result, dict) or not str(send_result.get("id") or "").strip():
-                raise RuntimeError("Gmail send response did not include a verifiable message ID")
-        else:
-            result = await send_message(
-                user_id,
-                str(payload["account_id"]),
-                str(payload["from_address"]),
-                str(payload["to"]),
-                str(payload["subject"]),
-                str(payload["body"]),
-                approved=True,
-            )
-            status = result.get("status") if isinstance(result, dict) else None
-            data = result.get("data") if isinstance(result, dict) else None
-            status_code = status.get("code") if isinstance(status, dict) else None
-            if not isinstance(status, dict) or str(status_code) not in {"200", "201", "202"}:
-                raise RuntimeError("Zoho Mail did not return a verified successful send status")
-            if not isinstance(data, dict) or not str(data.get("messageId") or "").strip():
-                raise RuntimeError("Zoho Mail send response did not include a verifiable message ID")
+        result = await send_message(
+            user_id,
+            str(payload["account_id"]),
+            str(payload["from_address"]),
+            str(payload["to"]),
+            str(payload["subject"]),
+            str(payload["body"]),
+            approved=True,
+        )
+        status = result.get("status") if isinstance(result, dict) else None
+        data = result.get("data") if isinstance(result, dict) else None
+        status_code = status.get("code") if isinstance(status, dict) else None
+        if not isinstance(status, dict) or str(status_code) not in {"200", "201", "202"}:
+            raise RuntimeError("Zoho Mail did not return a verified successful send status")
+        if not isinstance(data, dict) or not str(data.get("messageId") or "").strip():
+            raise RuntimeError("Zoho Mail send response did not include a verifiable message ID")
 
         logger.info(
             "confirmed email send verified by provider",
             extra={"provider": provider, "provider_message_id_present": True},
         )
-        return "Email sent successfully through " + ("Gmail" if provider == "gmail" else "Zoho Mail") + "."
+        return "Email sent successfully through " + "Zoho Mail" + "."
 
     if action_type == "delete_messages":
         items = payload.get("items")
@@ -728,17 +598,14 @@ async def _execute_pending(user_id: str, provider: str, action_type: str, payloa
         for item in items:
             if not isinstance(item, dict):
                 continue
-            if provider == "gmail":
-                await delete_gmail_message(user_id, str(item["id"]), approved=True)
-            else:
-                await delete_message(
-                    user_id,
-                    str(item["account_id"]),
-                    str(item["folder_id"]),
-                    str(item["id"]),
-                    approved=True,
-                    permanently=False,
-                )
+            await delete_message(
+                user_id,
+                str(item["account_id"]),
+                str(item["folder_id"]),
+                str(item["id"]),
+                approved=True,
+                permanently=False,
+            )
             completed += 1
         return "Moved " + str(completed) + " email(s) to Trash."
 
@@ -750,17 +617,14 @@ async def _execute_pending(user_id: str, provider: str, action_type: str, payloa
         for item in items:
             if not isinstance(item, dict):
                 continue
-            if provider == "gmail":
-                await delete_gmail_draft(user_id, str(item["draft_id"]), approved=True)
-            else:
-                await delete_message(
-                    user_id,
-                    str(item["account_id"]),
-                    str(item["folder_id"]),
-                    str(item["draft_id"] or item["id"]),
-                    approved=True,
-                    permanently=False,
-                )
+            await delete_message(
+                user_id,
+                str(item["account_id"]),
+                str(item["folder_id"]),
+                str(item["draft_id"] or item["id"]),
+                approved=True,
+                permanently=False,
+            )
             completed += 1
         return "Deleted " + str(completed) + " draft(s)."
 
@@ -826,23 +690,21 @@ async def handle_email_chat(user_id: str, conversation_id: str, message: str) ->
         return None
 
     connected = []
-    for provider in ("gmail", "zoho_mail"):
+    for provider in ("zoho_mail",):
         if get_integration_token_metadata(user, provider) is not None:
             connected.append(provider)
     requested = _provider_requested(text)
     if requested:
         if requested not in connected:
-            label = "Gmail" if requested == "gmail" else "Zoho Mail"
+            label = "Zoho Mail"
             return label + " is not connected to this Indoone account yet. Connect it from Plugins first."
         provider = requested
     else:
         if not connected:
             return "No email account is connected to this Indoone account. Connect Email or Zoho Mail from Plugins first."
-        if len(connected) > 1:
-            return "Both Gmail and Zoho Mail are connected. Please specify which one I should use."
         provider = connected[0]
 
-    label = "Gmail" if provider == "gmail" else "Zoho Mail"
+    label = "Zoho Mail"
     recipient_match = EMAIL_ADDRESS_RE.search(text)
     recipient = recipient_match.group(0) if recipient_match else ""
 

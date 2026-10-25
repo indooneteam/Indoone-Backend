@@ -64,15 +64,7 @@ def _rule_plan(message: str, intent: Intent) -> Plan:
                 payload = build_code_tool_payload(payload)
             return Plan(intent=Intent("tool", needs_file_context=intent.needs_file_context), tool=tool, tool_payload=payload, reason="registry-rule")
 
-    if lower.startswith(("search gmail", "find in gmail", "list gmail")):
-        payload = _extract_payload(text, ("search gmail", "find in gmail", "list gmail"))
-        if payload:
-            return Plan(intent=Intent("tool"), tool="gmail_search", tool_payload=payload, reason="gmail-search")
 
-    if lower.startswith(("read email ", "read gmail email ", "open email ")):
-        payload = _extract_payload(text, ("read email", "read gmail email", "open email"))
-        if payload:
-            return Plan(intent=Intent("tool"), tool="gmail_read", tool_payload=payload, reason="gmail-read")
 
     return Plan(intent=intent, reason="no-safe-tool-match")
 

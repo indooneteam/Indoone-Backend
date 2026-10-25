@@ -16,7 +16,6 @@ import httpx
 
 from app.ai.service import generate_reply
 from app.capabilities.store import get_integration_token_metadata, get_pending_email_action
-from app.plugins.gmail.service import create_gmail_draft, list_gmail_messages, update_gmail_draft
 from app.plugins.email_assistant import (
     CANCEL_RE,
     CONFIRM_RE,
@@ -48,7 +47,7 @@ logger = logging.getLogger(__name__)
 
 
 _ALLOWED_TOOLS = {item["name"] for item in EMAIL_TOOL_DECLARATIONS}
-_MAIL_LABEL = {"gmail": "Gmail", "zoho_mail": "Zoho Mail"}
+_MAIL_LABEL = {"zoho_mail": "Zoho Mail"}
 
 
 def _explicit_send_intent(message: str) -> bool:
@@ -127,14 +126,7 @@ def _explicit_draft_edit_intent(message: str) -> bool:
 
 def _provider_named_by_user(message: str) -> str:
     value = message.casefold()
-    zoho_names = ("zoho", "ಜೋಹೋ", "ಜೂಹೋ")
-    gmail_names = ("gmail", "ಜಿಮೇಲ್")
-    has_zoho = any(name in value for name in zoho_names)
-    has_gmail = any(name in value for name in gmail_names)
-    # Leave multi-provider requests to the model so it can call each mailbox.
-    if has_zoho == has_gmail:
-        return ""
-    return "zoho_mail" if has_zoho else "gmail"
+    return "zoho_mail" if any(name in value for name in ("zoho", "ಜೋಹೋ", "ಜೂಹೋ")) else ""
 
 
 def _limit(value: object, default: int = 200, maximum: int = 200) -> int:
@@ -151,24 +143,6 @@ _MAX_COUNT_PAGES = 100
 
 async def _count_inbox_emails(user_id: str, provider: str) -> dict[str, object]:
     """Count Inbox messages via provider pagination without fetching message bodies."""
-    if provider == "gmail":
-        count = 0
-        page_token = ""
-        seen_tokens: set[str] = set()
-        for _ in range(_MAX_COUNT_PAGES):
-            result = await list_gmail_messages(
-                user_id, query="in:inbox", page_token=page_token, max_results=100
-            )
-            messages = result.get("messages")
-            count += len(messages) if isinstance(messages, list) else 0
-            next_token = str(result.get("next_page_token") or "").strip()
-            if not next_token:
-                return {"folder": "Inbox", "count": count, "exact": True}
-            if next_token in seen_tokens:
-                break
-            seen_tokens.add(next_token)
-            page_token = next_token
-        return {"folder": "Inbox", "count": count, "exact": False, "has_more": True}
 
     accounts = _zoho_accounts(await list_accounts(user_id))
     if not accounts:
@@ -230,7 +204,7 @@ def _sanitize_tool_error(exc: Exception) -> dict[str, str]:
 
 def _resolve_provider(user_id: str, requested: object) -> tuple[str | None, dict[str, str] | None]:
     connected = {
-        name for name in ("gmail", "zoho_mail")
+        name for name in ("zoho_mail",)
         if get_integration_token_metadata(user_id, name) is not None
     }
     explicit = str(requested or "").strip().casefold()
@@ -242,8 +216,6 @@ def _resolve_provider(user_id: str, requested: object) -> tuple[str | None, dict
         return explicit, None
     if not connected:
         return None, {"code": "NOT_CONNECTED", "message": "No email account is connected to this Indoone account. Ask the user to connect Email or Zoho Mail from Plugins."}
-    if len(connected) > 1:
-        return None, {"code": "PROVIDER_REQUIRED", "message": "Both Gmail and Zoho Mail are connected. Ask the user which mailbox they want to use; do not guess."}
     return next(iter(connected)), None
 
 
@@ -264,13 +236,6 @@ async def _read_by_id(
 ) -> dict[str, Any]:
     if not message_id or len(message_id) > 256:
         return {"ok": False, "code": "INVALID_REQUEST", "message": "A valid message id is required."}
-    if provider == "gmail":
-        from app.plugins.gmail.service import get_gmail_message
-        from app.plugins.email_assistant import _gmail_summary
-
-        details = await get_gmail_message(user_id, message_id)
-        row = _gmail_summary({"id": message_id}, details)
-        return {"ok": True, "provider": provider, "email": _row_for_model(row, include_body=True)}
     if account_id and folder_id:
         row = {"id": message_id, "account_id": account_id, "folder_id": folder_id}
         body = await _read_body(user_id, provider, row)
@@ -307,17 +272,11 @@ async def execute_email_tool(
         return {"ok": False, "code": "ACTION_NOT_REQUESTED", "message": "The user did not explicitly ask to edit a draft in the current message. Ask a clarifying question instead."}
     user_named_provider = _provider_named_by_user(original_message)
     connected_providers = {
-        name for name in ("gmail", "zoho_mail")
+        name for name in ("zoho_mail",)
         if get_integration_token_metadata(user_id, name) is not None
     }
     if user_named_provider:
         requested_provider = user_named_provider
-    elif len(connected_providers) > 1:
-        return {
-            "ok": False,
-            "code": "PROVIDER_REQUIRED",
-            "message": "Both Gmail and Zoho Mail are connected. Ask the user which mailbox to use; do not choose based on the model's preference.",
-        }
     elif len(connected_providers) == 1:
         requested_provider = next(iter(connected_providers))
     else:
@@ -384,13 +343,10 @@ async def execute_email_tool(
                 return {"ok": False, "code": "INVALID_RECIPIENT", "message": "Ask the user for one valid recipient email address."}
             if len(to) > 512 or len(body) > 20000:
                 return {"ok": False, "code": "FIELD_TOO_LONG", "message": "The draft is too long. Ask the user to shorten it."}
-            if provider == "gmail":
-                await create_gmail_draft(user_id, to, subject, body)
-            else:
-                accounts = _zoho_accounts(await list_accounts(user_id))
-                if not accounts or not accounts[0]["email"]:
-                    return {"ok": False, "code": "SENDER_ADDRESS_UNAVAILABLE", "message": "The sender address could not be verified, so the draft was not saved."}
-                await save_draft(user_id, accounts[0]["id"], accounts[0]["email"], to, subject, body)
+            accounts = _zoho_accounts(await list_accounts(user_id))
+            if not accounts or not accounts[0]["email"]:
+                return {"ok": False, "code": "SENDER_ADDRESS_UNAVAILABLE", "message": "The sender address could not be verified, so the draft was not saved."}
+            await save_draft(user_id, accounts[0]["id"], accounts[0]["email"], to, subject, body)
             return {"ok": True, "operation": "draft_saved", "provider": label, "to": to, "subject": subject or "(No subject)", "sent": False}
 
         if name == "update_email_draft":
@@ -418,19 +374,13 @@ async def execute_email_tool(
                 f"Existing body:\n{old_body[:8000]}\nRequested edits:\n{instructions[:4000]}"
             )
             subject, body = await _compose_fields(prompt, recipient)
-            if provider == "gmail":
-                draft_id = str(row.get("draft_id") or "")
-                if not draft_id:
-                    return {"ok": False, "code": "DRAFT_ID_MISSING", "message": "The existing draft could not be identified safely; nothing was changed."}
-                await update_gmail_draft(user_id, draft_id, recipient, subject, body)
-            else:
-                accounts = _zoho_accounts(await list_accounts(user_id))
-                if not accounts or not accounts[0]["email"] or not row.get("folder_id") or not row.get("draft_id"):
-                    return {"ok": False, "code": "DRAFT_ID_MISSING", "message": "The existing draft or mailbox folder could not be verified; nothing was changed."}
-                await replace_draft(
-                    user_id, accounts[0]["id"], row["folder_id"], row["draft_id"],
-                    accounts[0]["email"], recipient, subject, body, approved=True,
-                )
+            accounts = _zoho_accounts(await list_accounts(user_id))
+            if not accounts or not accounts[0]["email"] or not row.get("folder_id") or not row.get("draft_id"):
+                return {"ok": False, "code": "DRAFT_ID_MISSING", "message": "The existing draft or mailbox folder could not be verified; nothing was changed."}
+            await replace_draft(
+                user_id, accounts[0]["id"], row["folder_id"], row["draft_id"],
+                accounts[0]["email"], recipient, subject, body, approved=True,
+            )
             return {"ok": True, "operation": "draft_updated", "provider": label, "subject": subject}
 
         if name == "prepare_email_reply":

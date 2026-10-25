@@ -20,7 +20,6 @@ class ConnectorSpec:
 
 
 CONNECTORS: tuple[ConnectorSpec, ...] = (
-    ConnectorSpec("gmail", "Gmail", "communication", "oauth2", ("messages.search", "messages.read"), ("messages.send",)),
     ConnectorSpec("telegram", "Telegram", "communication", "bot", ("messages.read",), ("messages.send",)),
     ConnectorSpec("whatsapp", "WhatsApp", "communication", "oauth2", ("messages.read",), ("messages.send",)),
     ConnectorSpec("instagram", "Instagram", "social", "oauth2", ("profile.read", "media.read"), ("media.publish", "messages.send")),

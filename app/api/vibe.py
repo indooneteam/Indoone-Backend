@@ -22,7 +22,6 @@ from app.ai.tool_loop import (
 )
 from app.ai.tool_registry import function_declarations
 from app.capabilities.store import get_integration_token_metadata
-from app.plugins.gmail.service import get_gmail_message, list_gmail_messages
 from app.plugins.github.chat_tools import _format_github_result
 
 logger = logging.getLogger("indoone.vibe")
@@ -82,39 +81,12 @@ def _live_config() -> tuple[str, str, str, str]:
     return api_key, model, voice, thinking_level
 
 
-_GMAIL_SEARCH_TOOL: dict[str, object] = {
-    "name": "search_gmail_messages",
-    "description": (
-        "Search the authenticated user's connected Gmail messages and return read-only "
-        "email metadata and snippets. Use for requests to check, track, find, or summarize "
-        "recent/unread emails. This tool never sends, modifies, archives, or deletes email."
-    ),
-    "behavior": "NON_BLOCKING",
-    "parameters": {
-        "type": "OBJECT",
-        "properties": {
-            "query": {
-                "type": "STRING",
-                "description": (
-                    "Gmail search query, for example newer_than:7d, is:unread, "
-                    "from:someone@example.com newer_than:30d, or a subject keyword."
-                ),
-            },
-            "max_results": {
-                "type": "INTEGER",
-                "description": "Maximum number of emails to inspect, from 1 to 10.",
-            },
-        },
-        "required": ["query"],
-    },
-}
 
 
 _TOOL_INSTRUCTION = (
     "Use the read-only tools you were given instead of guessing, and no others. "
-    "Email: use the email tools (list, count, search, read, drafts) for Gmail or "
-    "Zoho Mail, whichever the user has connected. Plugins: GitHub, Google "
-    "Calendar, Drive and Photos, YouTube, Instagram, Facebook, and Canva. Report "
+    "Email: use the email tools (list, count, search, read, drafts) for the "
+    "connected Zoho Mail account. Plugins: GitHub and Instagram. Report "
     "only what a tool returned. Never claim you sent, changed, archived, or "
     "deleted anything. If a connector is not connected, say the user must connect "
     "it in Indoone."
@@ -177,61 +149,6 @@ def _header_value(message: dict[str, Any], header_name: str) -> str:
     return ""
 
 
-async def _search_gmail_for_voice(user_id: str, args: dict[str, Any]) -> dict[str, object]:
-    query = str(args.get("query") or "").strip()
-    if not query:
-        return {"ok": False, "error": "Please specify which emails to search for."}
-    if len(query) > 300:
-        return {"ok": False, "error": "Email search query is too long."}
-    try:
-        max_results = int(args.get("max_results", 5))
-    except (TypeError, ValueError):
-        max_results = 5
-    max_results = max(1, min(max_results, 10))
-
-    try:
-        listing = await list_gmail_messages(user_id, query=query, max_results=max_results)
-    except ValueError:
-        return {
-            "ok": False,
-            "error": "Gmail is not connected to this Indoone account. Connect Gmail and try again.",
-        }
-    except Exception:
-        logger.exception("Vibe Gmail search failed")
-        return {"ok": False, "error": "Gmail search failed. Check the Gmail connection and try again."}
-
-    messages = listing.get("messages")
-    if not isinstance(messages, list) or not messages:
-        return {"ok": True, "query": query, "count": 0, "emails": []}
-
-    emails: list[dict[str, str]] = []
-    for item in messages[:max_results]:
-        if not isinstance(item, dict):
-            continue
-        message_id = str(item.get("id") or "").strip()
-        if not message_id:
-            continue
-        try:
-            result = await get_gmail_message(user_id, message_id)
-        except Exception:
-            logger.warning("Vibe could not fetch one Gmail message's metadata")
-            continue
-        message = result.get("message")
-        if not isinstance(message, dict):
-            continue
-        emails.append({
-            "message_id": message_id,
-            "thread_id": str(message.get("threadId") or item.get("threadId") or "")[:256],
-            "date": _header_value(message, "Date"),
-            "from": _header_value(message, "From"),
-            "to": _header_value(message, "To"),
-            "subject": _header_value(message, "Subject"),
-            "snippet": str(message.get("snippet") or "")[:600],
-        })
-
-    return {"ok": True, "query": query, "count": len(emails), "emails": emails}
-
-
 _VOICE_CONNECTOR_PREFIXES = ("github_", "instagram_")
 
 
@@ -263,12 +180,9 @@ def _voice_tool_declarations(user_id: str = "") -> list[dict[str, object]]:
         str(item.get("name") or "") for item in function_declarations(read_only=True)
     }
     declarations: list[dict[str, object]] = []
-    gmail = _connector_is_connected(user_id, "gmail")
-    if gmail:
-        declarations.append(dict(_GMAIL_SEARCH_TOOL))
     # The email tools resolve the provider through the same store, so they are
-    # only offered when Gmail or Zoho Mail is actually connected.
-    if gmail or _connector_is_connected(user_id, "zoho_mail"):
+    # only offered when Zoho Mail is actually connected.
+    if _connector_is_connected(user_id, "zoho_mail"):
         declarations.extend(email_read_tool_declarations())
     for declaration in model_tool_declarations(user_id):
         name = str(declaration.get("name") or "")
@@ -281,10 +195,6 @@ def _voice_tool_declarations(user_id: str = "") -> list[dict[str, object]]:
 
 
 async def _execute_voice_tool(user_id: str, name: str, args: object) -> dict[str, object]:
-    if name == "search_gmail_messages":
-        if not isinstance(args, dict):
-            return {"ok": False, "error": "Invalid email-search arguments."}
-        return await _search_gmail_for_voice(user_id, args)
     if not user_id.strip() or not name.strip():
         return {"ok": False, "error": "This voice action needs a signed-in Indoone user."}
     # Read-only plugin tools are dispatched through the shared chat tool loop.

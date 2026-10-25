@@ -54,29 +54,6 @@ def test_agent_routes_explicit_tools_in_message_order() -> None:
     assert [step.index for step in steps] == [1, 2]
 
 
-def test_agent_routes_gmail_search_for_user() -> None:
-    steps = build_agent_steps("search gmail for invoices", user_id="user-1")
-    assert len(steps) == 1
-    assert steps[0].tool == "gmail_search"
-    assert '\"user_id\":\"user-1\"' in steps[0].payload
-    assert '\"query\":\"invoices\"' in steps[0].payload
-    assert steps[0].requires_approval is False
-
-
-def test_agent_routes_gmail_read_for_user() -> None:
-    steps = build_agent_steps("read email abc123", user_id="user-1")
-    assert len(steps) == 1
-    assert steps[0].tool == "gmail_read"
-    assert '\"user_id\":\"user-1\"' in steps[0].payload
-    assert '\"message_id\":\"abc123\"' in steps[0].payload
-    assert steps[0].requires_approval is False
-
-
-def test_agent_does_not_route_gmail_without_user() -> None:
-    steps = build_agent_steps("search gmail for invoices")
-    assert steps == ()
-
-
 def test_agent_is_bounded_and_returns_tool_results() -> None:
     execution = execute_agent("calculate 7 * 8, 10 + 5, 100 / 4, 9 % 2, 1 + 1")
     assert len(execution.steps) == MAX_AGENT_STEPS
@@ -304,36 +281,3 @@ def test_agent_does_not_route_research_as_contact_lookup() -> None:
     assert steps == ()
 
 
-def test_agent_routes_email_safety_request() -> None:
-    steps = build_agent_steps("check my latest Gmail email for phishing", user_id="user-1")
-    assert len(steps) == 1
-    assert steps[0].tool == "gmail_email_safety"
-    assert "user-1" in steps[0].payload
-    assert steps[0].requires_approval is False
-
-
-def test_agent_routes_email_compose_request() -> None:
-    """A compose is planned, and like every other email write it needs approval.
-
-    The agent plans it, but it must not run it: with the step blocked the agent
-    produces no result, and the request stays with the email path, which knows the
-    provider the user connected and asks the one confirmation.
-    """
-    steps = build_agent_steps(
-        "compose an email to alex@example.com about tomorrow's meeting",
-        user_id="user-1",
-    )
-    assert len(steps) == 1
-    assert steps[0].tool == "gmail_compose"
-    assert "tomorrow's meeting" in steps[0].payload
-    assert steps[0].requires_approval is True
-
-
-def test_agent_routes_email_reply() -> None:
-    steps = build_agent_steps(
-        "reply to email m123: Thanks, I can attend.",
-        user_id="user-1",
-    )
-    assert len(steps) == 1
-    assert steps[0].tool == "gmail_reply"
-    assert steps[0].requires_approval is True

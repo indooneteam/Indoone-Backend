@@ -105,7 +105,7 @@ async def test_send_request_only_sends_after_confirmation(monkeypatch, tmp_path)
     monkeypatch.setattr(
         email_assistant,
         "get_integration_token_metadata",
-        lambda user_id, integration_id: {"user_id": user_id} if integration_id == "gmail" else None,
+        lambda user_id, integration_id: {"user_id": user_id} if integration_id == "zoho_mail" else None,
     )
 
     async def fake_compose(request, recipient):
@@ -114,12 +114,20 @@ async def test_send_request_only_sends_after_confirmation(monkeypatch, tmp_path)
 
     sent = []
 
-    async def fake_send(user_id, to, subject, body, approved=False):
+    async def fake_send(user_id, account_id, from_address, to, subject, body, approved=False):
         sent.append((user_id, to, subject, body, approved))
-        return {"result": {"id": "provider-message-id"}, "secrets_exposed": False}
+        return {
+            "status": {"code": "200"},
+            "data": {"messageId": "provider-message-id"},
+            "secrets_exposed": False,
+        }
 
+    async def fake_list_accounts(user_id):
+        return {"data": [{"accountId": "acct-1", "primaryEmailAddress": "sender@example.com"}]}
+
+    monkeypatch.setattr(email_assistant, "list_accounts", fake_list_accounts)
     monkeypatch.setattr(email_assistant, "_compose_fields", fake_compose)
-    monkeypatch.setattr(email_assistant, "send_gmail_message", fake_send)
+    monkeypatch.setattr(email_assistant, "send_message", fake_send)
 
     preview = await email_assistant.handle_email_chat(
         "firebase-user-2",

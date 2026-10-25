@@ -98,3 +98,61 @@ def test_discovery_does_not_depend_on_what_is_connected() -> None:
     names = tool_search.search_tool_names("list my github repositories")
 
     assert "github_list_repositories" in names
+
+
+# ---- a query written in the user's language ------------------------------- #
+# The model usually writes the query in English, but it also passes the user's own
+# words through. Before the alias table those words tokenised to nothing, the search
+# returned no tools at all, and the model told the user it had no access - a
+# capability the product has, reported as missing.
+
+
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ("ಬ್ರಾಂಚ್ ಎಷ್ಟಿದೆ", "github_list_branches"),
+        ("ರೆಪೊದಲ್ಲಿ ಎಷ್ಟು ಬ್ರಾಂಚ್ ಇದೆ", "github_list_branches"),
+        ("ಇಮೇಲ್ ಓದು", "read_email"),
+        ("ಕಮಿಟ್ ತೋರಿಸು", "github_list_repository_commits"),
+    ],
+)
+def test_a_kannada_query_finds_the_english_tool(query: str, expected: str) -> None:
+    assert expected in tool_search.search_tool_names(query)
+
+
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ("branch eshtu ide", "github_list_branches"),
+        ("repo branches torsu", "github_list_branches"),
+        ("commit ella torsu", "github_list_repository_commits"),
+    ],
+)
+def test_a_romanised_kannada_query_finds_the_tool(query: str, expected: str) -> None:
+    assert expected in tool_search.search_tool_names(query)
+
+
+def test_an_english_query_scores_exactly_as_it_did_before() -> None:
+    """The alias table must not change an English query's outcome.
+
+    A word only reaches the table by an exact match on a Kannada or romanised key, so
+    every ASCII word is scored the way it always was.
+    """
+
+    for query in (
+        "list my github repositories",
+        "read my unread email",
+        "send an email to ravi",
+        "summarize a json document",
+    ):
+        before = [
+            name for name, _score in tool_search.score_tools(query)
+        ]
+        assert before, query
+        assert tool_search.search_tool_names(query), query
+
+
+def test_a_kannada_word_that_names_no_capability_finds_nothing() -> None:
+    """A Kannada sentence with no capability in it must not invent a match."""
+
+    assert tool_search.search_tool_names("ನಮಸ್ಕಾರ ಹೇಗಿದ್ದೀರಿ") == []

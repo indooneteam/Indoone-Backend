@@ -177,11 +177,41 @@ def test_github_file_edit_tool_requires_approval():
 
 
 @pytest.mark.asyncio
-async def test_github_update_tool_rejects_invalid_approval_token(monkeypatch):
+async def test_a_protected_branch_does_not_run_on_an_invalid_approval_token(monkeypatch):
+    """An invalid token must not write, and must not be a dead end either.
+
+    On a protected branch the write is held and offered as a proposal. The property
+    that matters is unchanged - the commit does not happen.
+    """
+
     import json
-    from app.ai.execution.tools import _github_update_repository_file
+    from app.ai.execution import tools as ai_tools
 
     monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "a" * 32)
+    committed: list[dict] = []
+
+    async def _must_not_commit(**kwargs):
+        committed.append(kwargs)
+        raise AssertionError("the write must not run without a valid approval")
+
+    async def _protected(*_args, **_kwargs):
+        return "This writes directly to main, which is a protected branch."
+
+    monkeypatch.setattr(ai_tools, "commit_github_repository_file", _must_not_commit)
+    monkeypatch.setattr(
+        "app.plugins.github.branch_protection.protected_branch_reason", _protected
+    )
+    monkeypatch.setattr(ai_tools, "issue_approval_token", lambda *_a, **_k: "issued")
+    monkeypatch.setattr(
+        "app.capabilities.connectors.store.save_pending_github_action", lambda *_a, **_k: None
+    )
+
+    class _Fernet:
+        def encrypt(self, value: bytes) -> bytes:
+            return value
+
+    monkeypatch.setattr("app.capabilities.connectors.integrations._fernet", lambda: _Fernet())
+
     payload = {
         "user_id": "user-1",
         "repository": "owner/repo",
@@ -189,10 +219,58 @@ async def test_github_update_tool_rejects_invalid_approval_token(monkeypatch):
         "content": "print('safe')",
         "message": "Update source",
         "sha": "a" * 40,
+        "branch": "main",
         "approval_token": "not-a-valid-signed-token",
     }
-    with pytest.raises(PermissionError, match="approval"):
-        await _github_update_repository_file(json.dumps(payload))
+    result = json.loads(await ai_tools._github_update_repository_file(json.dumps(payload)))
+
+    assert committed == []
+    assert result["code"] == "APPROVAL_REQUIRED"
+    assert "protected branch" in result["reply"]
+    assert "confirm" in result["reply"].lower()
+
+
+@pytest.mark.asyncio
+async def test_a_reversible_file_write_runs_without_a_token(monkeypatch):
+    """The executor and its spec now agree: an unprotected edit is not gated."""
+
+    import json
+    from app.ai.execution import tools as ai_tools
+
+    monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "a" * 32)
+    committed: list[dict] = []
+
+    async def _commit(**kwargs):
+        committed.append(kwargs)
+        return {"content": {"sha": "b" * 40}}
+
+    async def _not_protected(*_args, **_kwargs):
+        return ""
+
+    monkeypatch.setattr(ai_tools, "commit_github_repository_file", _commit)
+    monkeypatch.setattr(
+        "app.plugins.github.branch_protection.protected_branch_reason", _not_protected
+    )
+    monkeypatch.setattr(ai_tools, "_verified_write_result", _passthrough)
+
+    payload = {
+        "user_id": "user-1",
+        "repository": "owner/repo",
+        "path": "src/app.py",
+        "content": "print('safe')",
+        "message": "Update source",
+        "sha": "a" * 40,
+        "branch": "feature/x",
+    }
+    await ai_tools._github_update_repository_file(json.dumps(payload))
+
+    assert committed and committed[0]["branch"] == "feature/x"
+
+
+async def _passthrough(_user_id, _tool, _data, result):
+    import json as _json
+
+    return _json.dumps({"ok": True, "result": result})
 
 
 @pytest.mark.asyncio

@@ -28,9 +28,8 @@ from app.plugins.zoho_mail.service import (
     send_message,
 )
 
+from app.ai.execution.confirmation import CANCEL, CONFIRM, classify_reply, waiting_prompt
 from app.ai.language.language_detection import (
-    INDIC_CANCEL_WORDS,
-    INDIC_CONFIRM_WORDS,
     INDIC_MAIL_WORDS,
     indic_pattern,
 )
@@ -44,8 +43,6 @@ EMAIL_ADDRESS_RE = re.compile(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}")
 # list instead of by hand-written patterns that only ever grew in one language. The
 # Kannada extras that were here before are kept alongside it.
 _INDIC_MAIL = indic_pattern(INDIC_MAIL_WORDS)
-_INDIC_CONFIRM = indic_pattern(INDIC_CONFIRM_WORDS)
-_INDIC_CANCEL = indic_pattern(INDIC_CANCEL_WORDS)
 
 EMAIL_CONTEXT_RE = re.compile(
     r"\b(email|emails|mail|mails|inbox|zoho|draft|drafts|unread)\b|"
@@ -53,19 +50,7 @@ EMAIL_CONTEXT_RE = re.compile(
     + r"|ಡ್ರಾಫ್ಟ್|ಜಿಮೇಲ್|ಜೋಹೋ|ಜೂಹೋ",
     re.IGNORECASE,
 )
-CONFIRM_RE = re.compile(
-    r"^(yes|yes please|confirm|confirmed|do it|go ahead|send it|delete them|"
-    r"approve|approved|"
-    + _INDIC_CONFIRM
-    + r"|ಮಾಡು|ಡಿಲೀಟ್ ಮಾಡು)[.! ]*$",
-    re.IGNORECASE,
-)
-CANCEL_RE = re.compile(
-    r"^(no|no thanks|cancel|stop|don't|do not|"
-    + _INDIC_CANCEL
-    + r"|ಕ್ಯಾನ್ಸಲ್)[.! ]*$",
-    re.IGNORECASE,
-)
+
 
 
 def _rows(payload: object, *keys: str) -> list[dict[str, Any]]:
@@ -656,11 +641,12 @@ async def handle_email_chat(user_id: str, conversation_id: str, message: str) ->
                     user, conversation, provider, str(data["request"]),
                     recipient_match.group(0), bool(data.get("sending")),
                 )
-            if CANCEL_RE.fullmatch(text):
+            if classify_reply(text) == CANCEL:
                 delete_pending_email_action(user, conversation)
                 return "Cancelled. Nothing was sent or saved."
             return "Please reply with the recipient email address, or CANCEL."
-        if CONFIRM_RE.fullmatch(text):
+        decision = classify_reply(text)
+        if decision == CONFIRM:
             delete_pending_email_action(user, conversation)
             try:
                 return await _execute_pending(user, provider, action_type, data)
@@ -679,10 +665,13 @@ async def handle_email_chat(user_id: str, conversation_id: str, message: str) ->
                         "Check the provider's Sent folder before retrying to avoid sending a duplicate."
                     )
                 return "The approved email action could not be verified. Check the mailbox before retrying."
-        if CANCEL_RE.fullmatch(text):
+        if decision == CANCEL:
             delete_pending_email_action(user, conversation)
             return "Cancelled. No email was sent or deleted."
-        delete_pending_email_action(user, conversation)
+        # Anything else - a question, a wait, a "did it happen?" - used to delete the held
+        # action and hand the turn to the model, which then said it was working on
+        # something it was not. The action stays held and the answer comes from the record.
+        return waiting_prompt("the email action")
 
     # Do not hijack ordinary questions containing words such as "latest"
     # or "research". Require an explicit email/mailbox/provider reference.

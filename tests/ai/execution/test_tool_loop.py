@@ -258,3 +258,60 @@ def test_the_tool_instruction_carries_the_answer_rules() -> None:
 
     assert TOOL_SYSTEM_INSTRUCTION.startswith(ANSWER_SYSTEM_INSTRUCTION)
     assert "find_tools" in TOOL_SYSTEM_INSTRUCTION
+
+
+# ---- a connected connector's read tools are there on the first round ------ #
+# Lazy discovery made correctness depend on the model choosing to call find_tools.
+# When it did not, the tool existed and the account was connected, and the model still
+# answered "no access". The read tools a user reaches for first are now offered up
+# front for the connectors that user has actually connected - and only those.
+
+
+def _declared(user_id: str, monkeypatch, connected: list[str]) -> set[str]:
+    monkeypatch.setattr(
+        "app.ai.execution.account_context.connected_accounts", lambda _uid: list(connected)
+    )
+    return {item["name"] for item in tool_loop.model_tool_declarations(user_id)}
+
+
+def test_a_connected_github_user_is_offered_the_read_tools_first(monkeypatch) -> None:
+    declared = _declared("u-connected", monkeypatch, ["github"])
+
+    for name in tool_loop._CONNECTED_READ_TOOLS["github"]:
+        assert name in declared
+    # The writes are still discovered, never handed over on the first round.
+    assert "github_delete_branch" not in declared
+    assert "github_merge_pull_request" not in declared
+
+
+def test_a_user_with_nothing_connected_gets_only_the_always_on_set(monkeypatch) -> None:
+    declared = _declared("u-empty", monkeypatch, [])
+
+    assert declared == set(tool_loop.ALWAYS_ON_TOOL_NAMES)
+
+
+def test_a_connected_email_account_is_offered_the_email_reads(monkeypatch) -> None:
+    declared = _declared("u-mail", monkeypatch, ["email"])
+
+    assert {"list_recent_emails", "search_emails"} <= declared
+
+
+def test_the_first_round_stays_small(monkeypatch) -> None:
+    """The point of discovery is the token saving; this must not give it back."""
+
+    declared = _declared("u-both", monkeypatch, ["github", "email"])
+    full = {item["name"] for item in tool_loop.model_tool_declarations("u-both", full=True)}
+
+    assert len(declared) <= 14
+    assert len(declared) < len(full) / 2
+
+
+def test_a_store_that_cannot_answer_does_not_break_the_round(monkeypatch) -> None:
+    def _boom(_user_id: str) -> list[str]:
+        raise RuntimeError("store unavailable")
+
+    monkeypatch.setattr("app.ai.execution.account_context.connected_accounts", _boom)
+
+    declared = {item["name"] for item in tool_loop.model_tool_declarations("u-broken")}
+
+    assert declared == set(tool_loop.ALWAYS_ON_TOOL_NAMES)

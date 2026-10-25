@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 
-from app.ai.tools import ToolResult
+from app.ai.execution.tools import ToolResult
 
 
 def remaining_budget(deadline: float) -> float:

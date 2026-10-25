@@ -1,5 +1,5 @@
-from app.ai.memory_service import MemoryService
-from app.ai.memory_policy import MemoryPolicy
+from app.ai.memory.memory_service import MemoryService
+from app.ai.memory.memory_policy import MemoryPolicy
 from app.capabilities import store
 
 

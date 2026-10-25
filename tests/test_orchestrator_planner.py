@@ -1,4 +1,4 @@
-from app.ai.orchestrator import plan_request
+from app.ai.agents.orchestrator import plan_request
 
 
 def test_planner_routes_text_stats() -> None:

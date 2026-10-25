@@ -14,7 +14,7 @@ import threading
 from typing import TYPE_CHECKING
 import time
 
-from app.ai.language_detection import detect_response_language
+from app.ai.language.language_detection import detect_response_language
 from app.storage.github_release import GitHubReleaseStorageError, get_github_release_storage
 
 
@@ -38,8 +38,7 @@ def ai_provider_status() -> dict[str, object]:
     makes it possible to verify that the deployed chat routes to the intended model.
     """
     if _azure_backend_enabled():
-        from app.ai import azure_openai_service
-
+        from app.ai.gateway import azure_openai_service
         return {
             "provider": "azure",
             "model": azure_openai_service.azure_model_name(),
@@ -55,8 +54,7 @@ def ai_provider_status() -> dict[str, object]:
             "api_key_configured": None,
         }
 
-    from app.ai import gemini_service
-
+    from app.ai.gateway import gemini_service
     model = os.getenv("GEMINI_MODEL", gemini_service._DEFAULT_MODEL).strip()
     api_key_configured = bool(os.getenv("GEMINI_API_KEY", "").strip())
     return {
@@ -68,7 +66,7 @@ def ai_provider_status() -> dict[str, object]:
 
 
 if TYPE_CHECKING:
-    from app.ai.inference import LocalModelRuntime
+    from app.ai.local.inference import LocalModelRuntime
 
 # Kept as a lazy injection point for tests and compatibility. The real class is
 # imported only inside _load_local_model_runtime() so Render startup stays light.
@@ -169,7 +167,7 @@ def _load_local_model_runtime() -> "LocalModelRuntime | None":
             # retaining a testable lazy injection point.
             runtime_factory = LocalModelRuntime
             if runtime_factory is None:
-                from app.ai.inference import LocalModelRuntime as runtime_factory
+                from app.ai.local.inference import LocalModelRuntime as runtime_factory
 
             _runtime = runtime_factory(_checkpoint, _tokenizer)
             _NEXT_MODEL_LOAD_ATTEMPT = 0.0
@@ -252,8 +250,8 @@ class LocalAIService:
         # Keep the existing local-model path as the default. When explicitly configured,
         # Google Gemini handles the chat turn and can call the bounded free web-search tool.
         if _gemini_backend_enabled() or _azure_backend_enabled():
-            from app.ai.gemini_service import generate_gemini_reply, run_with_provider_fallback
-            from app.ai.azure_openai_service import generate_azure_reply
+            from app.ai.gateway.gemini_service import generate_gemini_reply, run_with_provider_fallback
+            from app.ai.gateway.azure_openai_service import generate_azure_reply
 
             async def _reply_with(provider):
                 if media_attachments:

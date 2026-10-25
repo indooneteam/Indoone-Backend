@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 import httpx
 
-from app.ai.language_detection import SCRIPT_RANGES
+from app.ai.language.language_detection import SCRIPT_RANGES
 
 
 DEFAULT_TIMEOUT_SECONDS = 6.0

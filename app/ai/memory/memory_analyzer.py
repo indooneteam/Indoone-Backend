@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.ai.memory import extract_memory_candidates
+from app.ai.memory.memory import extract_memory_candidates
 
 
 @dataclass(frozen=True)

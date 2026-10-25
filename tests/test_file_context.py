@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-import app.ai.file_context as file_context
+import app.ai.memory.file_context as file_context
 
 
 OWNER = "user-one"

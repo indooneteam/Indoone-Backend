@@ -284,7 +284,7 @@ def test_build_research_query_variants_extracts_latin_terms() -> None:
 
 
 def test_wikipedia_research_provider_adapts_knowledge_answer(monkeypatch) -> None:
-    from app.ai.general_knowledge import WikipediaAnswer
+    from app.ai.language.general_knowledge import WikipediaAnswer
 
     class FakeWikipedia:
         def __init__(self, *args, **kwargs) -> None:
@@ -299,7 +299,7 @@ def test_wikipedia_research_provider_adapts_knowledge_answer(monkeypatch) -> Non
                 "AI is machine intelligence.",
             )
 
-    import app.ai.general_knowledge as general_knowledge
+    import app.ai.language.general_knowledge as general_knowledge
     monkeypatch.setattr(general_knowledge, "WikipediaKnowledgeProvider", FakeWikipedia)
 
     results = asyncio.run(

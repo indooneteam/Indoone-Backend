@@ -3,8 +3,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from app.ai.memory_policy import MemoryPolicy
-from app.ai.memory_service import MemoryService
+from app.ai.memory.memory_policy import MemoryPolicy
+from app.ai.memory.memory_service import MemoryService
 from app.api.dependencies import current_user_id
 
 router = APIRouter(tags=["memory"])

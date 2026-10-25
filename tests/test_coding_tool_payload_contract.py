@@ -11,12 +11,12 @@ import json
 
 import pytest
 
-from app.ai.agent import build_agent_steps
-from app.ai.coding import SUPPORTED_LANGUAGES, detect_language
-from app.ai.orchestrator import plan_request
-from app.ai.tool_loop import _core_payload
-from app.ai.tool_registry import get_tool_spec
-from app.ai.tools import run_tool
+from app.ai.agents.agent import build_agent_steps
+from app.ai.agents.coding import SUPPORTED_LANGUAGES, detect_language
+from app.ai.agents.orchestrator import plan_request
+from app.ai.execution.tool_loop import _core_payload
+from app.ai.execution.tool_registry import get_tool_spec
+from app.ai.execution.tools import run_tool
 
 CODING_TOOLS = ("code_analysis", "code_fix_suggestions", "code_transform", "sandbox_execution")
 

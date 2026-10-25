@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.ai.question_understanding import understand_question
+from app.ai.language.question_understanding import understand_question
 
 
 @dataclass(frozen=True)

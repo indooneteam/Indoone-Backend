@@ -1,6 +1,6 @@
 import asyncio
 
-from app.ai.conversation_store import ConversationStore
+from app.ai.memory.conversation_store import ConversationStore
 from app.capabilities import channel_common, store
 from app.instagram import ai_reply as instagram_ai_reply
 from app.telegram import ai_reply as telegram_ai_reply

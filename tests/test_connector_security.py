@@ -5,7 +5,7 @@ import time
 
 from fastapi.testclient import TestClient
 
-from app.ai.connector_authorization import scope_allows
+from app.ai.execution.connector_authorization import scope_allows
 from app.main import app
 
 

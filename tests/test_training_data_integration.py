@@ -2,7 +2,7 @@ from pathlib import Path
 
 import torch
 
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.tokenizer import BPETokenizer
 from app.ai.training.train import _instruction_batchify, train
 from app.ai.training.training_data import TrainingExample
 

@@ -14,10 +14,10 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from app.ai import observability
-from app.ai import tools as ai_tools
-from app.ai.gemini_service import _record_usage as record_gemini_usage
-from app.ai.azure_openai_service import _record_usage as record_azure_usage
+from app.ai.gateway import observability
+from app.ai.execution import tools as ai_tools
+from app.ai.gateway.gemini_service import _record_usage as record_gemini_usage
+from app.ai.gateway.azure_openai_service import _record_usage as record_azure_usage
 from app.main import app
 
 
@@ -173,7 +173,7 @@ def test_a_failing_tool_call_is_marked_failed() -> None:
 
 
 def test_a_provider_fallback_is_counted() -> None:
-    from app.ai.gemini_service import ModelBusyError, run_with_provider_fallback
+    from app.ai.gateway.gemini_service import ModelBusyError, run_with_provider_fallback
 
     async def primary() -> str:
         raise ModelBusyError("busy")

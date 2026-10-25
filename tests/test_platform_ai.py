@@ -1,5 +1,5 @@
-from app.ai.memory import extract_memory_candidates, resolve_memory_update
-from app.ai.orchestrator import execute_plan, plan_request
+from app.ai.memory.memory import extract_memory_candidates, resolve_memory_update
+from app.ai.agents.orchestrator import execute_plan, plan_request
 
 
 def test_memory_extraction_requires_explicit_user_statement() -> None:

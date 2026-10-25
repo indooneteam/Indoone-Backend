@@ -1,4 +1,4 @@
-from app.ai.response_style import assess_response_style
+from app.ai.quality.response_style import assess_response_style
 
 
 def test_concise_style_accepts_short_response() -> None:

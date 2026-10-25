@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.knowledge_learning import build_entry, load_entries, save_entry
+from app.ai.memory.knowledge_learning import build_entry, load_entries, save_entry
 
 
 def test_build_entry_creates_deterministic_id_and_provenance() -> None:

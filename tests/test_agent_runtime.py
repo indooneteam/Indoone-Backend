@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import time
 
-from app.ai.agent import MAX_AGENT_RUNTIME_SECONDS, execute_agent
-from app.ai.tools import ToolResult
+from app.ai.agents.agent import MAX_AGENT_RUNTIME_SECONDS, execute_agent
+from app.ai.execution.tools import ToolResult
 
 
 def test_agent_stops_when_total_runtime_budget_is_exhausted(monkeypatch) -> None:
@@ -15,8 +15,8 @@ def test_agent_stops_when_total_runtime_budget_is_exhausted(monkeypatch) -> None
         time.sleep(0.02)
         return ToolResult(name, payload, safe=True, retryable=False)
 
-    monkeypatch.setattr("app.ai.agent.run_tool", slow_tool)
-    monkeypatch.setattr("app.ai.agent.MAX_AGENT_RUNTIME_SECONDS", 0.03)
+    monkeypatch.setattr("app.ai.agents.agent.run_tool", slow_tool)
+    monkeypatch.setattr("app.ai.agents.agent.MAX_AGENT_RUNTIME_SECONDS", 0.03)
 
     execution = execute_agent("text stats: one; text stats: two; text stats: three")
     elapsed = time.monotonic() - started
@@ -29,13 +29,13 @@ def test_agent_stops_when_total_runtime_budget_is_exhausted(monkeypatch) -> None
 
 
 def test_agent_runtime_budget_is_independent_of_step_limit(monkeypatch) -> None:
-    monkeypatch.setattr("app.ai.agent.MAX_AGENT_RUNTIME_SECONDS", 0.02)
+    monkeypatch.setattr("app.ai.agents.agent.MAX_AGENT_RUNTIME_SECONDS", 0.02)
 
     def slow_tool(name: str, payload: str) -> ToolResult:
         time.sleep(0.03)
         return ToolResult(name, payload)
 
-    monkeypatch.setattr("app.ai.agent.run_tool", slow_tool)
+    monkeypatch.setattr("app.ai.agents.agent.run_tool", slow_tool)
 
     execution = execute_agent("text stats: one; text stats: two")
 

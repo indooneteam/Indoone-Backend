@@ -14,9 +14,9 @@ from types import SimpleNamespace
 import pytest
 from cryptography.fernet import Fernet
 
-from app.ai import tool_loop
-from app.ai import tools as ai_tools
-from app.ai.tools import _explicit_write_intent
+from app.ai.execution import tool_loop
+from app.ai.execution import tools as ai_tools
+from app.ai.execution.tools import _explicit_write_intent
 from app.capabilities import store
 from app.plugins.github import chat_tools
 
@@ -31,9 +31,9 @@ def _env(tmp_path, monkeypatch):
     monkeypatch.setenv("INDOONE_APPROVAL_SECRET", "a-test-approval-secret-that-is-long-enough")
     monkeypatch.setenv("INDOONE_OAUTH_ENCRYPTION_KEY", Fernet.generate_key().decode())
     allow = lambda *args, **kwargs: SimpleNamespace(allowed=True, reason="")  # noqa: E731
-    monkeypatch.setattr("app.ai.connector_authorization.authorize_tool", allow)
-    monkeypatch.setattr("app.ai.tools.authorize_tool", allow)
-    monkeypatch.setattr("app.ai.approval.authorize_tool", allow)
+    monkeypatch.setattr("app.ai.execution.connector_authorization.authorize_tool", allow)
+    monkeypatch.setattr("app.ai.execution.tools.authorize_tool", allow)
+    monkeypatch.setattr("app.ai.execution.approval.authorize_tool", allow)
     store.initialize()
     yield
 

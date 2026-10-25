@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from app.ai.coding import MAX_CODE_LENGTH, SUPPORTED_LANGUAGES
+from app.ai.agents.coding import MAX_CODE_LENGTH, SUPPORTED_LANGUAGES
 
 MAX_EXECUTION_SECONDS = 5
 MAX_OUTPUT_BYTES = 16_384

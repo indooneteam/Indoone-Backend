@@ -1,10 +1,10 @@
 import pytest
 import torch
 
-from app.ai.inference import LocalModelRuntime
-from app.ai.local_engine import LocalAIEngine
-from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.inference import LocalModelRuntime
+from app.ai.local.local_engine import LocalAIEngine
+from app.ai.local.model import IndooneTransformer
+from app.ai.local.tokenizer import BPETokenizer
 
 
 def test_select_next_token_uses_greedy_choice_at_zero_temperature() -> None:

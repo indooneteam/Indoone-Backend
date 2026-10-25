@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from app.ai.code_sandbox import build_sandbox_request, sandbox_execution_tool
-from app.ai.agent import build_agent_steps, execute_agent
+from app.ai.agents.code_sandbox import build_sandbox_request, sandbox_execution_tool
+from app.ai.agents.agent import build_agent_steps, execute_agent
 
 
 def test_sandbox_request_is_disabled_by_default() -> None:

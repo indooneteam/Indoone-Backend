@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from app.ai.conversation_store import ConversationStore
+from app.ai.memory.conversation_store import ConversationStore
 
 OWNER = "user-one"
 OTHER = "user-two"

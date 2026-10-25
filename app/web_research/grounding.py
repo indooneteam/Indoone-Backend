@@ -6,7 +6,7 @@ import logging
 import re
 from dataclasses import dataclass
 
-from app.ai.answer_quality import assess_answer
+from app.ai.quality.answer_quality import assess_answer
 
 
 logger = logging.getLogger(__name__)

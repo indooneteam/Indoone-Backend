@@ -40,13 +40,13 @@ from app.web_research.tools import (
     extract_search_web_call,
 )
 from app.web_research.research import ResearchResult
-from app.ai.observability import (
+from app.ai.gateway.observability import (
     add_model_usage,
     measured_model_call,
     note_fallback,
     set_model,
 )
-from app.ai.ai_rules import (
+from app.ai.gateway.ai_rules import (
     ANSWER_SYSTEM_INSTRUCTION as _SYSTEM_INSTRUCTION,
     EVIDENCE_SUFFIX,
     FUNCTION_DECLARATIONS_REQUIRED,

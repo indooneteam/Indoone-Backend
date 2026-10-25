@@ -1,5 +1,5 @@
-from app.ai.agent import _serialize_result
-from app.ai.tools import ToolResult
+from app.ai.agents.agent import _serialize_result
+from app.ai.execution.tools import ToolResult
 
 
 def test_agent_serializes_tool_truncation_metadata() -> None:

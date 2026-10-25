@@ -4,7 +4,7 @@ import re
 from dataclasses import dataclass
 from typing import Mapping
 
-from app.ai.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value
+from app.ai.memory.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value
 
 
 @dataclass(frozen=True)

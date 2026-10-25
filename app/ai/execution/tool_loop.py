@@ -9,7 +9,7 @@ language, exactly like a general assistant.
 
 Tools that change data (``requires_approval`` in the registry) are offered to
 the model too, but the dispatcher refuses to run one until the caller presents
-a server-issued approval token for that exact tool (see ``app.ai.approval``).
+a server-issued approval token for that exact tool (see ``app.ai.execution.approval``).
 """
 from __future__ import annotations
 
@@ -17,27 +17,27 @@ import json
 import os
 from typing import Any, Iterable
 
-from app.ai.approval import decide_tool
-from app.ai.language_detection import (
+from app.ai.execution.approval import decide_tool
+from app.ai.language.language_detection import (
     INDIC_MAIL_WORDS,
     INDIC_SEND_WORDS,
     SCRIPT_RANGES,
 )
-from app.ai.ai_rules import (
+from app.ai.gateway.ai_rules import (
     APPROVAL_REQUIRED,
     SEARCH_FAILED,
     SEARCH_RESULT_MESSAGES,
     TOOL_SYSTEM_INSTRUCTION as _UNIFIED_SYSTEM_INSTRUCTION,
     UNKNOWN_TOOL,
 )
-from app.ai.tool_registry import (
+from app.ai.execution.tool_registry import (
     EMAIL_TOOL_DECLARATIONS,
     GITHUB_TOOL_DECLARATIONS,
     TOOL_SPECS,
     get_tool_spec,
     tool_declaration,
 )
-from app.ai.tools import run_tool_async
+from app.ai.execution.tools import run_tool_async
 from app.capabilities.store import get_integration_token_metadata
 
 _EMAIL_TOOL_NAMES = frozenset(item["name"] for item in EMAIL_TOOL_DECLARATIONS)
@@ -337,11 +337,11 @@ async def run_tool_loop(
     if not (_gemini_backend_enabled() or _azure_backend_enabled()) or not message.strip():
         return None
 
-    from app.ai.gemini_service import (
+    from app.ai.gateway.gemini_service import (
         generate_gemini_function_call_reply,
         run_with_provider_fallback,
     )
-    from app.ai.azure_openai_service import generate_azure_function_call_reply
+    from app.ai.gateway.azure_openai_service import generate_azure_function_call_reply
 
     tokens = tuple(approval_tokens or ())
     write_done = {"value": False}

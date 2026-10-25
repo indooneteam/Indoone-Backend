@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from app.ai.tools import TOOLS, run_tool_async
+from app.ai.execution.tools import TOOLS, run_tool_async
 
 
 def test_async_tool_runtime_keeps_async_tool_on_current_loop(monkeypatch) -> None:
@@ -34,7 +34,7 @@ def test_async_tool_runtime_cancels_timed_out_coroutine(monkeypatch) -> None:
 
     monkeypatch.setitem(TOOLS, "text_stats", slow_tool)
     monkeypatch.setattr(
-        "app.ai.tools.get_tool_spec",
+        "app.ai.execution.tools.get_tool_spec",
         lambda _: type("Spec", (), {"timeout_seconds": 0.01, "max_output_chars": 100})(),
     )
 
@@ -82,7 +82,7 @@ def test_sync_tool_timeout_is_enforced_off_the_event_loop(monkeypatch) -> None:
 
     monkeypatch.setitem(TOOLS, "text_stats", slow_sync_tool)
     monkeypatch.setattr(
-        "app.ai.tools.get_tool_spec",
+        "app.ai.execution.tools.get_tool_spec",
         lambda _: type("Spec", (), {"timeout_seconds": 0.02, "max_output_chars": 100})(),
     )
 

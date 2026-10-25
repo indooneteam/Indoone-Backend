@@ -1,5 +1,5 @@
-from app.ai.memory_policy import MemoryPolicy
-from app.ai.memory_service import MemoryService
+from app.ai.memory.memory_policy import MemoryPolicy
+from app.ai.memory.memory_service import MemoryService
 
 
 def test_memory_service_blocks_implicit_write(monkeypatch, tmp_path):

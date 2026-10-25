@@ -1,7 +1,7 @@
 import pytest
 
-from app.ai.knowledge import KnowledgeDocument, LocalKnowledgeBase
-from app.ai.rag_evaluation import RetrievalCase, evaluate_retrieval
+from app.ai.memory.knowledge import KnowledgeDocument, LocalKnowledgeBase
+from app.ai.quality.rag_evaluation import RetrievalCase, evaluate_retrieval
 
 
 def test_retrieval_evaluation_reports_recall_and_mrr() -> None:

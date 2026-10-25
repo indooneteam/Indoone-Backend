@@ -1,4 +1,4 @@
-from app.ai.conversation_store import ConversationStore
+from app.ai.memory.conversation_store import ConversationStore
 
 
 def _close_conversation(store: ConversationStore, conversation_id: str) -> None:

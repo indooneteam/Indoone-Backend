@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import json
 
-from app.ai.coding import suggest_fixes
-from app.ai.tools import run_tool
+from app.ai.agents.coding import suggest_fixes
+from app.ai.execution.tools import run_tool
 
 
 def test_python_fix_suggestions_include_parser_location() -> None:

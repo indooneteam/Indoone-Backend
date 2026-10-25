@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from app.ai.language_detection import (
+from app.ai.language.language_detection import (
     INDIC_CANCEL_WORDS,
     INDIC_CONFIRM_WORDS,
     INDIC_MAIL_WORDS,

@@ -7,11 +7,11 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from app.ai.ai_rules import EMAIL_PENDING_ACTION
-from app.ai.conversation_store import ConversationStore
-from app.ai.file_context import read_text_file
-from app.ai.service import generate_reply
-from app.ai.connector_authorization import authorize_connector
+from app.ai.gateway.ai_rules import EMAIL_PENDING_ACTION
+from app.ai.memory.conversation_store import ConversationStore
+from app.ai.memory.file_context import read_text_file
+from app.ai.gateway.service import generate_reply
+from app.ai.execution.connector_authorization import authorize_connector
 from app.plugins.github.service import (
     MAX_REPOSITORY_FILE_BYTES,
     _redact_repository_secrets,
@@ -28,9 +28,9 @@ from app.capabilities.document_extract import (
 from app.capabilities.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
 from app.web_research.grounding import split_grounded_sources
 from app.api.dependencies import current_user_id
-from app.ai.gemini_service import ModelBusyError
-from app.ai.tool_loop import needs_tools, run_tool_loop
-from app.ai.agent_async import execute_agent_async
+from app.ai.gateway.gemini_service import ModelBusyError
+from app.ai.execution.tool_loop import needs_tools, run_tool_loop
+from app.ai.agents.agent_async import execute_agent_async
 from app.capabilities.store import (
     get_pending_email_action,
     get_pending_github_action,

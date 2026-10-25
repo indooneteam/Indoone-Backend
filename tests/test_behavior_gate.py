@@ -1,4 +1,4 @@
-from app.ai.behavior_eval import CATEGORIES, build_case_prompt, score_case, score_response, summarize_gate
+from app.ai.quality.behavior_eval import CATEGORIES, build_case_prompt, score_case, score_response, summarize_gate
 
 
 def test_score_response_requires_all_topics_and_required_terms() -> None:

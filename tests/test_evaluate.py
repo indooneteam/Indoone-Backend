@@ -3,8 +3,8 @@ from pathlib import Path
 import torch
 
 from app.ai.training.evaluate import evaluate_checkpoint
-from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.model import IndooneTransformer
+from app.ai.local.tokenizer import BPETokenizer
 
 
 def test_evaluate_checkpoint_returns_loss_and_perplexity(tmp_path: Path) -> None:

@@ -1,4 +1,4 @@
-from app.ai.hallucination import assess_hallucination
+from app.ai.quality.hallucination import assess_hallucination
 
 
 def test_affirmative_external_action_claim_is_rejected_without_verification() -> None:

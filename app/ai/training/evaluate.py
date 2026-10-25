@@ -7,8 +7,8 @@ from pathlib import Path
 
 import torch
 
-from app.ai.model import IndooneTransformer
-from app.ai.tokenizer import BPETokenizer
+from app.ai.local.model import IndooneTransformer
+from app.ai.local.tokenizer import BPETokenizer
 
 
 DEFAULT_CHECKPOINT = Path("models/indoone-small/indoone-small.pt")

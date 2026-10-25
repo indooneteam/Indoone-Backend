@@ -5,8 +5,8 @@ import json
 import threading
 import time
 
-from app.ai.tool_registry import get_tool_spec
-from app.ai.tools import MAX_CALCULATOR_ABS_VALUE, MAX_CALCULATOR_EXPONENT, TOOLS, _run_async, run_tool
+from app.ai.execution.tool_registry import get_tool_spec
+from app.ai.execution.tools import MAX_CALCULATOR_ABS_VALUE, MAX_CALCULATOR_EXPONENT, TOOLS, _run_async, run_tool
 
 
 def test_text_stats_tool_is_deterministic() -> None:
@@ -78,7 +78,7 @@ def test_sync_tool_timeout_is_bounded(monkeypatch) -> None:
         return "done"
 
     monkeypatch.setitem(TOOLS, "text_stats", slow_tool)
-    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.05, "max_output_chars": 100, "connector_id": None})())
+    monkeypatch.setattr("app.ai.execution.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.05, "max_output_chars": 100, "connector_id": None})())
     started = time.monotonic()
     result = run_tool("text_stats", "hello")
     elapsed = time.monotonic() - started
@@ -97,8 +97,8 @@ def test_total_tool_run_budget_is_enforced(monkeypatch) -> None:
         return "done"
 
     monkeypatch.setitem(TOOLS, "text_stats", slow_tool)
-    monkeypatch.setattr("app.ai.tools.MAX_TOOL_RUN_SECONDS", 0.05)
-    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 100, "connector_id": None})())
+    monkeypatch.setattr("app.ai.execution.tools.MAX_TOOL_RUN_SECONDS", 0.05)
+    monkeypatch.setattr("app.ai.execution.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 100, "connector_id": None})())
     started = time.monotonic()
     result = run_tool("text_stats", "hello")
     elapsed = time.monotonic() - started
@@ -112,7 +112,7 @@ def test_total_tool_run_budget_is_enforced(monkeypatch) -> None:
 def test_tool_output_truncation_is_explicit(monkeypatch) -> None:
     original = TOOLS["text_stats"]
     monkeypatch.setitem(TOOLS, "text_stats", lambda _: "abcdefghij")
-    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 4, "connector_id": None})())
+    monkeypatch.setattr("app.ai.execution.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 1.0, "max_output_chars": 4, "connector_id": None})())
     result = run_tool("text_stats", "hello")
     monkeypatch.setitem(TOOLS, "text_stats", original)
     assert result.safe is True
@@ -138,7 +138,7 @@ def test_sync_tool_worker_slots_are_bounded(monkeypatch) -> None:
         return "done"
 
     monkeypatch.setitem(TOOLS, "text_stats", blocked_tool)
-    monkeypatch.setattr("app.ai.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.2, "max_output_chars": 100, "connector_id": None})())
+    monkeypatch.setattr("app.ai.execution.tools.get_tool_spec", lambda _: type("Spec", (), {"timeout_seconds": 0.2, "max_output_chars": 100, "connector_id": None})())
     results: list[object] = []
     lock = threading.Lock()
 

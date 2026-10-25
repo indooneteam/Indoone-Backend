@@ -11,15 +11,15 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from app.ai.ai_rules import CONFIRM_OR_CANCEL
-from app.ai.approval import issue_approval_token
-from app.ai.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
+from app.ai.gateway.ai_rules import CONFIRM_OR_CANCEL
+from app.ai.execution.approval import issue_approval_token
+from app.ai.execution.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
 from app.capabilities.store import (
     delete_pending_github_action,
     get_pending_github_action,
     save_pending_github_action,
 )
-from app.ai.tools import ToolResult, _explicit_write_intent, run_tool_async
+from app.ai.execution.tools import ToolResult, _explicit_write_intent, run_tool_async
 
 _GITHUB_TARGET_RE = re.compile(
     r"\b(repositories|repository|repos|repo|pull\s+requests?|prs?|issues?|assigned\s+issues|files?|folders?|directories|contents|code|commits?|history|compare|readme|branches?|checks?|ci|workflows?)\b"

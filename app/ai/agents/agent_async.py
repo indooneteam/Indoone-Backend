@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from typing import Any, Iterable
 
-from app.ai.agent import (
+from app.ai.agents.agent import (
     AgentExecution,
     MAX_AGENT_MESSAGE_LENGTH,
     MAX_AGENT_RETRIES,
@@ -17,9 +17,9 @@ from app.ai.agent import (
     _unresolved_chain_references,
     build_agent_steps,
 )
-from app.ai.agent_policy import deadline_failure, remaining_budget, should_retry
-from app.ai.approval import decide_tool
-from app.ai.tools import ToolResult, run_tool_async
+from app.ai.agents.agent_policy import deadline_failure, remaining_budget, should_retry
+from app.ai.execution.approval import decide_tool
+from app.ai.execution.tools import ToolResult, run_tool_async
 from app.capabilities.store import create_agent_run, update_agent_run
 
 

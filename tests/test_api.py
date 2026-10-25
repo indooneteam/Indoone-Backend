@@ -7,7 +7,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.ai.conversation_store import ConversationStore
+from app.ai.memory.conversation_store import ConversationStore
 from app.api.request_context import clear_principal_id, get_principal_id, require_principal_id, set_principal_id
 from app.main import app
 

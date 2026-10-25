@@ -5,11 +5,11 @@ import json
 from pathlib import Path
 from typing import Iterable
 
-from app.ai.answer_quality import assess_answer
+from app.ai.quality.answer_quality import assess_answer
 from app.web_research.grounding import GroundedEvidence, assess_grounding
-from app.ai.hallucination import assess_hallucination
-from app.ai.inference import LocalModelRuntime
-from app.ai.response_style import assess_response_style
+from app.ai.quality.hallucination import assess_hallucination
+from app.ai.local.inference import LocalModelRuntime
+from app.ai.quality.response_style import assess_response_style
 
 DEFAULT_CASES = Path("data/eval/behavior.jsonl")
 DEFAULT_CHECKPOINT = Path("models/indoone-small/indoone-small.pt")

@@ -9,8 +9,8 @@ import time
 from dataclasses import dataclass
 from typing import Iterable
 
-from app.ai.connector_authorization import authorize_tool
-from app.ai.tool_registry import get_tool_spec
+from app.ai.execution.connector_authorization import authorize_tool
+from app.ai.execution.tool_registry import get_tool_spec
 
 MAX_APPROVAL_USER_LENGTH = 256
 MAX_APPROVAL_TOOL_LENGTH = 128

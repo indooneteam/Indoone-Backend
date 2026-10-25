@@ -230,10 +230,17 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         "List a repository's branches, so work can be started from the right one.",
         parameters=_object(
             {
-                "repository": {"type": "STRING", "description": "Repository as owner/name."},
+                # A branch question is asked by name - "how many branches in
+                # indoone?" - and the user rarely types owner/name. `repository` is
+                # therefore not required: with a hint and no exact name, the
+                # executor resolves the hint against the user's repositories and
+                # asks which one when the match is ambiguous. Requiring the exact
+                # owner/name made the model invent one, and a wrong owner is a wrong
+                # branch list.
+                "repository": {"type": "STRING", "description": "Exact repository as owner/name, if known."},
+                "repository_hint": {"type": "STRING", "description": "Repository name the user mentioned, when the owner is unknown."},
                 "per_page": {"type": "INTEGER", "description": "Number of branches, 1 through 100."},
             },
-            required=("repository",),
         ),
         categories=("github", "external"),
         connector_id="github",

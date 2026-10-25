@@ -91,3 +91,20 @@ def test_every_declared_array_parameter_has_items() -> None:
         name = str(declaration.get("name"))
         problems.extend(_array_params_without_items(declaration.get("parameters"), name))
     assert problems == []
+
+
+def test_github_list_branches_accepts_a_repository_hint() -> None:
+    """A branch question names a repository, rarely its owner.
+
+    The spec used to require an exact owner/name and declare no ``repository_hint``,
+    while every other repository tool declared both. The model, told the field was
+    required and given only "indoone", filled the owner in itself - and a wrong owner
+    is a wrong branch list. The executor already resolves a hint against the user's
+    repositories and asks which one when the match is ambiguous.
+    """
+
+    spec = get_tool_spec("github_list_branches")
+    assert spec is not None
+    properties = spec.parameters["properties"]
+    assert "repository_hint" in properties
+    assert "required" not in spec.parameters or "repository" not in spec.parameters.get("required", [])

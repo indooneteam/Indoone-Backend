@@ -832,7 +832,3 @@ async def handle_github_chat_with_tools(
     tool_name, tool_arguments = request
     result = await _execute_github_tool(user, tool_name, tool_arguments, (), conversation_id, message=message)
     return _format_github_result(tool_name, result)
-
-    tool_name, arguments = request
-    result = await _execute_github_tool(user, tool_name, arguments)
-    return _format_github_result(tool_name, result)

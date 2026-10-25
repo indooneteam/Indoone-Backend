@@ -40,6 +40,12 @@ from app.web_research.tools import (
     extract_search_web_call,
 )
 from app.web_research.research import ResearchResult
+from app.ai.observability import (
+    add_model_usage,
+    measured_model_call,
+    note_fallback,
+    set_model,
+)
 from app.ai.ai_rules import (
     ANSWER_SYSTEM_INSTRUCTION as _SYSTEM_INSTRUCTION,
     EVIDENCE_SUFFIX,
@@ -79,6 +85,7 @@ def _get_tool_config() -> tuple[str, str]:
     provider quotas; one message then spreads its usage over both.
     """
     api_key, model = _get_config()
+    set_model(model)
     tool_model = os.getenv("GEMINI_TOOL_MODEL", "").strip()
     return api_key, (tool_model or model)
 
@@ -100,6 +107,7 @@ async def run_with_provider_fallback(primary, fallback):
         return await primary()
     except ModelBusyError:
         logger.warning("The primary provider is at its limit; falling back to the other provider")
+        note_fallback()
         return await fallback()
 
 
@@ -279,9 +287,30 @@ async def _post_generate_content(
         raise RuntimeError("Gemini API returned invalid JSON") from exc
     if not isinstance(response_data, dict):
         raise RuntimeError("Gemini API returned invalid response data")
+    _record_usage(response_data)
     return response_data
 
 
+def _record_usage(response_data: dict[str, Any]) -> None:
+    """Add the token counts Gemini reported to the open model span.
+
+    Tokens are what a cost is computed from, and this is the only place the
+    provider reports them. A payload without usage is left alone rather than
+    guessed at.
+    """
+
+    usage = response_data.get("usageMetadata")
+    if not isinstance(usage, dict):
+        return
+    try:
+        input_tokens = int(usage.get("promptTokenCount") or 0)
+        output_tokens = int(usage.get("candidatesTokenCount") or 0)
+    except (TypeError, ValueError):
+        return
+    add_model_usage(input_tokens, output_tokens)
+
+
+@measured_model_call("gemini")
 async def generate_gemini_reply(
     message: str,
     history: list[tuple[str, str]] | None = None,
@@ -295,6 +324,7 @@ async def generate_gemini_reply(
         raise ValueError("message cannot be empty")
 
     api_key, model = _get_config()
+    set_model(model)
     encoded_model = quote(model, safe="")
     url = f"{_API_BASE_URL}/models/{encoded_model}:generateContent"
     system_instruction = _SYSTEM_INSTRUCTION + "\n\n" + build_grounded_prompt_instruction()
@@ -374,6 +404,7 @@ def _extract_function_calls(response_data: dict[str, Any]) -> tuple[dict[str, An
     return dict(content), calls
 
 
+@measured_model_call("gemini")
 async def generate_gemini_function_call_reply(
     message: str,
     *,
@@ -398,6 +429,7 @@ async def generate_gemini_function_call_reply(
         raise ValueError(FUNCTION_DECLARATIONS_REQUIRED)
 
     api_key, model = _get_tool_config()
+    set_model(model)
     encoded_model = quote(model, safe="")
     url = f"{_API_BASE_URL}/models/{encoded_model}:generateContent"
     system_instruction = (

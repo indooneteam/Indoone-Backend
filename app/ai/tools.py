@@ -14,6 +14,7 @@ from typing import Awaitable, Callable
 from app.ai.coding import code_analysis_tool, code_fix_suggestions_tool, code_transform_tool
 from datetime import datetime, timedelta, timezone
 
+from app.ai.observability import track
 from app.ai.ai_rules import CONFIRM_OR_CANCEL
 from app.ai.approval import issue_approval_token, validate_approval_token
 from app.ai.code_sandbox import sandbox_execution_tool
@@ -800,6 +801,24 @@ def _tool_error_message(exc: BaseException) -> str:
 
 
 async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None, user_id: str = "") -> ToolResult:
+    """Run a tool from an async request, measured as one span.
+
+    The measurement wraps the call and changes nothing about it: the same
+    validation, the same authorization, the same timeout and the same result. Only
+    the name, the outcome and the duration are recorded, never the payload or the
+    output.
+    """
+
+    async with track("tool.call", "tool", tool=str(name or "").strip().casefold()) as span:
+        result = await _execute_tool_async(name, payload, max_runtime_seconds, user_id)
+        span.attributes["ok"] = bool(result.safe)
+        span.attributes["truncated"] = bool(getattr(result, "truncated", False))
+        if not result.safe:
+            span.fail("tool_error")
+        return result
+
+
+async def _execute_tool_async(name: str, payload: str, max_runtime_seconds: float | None = None, user_id: str = "") -> ToolResult:
     """Run a tool from an async request without creating a thread for async tools."""
     normalized_name, prepared, error = _validate_tool_request(name, payload)
     if error is not None:
@@ -839,6 +858,23 @@ async def run_tool_async(name: str, payload: str, max_runtime_seconds: float | N
 
 
 def run_tool(name: str, payload: str, max_runtime_seconds: float | None = None, user_id: str = "") -> ToolResult:
+    """Run a tool on the calling thread, measured as one span.
+
+    This is the synchronous entry, used by the agent from a worker thread. The span
+    still reaches the aggregate metrics, but it cannot attach to the request trace,
+    because a new thread does not inherit the request context.
+    """
+
+    with track("tool.call", "tool", tool=str(name or "").strip().casefold()) as span:
+        result = _execute_tool(name, payload, max_runtime_seconds, user_id)
+        span.attributes["ok"] = bool(result.safe)
+        span.attributes["truncated"] = bool(getattr(result, "truncated", False))
+        if not result.safe:
+            span.fail("tool_error")
+        return result
+
+
+def _execute_tool(name: str, payload: str, max_runtime_seconds: float | None = None, user_id: str = "") -> ToolResult:
     normalized_name, prepared, error = _validate_tool_request(name, payload)
     if error is not None:
         return ToolResult(normalized_name, error, safe=False, retryable=False)

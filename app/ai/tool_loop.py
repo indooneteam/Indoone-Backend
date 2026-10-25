@@ -132,7 +132,7 @@ def _azure_backend_enabled() -> bool:
 # catalogue. A short greeting does not, and every call re-sends all declarations
 # (~2,900 tokens), so plain chat should not pay for them.
 _TOOL_HINTS = (
-    "email", "e-mail", "mail", "inbox", "gmail", "zoho", "draft", "unread",
+    "email", "e-mail", "mail", "inbox", "zoho", "draft", "unread",
     "reply", "send", "forward", "archive",
     "github", "repo", "repository", "commit", "pull request", "issue", "branch",
     "calendar", "event", "meeting", "schedule",
@@ -187,8 +187,7 @@ def model_tool_declarations(user_id: str = "") -> list[dict[str, Any]]:
 
     Local tools (including the approval-required ones) come from the registry;
     the GitHub read tools and the email tools come from their (registry-owned)
-    declarations. The legacy ``gmail_*`` specs are intentionally left out: the
-    email plugin's tools are the ones the model should use.
+    declarations.
 
     Tools for a connector the user has not connected are left out: they could
     only fail, and every declaration is re-sent on every model call, so an
@@ -203,8 +202,6 @@ def model_tool_declarations(user_id: str = "") -> list[dict[str, Any]]:
                 connected.add(connector_id)
 
     def wanted(spec: Any) -> bool:
-        if "gmail" in spec.categories:
-            return False
         # A tool the model cannot have the input for is not offered at all: the
         # contact tools need a client-supplied snapshot the model must never invent.
         if not getattr(spec, "model_facing", True):

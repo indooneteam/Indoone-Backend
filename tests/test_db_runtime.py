@@ -67,7 +67,7 @@ def test_oauth_state_wrong_integration_does_not_consume_state(monkeypatch, tmp_p
     store.initialize()
     store.create_oauth_state("state-2", "user-one", "google_drive", "https://example.test/callback")
 
-    assert store.consume_oauth_state("state-2", "gmail") is None
+    assert store.consume_oauth_state("state-2", "zoho_mail") is None
     assert store.consume_oauth_state("state-2", "google_drive") is not None
 
 

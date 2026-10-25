@@ -18,10 +18,6 @@ from app.ai.approval import issue_approval_token, validate_approval_token
 from app.ai.code_sandbox import sandbox_execution_tool
 from app.ai.connector_authorization import authorize_tool
 from app.ai.tool_registry import get_tool_spec
-from app.plugins.gmail.service import get_gmail_message, list_gmail_messages, send_gmail_message
-from app.capabilities.email_safety import analyze_gmail_email_safety
-from app.capabilities.email_actions import compose_gmail_email
-from app.plugins.gmail.service import reply_gmail_message
 from app.plugins.github.service import (
     get_github_commit as fetch_github_commit,
     list_github_branches as fetch_github_branches,
@@ -365,107 +361,6 @@ async def _github_update_repository_file(payload: str) -> str:
             create=create,
         ),
         spec.timeout_seconds if spec else 30.0,
-    )
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
-
-
-async def _gmail_search(payload: str) -> str:
-    data = json.loads(payload)
-    if not isinstance(data, dict):
-        raise ValueError("gmail_search payload must be an object")
-    user_id = str(data.get("user_id", "")).strip()
-    if not user_id:
-        raise ValueError("user_id is required")
-    spec = get_tool_spec("gmail_search")
-    result = await _run_async(list_gmail_messages(user_id=user_id, query=str(data.get("query", "")), page_token=str(data.get("page_token", "")), max_results=int(data.get("max_results", 20))), spec.timeout_seconds if spec else 20.0)
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
-
-
-async def _gmail_read(payload: str) -> str:
-    data = json.loads(payload)
-    if not isinstance(data, dict):
-        raise ValueError("gmail_read payload must be an object")
-    user_id = str(data.get("user_id", "")).strip()
-    message_id = str(data.get("message_id", "")).strip()
-    if not user_id:
-        raise ValueError("user_id is required")
-    if not message_id:
-        raise ValueError("message_id is required")
-    spec = get_tool_spec("gmail_read")
-    result = await _run_async(get_gmail_message(user_id=user_id, message_id=message_id), spec.timeout_seconds if spec else 20.0)
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
-
-
-async def _gmail_compose(payload: str) -> str:
-    data = json.loads(payload)
-    if not isinstance(data, dict):
-        raise ValueError("gmail_compose payload must be an object")
-    request = str(data.get("request", "")).strip()
-    if not request:
-        raise ValueError("compose request is required")
-    result = await _run_async(compose_gmail_email(request=request), 20.0)
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
-
-
-async def _gmail_email_safety(payload: str) -> str:
-    data = json.loads(payload)
-    if not isinstance(data, dict):
-        raise ValueError("gmail_email_safety payload must be an object")
-    user_id = str(data.get("user_id", "")).strip()
-    if not user_id:
-        raise ValueError("user_id is required")
-    spec = get_tool_spec("gmail_email_safety")
-    return await _run_async(
-        analyze_gmail_email_safety(
-            user_id=user_id,
-            query=str(data.get("query", "")),
-            message_id=str(data.get("message_id", "")),
-            user_request=str(data.get("user_request", "")),
-            limit=int(data.get("limit", 1)),
-        ),
-        spec.timeout_seconds if spec else 20.0,
-    )
-
-
-async def _gmail_reply(payload: str) -> str:
-    data = json.loads(payload)
-    if not isinstance(data, dict):
-        raise ValueError("gmail_reply payload must be an object")
-    user_id = str(data.get("user_id", "")).strip()
-    message_id = str(data.get("message_id", "")).strip()
-    body = str(data.get("body", "")).strip()
-    if not user_id or not message_id or not body:
-        raise ValueError("user_id, message_id and body are required")
-    spec = get_tool_spec("gmail_reply")
-    result = await _run_async(
-        reply_gmail_message(
-            user_id=user_id,
-            message_id=message_id,
-            body=body,
-            approved=True,
-        ),
-        spec.timeout_seconds if spec else 20.0,
-    )
-    return json.dumps(result, ensure_ascii=False, sort_keys=True)
-
-
-async def _gmail_send(payload: str) -> str:
-    data = json.loads(payload)
-    if not isinstance(data, dict):
-        raise ValueError("gmail_send payload must be an object")
-    user_id = str(data.get("user_id", "")).strip()
-    if not user_id:
-        raise ValueError("user_id is required")
-    spec = get_tool_spec("gmail_send")
-    result = await _run_async(
-        send_gmail_message(
-            user_id=user_id,
-            to=str(data.get("to", "")),
-            subject=str(data.get("subject", "")),
-            body=str(data.get("body", "")),
-            approved=True,
-        ),
-        spec.timeout_seconds if spec else 20.0,
     )
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
@@ -841,7 +736,6 @@ TOOLS: dict[str, ToolCallable] = {
     "code_fix_suggestions": code_fix_suggestions_tool,
     "code_transform": code_transform_tool,
     "sandbox_execution": sandbox_execution_tool,
-    "gmail_search": _gmail_search,
     "github_list_repositories": _github_list_repositories,
     "github_list_branches": _github_list_branches,
     "github_list_pull_request_files": _github_list_pull_request_files,
@@ -859,11 +753,6 @@ TOOLS: dict[str, ToolCallable] = {
     "github_list_repository_commits": _github_list_repository_commits,
     "github_compare_repository_commits": _github_compare_repository_commits,
     "github_update_repository_file": _github_update_repository_file,
-    "gmail_read": _gmail_read,
-    "gmail_compose": _gmail_compose,
-    "gmail_email_safety": _gmail_email_safety,
-    "gmail_reply": _gmail_reply,
-    "gmail_send": _gmail_send,
     "instagram_get_profile": _instagram_get_profile,
     "instagram_list_media": _instagram_list_media,
     "instagram_get_media_details": _instagram_get_media_details,

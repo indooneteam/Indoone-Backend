@@ -70,81 +70,11 @@ def _extract_calculations(message: str) -> tuple[str, ...]:
     matches = re.findall(expression, message)
     return tuple(match.replace(" ", "") for match in matches[:MAX_AGENT_STEPS])
 
-def _gmail_request_matches(message: str) -> bool:
-    text = message.strip()
-    patterns = (
-        r"(?:search|find|list)\s+(?:in\s+)?gmail(?:\s+for)?\s+.+$",
-        r"gmail\s+(?:search|find|list)\s+.+$",
-        r"(?:read|open|show)\s+(?:gmail\s+)?(?:email|message)\s+[A-Za-z0-9_-]+$",
-        r"\b(?:analy[sz]e|check|inspect|review|scan|classify|verify)\b.*\b(?:gmail|email|mail|inbox)\b",
-        r"\b(?:compose|create|write|draft)\b.*\b(?:email|mail)\b",
-        r"\b(?:reply|respond)\b.*\b(?:email|mail)\b",
-    )
-    return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
-
-
-def _extract_gmail_request(message: str, user_id: str) -> tuple[str, dict[str, Any]] | None:
-    if not user_id.strip():
-        return None
-    text = message.strip()
-
-    if re.search(
-        r"\b(?:analy[sz]e|check|inspect|review|scan|classify|verify)\b.*\b(?:gmail|email|mail|inbox)\b",
-        text,
-        re.IGNORECASE,
-    ):
-        return "gmail_email_safety", {
-            "user_id": user_id,
-            "user_request": text,
-            "limit": 1,
-        }
-
-    if re.search(
-        r"\b(?:compose|create|write|draft)\b.*\b(?:email|mail)\b|"
-        r"\b(?:email|mail)\b.*\b(?:compose|create|write|draft)\b",
-        text,
-        re.IGNORECASE,
-    ):
-        return "gmail_compose", {"request": text}
-
-    reply = re.search(
-        r"(?:reply|respond)\s+(?:to\s+)?(?:gmail\s+)?(?:email|message)\s+"
-        r"([A-Za-z0-9_-]+)(?:\s*[:,-]\s*(.+))?$",
-        text,
-        re.IGNORECASE,
-    )
-    if reply and reply.group(2):
-        return "gmail_reply", {
-            "user_id": user_id,
-            "message_id": reply.group(1).strip(),
-            "body": reply.group(2).strip(),
-        }
-
-    patterns = (
-        ("gmail_search", r"(?:search|find|list)\s+(?:in\s+)?gmail(?:\s+for)?\s+(.+)$"),
-        ("gmail_search", r"gmail\s+(?:search|find|list)\s+(.+)$"),
-        ("gmail_read", r"(?:read|open|show)\s+(?:gmail\s+)?(?:email|message)\s+([A-Za-z0-9_-]+)$"),
-    )
-    for tool, pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            value = match.group(1).strip(" .?!")
-            if value:
-                if tool == "gmail_search":
-                    return tool, {"user_id": user_id, "query": value}
-                return tool, {"user_id": user_id, "message_id": value}
-    return None
-
 def build_agent_steps(message: str, user_id: str = "", contacts: list[dict[str, Any]] | None = None) -> tuple[AgentStep, ...]:
     normalized = message.strip()
     if not normalized or len(normalized) > MAX_AGENT_MESSAGE_LENGTH: return ()
     explicit = _extract_explicit_requests(normalized)
     if explicit: return tuple(_step(tool, payload, index) for index, (_, tool, payload) in enumerate(explicit, start=1))
-    gmail_request = _extract_gmail_request(normalized, user_id)
-    if gmail_request is not None:
-        tool, payload = gmail_request
-        return (_step(tool, json.dumps(payload, ensure_ascii=False, separators=(",", ":")), 1),)
-    if _gmail_request_matches(normalized): return ()
     expressions = _extract_calculations(normalized)
     if expressions: return tuple(_step("calculator", expression, index) for index, expression in enumerate(expressions, start=1))
     plan: Plan = plan_request(normalized)

@@ -5,7 +5,6 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from app.plugins.gmail.routes import router as gmail_router
 from app.plugins.github.routes import router as github_router
 from app.capabilities.integrations import (
     probe_integration,
@@ -15,7 +14,6 @@ from secrets import token_urlsafe
 from app.api.errors import provider_failure
 
 router = APIRouter(prefix="/integrations", tags=["integrations"])
-router.include_router(gmail_router)
 router.include_router(github_router)
 
 

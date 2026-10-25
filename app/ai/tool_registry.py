@@ -15,11 +15,9 @@ Everything downstream reads from here:
 * ``EMAIL_TOOL_DECLARATIONS``    -- the email plugin declarations, kept here so
                                     every tool definition lives in one file.
 
-NOTE (known overlap to resolve in a later step): the legacy ``gmail_*`` specs
-below are the deterministic agent path, while the email plugin exposes its own
-``*_email*`` / ``*_draft*`` tools in ``EMAIL_TOOL_DECLARATIONS``. Both families
-are listed here so the duplication is visible in one place instead of hidden
-across modules.
+The email plugin exposes its ``*_email*`` / ``*_draft*`` tools in
+``EMAIL_TOOL_DECLARATIONS``, listed here so every tool definition lives in one
+file.
 """
 from __future__ import annotations
 
@@ -172,87 +170,6 @@ TOOL_SPECS: tuple[ToolSpec, ...] = (
         categories=("coding", "execution"),
     ),
     # ---- contacts / phone ------------------------------------------------- #
-    # ---- Gmail (legacy deterministic agent path) -------------------------- #
-    ToolSpec(
-        "gmail_search",
-        "Search the authenticated user's Gmail mailbox.",
-        parameters=_object(
-            {
-                "query": {"type": "STRING", "description": "Gmail search query."},
-                "page_token": {"type": "STRING", "description": "Pagination token from a prior result."},
-                "max_results": {"type": "INTEGER", "description": "Maximum messages to return."},
-            },
-            ("query",),
-        ),
-        categories=("gmail", "external"),
-        connector_id="gmail",
-        capability="messages.search",
-    ),
-    ToolSpec(
-        "gmail_read",
-        "Read one message from the authenticated user's Gmail mailbox.",
-        parameters=_object({"message_id": {"type": "STRING", "description": "Gmail message id."}}, ("message_id",)),
-        categories=("gmail", "external"),
-        connector_id="gmail",
-        capability="messages.read",
-    ),
-    ToolSpec(
-        "gmail_compose",
-        "Create an email draft with the local Indoone AI without sending it.",
-        parameters=_object({"request": {"type": "STRING", "description": "What the draft should say."}}, ("request",)),
-        connector_id="gmail",
-        capability="messages.read",
-        requires_approval=True,
-        categories=("gmail", "email", "external"),
-    ),
-    ToolSpec(
-        "gmail_email_safety",
-        "Read and analyze authenticated Gmail messages with the local Indoone Email Safety behavior.",
-        parameters=_object(
-            {
-                "query": {"type": "STRING", "description": "Search phrase identifying the messages."},
-                "message_id": {"type": "STRING", "description": "Exact message id, if known."},
-                "user_request": {"type": "STRING", "description": "The user's original request."},
-                "limit": {"type": "INTEGER", "description": "Number of messages to analyze."},
-            },
-        ),
-        categories=("gmail", "email_safety", "external"),
-        connector_id="gmail",
-        capability="messages.read",
-    ),
-    ToolSpec(
-        "gmail_reply",
-        "Reply to an authenticated Gmail message.",
-        parameters=_object(
-            {
-                "message_id": {"type": "STRING", "description": "Message id to reply to."},
-                "body": {"type": "STRING", "description": "Reply body."},
-            },
-            ("message_id", "body"),
-        ),
-        risk="external",
-        requires_approval=True,
-        categories=("gmail", "email", "external"),
-        connector_id="gmail",
-        capability="messages.send",
-    ),
-    ToolSpec(
-        "gmail_send",
-        "Send an email from the authenticated user's Gmail account.",
-        parameters=_object(
-            {
-                "to": {"type": "STRING", "description": "Recipient address."},
-                "subject": {"type": "STRING", "description": "Subject line."},
-                "body": {"type": "STRING", "description": "Email body."},
-            },
-            ("to", "subject", "body"),
-        ),
-        risk="external",
-        requires_approval=True,
-        categories=("gmail", "external"),
-        connector_id="gmail",
-        capability="messages.send",
-    ),
     # ---- GitHub ----------------------------------------------------------- #
     ToolSpec(
         "github_list_repositories",
@@ -717,7 +634,7 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"], "description": "Mailbox to use when clear from the user's request; omit if not specified."},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"], "description": "Mailbox to use when clear from the user's request; omit if not specified."},
                 "limit": {"type": "INTEGER", "description": "Number of messages to return, between 1 and 200. Defaults to 200 unless the user asks for fewer."},
             },
         },
@@ -728,7 +645,7 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"], "description": "Mailbox to count when clear from the user's request; omit if not specified."},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"], "description": "Mailbox to count when clear from the user's request; omit if not specified."},
             },
         },
     },
@@ -739,7 +656,7 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
             "type": "OBJECT",
             "properties": {
                 "query": {"type": "STRING", "description": "A concise search phrase, subject, sender, or topic."},
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"]},
                 "limit": {"type": "INTEGER", "description": "Number of matching messages, between 1 and 200. Defaults to 200 unless the user asks for fewer."},
             },
             "required": ["query"],
@@ -755,7 +672,7 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
                 "message_id": {"type": "STRING", "description": "Exact message id from a prior email tool result, if known."},
                 "account_id": {"type": "STRING", "description": "Account id returned by an earlier result; required with folder_id for reading a Zoho message by id."},
                 "folder_id": {"type": "STRING", "description": "Folder id returned by an earlier result; required with account_id for reading a Zoho message by id."},
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"]},
             },
         },
     },
@@ -774,11 +691,11 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
     },
     {
         "name": "list_email_drafts",
-        "description": "List saved drafts in the selected Gmail or Zoho Mail account. This is read-only.",
+        "description": "List saved drafts in the connected Zoho Mail account. This is read-only.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"]},
                 "limit": {"type": "INTEGER", "description": "Number of drafts to return, between 1 and 20."},
             },
         },
@@ -789,7 +706,7 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"]},
                 "to": {"type": "STRING", "description": "Recipient email address, if provided."},
                 "subject": {"type": "STRING", "description": "Email subject."},
                 "body": {"type": "STRING", "description": "Draft email body."},
@@ -803,7 +720,7 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"]},
                 "query": {"type": "STRING", "description": "Specific subject or phrase to find the existing draft."},
                 "instructions": {"type": "STRING", "description": "Requested changes to the existing draft."},
             },
@@ -816,7 +733,7 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"]},
                 "to": {"type": "STRING", "description": "One recipient email address."},
                 "subject": {"type": "STRING", "description": "Email subject."},
                 "body": {"type": "STRING", "description": "Email body."},
@@ -830,7 +747,7 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"]},
                 "query": {"type": "STRING", "description": "Specific subject, sender, topic, or other limiting search phrase. Must not be empty or a broad all-mail request."},
                 "limit": {"type": "INTEGER", "description": "Maximum number of matching messages to include in the preview, between 1 and 20."},
             },
@@ -843,7 +760,7 @@ EMAIL_TOOL_DECLARATIONS: list[dict[str, Any]] = [
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "provider": {"type": "STRING", "enum": ["gmail", "zoho_mail"]},
+                "provider": {"type": "STRING", "enum": ["zoho_mail"]},
                 "query": {"type": "STRING", "description": "Specific draft subject or phrase. Broad all-drafts requests are not allowed."},
             },
             "required": ["query"],

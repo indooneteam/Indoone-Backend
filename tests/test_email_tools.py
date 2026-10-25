@@ -9,25 +9,11 @@ import pytest
 from app.plugins import email_assistant, email_tools
 
 
-def test_resolve_provider_requires_choice_when_both_mailboxes_connected(monkeypatch) -> None:
-    monkeypatch.setattr(
-        email_tools,
-        "get_integration_token_metadata",
-        lambda user_id, provider: {"provider": provider},
-    )
-
-    provider, error = email_tools._resolve_provider("user-1", None)
-
-    assert provider is None
-    assert error is not None
-    assert error["code"] == "PROVIDER_REQUIRED"
-
-
 def test_resolve_provider_rejects_unconnected_explicit_mailbox(monkeypatch) -> None:
     monkeypatch.setattr(
         email_tools,
         "get_integration_token_metadata",
-        lambda user_id, provider: {"provider": provider} if provider == "gmail" else None,
+        lambda user_id, provider: None,
     )
 
     provider, error = email_tools._resolve_provider("user-1", "zoho_mail")
@@ -41,7 +27,12 @@ def test_prepare_send_only_stores_pending_confirmation(monkeypatch) -> None:
     monkeypatch.setattr(
         email_tools,
         "get_integration_token_metadata",
-        lambda user_id, provider: {"provider": provider} if provider == "gmail" else None,
+        lambda user_id, provider: {"provider": provider} if provider == "zoho_mail" else None,
+    )
+    monkeypatch.setattr(
+        email_tools,
+        "list_accounts",
+        lambda user_id: _async_value({"data": [{"accountId": "acct-1", "primaryEmailAddress": "sender@example.com"}]}),
     )
     saved: list[tuple[object, ...]] = []
     monkeypatch.setattr(email_tools, "_save_pending", lambda *args: saved.append(args))
@@ -52,7 +43,7 @@ def test_prepare_send_only_stores_pending_confirmation(monkeypatch) -> None:
             "conversation-1",
             "prepare_email_to_send",
             {
-                "provider": "gmail",
+                "provider": "zoho_mail",
                 "to": "customer@example.com",
                 "subject": "Invoice update",
                 "body": "The invoice is ready.",
@@ -73,14 +64,14 @@ def test_prepare_delete_only_stores_verified_targets_and_never_deletes(monkeypat
     monkeypatch.setattr(
         email_tools,
         "get_integration_token_metadata",
-        lambda user_id, provider: {"provider": provider} if provider == "gmail" else None,
+        lambda user_id, provider: {"provider": provider} if provider == "zoho_mail" else None,
     )
     monkeypatch.setattr(
         email_tools,
         "_list_mail",
         lambda *args, **kwargs: _async_value([
-            {"id": "message-1", "subject": "Finance invoice", "from": "finance@example.com"},
-            {"id": "message-2", "subject": "Finance report", "from": "finance@example.com"},
+            {"id": "message-1", "subject": "Finance invoice", "from": "finance@example.com", "account_id": "acct-1", "folder_id": "inbox-1"},
+            {"id": "message-2", "subject": "Finance report", "from": "finance@example.com", "account_id": "acct-1", "folder_id": "inbox-1"},
         ]),
     )
     saved: list[tuple[object, ...]] = []
@@ -91,7 +82,7 @@ def test_prepare_delete_only_stores_verified_targets_and_never_deletes(monkeypat
             "user-1",
             "conversation-1",
             "prepare_email_deletion",
-            {"provider": "gmail", "query": "Finance", "limit": 5},
+            {"provider": "zoho_mail", "query": "Finance", "limit": 5},
             original_message="Delete matching Finance emails",
         )
     )
@@ -113,7 +104,7 @@ def test_prepare_delete_rejects_unfiltered_delete_request(monkeypatch) -> None:
     monkeypatch.setattr(
         email_tools,
         "get_integration_token_metadata",
-        lambda user_id, provider: {"provider": provider} if provider == "gmail" else None,
+        lambda user_id, provider: {"provider": provider} if provider == "zoho_mail" else None,
     )
 
     result = asyncio.run(
@@ -121,7 +112,7 @@ def test_prepare_delete_rejects_unfiltered_delete_request(monkeypatch) -> None:
             "user-1",
             "conversation-1",
             "prepare_email_deletion",
-            {"provider": "gmail", "query": "all emails"},
+            {"provider": "zoho_mail", "query": "all emails"},
             original_message="Delete all emails",
         )
     )
@@ -227,6 +218,11 @@ def test_send_tool_is_rejected_without_explicit_send_intent(monkeypatch) -> None
         "get_integration_token_metadata",
         lambda user_id, provider: {"provider": provider},
     )
+    monkeypatch.setattr(
+        email_tools,
+        "list_accounts",
+        lambda user_id: _async_value({"data": [{"accountId": "acct-1", "primaryEmailAddress": "sender@example.com"}]}),
+    )
     saved: list[tuple[object, ...]] = []
     monkeypatch.setattr(email_tools, "_save_pending", lambda *args: saved.append(args))
 
@@ -236,7 +232,7 @@ def test_send_tool_is_rejected_without_explicit_send_intent(monkeypatch) -> None
             "conversation-1",
             "prepare_email_to_send",
             {
-                "provider": "gmail",
+                "provider": "zoho_mail",
                 "to": "customer@example.com",
                 "subject": "Unexpected",
                 "body": "This must not be sent.",
@@ -270,7 +266,7 @@ def test_tool_uses_mailbox_named_by_user_over_model_argument(monkeypatch) -> Non
             "user-1",
             "conversation-1",
             "list_recent_emails",
-            {"provider": "gmail", "limit": 1},
+            {"provider": "zoho_mail", "limit": 1},
             original_message="Show recent Zoho Mail",
         )
     )
@@ -287,24 +283,28 @@ def test_only_one_write_operation_is_allowed_in_a_single_chat_turn(monkeypatch) 
     monkeypatch.setattr(
         email_tools,
         "get_integration_token_metadata",
-        lambda user_id, provider: {"provider": provider} if provider == "gmail" else None,
+        lambda user_id, provider: {"provider": provider} if provider == "zoho_mail" else None,
     )
     created: list[tuple[str, str, str]] = []
 
-    async def fake_create_draft(user_id: str, to: str = "", subject: str = "", body: str = ""):
+    async def fake_list_accounts(user_id: str):
+        return {"data": [{"accountId": "acct-1", "primaryEmailAddress": "sender@example.com"}]}
+
+    async def fake_save_draft(user_id: str, account_id: str, from_address: str, to: str = "", subject: str = "", body: str = ""):
         created.append((to, subject, body))
         return {"operation": "draft_saved"}
 
-    monkeypatch.setattr(email_tools, "create_gmail_draft", fake_create_draft)
+    monkeypatch.setattr(email_tools, "list_accounts", fake_list_accounts)
+    monkeypatch.setattr(email_tools, "save_draft", fake_save_draft)
 
     async def fake_model(message, *, history, tool_declarations, execute_tool, extra_system_instruction):
         first = await execute_tool(
             "create_email_draft",
-            {"provider": "gmail", "to": "a@example.com", "subject": "First", "body": "First body"},
+            {"provider": "zoho_mail", "to": "a@example.com", "subject": "First", "body": "First body"},
         )
         second = await execute_tool(
             "create_email_draft",
-            {"provider": "gmail", "to": "b@example.com", "subject": "Second", "body": "Second body"},
+            {"provider": "zoho_mail", "to": "b@example.com", "subject": "Second", "body": "Second body"},
         )
         assert first["ok"] is True
         assert second["code"] == "MULTIPLE_WRITES_BLOCKED"
@@ -326,27 +326,6 @@ def test_only_one_write_operation_is_allowed_in_a_single_chat_turn(monkeypatch) 
     assert result == "A single draft was saved."
     assert created == [("a@example.com", "First", "First body")]
 
-
-
-def test_model_cannot_guess_between_two_connected_mailboxes(monkeypatch) -> None:
-    monkeypatch.setattr(
-        email_tools,
-        "get_integration_token_metadata",
-        lambda user_id, provider: {"provider": provider},
-    )
-
-    result = asyncio.run(
-        email_tools.execute_email_tool(
-            "user-1",
-            "conversation-1",
-            "list_recent_emails",
-            {"provider": "gmail"},
-            original_message="Check my email",
-        )
-    )
-
-    assert result["ok"] is False
-    assert result["code"] == "PROVIDER_REQUIRED"
 
 
 def test_send_preparation_cannot_be_reported_as_sent_by_model(monkeypatch) -> None:

@@ -45,11 +45,9 @@ from app.capabilities.voice_session import (
     ready_event,
 )
 
-from app.plugins.gmail.oauth_routes import router as gmail_oauth_router
 from app.api.errors import provider_failure
 
 router = APIRouter(tags=["capabilities"])
-router.include_router(gmail_oauth_router)
 
 
 class ProjectRequest(BaseModel):
@@ -214,7 +212,6 @@ async def integration_callback_browser(
         )
     integration_name = {
         "github": "GitHub",
-        "gmail": "Gmail",
         "zoho_mail": "Zoho Mail",
         "slack": "Slack",
     }.get(integration_id.strip().lower(), "Service")

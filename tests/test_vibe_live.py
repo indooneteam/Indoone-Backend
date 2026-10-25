@@ -20,9 +20,7 @@ def test_gemini_live_setup_uses_audio_and_transcription() -> None:
     # A live voice session must not go quiet while the model reasons, so the default is
     # low rather than medium. See the note on _DEFAULT_THINKING_LEVEL.
     assert setup["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "LOW"}
-    tool = setup["tools"][0]["functionDeclarations"][0]
-    assert tool["name"] == "search_gmail_messages"
-    assert tool["behavior"] == "NON_BLOCKING"
+    assert "functionDeclarations" in setup["tools"][0]
     assert setup["generationConfig"]["speechConfig"]["voiceConfig"]["prebuiltVoiceConfig"]["voiceName"] == "Aoede"
     assert setup["inputAudioTranscription"] == {}
     assert setup["outputAudioTranscription"] == {}
@@ -65,8 +63,8 @@ class FakeGeminiWebSocket:
                     "toolCall": {
                         "functionCalls": [{
                             "id": "call-gmail-1",
-                            "name": "search_gmail_messages",
-                            "args": {"query": "is:unread", "max_results": 2},
+                            "name": "github_list_repositories",
+                            "args": {},
                         }],
                     },
                 }))
@@ -190,110 +188,6 @@ def test_vibe_websocket_rejects_legacy_live_model_for_extended_thinking(
                 "type": "error",
                 "detail": "Indoone Vibe requires GEMINI_LIVE_MODEL=gemini-3.8-live-extended-thinking",
             }
-
-
-def test_search_gmail_for_voice_uses_user_scoped_read_only_tools(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_list(user_id: str, *, query: str, max_results: int):
-        assert user_id == "firebase-user-1"
-        assert query == "is:unread"
-        assert max_results == 3
-        return {"messages": [{"id": "msg-1", "threadId": "thread-1"}]}
-
-    async def fake_get(user_id: str, message_id: str):
-        assert user_id == "firebase-user-1"
-        assert message_id == "msg-1"
-        return {
-            "message": {
-                "id": message_id,
-                "threadId": "thread-1",
-                "snippet": "Please review the updated estimate.",
-                "payload": {
-                    "headers": [
-                        {"name": "From", "value": "client@example.com"},
-                        {"name": "Subject", "value": "Updated estimate"},
-                        {"name": "Date", "value": "Sat, 10 Oct 2026 10:00:00 +0000"},
-                    ],
-                },
-            },
-        }
-
-    monkeypatch.setattr(vibe_api, "list_gmail_messages", fake_list)
-    monkeypatch.setattr(vibe_api, "get_gmail_message", fake_get)
-
-    result = asyncio.run(
-        vibe_api._execute_voice_tool(
-            "firebase-user-1",
-            "search_gmail_messages",
-            {"query": "is:unread", "max_results": 3},
-        )
-    )
-    assert result == {
-        "ok": True,
-        "query": "is:unread",
-        "count": 1,
-        "emails": [{
-            "message_id": "msg-1",
-            "thread_id": "thread-1",
-            "date": "Sat, 10 Oct 2026 10:00:00 +0000",
-            "from": "client@example.com",
-            "to": "",
-            "subject": "Updated estimate",
-            "snippet": "Please review the updated estimate.",
-        }],
-    }
-
-
-
-def test_vibe_executes_nonblocking_gmail_tool_and_tracks_interaction_status(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("GEMINI_API_KEY", "test-api-key")
-    monkeypatch.setenv("GEMINI_LIVE_MODEL", "gemini-3.8-live-extended-thinking")
-    monkeypatch.setattr(vibe_api, "extract_principal", lambda authorization: "firebase-user-1")
-
-    async def fake_tool(user_id: str, name: str, args: object) -> dict[str, object]:
-        assert user_id == "firebase-user-1"
-        assert name == "search_gmail_messages"
-        assert args == {"query": "is:unread", "max_results": 2}
-        await asyncio.sleep(0)
-        return {"ok": True, "count": 1, "emails": [{"subject": "Invoice"}]}
-
-    monkeypatch.setattr(vibe_api, "_execute_voice_tool", fake_tool)
-    upstream = FakeGeminiWebSocket()
-    monkeypatch.setattr(vibe_api.websockets, "connect", lambda *args, **kwargs: upstream)
-
-    with TestClient(app) as client:
-        with client.websocket_connect(
-            "/api/vibe/session",
-            headers={"Authorization": "Bearer test-firebase-token"},
-        ) as websocket:
-            assert websocket.receive_json()["type"] == "ready"
-            websocket.send_json({"type": "text", "text": "Check my unread email"})
-
-            in_progress = websocket.receive_json()
-            assert in_progress == {"type": "status", "interaction_status": "IN_PROGRESS"}
-            idle = websocket.receive_json()
-            assert idle == {"type": "status", "interaction_status": "IDLE"}
-            transcript = websocket.receive_json()
-            assert transcript == {
-                "type": "transcript",
-                "role": "assistant",
-                "text": "I found one unread email.",
-            }
-
-            websocket.send_json({"type": "stop"})
-            assert websocket.receive_json()["type"] == "stopped"
-
-    tool_response = next(message for message in upstream.sent if "toolResponse" in message)
-    function_response = tool_response["toolResponse"]["functionResponses"][0]
-    assert function_response["id"] == "call-gmail-1"
-    assert function_response["name"] == "search_gmail_messages"
-    assert function_response["response"]["output"] == {
-        "ok": True,
-        "count": 1,
-        "emails": [{"subject": "Invoice"}],
-    }
-
 
 
 def test_vibe_does_not_forward_gemini_parts_marked_as_internal_thought() -> None:
@@ -479,7 +373,7 @@ def test_vibe_tool_failure_answers_the_model_and_keeps_the_session_alive(
     tool_response = next(message for message in upstream.sent if "toolResponse" in message)
     function_response = tool_response["toolResponse"]["functionResponses"][0]
     assert function_response["id"] == "call-gmail-1"
-    assert function_response["name"] == "search_gmail_messages"
+    assert function_response["name"] == "github_list_repositories"
     assert function_response["response"]["output"] == {
         "ok": False,
         "error": "That action could not be completed right now.",
@@ -631,7 +525,7 @@ def test_vibe_keeps_the_full_catalogue_without_a_signed_in_user(
 ) -> None:
     names = _voice_tool_names(monkeypatch, set(), user="")
 
-    assert "search_gmail_messages" in names
+    assert "github_list_repositories" in names
     assert "github_list_repositories" in names
     assert "instagram_list_media" in names
 

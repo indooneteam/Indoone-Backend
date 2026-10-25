@@ -156,3 +156,34 @@ def test_a_kannada_word_that_names_no_capability_finds_nothing() -> None:
     """A Kannada sentence with no capability in it must not invent a match."""
 
     assert tool_search.search_tool_names("ನಮಸ್ಕಾರ ಹೇಗಿದ್ದೀರಿ") == []
+
+
+# ---- a name hit qualifies on its own -------------------------------------- #
+# A flat threshold dropped the strongest possible evidence: the query word is the
+# tool's own name. One capability word scores low however well it matches, so
+# "branch" returned nothing in English as well as in Kannada.
+
+
+@pytest.mark.parametrize(
+    "query,expected",
+    [
+        ("branch", "github_list_branches"),
+        ("ಬ್ರಾಂಚ್", "github_list_branches"),
+        ("commit", "github_get_commit"),
+    ],
+)
+def test_a_single_capability_word_finds_its_tool(query: str, expected: str) -> None:
+    assert expected in tool_search.search_tool_names(query)
+
+
+def test_a_name_hit_does_not_push_out_a_better_match() -> None:
+    """The rule adds reach; it must not reorder a clear winner."""
+
+    names = tool_search.search_tool_names("list github branches in my repository")
+
+    assert names[0] == "github_list_branches"
+
+
+def test_a_query_with_no_capability_still_matches_nothing() -> None:
+    assert tool_search.search_tool_names("namaskara hegiddiri") == []
+    assert tool_search.search_tool_names("write a story about a king") == []

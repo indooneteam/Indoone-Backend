@@ -9,6 +9,9 @@ pytest-asyncio>=0.26,<1.0
 torch==2.14.0+cpu
 numpy>=1.26,<3.0
 pypdf>=6.0,<7.0
+# Driver for the Postgres state store. SQLite needs nothing, but the deploy has to
+# carry this the moment INDOONE_DATABASE_URL points at Postgres.
+psycopg[binary]>=3.2,<4.0
 python-docx>=1.2,<2.0
 openpyxl>=3.1,<4.0
 tokenizers>=0.21,<1.0

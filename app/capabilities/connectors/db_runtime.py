@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import sqlite3
 from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from threading import RLock
 from typing import Any
 
 from app.capabilities.connectors import store
+from app.storage import database
 _DEFAULT_BUSY_TIMEOUT_MS = 5_000
 _OAUTH_STATE_MAX_AGE_SECONDS = 600
 _RUNTIME_LOCK = RLock()
@@ -27,11 +27,12 @@ def _consume_oauth_state_atomic(state: str, integration_id: str, max_age_seconds
     """Consume one OAuth state under a write lock so replay cannot race a parallel callback."""
     max_age_seconds = max(0, int(max_age_seconds))
     with store._connect() as db:
-        db.execute("BEGIN IMMEDIATE")
+        db.begin_write()
         cutoff = (datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)).isoformat()
         db.execute("DELETE FROM oauth_states WHERE created_at < ?", (cutoff,))
         row = db.execute(
-            "SELECT user_id, integration_id, redirect_uri, created_at FROM oauth_states WHERE state = ? AND integration_id = ?",
+            "SELECT user_id, integration_id, redirect_uri, created_at FROM oauth_states "
+            "WHERE state = ? AND integration_id = ?" + database.for_update(),
             (state, integration_id),
         ).fetchone()
         if row is None:
@@ -59,10 +60,14 @@ def _consume_oauth_state_atomic(state: str, integration_id: str, max_age_seconds
 def configure_sqlite_runtime() -> None:
     """Apply safe SQLite connection pragmas and concurrency guards to the capability-store runtime."""
     with _RUNTIME_LOCK:
-        original_connect: Callable[[], sqlite3.Connection] = store._connect
+        if database.is_postgres():
+            # These pragmas are SQLite tuning. Postgres needs none of them, and its
+            # own concurrency comes from row locks rather than a file lock.
+            return
+        original_connect: Callable[[], database.Connection] = store._connect
         if not getattr(original_connect, "_indoone_hardened", False):
 
-            def hardened_connect() -> sqlite3.Connection:
+            def hardened_connect() -> database.Connection:
                 connection = original_connect()
                 connection.execute(f"PRAGMA busy_timeout={_configured_busy_timeout_ms()}")
                 connection.execute("PRAGMA foreign_keys=ON")
@@ -89,7 +94,14 @@ def configure_sqlite_runtime() -> None:
 
 
 def sqlite_runtime_status() -> dict[str, Any]:
-    """Return a small, non-sensitive SQLite runtime health snapshot."""
+    """Return a small, non-sensitive runtime health snapshot.
+
+    The pragmas it reports are SQLite settings, so on Postgres it says so instead
+    of pretending to read them.
+    """
+    if database.is_postgres():
+        return {"database": "postgres", "journal_mode": "n/a", "synchronous": "n/a",
+                "busy_timeout_ms": 0, "foreign_keys": True}
     configure_sqlite_runtime()
     with store._connect() as db:
         journal_mode = str(db.execute("PRAGMA journal_mode").fetchone()[0])

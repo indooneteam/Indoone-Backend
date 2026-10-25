@@ -87,7 +87,7 @@ def test_every_declared_array_parameter_has_items() -> None:
     from app.ai.execution.tool_loop import model_tool_declarations
 
     problems: list[str] = []
-    for declaration in model_tool_declarations():
+    for declaration in model_tool_declarations(full=True):
         name = str(declaration.get("name"))
         problems.extend(_array_params_without_items(declaration.get("parameters"), name))
     assert problems == []

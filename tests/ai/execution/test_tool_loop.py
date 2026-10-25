@@ -170,7 +170,8 @@ async def test_run_tool_loop_uses_auto_mode_and_the_users_declarations(monkeypat
         reuse_first_text_when_no_tool=False,
     ):
         captured["mode"] = tool_mode
-        captured["count"] = len(tool_declarations)
+        # A callable: the loop asks each round so discovery can add to it.
+        captured["count"] = len(tool_declarations())
         captured["return_none"] = return_none_when_no_tool
         captured["reuse_text"] = reuse_first_text_when_no_tool
         return "done"
@@ -187,76 +188,73 @@ async def test_run_tool_loop_uses_auto_mode_and_the_users_declarations(monkeypat
     assert captured["count"] == len(tool_loop.model_tool_declarations("u1"))
 
 
-def test_plain_chat_does_not_carry_the_tool_catalogue() -> None:
-    """A bare greeting must not pay ~2,900 tokens for tools it cannot use.
+def test_the_whole_catalogue_is_not_sent_any_more() -> None:
+    """Four small declarations, not forty.
 
-    "how are you" used to be in this list. It is not any more, and that is
-    deliberate: a three-word question like "how are you" and a three-word
-    question like "nale enu special" are the same length, and only the model can
-    tell them apart. We send the catalogue and let it choose, rather than guess
-    from the wording and get it wrong.
+    Every declaration is re-sent on every round of every message. The whole
+    catalogue measured 41 declarations and about 4,863 tokens; this is the number
+    that keeps it from creeping back.
     """
-    assert tool_loop.needs_tools("hi") is False
-    assert tool_loop.needs_tools("thanks!") is False
-    assert tool_loop.needs_tools("ok") is False
+    import json
+
+    declarations = tool_loop.model_tool_declarations("u1")
+    names = [item["name"] for item in declarations]
+
+    assert names == ["find_tools", "calculator", "text_stats", "search_web"]
+    assert len(json.dumps(declarations)) // 4 < 600
 
 
-def test_a_request_for_a_service_still_uses_tools() -> None:
-    assert tool_loop.needs_tools("check my Zoho Mail") is True
-    assert tool_loop.needs_tools("how many GitHub repositories do I have?") is True
-    assert tool_loop.needs_tools("summarise my unread email") is True
-    assert tool_loop.needs_tools("ಇಮೇಲ್ ನೋಡು") is True
-    assert tool_loop.needs_tools("what is the capital of Karnataka and why") is True
+def test_a_discovered_tool_is_offered_on_the_next_round() -> None:
+    names = [item["name"] for item in tool_loop.model_tool_declarations("u1", discovered=("read_email",))]
+
+    assert "read_email" in names
+    assert "find_tools" in names
+    assert "github_list_repositories" not in names
 
 
-def test_tool_declarations_skip_connectors_the_user_has_not_connected(monkeypatch) -> None:
-    """A connector the user never connected can only fail, so it is not offered."""
-    monkeypatch.setattr(
-        tool_loop,
-        "get_integration_token_metadata",
-        lambda user_id, integration_id: {} if integration_id == "github" else None,
-    )
+def test_find_tools_finds_the_github_tools() -> None:
+    result = tool_loop._find_tools_result("list my github repositories", "u1")
 
-    names = [item["name"] for item in tool_loop.model_tool_declarations("u1")]
+    assert result["ok"] is True
+    names = [item["name"] for item in result["result"]["tools"]]
     assert "github_list_repositories" in names
-    assert "canva_list_designs" not in names
-    # Without a user context the whole catalogue is returned.
-    assert len(tool_loop.model_tool_declarations()) > len(names)
 
 
-def test_a_festival_question_gets_the_tools():
-    """A festival's date is year-specific, so it is a current-information question.
+def test_discovery_is_not_hidden_by_a_missing_connector() -> None:
+    """The tool is offered even when the connector is not connected.
 
-    Before this, a festival question carried no tools, the model had no way to look
-    the date up, and it answered that it did not know.
+    Hiding it made the model answer "I don't have access" for something the product
+    does, and it had no way to tell the user how to fix it. The executor answers with
+    "connect it in Plugins" instead, which is a reply the user can act on.
     """
-    from app.ai.execution.tool_loop import needs_tools
+    result = tool_loop._find_tools_result("list my github repositories", "a-user-with-nothing-connected")
 
-    for question in (
-        "ivattu yava habba ide",
-        "when is diwali this year",
-        "deepavali date 2026",
-        "ಇವತ್ತು ಯಾವ ಹಬ್ಬ ಇದೆ",
-        "ಶುಭ ಮುಹೂರ್ತ ಯಾವಾಗ",
-    ):
-        assert needs_tools(question) is True, question
+    assert result["ok"] is True
+    names = [item["name"] for item in result["result"]["tools"]]
+    assert "github_list_repositories" in names
 
-def test_the_gate_does_not_guess_from_topic_words():
-    """The gate is about length, not about knowing every festival word.
 
-    A word list would need twelve languages and eleven scripts, and every word
-    added for one language is a gap in the next. Any real sentence carries the
-    catalogue and the model chooses; only a bare greeting is spared the cost.
+def test_find_tools_says_nothing_matches_a_story() -> None:
+    """A writing request needs no tool, and the search says so instead of guessing."""
+    result = tool_loop._find_tools_result("write a story about a king", "")
+
+    assert result["ok"] is True
+    assert result["result"]["tools"] == []
+
+
+def test_find_tools_needs_a_query() -> None:
+    result = tool_loop._find_tools_result("   ", "u1")
+
+    assert result["ok"] is False
+    assert result["code"] == "EMPTY_QUERY"
+
+
+def test_the_tool_instruction_carries_the_answer_rules() -> None:
+    """Every message goes through the tool path now, so it needs the answer rules.
+
+    A festival date or the persona must not depend on which path a message took.
     """
-    from app.ai.execution.tool_loop import _TOOL_HINTS, needs_tools
+    from app.ai.gateway.ai_rules import ANSWER_SYSTEM_INSTRUCTION, TOOL_SYSTEM_INSTRUCTION
 
-    for word in ("festival", "habba", "deepavali", "muhurta", "ಹಬ್ಬ", "ದೀಪಾವಳಿ"):
-        assert word not in _TOOL_HINTS, word
-
-    # and yet every one of these still gets the catalogue
-    for question in ("ivattu yava habba ide", "nale enu special", "when is diwali"):
-        assert needs_tools(question) is True, question
-
-    # a bare greeting is still spared
-    for greeting in ("hi", "ok", "thanks"):
-        assert needs_tools(greeting) is False, greeting
+    assert TOOL_SYSTEM_INSTRUCTION.startswith(ANSWER_SYSTEM_INSTRUCTION)
+    assert "find_tools" in TOOL_SYSTEM_INSTRUCTION

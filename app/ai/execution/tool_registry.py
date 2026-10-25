@@ -88,6 +88,22 @@ _CODE_LANGUAGE = {
 # --------------------------------------------------------------------------- #
 
 TOOL_SPECS: tuple[ToolSpec, ...] = (
+    # ---- discovery -------------------------------------------------------- #
+    # The catalogue is no longer sent whole: the model gets a handful of tools and this
+    # one, and asks for anything else. See app/ai/execution/tool_search.py.
+    ToolSpec(
+        "find_tools",
+        "Find the tools that can do something the tools you already have cannot. "
+        "Ask with a short English query, for example 'list github repositories' or "
+        "'read unread email'. Returns tool names with a one-line description; call "
+        "them on the next turn.",
+        parameters=_object(
+            {"query": {"type": "STRING", "description": "A short English description of the capability needed."}},
+            ("query",),
+        ),
+        payload_style="text",
+        categories=("reasoning",),
+    ),
     # ---- local reasoning / text ------------------------------------------ #
     ToolSpec(
         "calculator",

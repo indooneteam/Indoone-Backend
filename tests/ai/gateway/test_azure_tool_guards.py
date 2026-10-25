@@ -95,3 +95,39 @@ def test_azure_stops_at_the_call_cap(_azure):
     ))
 
     assert len(ran) == 8, "only the capped number of tool calls may run"
+
+
+def test_a_tool_discovered_mid_loop_is_offered_on_the_next_round(_azure):
+    """The catalogue grows inside one exchange, which is what makes find_tools work.
+
+    The caller hands the loop a callable rather than a list, and the loop asks it
+    again each round. Without that, a tool the model discovered could not be called
+    in the same exchange, and the discovery would be a dead end.
+    """
+    sent = _azure([_call_response(_tool_call("find_tools", "c1")), _text_response("done")])
+    called: list[str] = []
+
+    def declarations():
+        names = ["find_tools"] + (["read_email"] if "find_tools" in called else [])
+        return [
+            {"name": name, "description": name, "parameters": {"type": "OBJECT", "properties": {}}}
+            for name in names
+        ]
+
+    async def execute_tool(name, arguments):
+        called.append(name)
+        return {"ok": True, "result": {"tools": [{"name": "read_email", "description": "Read mail."}]}}
+
+    asyncio.run(az.generate_azure_function_call_reply(
+        "read my mail",
+        history=None,
+        tool_declarations=declarations,
+        execute_tool=execute_tool,
+        extra_system_instruction="",
+        tool_mode="AUTO",
+    ))
+
+    first_round = [item["function"]["name"] for item in sent[0]["tools"]]
+    second_round = [item["function"]["name"] for item in sent[1]["tools"]]
+    assert first_round == ["find_tools"]
+    assert "read_email" in second_round

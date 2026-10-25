@@ -730,7 +730,20 @@ async def _github_merge_pull_request(payload: str) -> str:
     return json.dumps(result, ensure_ascii=False, sort_keys=True)
 
 
+def _find_tools(query: str) -> str:
+    """The find_tools executor: the searchable catalogue, as text.
+
+    The tool loop calls the same builder directly, because it needs the names to
+    offer on the next round; this entry exists so the registry contract holds - every
+    declared tool has a runtime implementation - and so the agent path can search too.
+    """
+    from app.ai.execution.tool_search import find_tools_payload
+
+    return json.dumps(find_tools_payload(query), ensure_ascii=False, sort_keys=True)
+
+
 TOOLS: dict[str, ToolCallable] = {
+    "find_tools": _find_tools,
     "calculator": _calculate,
     "text_stats": _text_stats,
     "json_summary": _json_summary,

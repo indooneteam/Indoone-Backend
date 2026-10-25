@@ -20,7 +20,7 @@ from app.ai.execution.tool_loop import (
     email_read_tool_declarations,
     model_tool_declarations,
 )
-from app.ai.execution.tool_registry import function_declarations
+from app.ai.execution.tool_registry import function_declarations, get_tool_spec
 from app.capabilities.connectors.store import get_integration_token_metadata
 from app.plugins.github.chat_tools import _format_github_result
 
@@ -184,11 +184,21 @@ def _voice_tool_declarations(user_id: str = "") -> list[dict[str, object]]:
     # only offered when Zoho Mail is actually connected.
     if _connector_is_connected(user_id, "zoho_mail"):
         declarations.extend(email_read_tool_declarations())
-    for declaration in model_tool_declarations(user_id):
+    # Voice filters to the read-only tools and has no discovery step, so it takes
+    # the whole catalogue rather than the always-on set.
+    for declaration in model_tool_declarations(user_id, full=True):
         name = str(declaration.get("name") or "")
         if not name.startswith(_VOICE_CONNECTOR_PREFIXES):
             continue
         if name not in read_only_names:
+            continue
+        # Chat no longer hides a tool whose connector is missing - the executor says
+        # "connect it in Plugins" instead. Voice keeps the filter on purpose: a live
+        # session has no place to show that reply, and offering a tool it cannot use
+        # made the model say "let me check the connection" instead of answering.
+        spec = get_tool_spec(name)
+        connector_id = getattr(spec, "connector_id", None) if spec is not None else None
+        if connector_id and user_id.strip() and not _connector_is_connected(user_id, connector_id):
             continue
         declarations.append(dict(declaration))
     return declarations

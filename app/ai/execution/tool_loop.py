@@ -18,11 +18,6 @@ import os
 from typing import Any, Iterable
 
 from app.ai.execution.approval import decide_tool
-from app.ai.language.language_detection import (
-    INDIC_MAIL_WORDS,
-    INDIC_SEND_WORDS,
-    SCRIPT_RANGES,
-)
 from app.ai.gateway.ai_rules import (
     APPROVAL_REQUIRED,
     SEARCH_FAILED,
@@ -37,8 +32,8 @@ from app.ai.execution.tool_registry import (
     get_tool_spec,
     tool_declaration,
 )
+from app.ai.execution.tool_search import find_tools_payload
 from app.ai.execution.tools import run_tool_async
-from app.capabilities.connectors.store import get_integration_token_metadata
 
 _EMAIL_TOOL_NAMES = frozenset(item["name"] for item in EMAIL_TOOL_DECLARATIONS)
 _GITHUB_TOOL_NAMES = frozenset(item["name"] for item in GITHUB_TOOL_DECLARATIONS)
@@ -118,94 +113,72 @@ def _azure_backend_enabled() -> bool:
     return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() == "azure"
 
 
-# A message that names a connected service, or an action on one, needs the tool
-# catalogue. A short greeting does not, and every call re-sends all declarations
-# (~2,900 tokens), so plain chat should not pay for them.
-_TOOL_HINTS = (
-    "email", "e-mail", "mail", "inbox", "zoho", "draft", "unread",
-    "reply", "send", "forward", "archive",
-    "github", "repo", "repository", "commit", "pull request", "issue", "branch",
-    "calendar", "event", "meeting", "schedule",
-    "folder", "photo", "video", "instagram", "post",
-    "check", "search", "find", "list", "show", "summar", "delete", "connect",
-    "ಮೇಲ್", "ಇಮೇಲ್", "ಇನ್‌ಬಾಕ್ಸ್", "ಇನ್ಬಾಕ್ಸ್", "ಕಳುಹಿಸ", "ಓದ", "ನೋಡ",
-    "ರೆಪೊ", "ಕಮಿಟ್", "ಇಷ್ಯೂ", "ಕ್ಯಾಲೆಂಡರ್", "ಫೋಟೋ", "ವಿಡಿಯೋ",
-) + INDIC_MAIL_WORDS + INDIC_SEND_WORDS
+# The tools the model is given without asking. Everything else in the catalogue is
+# reached through find_tools, so a message that needs nothing pays for four small
+# declarations instead of all of them (about 400 tokens rather than 4,863).
+#
+# Kept on purpose: find_tools (the way to everything else), search_web (the
+# instruction tells the model to look up current facts, so it must not need a round
+# trip to get it), and the two cheap local tools that plain messages use most.
+ALWAYS_ON_TOOL_NAMES = frozenset({"find_tools", "search_web", "calculator", "text_stats"})
+
+# How many tools one find_tools call returns. Five is what the tool is for: enough to
+# choose from, few enough that the model still picks rather than guesses.
+_FIND_TOOLS_LIMIT = 5
 
 
-def _written_in_indic(message: str) -> bool:
-    """Whether the message is written in any Indian script."""
-    return any(pattern.search(message) for _, pattern in SCRIPT_RANGES)
-_SHORT_MESSAGE_WORDS = 2
+def model_tool_declarations(
+    user_id: str = "",
+    *,
+    discovered: Iterable[str] = (),
+    full: bool = False,
+) -> list[dict[str, Any]]:
+    """The tools the model is given for this turn.
 
+    By default: the always-on handful, plus whatever the model discovered with
+    ``find_tools`` so far in this exchange. ``full=True`` returns the whole
+    catalogue, which voice uses because it filters for the read-only tools and has
+    no discovery step.
 
-def needs_tools(message: str) -> bool:
-    """Whether a message should carry the tool catalogue.
-
-    Every model call re-sends all declarations, so a one-word greeting must not
-    pay for them. Everything else carries the catalogue and the model chooses.
-
-    This deliberately does NOT guess from topic words. A word list cannot cover
-    festivals, holidays, muhurta and the rest across twelve languages and eleven
-    scripts, and every word added for one language is a gap in the next. The
-    length of the message is the signal; the choice of tool is the model's, which
-    is the whole point of sending it the list.
+    Why not send everything: every declaration is re-sent on every round of every
+    message. The whole catalogue is 41 declarations, about 4,863 tokens; the
+    always-on set is about 400.
     """
-    text = " ".join(str(message).split()).strip().casefold()
-    if not text:
-        return False
-    if any(hint in text for hint in _TOOL_HINTS):
-        return True
-    # A message written in an Indian script is offered the tools unless it is a bare
-    # word. Matching it against a keyword list would mean keeping that list in twelve
-    # languages and eleven scripts, and every language added later would be a gap until
-    # somebody remembered it. The script is the reliable signal; the word list is not.
-    # The same reasoning applies to topic words like "festival": the model is given
-    # the catalogue and chooses, rather than us guessing from the wording.
-    if _written_in_indic(str(message)) and len(text.split()) > 1:
-        return True
-    return len(text.split()) > _SHORT_MESSAGE_WORDS
-
-
-_CONNECTOR_IDS = tuple(
-    sorted({spec.connector_id for spec in TOOL_SPECS if getattr(spec, "connector_id", None)})
-)
-
-
-def model_tool_declarations(user_id: str = "") -> list[dict[str, Any]]:
-    """Every tool the model may choose for this user, in one list.
-
-    Local tools (including the approval-required ones) come from the registry;
-    the GitHub read tools and the email tools come from their (registry-owned)
-    declarations.
-
-    Tools for a connector the user has not connected are left out: they could
-    only fail, and every declaration is re-sent on every model call, so an
-    unused connector costs tokens on each request. Without a ``user_id`` the
-    full list is returned, so callers with no user context keep working.
-    """
-    normalized_user = user_id.strip()
-    connected: set[str] = set()
-    if normalized_user:
-        for connector_id in _CONNECTOR_IDS:
-            if get_integration_token_metadata(normalized_user, connector_id) is not None:
-                connected.add(connector_id)
+    wanted_names = None if full else set(ALWAYS_ON_TOOL_NAMES) | {str(name) for name in discovered}
 
     def wanted(spec: Any) -> bool:
         # A tool the model cannot have the input for is not offered at all: the
         # contact tools need a client-supplied snapshot the model must never invent.
         if not getattr(spec, "model_facing", True):
             return False
-        connector_id = getattr(spec, "connector_id", None)
-        if not connector_id or not normalized_user:
-            return True
-        # Approval for the write tools is enforced at dispatch, not by hiding them.
-        return connector_id in connected
+        if wanted_names is not None and spec.name not in wanted_names:
+            return False
+        # A connector the user has not connected is NOT filtered out any more. The
+        # executor answers with "connect it in Plugins", which is a usable reply;
+        # hiding the tool made the model say it had no access to something the
+        # product does. Approval for the write tools is enforced at dispatch.
+        return True
 
     declarations = [tool_declaration(spec) for spec in TOOL_SPECS if wanted(spec)]
-    declarations += EMAIL_TOOL_DECLARATIONS
-    declarations.append(dict(_SEARCH_WEB_DECLARATION))
+
+    email_names = {str(item["name"]) for item in EMAIL_TOOL_DECLARATIONS}
+    if full:
+        declarations += [dict(item) for item in EMAIL_TOOL_DECLARATIONS]
+    else:
+        declarations += [dict(item) for item in EMAIL_TOOL_DECLARATIONS if str(item["name"]) in wanted_names]
+
+    if wanted_names is None or "search_web" in wanted_names:
+        declarations.append(dict(_SEARCH_WEB_DECLARATION))
     return declarations
+
+
+def _find_tools_result(query: str, user_id: str = "") -> dict[str, Any]:
+    """Run find_tools: search the catalogue and report what can be called next.
+
+    Only tools the model would actually be given are reported, so a discovery never
+    promises something the connector filter then refuses.
+    """
+    return find_tools_payload(query, limit=_FIND_TOOLS_LIMIT)
 
 
 def _core_payload(spec: Any, arguments: dict[str, Any]) -> str:
@@ -345,8 +318,25 @@ async def run_tool_loop(
 
     tokens = tuple(approval_tokens or ())
     write_done = {"value": False}
+    # Tools the model asked for with find_tools, so later rounds can call them.
+    discovered: set[str] = set()
+
+    def declarations() -> list[dict[str, Any]]:
+        """What the model is offered right now.
+
+        Called once per round by the provider, so a tool discovered in round one is
+        callable in round two without re-sending the catalogue.
+        """
+        return model_tool_declarations(user_id, discovered=tuple(discovered))
 
     async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if name == "find_tools":
+            result = _find_tools_result(str(arguments.get("query") or ""), user_id)
+            if result.get("ok") is True:
+                discovered.update(
+                    str(item["name"]) for item in (result.get("result") or {}).get("tools") or []
+                )
+            return result
         if name in _EMAIL_WRITE_TOOLS and write_done["value"]:
             return {
                 "ok": False,
@@ -367,7 +357,9 @@ async def run_tool_loop(
 
     _shared = dict(
         history=history,
-        tool_declarations=model_tool_declarations(user_id),
+        # A callable, not a list: the provider asks for the declarations each round so
+        # a tool found with find_tools becomes callable immediately.
+        tool_declarations=declarations,
         execute_tool=execute_tool,
         extra_system_instruction=(
             _UNIFIED_SYSTEM_INSTRUCTION

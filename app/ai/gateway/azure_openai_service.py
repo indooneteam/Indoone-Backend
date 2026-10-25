@@ -411,7 +411,7 @@ async def generate_azure_function_call_reply(
     message: str,
     *,
     history: list[tuple[str, str]] | None,
-    tool_declarations: list[dict[str, Any]],
+    tool_declarations: list[dict[str, Any]] | Callable[[], list[dict[str, Any]]],
     execute_tool: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]],
     extra_system_instruction: str,
     max_tool_rounds: int = 4,
@@ -441,8 +441,15 @@ async def generate_azure_function_call_reply(
         "",
         _system_instruction(extra_system_instruction),
     )
-    tools = _openai_tools(tool_declarations)
-    tool_names = {str(item["function"]["name"]) for item in tools}
+    def tools_for_this_round() -> list[dict[str, Any]]:
+        """OpenAI-shaped tools, rebuilt per round so discovery can add to them."""
+        source = tool_declarations() if callable(tool_declarations) else tool_declarations
+        converted = _openai_tools(source)
+        if not converted:
+            raise ValueError("no valid function declarations were supplied")
+        return converted
+
+    tool_names: set[str] = set()
 
     first_text: str | None = None
 
@@ -453,16 +460,18 @@ async def generate_azure_function_call_reply(
     max_total_calls = 8
     executed_calls = 0
 
-    logger.info(
-        "Azure OpenAI tool round: %d tool(s) offered: %s",
-        len(tools),
-        ", ".join(t["function"]["name"] for t in tools) or "(none)",
-    )
-
     for round_index in range(max_rounds + 1):
         payload: dict[str, Any] = {"messages": messages}
         # The final round carries no tools, so the model must answer in words.
         if round_index < max_rounds:
+            tools = tools_for_this_round()
+            tool_names = {str(item["function"]["name"]) for item in tools}
+            logger.info(
+                "Azure OpenAI tool round %d: %d tool(s) offered: %s",
+                round_index,
+                len(tools),
+                ", ".join(item["function"]["name"] for item in tools) or "(none)",
+            )
             payload["tools"] = tools
             if tool_mode.upper() == "ANY" and round_index == 0:
                 # "required" is OpenAI's spelling of Gemini's ANY: at least one call.

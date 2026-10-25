@@ -33,9 +33,11 @@ from app.instagram.api.instagram_publishing import router as instagram_publishin
 from app.instagram.api.instagram_webhooks import router as instagram_webhooks_router
 from app.instagram.api.instagram_automation import router as instagram_automation_router
 from app.api.memory import router as memory_router
+from app.api.observability import router as observability_router
 from app.api.notifications import initialize as initialize_notification_store
 from app.api.notifications import router as notifications_router
 from app.api.platform import router as platform_router
+from app.ai.observability import begin_request, record_request
 from app.api.request_context import clear_principal_id, get_request_id, new_request_id, set_principal_id
 from app.api.network_security import configure_network_security, validate_network_security_config
 from app.api.environment_security import validate_environment_security_config
@@ -111,6 +113,14 @@ def _log_request(request: Request, request_id: str, started: float, status_code:
     _REQUEST_COUNT += 1
     status_key = str(status_code)
     _STATUS_COUNTS[status_key] = _STATUS_COUNTS.get(status_key, 0) + 1
+    # One span per request, recorded here because every path through the
+    # middleware already passes this line, including every early return.
+    record_request(
+        request.method,
+        request.url.path,
+        status_code=status_code,
+        duration_ms=(time.perf_counter() - started) * 1000.0,
+    )
     logger.info(
         "request completed",
         extra={
@@ -163,6 +173,7 @@ configure_network_security(app)
 async def request_context_middleware(request: Request, call_next):
     started = time.perf_counter()
     request_id = new_request_id()
+    begin_request(request_id)
     clear_principal_id()
     request.state.principal_id = ""
     authorization = request.headers.get("authorization", "")
@@ -293,6 +304,7 @@ app.include_router(zoho_mail_oauth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
 app.include_router(platform_router, prefix="/api")
+app.include_router(observability_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")
 app.include_router(notifications_router, prefix="/api")
 app.include_router(capabilities_router, prefix="/api")

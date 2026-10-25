@@ -14,6 +14,10 @@ This backend exposes stable contracts for the major assistant capabilities so th
 - `POST /api/deep-research` — multi-query source collection with provenance.
 - `POST /api/agent` — orchestrator/tool planning contract.
 - `POST /api/image-generation` — local image-model adapter contract.
+- `GET /api/observability` — spans, tool and model stats and cost for the current
+  process, for an operator. Off until `INDOONE_OBSERVABILITY_TOKEN` is set; while
+  it is empty the endpoint answers 404. Counts, names, durations and tokens only.
+- `POST /api/observability/reset` — clear the aggregate window.
 
 ## Important boundaries
 

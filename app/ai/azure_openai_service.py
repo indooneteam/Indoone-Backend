@@ -31,6 +31,7 @@ import httpx
 # the code catches. Both live with the Gemini service today; reusing them here
 # means the two providers cannot drift apart, and the Gemini file is untouched.
 from app.ai.gemini_service import BUSY_MESSAGE, ModelBusyError
+from app.ai.observability import add_model_usage, measured_model_call, set_model
 from app.ai.ai_rules import (
     ANSWER_SYSTEM_INSTRUCTION as _SYSTEM_INSTRUCTION,
     FUNCTION_DECLARATIONS_REQUIRED,
@@ -105,6 +106,7 @@ def _get_tool_config() -> tuple[str, str, str, str]:
     two quotas instead of one.
     """
     api_key, endpoint, deployment, api_version = _get_config()
+    set_model(deployment)
     tool_deployment = os.getenv("AZURE_OPENAI_TOOL_DEPLOYMENT", "").strip()
     return api_key, endpoint, (tool_deployment or deployment), api_version
 
@@ -316,7 +318,26 @@ async def _post_chat(
         raise RuntimeError("Azure OpenAI returned invalid JSON") from exc
     if not isinstance(response_data, dict):
         raise RuntimeError("Azure OpenAI returned invalid response data")
+    _record_usage(response_data)
     return response_data
+
+
+def _record_usage(response_data: dict[str, Any]) -> None:
+    """Add the token counts Azure reported to the open model span.
+
+    Azure reports usage per call in a ``usage`` object; the tool loop makes
+    several calls inside one span, so the counts are added, not replaced.
+    """
+
+    usage = response_data.get("usage")
+    if not isinstance(usage, dict):
+        return
+    try:
+        input_tokens = int(usage.get("prompt_tokens") or 0)
+        output_tokens = int(usage.get("completion_tokens") or 0)
+    except (TypeError, ValueError):
+        return
+    add_model_usage(input_tokens, output_tokens)
 
 
 def _first_message(response_data: dict[str, Any]) -> dict[str, Any]:
@@ -349,6 +370,7 @@ def _system_instruction(extra_system_instruction: str) -> str:
     return instruction
 
 
+@measured_model_call("azure")
 async def generate_azure_reply(
     message: str,
     history: list[tuple[str, str]] | None = None,
@@ -363,6 +385,7 @@ async def generate_azure_reply(
         raise ValueError("message cannot be empty")
 
     api_key, endpoint, deployment, api_version = _get_config()
+    set_model(deployment)
     url = _chat_url(endpoint, deployment, api_version)
 
     payload: dict[str, Any] = {
@@ -383,6 +406,7 @@ async def generate_azure_reply(
     return reply
 
 
+@measured_model_call("azure")
 async def generate_azure_function_call_reply(
     message: str,
     *,

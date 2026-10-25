@@ -10,7 +10,7 @@ from urllib.parse import quote, urlsplit
 
 import httpx
 
-from app.capabilities.integrations import get_valid_access_token
+from app.capabilities.connectors.integrations import get_valid_access_token
 
 
 def _mail_api_base_url() -> str:

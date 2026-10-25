@@ -6,10 +6,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.plugins.github.routes import router as github_router
-from app.capabilities.integrations import (
+from app.capabilities.connectors.integrations import (
     probe_integration,
 )
-from app.capabilities.store import create_oauth_state
+from app.capabilities.connectors.store import create_oauth_state
 from secrets import token_urlsafe
 from app.api.security.errors import provider_failure
 

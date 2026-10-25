@@ -3,9 +3,7 @@ from __future__ import annotations
 import pytest
 from cryptography.fernet import Fernet
 
-from app.plugins import email_assistant
-
-
+from app.plugins.email import email_assistant
 def test_non_email_chat_is_not_intercepted() -> None:
     import asyncio
     result = asyncio.run(email_assistant.handle_email_chat("user", "conversation", "Explain the moon phases"))

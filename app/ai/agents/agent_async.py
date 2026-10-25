@@ -20,7 +20,7 @@ from app.ai.agents.agent import (
 from app.ai.agents.agent_policy import deadline_failure, remaining_budget, should_retry
 from app.ai.execution.approval import decide_tool
 from app.ai.execution.tools import ToolResult, run_tool_async
-from app.capabilities.store import create_agent_run, update_agent_run
+from app.capabilities.connectors.store import create_agent_run, update_agent_run
 
 
 async def _run_with_retry_async(tool: str, payload: str, deadline: float, user_id: str = "") -> tuple[ToolResult, int]:

@@ -61,7 +61,7 @@ Model generation has no application-level timeout. Render Web Services allow HTT
 Place source documents in `data/raw/`. The preparation script normalizes whitespace, splits documents, removes very short entries, removes exact duplicate content using a normalized SHA-256 fingerprint, and creates deterministic train/validation/test files under `data/processed/`.
 
 ```bash
-python -m scripts.prepare_dataset --source data/raw/indoone_corpus.txt --output-dir data/processed
+python -m scripts.dataset.prepare_dataset --source data/raw/indoone_corpus.txt --output-dir data/processed
 ```
 
 The processed dataset is a generated training artifact and should not be committed as a substitute for the original licensed source data.
@@ -82,7 +82,7 @@ The processed dataset is a generated training artifact and should not be committ
 
 ```bash
 python -m pip install -r requirements.txt
-python -m scripts.prepare_dataset --source data/raw/indoone_corpus.txt --output-dir data/processed
+python -m scripts.dataset.prepare_dataset --source data/raw/indoone_corpus.txt --output-dir data/processed
 python -m app.ai.training.train --corpus data/processed/train.txt --output models/indoone-small --steps 2000
 ```
 
@@ -99,7 +99,7 @@ uvicorn app.main:app --reload
 Production/deployment:
 
 ```bash
-python -m scripts.run_server
+python -m scripts.ops.run_server
 ```
 
 The production entrypoint honors a deployment-provided `PORT`, defaults to one worker, disables reload in production, bounds concurrency and keep-alive/graceful-shutdown settings, suppresses the Uvicorn `Server` header, and keeps Uvicorn-level forwarded-header trust disabled. The application only enables forwarded-header handling through its explicit trusted-proxy configuration.

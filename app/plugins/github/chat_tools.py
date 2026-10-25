@@ -14,7 +14,7 @@ from typing import Any
 from app.ai.gateway.ai_rules import CONFIRM_OR_CANCEL
 from app.ai.execution.approval import issue_approval_token
 from app.ai.execution.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
-from app.capabilities.store import (
+from app.capabilities.connectors.store import (
     delete_pending_github_action,
     get_pending_github_action,
     save_pending_github_action,
@@ -749,13 +749,13 @@ _CANCEL_RE = re.compile(
 
 def _pending_payload(payload: dict[str, Any]) -> bytes:
     """Encrypt a pending write, so a stored token is never sitting in the clear."""
-    from app.capabilities.integrations import _fernet
+    from app.capabilities.connectors.integrations import _fernet
 
     return _fernet().encrypt(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
 
 
 def _read_pending_payload(item: dict[str, Any]) -> dict[str, Any]:
-    from app.capabilities.integrations import _fernet
+    from app.capabilities.connectors.integrations import _fernet
 
     raw = _fernet().decrypt(bytes(item.get("encrypted_payload") or b"")).decode("utf-8")
     data = json.loads(raw)

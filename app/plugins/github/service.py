@@ -12,8 +12,8 @@ import re
 import httpx
 from urllib.parse import quote
 
-from app.capabilities.integrations import _fernet
-from app.capabilities.store import get_integration_token
+from app.capabilities.connectors.integrations import _fernet
+from app.capabilities.connectors.store import get_integration_token
 
 _GITHUB_BASE = "https://api.github.com"
 _GITHUB_REPOSITORIES_URL = f"{_GITHUB_BASE}/user/repos"

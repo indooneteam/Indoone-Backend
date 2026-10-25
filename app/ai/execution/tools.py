@@ -41,13 +41,13 @@ from app.plugins.github.writes import (
     github_merge_pull_request as write_github_merge_pull_request,
     github_update_repository_file as commit_github_repository_file,
 )
-from app.instagram.capabilities.instagram import (
+from app.channels.instagram.capabilities.instagram import (
     get_profile as get_instagram_profile,
     list_media as list_instagram_media,
 )
-from app.instagram.capabilities.instagram_advanced import get_media_details as get_instagram_media_details
-from app.capabilities.data_analysis import analyze_payload
-from app.capabilities.task_scheduler import build_schedule as build_task_schedule
+from app.channels.instagram.capabilities.instagram_advanced import get_media_details as get_instagram_media_details
+from app.capabilities.media.data_analysis import analyze_payload
+from app.capabilities.platform.task_scheduler import build_schedule as build_task_schedule
 
 MAX_CALCULATOR_ABS_VALUE = 10**100
 MAX_CALCULATOR_EXPONENT = 1000
@@ -595,8 +595,8 @@ def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
         return None
     try:
         token = issue_approval_token(user_id, tool, ttl_seconds=300)
-        from app.capabilities.integrations import _fernet
-        from app.capabilities.store import save_pending_github_action
+        from app.capabilities.connectors.integrations import _fernet
+        from app.capabilities.connectors.store import save_pending_github_action
 
         stored = {
             key: value for key, value in data.items()

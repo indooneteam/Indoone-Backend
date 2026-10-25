@@ -8,7 +8,7 @@ on:
       - main
     paths:
       - "app/ai/self_update.py"
-      - "scripts/self_update_knowledge.py"
+      - "scripts/training/self_update_knowledge.py"
       - "config/self_update_sources.json"
       - ".github/workflows/auto-self-update.yml"
   workflow_dispatch:
@@ -34,7 +34,7 @@ jobs:
           python-version: "3.12"
 
       - name: Collect trusted web updates
-        run: python scripts/self_update_knowledge.py
+        run: python scripts/training/self_update_knowledge.py
 
       - name: Commit knowledge updates
         run: |

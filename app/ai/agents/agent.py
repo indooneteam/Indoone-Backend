@@ -14,7 +14,7 @@ from app.ai.agents.coding import build_code_tool_payload
 from app.ai.agents.orchestrator import Plan, plan_request
 from app.ai.execution.tool_registry import get_tool_spec, tool_names
 from app.ai.execution.tools import ToolResult, run_tool
-from app.capabilities.store import create_agent_run, search_memories, update_agent_run
+from app.capabilities.connectors.store import create_agent_run, search_memories, update_agent_run
 
 MAX_AGENT_STEPS = 4
 MAX_AGENT_MEMORIES = 5

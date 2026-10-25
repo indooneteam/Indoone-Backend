@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.capabilities.voice_session import (
+from app.capabilities.voice.voice_session import (
     VoiceSessionState,
     handle_audio_message,
     handle_speak_message,

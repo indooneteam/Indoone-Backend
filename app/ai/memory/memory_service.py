@@ -5,9 +5,7 @@ from typing import Any
 
 from app.ai.memory.memory import extract_memory_candidates, rank_memory_matches, resolve_memory_update
 from app.ai.memory.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value, should_store
-from app.capabilities import store
-
-
+from app.capabilities.connectors import store
 class MemoryService:
     def __init__(self, policy: MemoryPolicy = MemoryPolicy()) -> None:
         self.policy = policy

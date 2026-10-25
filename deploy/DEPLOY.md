@@ -13,7 +13,7 @@ it. `deploy/indoone-backend.service` is now the copy in the repository.
 | Virtualenv | `/home/ubuntu/Indoone-Backend/.venv` |
 | Environment file | `/etc/indoone/indoone.env` |
 | Service unit | `/etc/systemd/system/indoone-backend.service` |
-| Entry point | `python -m scripts.run_server` |
+| Entry point | `python -m scripts.ops.run_server` |
 | Health check | `http://localhost:8000/health` |
 
 **The environment file is not in this repository, and must not be.** It holds the API keys,

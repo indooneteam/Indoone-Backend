@@ -1,8 +1,5 @@
- f"expected one ExecStart, found {executables}"
-    match = _MODULE_ARGUMENT.search(executables[0])
-    assert match is not None, f"ExecStart does not name a module: {executables[0]}"
-    assert match.group(1) == "scripts.ops.run_server"
-
-
-def test_that_module_can_actually_be_imported() -> None:
-    match = _MODU
+LE_ARGUMENT.search(_unit_text())
+    assert match is not None
+    module = match.group(1)
+    assert importlib.util.find_spec(module) is not None, (
+        

@@ -21,9 +21,34 @@ def test_connector_authorization_denies_missing_connection(monkeypatch, tmp_path
 def test_connector_authorization_denies_wrong_scope(monkeypatch, tmp_path) -> None:
     monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
     upsert_integration_token("user-one", "github", b"encrypted", None, "Bearer", "public_repo", None)
-    result = authorize_connector("user-one", "github", "pull_requests.write")
+    # `issues.write` is registered on the connector but a public_repo token does not
+    # grant it. The previous example here was `pull_requests.write`, which a
+    # public_repo token does grant - the scope map was missing it, so the test was
+    # asserting a bug as if it were the rule.
+    result = authorize_connector("user-one", "github", "issues.write")
     assert result.allowed is False
     assert result.reason == "connected token scope does not allow this capability"
+
+
+@pytest.mark.parametrize("capability", ["branches.write", "pull_requests.write"])
+def test_connector_authorization_allows_branch_and_pull_request_writes(
+    monkeypatch, tmp_path, capability: str
+) -> None:
+    """The scope map must grant what the token actually grants.
+
+    github_create_branch, github_delete_branch, github_create_pull_request and
+    github_merge_pull_request all declare these capabilities. A repo/public_repo
+    token grants them, so the map must say so; when it did not, every branch and
+    pull-request write was refused with "connected token scope does not allow this
+    capability" before the approval step could even be reached.
+    """
+
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "capabilities.db"))
+    for scope in ("repo", "public_repo"):
+        upsert_integration_token("user-two", "github", b"encrypted", None, "Bearer", scope, None)
+        result = authorize_connector("user-two", "github", capability)
+        assert result.allowed is True, (scope, capability, result.reason)
+        assert scope_allows("github", scope, capability) is True
 
 
 def test_connector_authorization_denies_expired_token(monkeypatch, tmp_path) -> None:

@@ -25,10 +25,19 @@ _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
     "github": {
         # public_repo grants writes to public repositories; repository writes
         # remain separately gated by a short-lived, server-issued approval token.
+        #
+        # `branches.write` and `pull_requests.write` are listed here because the
+        # tool catalogue already declares them (github_create_branch,
+        # github_delete_branch, github_create_pull_request, github_merge_pull_request)
+        # and the connector registry registers them as write capabilities. Leaving
+        # them out of this map made every branch and pull-request write fail with
+        # "connected token scope does not allow this capability" even though the
+        # token did grant it - the scope map was the only place that said no.
         "public_repo": frozenset((
             "repos.read", "issues.read", "pull_requests.read",
             "repo.contents.read", "repo.files.read", "repo.code.search",
             "repo.history.read", "repo.compare.read", "repo.files.write",
+            "branches.write", "pull_requests.write",
         )),
         # The classic repo scope also reaches private repositories. File writes
         # remain available only through the explicitly approved commit workflow.
@@ -36,6 +45,7 @@ _SCOPE_ALIASES: dict[str, dict[str, frozenset[str]]] = {
             "repos.read", "issues.read", "pull_requests.read",
             "repo.contents.read", "repo.files.read", "repo.code.search",
             "repo.history.read", "repo.compare.read", "repo.files.write",
+            "branches.write", "pull_requests.write",
         )),
     },
 }

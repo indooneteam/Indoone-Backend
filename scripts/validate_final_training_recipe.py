@@ -14,7 +14,6 @@ import torch
 
 from app.ai.tokenizer import BPETokenizer
 from app.ai.training.train import (
-    CAPABILITY_INSTRUCTION_WEIGHT,
     CURATED_INSTRUCTION_WEIGHT,
     DEFAULT_BATCH_SIZE,
     DEFAULT_CHECKPOINT_INTERVAL,
@@ -35,12 +34,10 @@ RAW_FILES = (
     Path("data/raw/indoone_instructions.jsonl"),
     Path("data/raw/core_instruction_seed.jsonl"),
     Path("data/raw/indoone_multilingual_examples.jsonl"),
-    Path("data/raw/indoone_phone_contacts_examples.jsonl"),
 )
 GENERATED_FILE = Path("data/processed/generated_multilingual_examples.jsonl")
 GENERATED_CORPUS = Path("data/processed/generated_multilingual_corpus.txt")
 CURATED_FILE = Path("data/processed/curated_instructions.jsonl")
-CAPABILITY_FILE = Path("data/raw/indoone_phone_contacts_examples.jsonl")
 EVAL_FILE = Path("data/eval/behavior.jsonl")
 
 
@@ -83,7 +80,6 @@ def validate() -> dict[str, object]:
     expected_sampling = {
         "curated": CURATED_INSTRUCTION_WEIGHT,
         "generated_multilingual": GENERATED_INSTRUCTION_WEIGHT,
-        "capability": CAPABILITY_INSTRUCTION_WEIGHT,
     }
     if sampling_manifest != expected_sampling:
         raise SystemExit("config/training/training_manifest.json sampling weights do not match the executable training recipe")
@@ -107,7 +103,7 @@ def validate() -> dict[str, object]:
         raise SystemExit("generated multilingual readiness corpus is unexpectedly small")
 
     examples, fingerprints, weights, policy = _merge_instruction_sets_weighted(
-        [CURATED_FILE, GENERATED_FILE, CAPABILITY_FILE]
+        [CURATED_FILE, GENERATED_FILE]
     )
     if not examples:
         raise SystemExit("final instruction pool is empty")
@@ -116,15 +112,12 @@ def validate() -> dict[str, object]:
 
     curated_policy = policy.get(CURATED_FILE.name)
     generated_policy = policy.get(GENERATED_FILE.name)
-    capability_policy = policy.get(CAPABILITY_FILE.name)
-    if not curated_policy or not generated_policy or not capability_policy:
+    if not curated_policy or not generated_policy:
         raise SystemExit("final instruction pool policy is incomplete")
     if abs(float(curated_policy["target_probability"]) - CURATED_INSTRUCTION_WEIGHT) > 1e-9:
         raise SystemExit("curated instruction sampling target changed unexpectedly")
     if abs(float(generated_policy["target_probability"]) - GENERATED_INSTRUCTION_WEIGHT) > 1e-9:
         raise SystemExit("generated instruction sampling target changed unexpectedly")
-    if abs(float(capability_policy["target_probability"]) - CAPABILITY_INSTRUCTION_WEIGHT) > 1e-9:
-        raise SystemExit("capability instruction sampling target changed unexpectedly")
 
     total_weight = sum(weights)
     if abs(total_weight - 1.0) > 1e-5:
@@ -189,7 +182,6 @@ def validate() -> dict[str, object]:
         "raw_sha256": hashes,
         "curated_examples": len(curated),
         "generated_examples": len(generated),
-        "capability_examples": len(load_examples(CAPABILITY_FILE)),
         "generated_corpus_characters": len(GENERATED_CORPUS.read_text(encoding="utf-8")),
         "instruction_sampling_policy": policy,
         "evaluation_cases": len(eval_cases),

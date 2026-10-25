@@ -232,9 +232,7 @@ def _ensure_training_data() -> None:
             "data/processed/instructions_validation.jsonl",
             "--source",
             "data/processed/generated_multilingual_examples.jsonl",
-            "--source",
-            "data/raw/indoone_phone_contacts_examples.jsonl",
-        ]
+                    ]
     )
     _run([sys.executable, "scripts/validate_training_manifest.py"])
     _run([sys.executable, "scripts/validate_final_training_recipe.py"])
@@ -431,8 +429,6 @@ def run_self_training(
                 "data/processed/generated_multilingual_examples.jsonl",
                 "--validation-instructions",
                 "data/processed/instructions_validation.jsonl",
-                "--capability-instructions",
-                "data/raw/indoone_phone_contacts_examples.jsonl",
                 "--steps",
                 str(steps),
                 "--batch-size",

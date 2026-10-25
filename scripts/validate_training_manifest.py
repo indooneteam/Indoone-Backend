@@ -9,7 +9,6 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.ai.training.train import (
-    CAPABILITY_INSTRUCTION_WEIGHT,
     CURATED_INSTRUCTION_WEIGHT,
     DEFAULT_BATCH_SIZE,
     DEFAULT_CHECKPOINT_INTERVAL,
@@ -86,8 +85,8 @@ def main() -> int:
     if not isinstance(instruction_mix_ratio, (int, float)) or not 0.0 < float(instruction_mix_ratio) <= 1.0:
         raise SystemExit("training default instruction_mix_ratio must be in (0, 1]")
     sampling = defaults.get("instruction_sampling")
-    if not isinstance(sampling, dict) or set(sampling) != {"curated", "generated_multilingual", "capability"}:
-        raise SystemExit("training default instruction_sampling must define curated, generated_multilingual, and capability")
+    if not isinstance(sampling, dict) or set(sampling) != {"curated", "generated_multilingual"}:
+        raise SystemExit("training default instruction_sampling must define curated and generated_multilingual")
     if any(not isinstance(value, (int, float)) or value <= 0 for value in sampling.values()):
         raise SystemExit("instruction sampling probabilities must be positive numbers")
     if abs(sum(float(value) for value in sampling.values()) - 1.0) > 1e-9:
@@ -95,7 +94,6 @@ def main() -> int:
     expected_sampling = {
         "curated": CURATED_INSTRUCTION_WEIGHT,
         "generated_multilingual": GENERATED_INSTRUCTION_WEIGHT,
-        "capability": CAPABILITY_INSTRUCTION_WEIGHT,
     }
     if sampling != expected_sampling:
         raise SystemExit("instruction sampling probabilities do not match executable recipe")

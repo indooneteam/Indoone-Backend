@@ -33,9 +33,8 @@ DEFAULT_LEARNING_RATE = 1e-4
 DEFAULT_INSTRUCTION_MIX_RATIO = 0.8
 DEFAULT_WEIGHT_DECAY = 0.01
 DEFAULT_SEED = 42
-CURATED_INSTRUCTION_WEIGHT = 0.90
+CURATED_INSTRUCTION_WEIGHT = 0.95
 GENERATED_INSTRUCTION_WEIGHT = 0.05
-CAPABILITY_INSTRUCTION_WEIGHT = 0.05
 
 
 def _file_fingerprint(path: Path) -> str:
@@ -75,7 +74,6 @@ def _merge_instruction_sets_weighted(
     """
     pool_targets = {
         "generated_multilingual_examples.jsonl": GENERATED_INSTRUCTION_WEIGHT,
-        "indoone_phone_contacts_examples.jsonl": CAPABILITY_INSTRUCTION_WEIGHT,
     }
     default_target = CURATED_INSTRUCTION_WEIGHT
 
@@ -676,7 +674,6 @@ def main() -> None:
     parser.add_argument("--validation", type=Path, default=Path("data/processed/validation.txt"))
     parser.add_argument("--instructions", type=Path, default=Path("data/raw/indoone_instructions.jsonl"))
     parser.add_argument("--multilingual-instructions", type=Path, default=Path("data/raw/indoone_multilingual_examples.jsonl"))
-    parser.add_argument("--capability-instructions", type=Path, default=Path("data/raw/indoone_phone_contacts_examples.jsonl"))
     parser.add_argument("--instruction-validation", type=Path, default=Path("data/processed/instructions_validation.jsonl"))
     parser.add_argument("--output", type=Path, default=Path("models/indoone-small"))
     parser.add_argument("--steps", type=int, default=DEFAULT_TRAINING_STEPS)
@@ -697,7 +694,6 @@ def main() -> None:
         args.learning_rate,
         args.instructions,
         args.multilingual_instructions,
-        args.capability_instructions,
         args.instruction_validation,
         args.instruction_mix_ratio,
     )

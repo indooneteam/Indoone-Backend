@@ -17,7 +17,6 @@ from torch import nn
 from app.ai.model import IndooneTransformer
 from app.ai.tokenizer import BPETokenizer
 from app.ai.training.train import (
-    CAPABILITY_INSTRUCTION_WEIGHT,
     CURATED_INSTRUCTION_WEIGHT,
     GENERATED_INSTRUCTION_WEIGHT,
     _instruction_batchify,
@@ -32,7 +31,6 @@ DEFAULT_MODEL_DIR = Path("models/indoone-small")
 DEFAULT_TRAIN_INSTRUCTIONS = Path("data/processed/curated_instructions.jsonl")
 DEFAULT_GENERATED_INSTRUCTIONS = Path("data/processed/generated_multilingual_examples.jsonl")
 DEFAULT_VALIDATION_INSTRUCTIONS = Path("data/processed/instructions_validation.jsonl")
-DEFAULT_CAPABILITY_INSTRUCTIONS = Path("data/raw/indoone_phone_contacts_examples.jsonl")
 DEFAULT_STEPS = 8000
 DEFAULT_BATCH_SIZE = 16
 DEFAULT_LEARNING_RATE = 3e-5
@@ -46,7 +44,6 @@ def run_sft(
     train_instructions: Path,
     generated_instructions: Path,
     validation_instructions: Path,
-    capability_instructions: Path,
     steps: int,
     batch_size: int,
     learning_rate: float,
@@ -100,19 +97,13 @@ def run_sft(
         if generated_instructions.is_file()
         else []
     )
-    capability_examples = (
-        load_examples(capability_instructions)
-        if capability_instructions.is_file()
-        else []
-    )
-    source_examples = [curated_examples, generated_examples, capability_examples]
+    source_examples = [curated_examples, generated_examples]
     source_weights = [
         CURATED_INSTRUCTION_WEIGHT,
         GENERATED_INSTRUCTION_WEIGHT,
-        CAPABILITY_INSTRUCTION_WEIGHT,
     ]
     train_examples, _fingerprints, sampling_weights, sampling_policy = _merge_instruction_sets_weighted(
-        [train_instructions, generated_instructions, capability_instructions]
+        [train_instructions, generated_instructions]
     )
     if not train_examples:
         raise ValueError("SFT training pool is empty")
@@ -264,7 +255,6 @@ def main() -> None:
     parser.add_argument("--train-instructions", type=Path, default=DEFAULT_TRAIN_INSTRUCTIONS)
     parser.add_argument("--generated-instructions", type=Path, default=DEFAULT_GENERATED_INSTRUCTIONS)
     parser.add_argument("--validation-instructions", type=Path, default=DEFAULT_VALIDATION_INSTRUCTIONS)
-    parser.add_argument("--capability-instructions", type=Path, default=DEFAULT_CAPABILITY_INSTRUCTIONS)
     parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--learning-rate", type=float, default=DEFAULT_LEARNING_RATE)
@@ -279,7 +269,6 @@ def main() -> None:
                 train_instructions=args.train_instructions,
                 generated_instructions=args.generated_instructions,
                 validation_instructions=args.validation_instructions,
-                capability_instructions=args.capability_instructions,
                 steps=args.steps,
                 batch_size=args.batch_size,
                 learning_rate=args.learning_rate,

@@ -120,7 +120,7 @@ async def test_write_tool_token_is_passed_into_the_payload(monkeypatch) -> None:
         "app.ai.execution.approval.authorize_tool",
         lambda *args, **kwargs: SimpleNamespace(allowed=True, reason=""),
     )
-    token = issue_approval_token("u1", "github_update_repository_file")
+    token = issue_approval_token("u1", "github_delete_branch")
     seen = {}
 
     async def fake_run_tool_async(name, payload, **kwargs):
@@ -132,8 +132,8 @@ async def test_write_tool_token_is_passed_into_the_payload(monkeypatch) -> None:
     result = await tool_loop.dispatch_tool(
         "u1",
         "c1",
-        "github_update_repository_file",
-        {"repository": "o/r", "path": "a.py", "content": "x", "message": "m"},
+        "github_delete_branch",
+        {"repository": "o/r", "branch": "x", "message": "m"},
         approval_tokens=[token],
     )
     assert result["ok"] is True

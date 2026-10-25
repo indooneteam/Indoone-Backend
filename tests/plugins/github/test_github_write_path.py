@@ -27,7 +27,7 @@ def _env(tmp_path, monkeypatch):
 
 
 def test_the_executor_holds_a_write_with_no_token(monkeypatch):
-    """This is the path the app uses. It must hold, not refuse."""
+    """This is the path the app uses for an irreversible write. It must hold, not refuse."""
     ran = {"value": False}
 
     async def _never(*args, **kwargs):
@@ -42,7 +42,7 @@ def test_the_executor_holds_a_write_with_no_token(monkeypatch):
         "repository": "teaminmail/IndoMail",
         "branch": "terminal",
     })
-    answer = asyncio.run(ai_tools._github_create_branch(payload))
+    answer = asyncio.run(ai_tools._github_delete_branch(payload))
 
     assert ran["value"] is False
     parsed = json.loads(answer)
@@ -65,7 +65,7 @@ def test_a_held_write_runs_when_the_user_confirms(monkeypatch):
     monkeypatch.setattr(chat_tools, "run_tool_async", _record)
     monkeypatch.setattr(ai_tools, "_run_async", _record)
 
-    asyncio.run(ai_tools._github_create_branch(json.dumps({
+    asyncio.run(ai_tools._github_delete_branch(json.dumps({
         "user_id": "u-2",
         "conversation_id": "c-2",
         "repository": "teaminmail/IndoMail",
@@ -82,7 +82,7 @@ def test_a_held_write_runs_when_the_user_confirms(monkeypatch):
     answer = asyncio.run(_execute_through_handler())
 
     assert calls, "the held write must run after the confirmation"
-    assert "terminal" in answer
+    assert "terminal" in answer or "delete" in answer.casefold()
     assert store.get_pending_github_action("u-2", "c-2") is None, "it must be cleared"
 
 
@@ -91,7 +91,7 @@ def test_the_held_arguments_carry_the_token_not_the_user_id(monkeypatch):
         raise AssertionError("must not run")
 
     monkeypatch.setattr(ai_tools, "_run_async", _never)
-    asyncio.run(ai_tools._github_create_branch(json.dumps({
+    asyncio.run(ai_tools._github_delete_branch(json.dumps({
         "user_id": "u-3", "conversation_id": "c-3", "repository": "o/r", "branch": "x",
     })))
 
@@ -99,7 +99,7 @@ def test_the_held_arguments_carry_the_token_not_the_user_id(monkeypatch):
     assert pending is not None
     from app.capabilities.connectors.integrations import _fernet
     stored = json.loads(_fernet().decrypt(bytes(pending["encrypted_payload"])).decode("utf-8"))
-    assert stored["tool"] == "github_create_branch"
+    assert stored["tool"] == "github_delete_branch"
     assert stored["token"], "the token must be held with it"
     assert "user_id" not in stored["arguments"], "the user id is not part of the stored action"
 
@@ -114,7 +114,7 @@ def test_a_missing_secret_is_reported_not_raised(tmp_path, monkeypatch):
         raise AssertionError("must not run")
 
     monkeypatch.setattr(ai_tools, "_run_async", _never)
-    answer = asyncio.run(ai_tools._github_create_branch(json.dumps({
+    answer = asyncio.run(ai_tools._github_delete_branch(json.dumps({
         "user_id": "u-4", "conversation_id": "c-4", "repository": "o/r", "branch": "x",
     })))
     assert json.loads(answer)["code"] == "APPROVAL_UNAVAILABLE"

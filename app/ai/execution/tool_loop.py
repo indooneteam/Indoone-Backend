@@ -54,10 +54,7 @@ _EMAIL_WRITE_TOOLS = frozenset(
 # approved call must carry it or the executor re-asks for approval it already has.
 _TOKEN_IN_PAYLOAD = frozenset(
     {
-        "github_update_repository_file",
-        "github_create_branch",
         "github_delete_branch",
-        "github_create_pull_request",
         "github_merge_pull_request",
     }
 )
@@ -68,9 +65,7 @@ _TOKEN_IN_PAYLOAD = frozenset(
 # unapproved.
 _HOLDING_WRITE_TOOLS = frozenset(
     {
-        "github_create_branch",
         "github_delete_branch",
-        "github_create_pull_request",
         "github_merge_pull_request",
     }
 )

@@ -73,13 +73,14 @@ def test_an_explicit_request_runs_without_a_confirmation(monkeypatch):
 
 
 def test_a_proposal_without_an_explicit_request_is_still_held(monkeypatch):
+    """Deleting a branch is held: it takes its commits with it and cannot be undone."""
     async def _must_not_run(**kwargs):
         raise AssertionError("the write must not run")
 
-    monkeypatch.setattr(ai_tools, "write_github_create_branch", _must_not_run)
+    monkeypatch.setattr(ai_tools, "write_github_delete_branch", _must_not_run)
 
     result = asyncio.run(tool_loop.dispatch_tool(
-        "u-2", "c-2", "github_create_branch",
+        "u-2", "c-2", "github_delete_branch",
         {"repository": "o/r", "branch": "test"},
         original_message="what branches do I have",
     ))

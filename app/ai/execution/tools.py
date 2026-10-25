@@ -577,7 +577,16 @@ def _explicit_write_intent(tool: str, message: str) -> bool:
 
 
 def _write_approved(data: dict[str, object], user_id: str, tool: str) -> bool:
-    """A write runs with a server-issued token, or when the user asked for it."""
+    """Whether this write may run now.
+
+    Three ways, in order: the tool's own policy says it runs when asked (creating a
+    branch, opening a pull request, writing a file), a server-issued token arrived, or
+    the user's own message asked for it. Deleting a branch and merging a pull request
+    are not in the first group - they still need the token.
+    """
+    spec = get_tool_spec(tool)
+    if spec is not None and not spec.requires_approval:
+        return True
     if _approved_write(data, user_id, tool):
         return True
     return _explicit_write_intent(tool, str(data.get("original_message") or ""))

@@ -187,10 +187,16 @@ def test_the_write_tools_are_declared_and_offered():
     assert not (read_names & write_names)
 
 
-def test_the_write_tools_are_marked_as_needing_approval():
+def test_only_the_irreversible_writes_need_approval():
+    """Creating and updating run when asked; deleting and merging are held.
+
+    A branch can be created again in a second, and a file can be written again. A
+    deleted branch takes its commits with it and a merged pull request cannot be
+    un-merged, so those two still ask.
+    """
     from app.ai.execution.tool_registry import TOOL_SPECS
 
-    for spec in TOOL_SPECS:
-        if spec.name in {"github_create_branch", "github_delete_branch",
-                         "github_create_pull_request", "github_merge_pull_request"}:
-            assert spec.requires_approval is True, spec.name
+    held = {spec.name for spec in TOOL_SPECS if spec.requires_approval}
+    assert {"github_delete_branch", "github_merge_pull_request"} <= held
+    for name in ("github_create_branch", "github_create_pull_request", "github_update_repository_file"):
+        assert name not in held, name

@@ -1,18 +1,26 @@
+"""Conversation history, on whichever database INDOONE_DATABASE_URL names.
+
+SQLite is the default and its file is unchanged. The store talks to the database
+through ``app.storage.database``, so the same code runs on Postgres, and the three
+places that were written against SQLite specifically - the pragmas, the auto
+incrementing key and the schema introspection - now ask the seam instead.
+"""
+
 from __future__ import annotations
 
 import os
-import sqlite3
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
+
+from app.storage import database
 
 DEFAULT_DB_PATH = Path(os.getenv("INDOONE_CONVERSATION_DB", "data/indoone_conversations.sqlite3"))
 DEFAULT_MAX_MESSAGES: int | None = None
-SQLITE_TIMEOUT_SECONDS = 30.0
-SQLITE_BUSY_TIMEOUT_MS = 30_000
 
 
 class ConversationStore:
-    """Persistent SQLite conversation history with strict user ownership."""
+    """Persistent conversation history with strict user ownership."""
 
     def __init__(self, db_path: Path = DEFAULT_DB_PATH, max_messages: int | None = DEFAULT_MAX_MESSAGES) -> None:
         if max_messages is not None and max_messages <= 0:
@@ -21,19 +29,23 @@ class ConversationStore:
         self.max_messages = max_messages
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
+    def _connect(self) -> database.Connection:
+        """Open the conversation store.
+
+        The configured database URL wins; otherwise the file this store has always
+        used is opened.
+        """
+
+        if database.is_postgres():
+            return database.connect()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.db_path, timeout=SQLITE_TIMEOUT_SECONDS)
-        connection.row_factory = sqlite3.Row
-        connection.execute(f"PRAGMA busy_timeout={SQLITE_BUSY_TIMEOUT_MS}")
-        connection.execute("PRAGMA foreign_keys=ON")
-        return connection
+        return database.connect(self.db_path)
 
     @staticmethod
-    def _create_messages_table(connection: sqlite3.Connection, table_name: str = "messages") -> None:
+    def _create_messages_table(connection: database.Connection, table_name: str = "messages") -> None:
         connection.execute(
             f"""CREATE TABLE IF NOT EXISTS {table_name} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id {database.identity_column()},
                 conversation_id TEXT NOT NULL,
                 role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
                 content TEXT NOT NULL,
@@ -43,22 +55,20 @@ class ConversationStore:
         )
 
     @staticmethod
-    def _ensure_message_foreign_key(connection: sqlite3.Connection) -> None:
-        foreign_keys = connection.execute("PRAGMA foreign_key_list(messages)").fetchall()
-        if foreign_keys:
+    def _ensure_message_foreign_key(connection: database.Connection) -> None:
+        if connection.foreign_key_columns("messages"):
             return
 
-        orphan_count = int(
-            connection.execute(
-                """SELECT COUNT(*)
-                   FROM messages AS messages
-                   LEFT JOIN conversations AS conversations
-                     ON conversations.conversation_id = messages.conversation_id
-                  WHERE conversations.conversation_id IS NULL"""
-            ).fetchone()[0]
-        )
+        orphan_row = connection.execute(
+            """SELECT COUNT(*) AS orphan_count
+               FROM messages AS messages
+               LEFT JOIN conversations AS conversations
+                 ON conversations.conversation_id = messages.conversation_id
+              WHERE conversations.conversation_id IS NULL"""
+        ).fetchone()
+        orphan_count = int(orphan_row["orphan_count"] if orphan_row is not None else 0)
         if orphan_count:
-            raise sqlite3.IntegrityError(
+            raise database.IntegrityError(
                 "cannot enable message foreign key with orphaned messages"
             )
 
@@ -73,15 +83,17 @@ class ConversationStore:
         connection.execute("ALTER TABLE messages_new RENAME TO messages")
 
     @staticmethod
-    def _validate_integrity(connection: sqlite3.Connection) -> None:
-        violations = connection.execute("PRAGMA foreign_key_check").fetchall()
-        if violations:
-            raise sqlite3.IntegrityError("database foreign key integrity check failed")
+    def _validate_integrity(connection: database.Connection) -> None:
+        if connection.integrity_problems():
+            raise database.IntegrityError("database foreign key integrity check failed")
 
     def _initialize(self) -> None:
         with self._connect() as connection:
-            connection.execute("PRAGMA journal_mode=WAL")
-            connection.execute("PRAGMA synchronous=NORMAL")
+            if not database.is_postgres():
+                # Write-ahead logging and a relaxed sync are SQLite settings. Postgres
+                # has its own durability model and needs neither.
+                connection.execute("PRAGMA journal_mode=WAL")
+                connection.execute("PRAGMA synchronous=NORMAL")
             connection.execute(
                 """CREATE TABLE IF NOT EXISTS conversations (
                     conversation_id TEXT PRIMARY KEY,
@@ -92,17 +104,13 @@ class ConversationStore:
                     closed_at TEXT
                 )"""
             )
-            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(conversations)").fetchall()}
-            if "user_id" not in columns:
+            if "user_id" not in connection.table_columns("conversations"):
                 connection.execute("ALTER TABLE conversations ADD COLUMN user_id TEXT")
 
-            messages_exists = connection.execute(
-                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='messages'"
-            ).fetchone()
-            if messages_exists is None:
-                self._create_messages_table(connection)
-            else:
+            if connection.table_exists("messages"):
                 self._ensure_message_foreign_key(connection)
+            else:
+                self._create_messages_table(connection)
 
             connection.execute("CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id ON messages(conversation_id, id)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC)")
@@ -121,7 +129,7 @@ class ConversationStore:
         return normalized
 
     @classmethod
-    def _assert_owner(cls, row: sqlite3.Row | None, user_id: str | None) -> str:
+    def _assert_owner(cls, row: Any | None, user_id: str | None) -> str:
         requested = cls._require_user_id(user_id)
         if row is None:
             raise ValueError("conversation not found")
@@ -145,15 +153,26 @@ class ConversationStore:
             if not content.strip():
                 raise ValueError("message content cannot be empty")
         with self._connect() as connection:
-            connection.execute("INSERT OR IGNORE INTO conversations(conversation_id, user_id) VALUES (?, ?)", (conversation_id, normalized_user_id))
+            connection.execute(
+                "INSERT INTO conversations(conversation_id, user_id) VALUES (?, ?) "
+                "ON CONFLICT(conversation_id) DO NOTHING",
+                (conversation_id, normalized_user_id),
+            )
             current = connection.execute("SELECT user_id, status FROM conversations WHERE conversation_id = ?", (conversation_id,)).fetchone()
             self._assert_owner(current, normalized_user_id)
             if current["status"] == "closed":
                 raise ValueError("conversation is closed")
-            connection.executemany("INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)", [(conversation_id, role, content.strip()) for role, content in rows])
+            connection.executemany(
+                "INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)",
+                [(conversation_id, role, content.strip()) for role, content in rows],
+            )
             connection.execute("UPDATE conversations SET updated_at=CURRENT_TIMESTAMP WHERE conversation_id=?", (conversation_id,))
             if self.max_messages is not None:
-                count = int(connection.execute("SELECT COUNT(*) FROM messages WHERE conversation_id = ?", (conversation_id,)).fetchone()[0])
+                count_row = connection.execute(
+                    "SELECT COUNT(*) AS message_count FROM messages WHERE conversation_id = ?",
+                    (conversation_id,),
+                ).fetchone()
+                count = int(count_row["message_count"] if count_row is not None else 0)
                 if count >= self.max_messages:
                     connection.execute("UPDATE conversations SET status='closed', closed_at=CURRENT_TIMESTAMP WHERE conversation_id=?", (conversation_id,))
 
@@ -182,7 +201,11 @@ class ConversationStore:
         if limit <= 0 or limit > 100:
             raise ValueError("limit must be between 1 and 100")
         with self._connect() as connection:
-            rows = connection.execute("SELECT conversation_id, status, created_at, updated_at, closed_at FROM conversations WHERE user_id=? ORDER BY updated_at DESC LIMIT ?", (owner, limit)).fetchall()
+            rows = connection.execute(
+                "SELECT conversation_id, status, created_at, updated_at, closed_at FROM conversations "
+                "WHERE user_id=? ORDER BY updated_at DESC LIMIT ?",
+                (owner, limit),
+            ).fetchall()
         return [dict(row) for row in rows]
 
     def message_count(self, conversation_id: str, user_id: str | None = None) -> int:
@@ -191,8 +214,11 @@ class ConversationStore:
         with self._connect() as connection:
             owner = connection.execute("SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)).fetchone()
             self._assert_owner(owner, user_id)
-            row = connection.execute("SELECT COUNT(*) AS count FROM messages WHERE conversation_id = ?", (conversation_id,)).fetchone()
-        return int(row["count"] if row is not None else 0)
+            row = connection.execute(
+                "SELECT COUNT(*) AS message_count FROM messages WHERE conversation_id = ?",
+                (conversation_id,),
+            ).fetchone()
+        return int(row["message_count"] if row is not None else 0)
 
     def is_closed(self, conversation_id: str, user_id: str | None = None) -> bool:
         if not conversation_id:
@@ -223,17 +249,24 @@ class ConversationStore:
             connection.execute("DELETE FROM conversations WHERE conversation_id = ?", (conversation_id,))
 
     def purge_expired_closed(self, max_age_days: int = 7) -> int:
-        """Delete conversations closed at least max_age_days ago."""
+        """Delete conversations closed at least max_age_days ago.
+
+        The cutoff is computed here rather than by a database function: both databases
+        write created_at and closed_at as text starting YYYY-MM-DD HH:MM:SS, so a
+        cutoff in that same shape compares correctly on either.
+        """
+
         if max_age_days <= 0:
             raise ValueError("max_age_days must be greater than zero")
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).strftime("%Y-%m-%d %H:%M:%S")
         with self._connect() as connection:
             rows = connection.execute(
                 """SELECT conversation_id
                    FROM conversations
                   WHERE status='closed'
                     AND closed_at IS NOT NULL
-                    AND closed_at <= datetime('now', ?)""",
-                (f"-{max_age_days} days",),
+                    AND closed_at <= ?""",
+                (cutoff,),
             ).fetchall()
             if not rows:
                 return 0

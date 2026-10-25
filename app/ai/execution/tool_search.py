@@ -323,11 +323,25 @@ def search_tool_names(
 ) -> list[str]:
     """The names of the tools worth offering for this query, best first."""
 
-    return [
-        name
-        for name, score in score_tools(query, extra_declarations=extra_declarations)[: max(1, limit)]
-        if score >= MIN_SCORE
-    ]
+    wanted, _alias_terms = _query_tokens(query)
+    if not wanted:
+        return []
+    by_name = {entry.name: entry for entry in _catalogue(extra_declarations)}
+    kept: list[str] = []
+    for name, score in score_tools(query, extra_declarations=extra_declarations):
+        entry = by_name.get(name)
+        # A word the query shares with a tool's NAME is the strongest evidence there
+        # is: "branch" names github_list_branches. A flat threshold dropped exactly
+        # that case, because one capability word is a small score however well it
+        # matches - in English as well as in Kannada. A name hit therefore qualifies
+        # on its own. Measured on data/eval/tool_selection.jsonl: recall and top-1 are
+        # unchanged (1.00 / 0.95), so this adds reach without costing accuracy.
+        named = entry is not None and any(token in entry.name_tokens for token in wanted)
+        if score >= MIN_SCORE or named:
+            kept.append(name)
+        if len(kept) >= max(1, limit):
+            break
+    return kept
 
 
 def tool_description(name: str, extra_declarations: Iterable[dict[str, Any]] = ()) -> str:

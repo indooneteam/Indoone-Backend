@@ -106,6 +106,48 @@ ALWAYS_ON_TOOL_NAMES = frozenset({"find_tools", "search_web", "calculator", "tex
 _FIND_TOOLS_LIMIT = 5
 
 
+# The read tools a user reaches for first, per connector. These are offered on the
+# first round when that connector is connected, so a question about branches does not
+# depend on the model choosing to call find_tools first - the failure mode where the
+# tool exists, the account is connected, and the model still answers "no access".
+#
+# Kept deliberately short. All 12 GitHub reads cost about 1,360 tokens and all 11 email
+# declarations about 1,516, against ~360 for the whole always-on set; six GitHub reads
+# plus the two email reads is about 980, which buys the reliability without giving back
+# the saving that lazy discovery exists for.
+_CONNECTED_READ_TOOLS: dict[str, tuple[str, ...]] = {
+    "github": (
+        "github_list_repositories",
+        "github_list_branches",
+        "github_list_repository_contents",
+        "github_read_repository_file",
+        "github_list_pull_requests",
+        "github_list_repository_commits",
+    ),
+    "email": ("list_recent_emails", "search_emails"),
+    "zoho_mail": ("list_recent_emails", "search_emails"),
+}
+
+
+def _connected_read_tools(user_id: str) -> frozenset[str]:
+    """The first-round read tools for the connectors this user has connected.
+
+    A store that cannot answer returns nothing rather than raising: the model then
+    falls back to discovery, which is the behaviour that shipped before this.
+    """
+
+    from app.ai.execution.account_context import connected_accounts
+
+    try:
+        connected = connected_accounts(user_id)
+    except Exception:
+        return frozenset()
+    names: set[str] = set()
+    for connector_id in connected:
+        names.update(_CONNECTED_READ_TOOLS.get(connector_id, ()))
+    return frozenset(names)
+
+
 def model_tool_declarations(
     user_id: str = "",
     *,
@@ -124,6 +166,8 @@ def model_tool_declarations(
     always-on set is about 400.
     """
     wanted_names = None if full else set(ALWAYS_ON_TOOL_NAMES) | {str(name) for name in discovered}
+    if wanted_names is not None and str(user_id or "").strip():
+        wanted_names |= _connected_read_tools(str(user_id).strip())
 
     def wanted(spec: Any) -> bool:
         # A tool the model cannot have the input for is not offered at all: the

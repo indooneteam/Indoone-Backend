@@ -11,6 +11,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.ai.execution.confirmation import CANCEL, CONFIRM, classify_reply, waiting_prompt
 from app.ai.gateway.ai_rules import CONFIRM_OR_CANCEL
 from app.ai.execution.approval import issue_approval_token
 from app.ai.execution.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
@@ -729,24 +730,6 @@ _WRITE_INTENT = {
     "github_merge_pull_request": "merge the pull request",
 }
 
-# A confirmation is short and leads with the word: "ok", "sari", "haudu", or the
-# whole message. "ok create maadu" confirms - it does not have to be the only word,
-# because that is how people actually answer.
-_CONFIRM_RE = re.compile(
-    r"^\s*(?:ok(?:ay)?|k|yes|yep|yeah|ya|sure|confirm(?:ed)?|approve[d]?|go\s*ahead|"
-    r"do\s*it|proceed|"
-    r"haan|ha|sari|sare|hudu|howdu|aaytu|aytu|"
-    r"ಮಾಡು|ಮಾಡಿ|ಸರಿ|ಹೌದು|ಆಯ್ತು|ಆಗಲಿ|ಖಚಿತ)\b",
-    re.IGNORECASE,
-)
-_CANCEL_RE = re.compile(
-    r"^\s*(?:no|nope|cancel|stop|don'?t|do\s*not|abort|never\s*mind|"
-    r"beda|beeda|ille|illa|"
-    r"ಬೇಡ|ಇಲ್ಲ|ನಿಲ್ಲಿಸು|ರದ್ದು)\b",
-    re.IGNORECASE,
-)
-
-
 def _pending_payload(payload: dict[str, Any]) -> bytes:
     """Encrypt a pending write, so a stored token is never sitting in the clear."""
     from app.capabilities.connectors.integrations import _fernet
@@ -789,10 +772,11 @@ async def handle_github_chat_with_tools(
     conversation_key = str(conversation_id or "") or _PENDING_CONVERSATION
     pending = get_pending_github_action(user, conversation_key)
     if pending is not None:
-        if _CANCEL_RE.search(message or ""):
+        decision = classify_reply(message)
+        if decision == CANCEL:
             delete_pending_github_action(user, conversation_key)
             return "Understood - cancelled. Nothing was changed in your GitHub repository."
-        if _CONFIRM_RE.search(message or ""):
+        if decision == CONFIRM:
             try:
                 stored = _read_pending_payload(pending)
             except (ValueError, RuntimeError):
@@ -807,10 +791,13 @@ async def handle_github_chat_with_tools(
                 user, tool, stored_arguments, conversation_id=conversation_key, message=message
             )
             return _format_github_result(tool, result)
-        return (
-            "You have a GitHub change waiting for your decision: reply CONFIRM to go "
-            "ahead, or CANCEL to stop it. Nothing has been changed yet."
-        )
+        # Anything else - including "did it happen?" - is answered from the record, not by
+        # the model. The held change stays held, so the answer can be acted on.
+        try:
+            stored_action = str(_read_pending_payload(pending).get("tool") or "the change")
+        except (ValueError, RuntimeError):
+            stored_action = "the change"
+        return waiting_prompt(_WRITE_INTENT.get(stored_action, "this GitHub change"))
 
     request = _github_action(message, history)
     if request is None:

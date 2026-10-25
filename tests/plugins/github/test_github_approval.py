@@ -121,7 +121,10 @@ def test_anything_else_reminds_the_user_and_holds_it(monkeypatch):
         "user-4", "what is the weather", history=None, conversation_id="c-4",
     ))
 
-    assert "CONFIRM" in answer or "confirm" in answer
+    # The prompt names the state, offers a numbered choice so the answer does not
+    # depend on knowing a word, and says plainly that nothing has happened yet.
+    assert "still waiting" in answer
+    assert "Reply 1" in answer and "2" in answer
     assert store.get_pending_github_action("user-4", "c-4") is not None, "it must still be waiting"
 
 

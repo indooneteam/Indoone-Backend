@@ -29,6 +29,7 @@ from app.capabilities.media.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, 
 from app.web_research.grounding import split_grounded_sources
 from app.api.security.dependencies import current_user_id
 from app.ai.gateway.gemini_service import ModelBusyError
+from app.ai.execution.confirmation import classify_reply
 from app.ai.execution.tool_loop import run_tool_loop
 from app.ai.agents.agent_async import execute_agent_async
 from app.capabilities.connectors.store import (
@@ -40,8 +41,6 @@ from datetime import datetime, timedelta, timezone
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 from app.plugins.email.email_tools import (
-    CANCEL_RE,
-    CONFIRM_RE,
     handle_email_chat,
     handle_email_chat_with_tools,
 )
@@ -362,8 +361,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                     action_type = str(pending.get("action_type") or "")
                     if (
                         action_type == "await_recipient"
-                        or CONFIRM_RE.fullmatch(body.message)
-                        or CANCEL_RE.fullmatch(body.message)
+                        or classify_reply(body.message) in {"confirm", "cancel"}
                     ):
                         tool_reply = await handle_email_chat(user_id, conversation_id, body.message)
                     else:

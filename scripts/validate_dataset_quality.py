@@ -9,7 +9,6 @@ DEFAULT_SOURCES = (
     Path("data/raw/indoone_instructions.jsonl"),
     Path("data/raw/core_instruction_seed.jsonl"),
     Path("data/raw/indoone_multilingual_examples.jsonl"),
-    Path("data/raw/indoone_phone_contacts_examples.jsonl"),
 )
 
 REQUIRED_FIELDS = ("instruction", "response", "category")

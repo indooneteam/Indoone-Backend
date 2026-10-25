@@ -409,7 +409,7 @@ async def generate_gemini_function_call_reply(
     message: str,
     *,
     history: list[tuple[str, str]] | None,
-    tool_declarations: list[dict[str, Any]],
+    tool_declarations: list[dict[str, Any]] | Callable[[], list[dict[str, Any]]],
     execute_tool: Callable[[str, dict[str, Any]], Awaitable[dict[str, Any]]],
     extra_system_instruction: str,
     max_tool_rounds: int = 4,
@@ -440,11 +440,20 @@ async def generate_gemini_function_call_reply(
         + extra_system_instruction.strip()
     )
     contents = _build_contents(cleaned, history, "")
-    declarations = [item for item in tool_declarations if isinstance(item, dict) and item.get("name")]
-    if not declarations:
-        raise ValueError("no valid function declarations were supplied")
-    tool_names = {str(item["name"]) for item in declarations}
-    tools = [{"functionDeclarations": declarations}]
+    def declarations() -> list[dict[str, Any]]:
+        """The declarations to offer, asked for once per round.
+
+        A callable lets the caller grow the set while the loop runs - a tool the
+        model discovered with find_tools becomes callable on the next round, without
+        re-sending the whole catalogue.
+        """
+        source = tool_declarations() if callable(tool_declarations) else tool_declarations
+        valid = [item for item in source if isinstance(item, dict) and item.get("name")]
+        if not valid:
+            raise ValueError("no valid function declarations were supplied")
+        return valid
+
+    declarations()
     headers = {
         "x-goog-api-key": api_key,
         "Content-Type": "application/json",
@@ -453,6 +462,7 @@ async def generate_gemini_function_call_reply(
     max_rounds = max(1, min(int(max_tool_rounds), 6))
     max_total_calls = 8
     executed_calls = 0
+    tool_names: set[str] = set()
 
     async with httpx.AsyncClient(timeout=timeout) as client:
         for round_index in range(max_rounds + 1):
@@ -463,7 +473,9 @@ async def generate_gemini_function_call_reply(
             }
             # The final turn has no tools, stopping recursive tool execution.
             if round_index < max_rounds:
-                payload["tools"] = tools
+                offered = declarations()
+                tool_names = {str(item["name"]) for item in offered}
+                payload["tools"] = [{"functionDeclarations": offered}]
                 if round_index == 0:
                     # "ANY" forces a tool call on the first turn (used when the
                     # request must be grounded in live data). "AUTO" lets the

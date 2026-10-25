@@ -29,7 +29,7 @@ from app.capabilities.media.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, 
 from app.web_research.grounding import split_grounded_sources
 from app.api.security.dependencies import current_user_id
 from app.ai.gateway.gemini_service import ModelBusyError
-from app.ai.execution.tool_loop import needs_tools, run_tool_loop
+from app.ai.execution.tool_loop import run_tool_loop
 from app.ai.agents.agent_async import execute_agent_async
 from app.capabilities.connectors.store import (
     get_pending_email_action,
@@ -340,10 +340,11 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                     approval_tokens=tuple(body.approval_tokens or ()),
                     conversation_id=conversation_id,
                 )
-            # No needs_tools gate otherwise: that is a cost heuristic for the model
-            # call - a short greeting should not pay for the whole tool catalogue. The
-            # agent is deterministic and plans nothing for a greeting, so it costs
-            # almost nothing and catches the short requests the heuristic would miss.
+            # No gate on whether to offer tools: the model is given four small
+            # declarations and find_tools, so an ordinary message costs a few hundred
+            # tokens rather than the whole catalogue. A message that needs nothing is
+            # answered in one call with no tool called, and the agent above still runs
+            # first for the short requests a model would have to be told about.
             if tool_reply is None and not email_owns_this:
                 agent_history = await _agent_history_for_chat(
                     user_id,
@@ -369,9 +370,10 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                         tool_reply = (
                             EMAIL_PENDING_ACTION
                         )
-                if tool_reply is None and not agent_ran and needs_tools(body.message):
-                    # One loop, every tool: the model chooses whether and which to call.
-                    # This is the fallback for when the agent planned nothing.
+                if tool_reply is None and not agent_ran:
+                    # One loop, every tool: the model chooses whether and which to call,
+                    # and asks for anything else with find_tools. This is the fallback
+                    # for when the agent planned nothing.
                     try:
                         tool_reply = await run_tool_loop(
                             user_id,

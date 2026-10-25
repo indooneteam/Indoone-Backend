@@ -414,7 +414,9 @@ async def _execute_github_tool(
             "path": path,
             "content": content,
             "message": str(arguments.get("message") or "Update " + path)[:200],
-            "expected_sha": str(arguments.get("expected_sha") or ""),
+            # The executor reads `sha`; `expected_sha` was the wrong key, so the
+            # blob sha never arrived and every update was refused. Accept both.
+            "sha": str(arguments.get("sha") or arguments.get("expected_sha") or ""),
             "branch": str(arguments.get("branch") or ""),
             "create": bool(arguments.get("create", False)),
         })

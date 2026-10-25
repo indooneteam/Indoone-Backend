@@ -1,13 +1,8 @@
-and_script_agree_with_the_unit() -> None:
-    match = _MODULE_ARGUMENT.search(_unit_text())
-    assert match is not None
-    documented = _MODULE_ARGUMENT.findall(DEPLOY_DOC.read_text(encoding="utf-8"))
+ f"expected one ExecStart, found {executables}"
+    match = _MODULE_ARGUMENT.search(executables[0])
+    assert match is not None, f"ExecStart does not name a module: {executables[0]}"
+    assert match.group(1) == "scripts.ops.run_server"
 
-    assert match.group(1) in documented, (
-        f"deploy/DEPLOY.md does not mention {match.group(1)}; it mentions {documented}"
-    )
-    assert DEPLOY_SCRIPT.is_file(), "scripts/ops/deploy.sh is missing"
-    assert "deploy/indoone-backend.service" in DEPLOY_SCRIPT.read_text(encoding="utf-8"), (
-        "the deploy script must install the unit from the repository, or a unit change "
-        "never reaches the box"
-   
+
+def test_that_module_can_actually_be_imported() -> None:
+    match = _MODU

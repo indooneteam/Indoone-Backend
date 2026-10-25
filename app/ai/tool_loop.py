@@ -206,6 +206,10 @@ def model_tool_declarations(user_id: str = "") -> list[dict[str, Any]]:
     def wanted(spec: Any) -> bool:
         if "gmail" in spec.categories:
             return False
+        # A tool the model cannot have the input for is not offered at all: the
+        # contact tools need a client-supplied snapshot the model must never invent.
+        if not getattr(spec, "model_facing", True):
+            return False
         connector_id = getattr(spec, "connector_id", None)
         if not connector_id or not normalized_user:
             return True
@@ -295,6 +299,7 @@ async def dispatch_tool(
     # The GitHub writes hold the proposal themselves (and store it, so the user's
     # CONFIRM can replay it), so they are not refused here; every other
     # approval-required tool is refused until a valid token is presented.
+    approval_granted = False
     if spec.requires_approval and name not in _HOLDING_WRITE_TOOLS:
         decision = decide_tool(name, approval_tokens=approval_tokens, user_id=user_id)
         if not decision.allowed:
@@ -307,8 +312,15 @@ async def dispatch_tool(
                     "confirm. Do not claim the action happened."
                 ),
             }
+        approval_granted = True
 
     payload_arguments = dict(arguments)
+    # The model never asserts that a write is approved; the backend does, and only
+    # when the decision above allowed it. A write executor reads this flag, so it
+    # refuses on its own instead of trusting whichever caller reached it.
+    payload_arguments.pop("approved", None)
+    if approval_granted:
+        payload_arguments["approved"] = True
     # The authenticated identity is injected by the backend, never by the model.
     if user_id.strip():
         payload_arguments.setdefault("user_id", user_id)

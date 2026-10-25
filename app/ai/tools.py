@@ -5,6 +5,7 @@ import asyncio
 import inspect
 import json
 import operator
+import re
 import threading
 import time
 from dataclasses import dataclass
@@ -1196,6 +1197,32 @@ _WRITE_INTENT = {
 }
 _PENDING_CONVERSATION = "github-pending"
 
+# The wording a user uses when they ask for a write themselves. An explicit
+# request in the user's own message IS the approval - the assistant acts on it
+# instead of asking the user to confirm the thing they just asked for. Only the
+# user's message is read here, never the model's wording.
+_WRITE_REQUEST_PATTERNS = {
+    "github_create_branch": r"\b(?:create|make|add|open|new)\b[^.\n]{0,40}\bbranch\b|\bbranch\b[^.\n]{0,40}\b(?:create|madi|maadu|ಮಾಡು|ಮಾಡಿ)\b",
+    "github_delete_branch": r"\b(?:delete|remove|drop)\b[^.\n]{0,40}\bbranch\b",
+    "github_create_pull_request": r"\b(?:create|open|raise|make|file)\b[^.\n]{0,40}\b(?:pull\s*request|pr)\b",
+    "github_merge_pull_request": r"\bmerge\b[^.\n]{0,40}\b(?:pull\s*request|pr|branch)\b|\b(?:pull\s*request|pr)\b[^.\n]{0,40}\bmerge\b",
+}
+
+
+def _explicit_write_intent(tool: str, message: str) -> bool:
+    """Whether the user's own message asks for this exact write."""
+    pattern = _WRITE_REQUEST_PATTERNS.get(tool)
+    if not pattern or not message.strip():
+        return False
+    return bool(re.search(pattern, message, re.IGNORECASE))
+
+
+def _write_approved(data: dict[str, object], user_id: str, tool: str) -> bool:
+    """A write runs with a server-issued token, or when the user asked for it."""
+    if _approved_write(data, user_id, tool):
+        return True
+    return _explicit_write_intent(tool, str(data.get("original_message") or ""))
+
 
 def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
     """Hold an unapproved write and return the proposal, or None to let it run.
@@ -1205,7 +1232,7 @@ def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
     handler was the earlier mistake: the handler returns before the model runs, so
     a write never got there, nothing was stored, and no token was ever issued.
     """
-    if _approved_write(data, user_id, tool):
+    if _write_approved(data, user_id, tool):
         return None
     try:
         token = issue_approval_token(user_id, tool, ttl_seconds=300)
@@ -1214,7 +1241,7 @@ def _hold_write(data: dict[str, object], user_id: str, tool: str) -> str | None:
 
         stored = {
             key: value for key, value in data.items()
-            if key not in {"user_id", "approval_token", "conversation_id"}
+            if key not in {"user_id", "approval_token", "conversation_id", "original_message"}
         }
         payload = _fernet().encrypt(
             json.dumps({"tool": tool, "arguments": stored, "token": token}, separators=(",", ":")).encode("utf-8")
@@ -1261,7 +1288,7 @@ async def _github_create_branch(payload: str) -> str:
             repository=str(data.get("repository", "")),
             branch=str(data.get("branch", "")),
             from_ref=str(data.get("from_ref", "")),
-            approved=_approved_write(data, user_id, "github_create_branch"),
+            approved=_write_approved(data, user_id, "github_create_branch"),
         ),
         spec.timeout_seconds if spec else 20.0,
     )
@@ -1284,7 +1311,7 @@ async def _github_delete_branch(payload: str) -> str:
             user_id=user_id,
             repository=str(data.get("repository", "")),
             branch=str(data.get("branch", "")),
-            approved=_approved_write(data, user_id, "github_delete_branch"),
+            approved=_write_approved(data, user_id, "github_delete_branch"),
         ),
         spec.timeout_seconds if spec else 20.0,
     )
@@ -1310,7 +1337,7 @@ async def _github_create_pull_request(payload: str) -> str:
             head=str(data.get("head", "")),
             base=str(data.get("base", "main")) or "main",
             body=str(data.get("body", "")),
-            approved=_approved_write(data, user_id, "github_create_pull_request"),
+            approved=_write_approved(data, user_id, "github_create_pull_request"),
         ),
         spec.timeout_seconds if spec else 20.0,
     )
@@ -1337,7 +1364,7 @@ async def _github_merge_pull_request(payload: str) -> str:
             repository=str(data.get("repository", "")),
             number=number,
             method=str(data.get("method", "squash")) or "squash",
-            approved=_approved_write(data, user_id, "github_merge_pull_request"),
+            approved=_write_approved(data, user_id, "github_merge_pull_request"),
         ),
         spec.timeout_seconds if spec else 30.0,
     )

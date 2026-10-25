@@ -327,6 +327,10 @@ async def dispatch_tool(
         # A GitHub write that needs confirmation is stored against the
         # conversation, so the confirmation can find it again.
         payload_arguments.setdefault("conversation_id", conversation_id)
+    # The user's own message decides whether an explicit write request still needs a
+    # confirmation. It is the user's wording, never the model's.
+    if original_message.strip():
+        payload_arguments.setdefault("original_message", original_message)
     if name in _TOKEN_IN_PAYLOAD:
         token = _first_token(approval_tokens)
         if token:

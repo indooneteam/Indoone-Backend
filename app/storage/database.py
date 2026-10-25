@@ -70,12 +70,28 @@ def is_postgres(url: str | None = None) -> bool:
 
 
 def sqlite_path(url: str | None = None) -> Path:
-    """Return the file behind a SQLite URL."""
+    """Return the file behind a SQLite URL.
+
+    The three-slash form names a path relative to the working directory and the
+    four-slash form names an absolute one, which is the convention the URL syntax
+    itself defines:
+
+        sqlite:///data/indoone.db       -> data/indoone.db
+        sqlite:////var/lib/indoone.db   -> /var/lib/indoone.db
+
+    Absolute paths used to lose their leading slash here, so a database named by an
+    absolute path was silently opened as a relative one - a different file, created
+    next to the process, with none of the operator's data in it.
+    """
 
     value = (url or database_url()).strip()
     if not value.lower().startswith("sqlite://"):
         raise ValueError("not a sqlite url")
-    return Path(value[len("sqlite://"):].lstrip("/") or DEFAULT_SQLITE_PATH)
+    remainder = value[len("sqlite://"):]
+    if remainder.startswith("//"):
+        # sqlite:/// + an absolute path: keep every slash but the two the syntax eats.
+        return Path("/" + remainder.lstrip("/"))
+    return Path(remainder.lstrip("/") or DEFAULT_SQLITE_PATH)
 
 
 def blob_type(url: str | None = None) -> str:

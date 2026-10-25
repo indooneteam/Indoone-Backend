@@ -37,6 +37,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.storage import database
+from app.storage.migrations import ensure_schema
 
 # Per subject, per minute, refilled continuously. Thirty a minute is a fast human
 # typing with a couple of retries; it is not a batch job.
@@ -201,21 +202,14 @@ def _today() -> str:
 
 
 def initialize() -> None:
-    """Create the counter table. Safe to call on every start."""
+    """Bring the schema up to date.
 
-    with closing(database.connect()) as db:
-        db.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS usage_counters (
-                subject TEXT NOT NULL,
-                window_key TEXT NOT NULL,
-                used INTEGER NOT NULL DEFAULT 0,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (subject, window_key)
-            )
-            """
-        )
-        db.commit()
+    ``usage_counters`` is created by the migrations like every other table. This is
+    kept as a named entry point so the startup path reads the same as the other
+    stores'.
+    """
+
+    ensure_schema()
 
 
 def _consume_daily(user_id: str, *, window: str | None = None) -> Admission:
@@ -244,7 +238,7 @@ def _consume_daily(user_id: str, *, window: str | None = None) -> Admission:
         ).fetchone()
         db.commit()
 
-    used = int(row[0]) if row is not None else 1
+    used = int(row["used"]) if row is not None else 1
     if used > quota:
         # The counter keeps climbing past the limit so the next request is refused
         # immediately rather than re-testing; it resets with the window.
@@ -282,7 +276,7 @@ def usage_today(user_id: str, *, window: str | None = None) -> int:
             ).fetchone()
     except Exception:
         return 0
-    return int(row[0]) if row is not None else 0
+    return int(row["used"]) if row is not None else 0
 
 
 # ---- the one function the request path calls ------------------------------- #

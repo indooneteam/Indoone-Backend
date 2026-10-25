@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from app.storage import database
+from app.storage.migrations import ensure_schema
 
 DEFAULT_DB_PATH = Path(os.getenv("INDOONE_CONVERSATION_DB", "data/indoone_conversations.sqlite3"))
 DEFAULT_MAX_MESSAGES: int | None = None
@@ -42,45 +43,9 @@ class ConversationStore:
         return database.connect(self.db_path)
 
     @staticmethod
-    def _create_messages_table(connection: database.Connection, table_name: str = "messages") -> None:
-        connection.execute(
-            f"""CREATE TABLE IF NOT EXISTS {table_name} (
-                id {database.identity_column()},
-                conversation_id TEXT NOT NULL,
-                role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
-                content TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(conversation_id) REFERENCES conversations(conversation_id) ON DELETE CASCADE
-            )"""
-        )
-
-    @staticmethod
-    def _ensure_message_foreign_key(connection: database.Connection) -> None:
-        if connection.foreign_key_columns("messages"):
-            return
-
-        orphan_row = connection.execute(
-            """SELECT COUNT(*) AS orphan_count
-               FROM messages AS messages
-               LEFT JOIN conversations AS conversations
-                 ON conversations.conversation_id = messages.conversation_id
-              WHERE conversations.conversation_id IS NULL"""
-        ).fetchone()
-        orphan_count = int(orphan_row["orphan_count"] if orphan_row is not None else 0)
-        if orphan_count:
-            raise database.IntegrityError(
-                "cannot enable message foreign key with orphaned messages"
-            )
-
-        connection.execute("DROP INDEX IF EXISTS idx_messages_conversation_id_id")
-        ConversationStore._create_messages_table(connection, "messages_new")
-        connection.execute(
-            """INSERT INTO messages_new(id, conversation_id, role, content, created_at)
-               SELECT id, conversation_id, role, content, created_at
-                 FROM messages"""
-        )
-        connection.execute("DROP TABLE messages")
-        connection.execute("ALTER TABLE messages_new RENAME TO messages")
+    def _validate_integrity(connection: database.Connection) -> None:
+        if connection.integrity_problems():
+            raise database.IntegrityError("database foreign key integrity check failed")
 
     @staticmethod
     def _validate_integrity(connection: database.Connection) -> None:
@@ -88,33 +53,23 @@ class ConversationStore:
             raise database.IntegrityError("database foreign key integrity check failed")
 
     def _initialize(self) -> None:
+        """Bring the schema up to date, then check it is sound.
+
+        The two tables this store owns - ``conversations`` and ``messages`` - are
+        created by the migrations now. The column that used to be added here if it
+        was missing, and the table that used to be rebuilt here to gain its foreign
+        key, are migrations too: schema surgery belongs in a revision with a version
+        number, not in a constructor that runs on every boot.
+        """
+
         with self._connect() as connection:
             if not database.is_postgres():
                 # Write-ahead logging and a relaxed sync are SQLite settings. Postgres
                 # has its own durability model and needs neither.
                 connection.execute("PRAGMA journal_mode=WAL")
                 connection.execute("PRAGMA synchronous=NORMAL")
-            connection.execute(
-                """CREATE TABLE IF NOT EXISTS conversations (
-                    conversation_id TEXT PRIMARY KEY,
-                    user_id TEXT,
-                    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed')),
-                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                    closed_at TEXT
-                )"""
-            )
-            if "user_id" not in connection.table_columns("conversations"):
-                connection.execute("ALTER TABLE conversations ADD COLUMN user_id TEXT")
-
-            if connection.table_exists("messages"):
-                self._ensure_message_foreign_key(connection)
-            else:
-                self._create_messages_table(connection)
-
-            connection.execute("CREATE INDEX IF NOT EXISTS idx_messages_conversation_id_id ON messages(conversation_id, id)")
-            connection.execute("CREATE INDEX IF NOT EXISTS idx_conversations_user_updated ON conversations(user_id, updated_at DESC)")
-            connection.execute("CREATE INDEX IF NOT EXISTS idx_conversations_status_updated ON conversations(status, updated_at)")
+        ensure_schema(database.database_url(self.db_path))
+        with self._connect() as connection:
             self._validate_integrity(connection)
 
     @staticmethod

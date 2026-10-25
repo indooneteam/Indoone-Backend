@@ -9,6 +9,7 @@ from typing import Any
 from uuid import uuid4
 
 from app.storage import database
+from app.storage.migrations import ensure_schema
 
 
 # Reply rules are set by the business that connected a channel account. The
@@ -29,129 +30,15 @@ def _connect() -> database.Connection:
 
 
 def initialize() -> None:
-    with closing(_connect()) as db:
-        blob = database.blob_type()
-        db.executescript(
-            f"""
-            CREATE TABLE IF NOT EXISTS memories (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                key TEXT NOT NULL,
-                value TEXT NOT NULL,
-                confidence REAL NOT NULL,
-                source TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE UNIQUE INDEX IF NOT EXISTS uq_memories_user_key ON memories(user_id, key);
-            CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id);
-            CREATE INDEX IF NOT EXISTS idx_memories_user_updated ON memories(user_id, updated_at DESC);
-            CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                name TEXT NOT NULL,
-                instructions TEXT NOT NULL,
-                context TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                archived INTEGER NOT NULL DEFAULT 0
-            );
-            CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                title TEXT NOT NULL,
-                prompt TEXT NOT NULL,
-                schedule TEXT NOT NULL,
-                enabled INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS agent_runs (
-                id TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                message TEXT NOT NULL,
-                status TEXT NOT NULL,
-                steps TEXT NOT NULL,
-                results TEXT NOT NULL,
-                blocked_steps TEXT NOT NULL,
-                retry_counts TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS oauth_states (
-                state TEXT PRIMARY KEY,
-                user_id TEXT NOT NULL,
-                integration_id TEXT NOT NULL,
-                redirect_uri TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_oauth_states_created ON oauth_states(created_at);
-            CREATE TABLE IF NOT EXISTS oauth_state_results (
-                state_hash TEXT NOT NULL,
-                integration_id TEXT NOT NULL,
-                user_id TEXT NOT NULL,
-                code_hash TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                PRIMARY KEY (state_hash, integration_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_oauth_state_results_created ON oauth_state_results(created_at);
-            CREATE TABLE IF NOT EXISTS integration_tokens (
-                user_id TEXT NOT NULL,
-                integration_id TEXT NOT NULL,
-                access_token {blob} NOT NULL,
-                refresh_token {blob},
-                token_type TEXT NOT NULL,
-                scope TEXT NOT NULL,
-                expires_at TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (user_id, integration_id)
-            );
-            CREATE TABLE IF NOT EXISTS pending_email_actions (
-                user_id TEXT NOT NULL,
-                conversation_id TEXT NOT NULL,
-                integration_id TEXT NOT NULL,
-                action_type TEXT NOT NULL,
-                encrypted_payload {blob} NOT NULL,
-                created_at TEXT NOT NULL,
-                expires_at TEXT NOT NULL,
-                PRIMARY KEY (user_id, conversation_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_pending_email_actions_expiry
-                ON pending_email_actions(expires_at);
-            CREATE TABLE IF NOT EXISTS channel_inbound_events (
-                event_key TEXT PRIMARY KEY,
-                status TEXT NOT NULL CHECK(status IN ('processing', 'sent', 'failed')),
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_channel_inbound_events_updated
-                ON channel_inbound_events(updated_at);
-            CREATE TABLE IF NOT EXISTS channel_rules (
-                user_id TEXT NOT NULL,
-                rule_id TEXT NOT NULL,
-                channel TEXT NOT NULL,
-                trigger TEXT NOT NULL CHECK(trigger IN ('comment', 'message')),
-                keyword TEXT NOT NULL,
-                response TEXT NOT NULL,
-                enabled INTEGER NOT NULL DEFAULT 1,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (user_id, rule_id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_channel_rules_user_channel
-                ON channel_rules(user_id, channel);
-            CREATE INDEX IF NOT EXISTS idx_integration_tokens_user ON integration_tokens(user_id);
-            CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
-            CREATE INDEX IF NOT EXISTS idx_projects_user_updated ON projects(user_id, updated_at DESC);
-            CREATE INDEX IF NOT EXISTS idx_tasks_user ON tasks(user_id);
-            CREATE INDEX IF NOT EXISTS idx_agent_runs_user_updated ON agent_runs(user_id, updated_at DESC);
-            """
-        )
-        columns = db.table_columns("projects")
-        if "archived" not in columns:
-            db.execute("ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
-        db.commit()
+    """Bring the schema up to date.
+
+    The DDL that used to live here now lives in ``migrations/`` - one revision per
+    change, with a version the database records. This call is kept because every
+    caller already makes it, and it is idempotent: the first caller in the process
+    migrates and the rest return immediately.
+    """
+
+    ensure_schema()
 
 
 def _row_dict(row: Any | None) -> dict[str, Any] | None:

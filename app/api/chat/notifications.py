@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from app.storage import database
+from app.storage.migrations import ensure_schema
 from app.api.security.dependencies import current_user_id
 
 router = APIRouter(tags=["notifications"])
@@ -37,23 +38,26 @@ def _connect() -> database.Connection:
     return database.connect(_database_path())
 
 
+def _database_url() -> str | None:
+    """The URL of the file this store opens, or ``None`` for the shared database.
+
+    The notification store keeps its own SQLite file unless a database URL names
+    Postgres, and the migration has to land on whichever one ``_connect`` uses.
+    """
+
+    if database.is_postgres():
+        return None
+    return database.database_url(_database_path())
+
+
 def initialize() -> None:
-    """Create the notification-token table if it does not exist yet."""
-    with closing(_connect()) as db:
-        db.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS notification_tokens (
-                user_id TEXT NOT NULL,
-                token TEXT NOT NULL,
-                platform TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                PRIMARY KEY (user_id, token)
-            );
-            CREATE INDEX IF NOT EXISTS idx_notification_tokens_user
-                ON notification_tokens(user_id);
-            """
-        )
-        db.commit()
+    """Bring the schema up to date.
+
+    The notification-token table is created by the migrations now, like every other
+    table, so there is one history of schema changes instead of one per module.
+    """
+
+    ensure_schema(_database_url())
 
 
 def stored_tokens(user_id: str) -> list[str]:

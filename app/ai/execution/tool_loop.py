@@ -105,6 +105,23 @@ ALWAYS_ON_TOOL_NAMES = frozenset({"find_tools", "search_web", "calculator", "tex
 # choose from, few enough that the model still picks rather than guesses.
 _FIND_TOOLS_LIMIT = 5
 
+# How many model rounds one message may use. Each round is a provider call, so this is
+# the other half of admission control: the quota bounds how many messages a user sends,
+# this bounds what one message can cost. Four is enough for "list repositories, then
+# list its branches, then answer" with one retry, and the providers clamp it to 1..6.
+_DEFAULT_MAX_TOOL_ROUNDS = 4
+
+
+def _max_tool_rounds() -> int:
+    """The configured round cap, clamped to the range the providers accept."""
+
+    raw = os.getenv("INDOONE_MAX_TOOL_ROUNDS", "").strip()
+    try:
+        value = int(raw) if raw else _DEFAULT_MAX_TOOL_ROUNDS
+    except ValueError:
+        value = _DEFAULT_MAX_TOOL_ROUNDS
+    return max(1, min(value, 6))
+
 
 # The read tools a user reaches for first, per connector. These are offered on the
 # first round when that connector is connected, so a question about branches does not
@@ -391,6 +408,10 @@ async def run_tool_loop(
         tool_mode="AUTO",
         return_none_when_no_tool=True,
         reuse_first_text_when_no_tool=True,
+        # The round cap, passed explicitly rather than left to each provider's default.
+        # Both providers already clamp it (1..6); naming it here is what makes it one
+        # policy for both instead of two defaults that happen to agree today.
+        max_tool_rounds=_max_tool_rounds(),
     )
     _azure_first = _azure_backend_enabled()
     return await run_with_provider_fallback(

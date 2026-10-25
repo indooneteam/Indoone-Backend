@@ -13,7 +13,7 @@ it. `deploy/indoone-backend.service` is now the copy in the repository.
 | Virtualenv | `/home/ubuntu/Indoone-Backend/.venv` |
 | Environment file | `/etc/indoone/indoone.env` |
 | Service unit | `/etc/systemd/system/indoone-backend.service` |
-| Entry point | `python -m scripts.ops.run_server` |
+| Entry point | the `run_server` module in `scripts/ops` |
 | Health check | `http://localhost:8000/health` |
 
 **The environment file is not in this repository, and must not be.** It holds the API keys,
@@ -44,14 +44,28 @@ sudo systemctl enable --now indoone-backend
 
 ## Deploying a new version
 
-One line, and it can be pasted as it is:
-
 ```bash
-cd /home/ubuntu/Indoone-Backend && git pull origin main && /home/ubuntu/Indoone-Backend/.venv/bin/pip install -q -r requirements.txt && sudo systemctl restart indoone-backend && sleep 3 && systemctl is-active indoone-backend && curl -s http://localhost:8000/health
+bash /home/ubuntu/Indoone-Backend/scripts/ops/deploy.sh
 ```
 
-The `pip install` step matters when `requirements.txt` changes, which it does: it gained
-`defusedxml` in the change that hardened the RSS parsing.
+That is the whole flow, and it is a script rather than a one-liner because the one-liner
+had two holes that each cost us an outage:
+
+1. It never copied the unit, so a change to `deploy/indoone-backend.service` stayed in
+   the repository and the box kept running the old one. When the entry point moved to
+   `scripts/ops/run_server.py` the unit still named `scripts.run_server`, and the service
+   restart-looped with `No module named scripts.run_server`.
+2. It waited a fixed three seconds and then asked `systemctl is-active`. A unit in a
+   restart loop answers `activating`, not `active`, so the check failed, the `&&` chain
+   stopped, and the health check never ran — which looked like a quiet success.
+
+The script does the five things in order: pull, install requirements, copy the unit and
+reload systemd only if it changed, restart, then wait up to 45 seconds for `active` and
+curl `/health`. On any failure it prints the last 40 journal lines and exits non-zero, so
+a bad deploy is loud instead of silent.
+
+Each step can be pointed elsewhere with `INDOONE_DEPLOY_*` variables if the layout ever
+changes; the defaults are the table above.
 
 ## Reading the environment without printing the secrets
 

@@ -29,6 +29,7 @@ from app.capabilities.media.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, 
 from app.web_research.grounding import split_grounded_sources
 from app.api.security.dependencies import current_user_id
 from app.ai.gateway.gemini_service import ModelBusyError
+from app.ai.execution.account_context import accounts_instruction, without_stale_refusals
 from app.ai.execution.confirmation import classify_reply_async
 from app.ai.execution.tool_loop import run_tool_loop
 from app.ai.agents.agent_async import execute_agent_async
@@ -304,8 +305,16 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         # Two short lines: the user's name, and today's date and time. Together they
         # cost about 16 tokens; the date line is what stops the model answering a
         # date question from its training memory.
-        extra_lines = [line for line in (_user_name_line(user_id), _now_line()) if line]
+        extra_lines = [
+            line
+            for line in (_user_name_line(user_id), _now_line(), accounts_instruction(user_id))
+            if line
+        ]
         extra_instruction = " ".join(extra_lines)
+        # An earlier "I don't have access" must not be replayed now that an account is
+        # connected: the model reads its own last answer as context, and an old refusal
+        # is a strong pull. Only the assistant's turns are dropped, never the user's.
+        history = without_stale_refusals(history, user_id) or []
         if not attachments and not file_ids and not document_context.strip() and not media_attachments:
             # The agent runs first. It plans its own tool steps and can chain one result
             # into the next, and it is deterministic, so it does not depend on the model

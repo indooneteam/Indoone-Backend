@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.ai.quality.answer_quality import assess_answer
+from app.ai.execution.account_context import accounts_instruction, without_stale_refusals
 from app.ai.execution.tool_loop import run_tool_loop
 from app.ai.memory.conversation_store import ConversationStore
 from app.ai.memory.file_context import read_text_file
@@ -42,7 +43,8 @@ async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingRes
     if _stream_store.is_closed(conversation_id):
         conversation_id = str(uuid4())
 
-    history = _stream_store.recent(conversation_id)
+    history = without_stale_refusals(_stream_store.recent(conversation_id), user_id) or []
+    accounts = accounts_instruction(user_id)
     document_context = ""
     if body.file_id:
         try:
@@ -56,13 +58,17 @@ async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingRes
         tool_reply: str | None = None
         if user_id:
             try:
-                tool_reply = await run_tool_loop(user_id, conversation_id, body.message, history=history)
+                tool_reply = await run_tool_loop(
+                    user_id, conversation_id, body.message, history=history,
+                    extra_system_instruction=accounts,
+                )
             except Exception:
                 tool_reply = None
         reply = tool_reply if tool_reply is not None else await generate_reply(
             body.message,
             history=history,
             document_context=document_context,
+            extra_system_instruction=accounts,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc

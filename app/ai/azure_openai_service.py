@@ -30,7 +30,15 @@ import httpx
 # One source of truth for the assistant's own words and for the error the rest of
 # the code catches. Both live with the Gemini service today; reusing them here
 # means the two providers cannot drift apart, and the Gemini file is untouched.
-from app.ai.gemini_service import BUSY_MESSAGE, ModelBusyError, _SYSTEM_INSTRUCTION
+from app.ai.gemini_service import BUSY_MESSAGE, ModelBusyError
+from app.ai.ai_rules import (
+    ANSWER_SYSTEM_INSTRUCTION as _SYSTEM_INSTRUCTION,
+    FUNCTION_DECLARATIONS_REQUIRED,
+    INVALID_TOOL_RESULT,
+    TOOL_EXECUTION_FAILED,
+    TOOL_LIMIT_REACHED,
+    UNKNOWN_TOOL,
+)
 from app.web_research.grounding import build_grounded_prompt_instruction
 
 logger = logging.getLogger("indoone.azure_openai")
@@ -398,7 +406,7 @@ async def generate_azure_function_call_reply(
     if not cleaned:
         raise ValueError("message cannot be empty")
     if not tool_declarations:
-        raise ValueError("at least one function declaration is required")
+        raise ValueError(FUNCTION_DECLARATIONS_REQUIRED)
 
     api_key, endpoint, deployment, api_version = _get_tool_config()
     url = _chat_url(endpoint, deployment, api_version)
@@ -477,13 +485,13 @@ async def generate_azure_function_call_reply(
                 result: dict[str, Any] = {
                     "ok": False,
                     "code": "TOOL_LIMIT_REACHED",
-                    "message": "The maximum number of tool calls for one user message was reached. Summarize only verified results already received.",
+                    "message": TOOL_LIMIT_REACHED,
                 }
             elif name not in tool_names:
                 result = {
                     "ok": False,
                     "code": "UNKNOWN_TOOL",
-                    "message": "That tool is not available. Choose only from the declared tools.",
+                    "message": UNKNOWN_TOOL,
                 }
             else:
                 logger.info("Azure OpenAI called tool: %s", name)
@@ -493,13 +501,13 @@ async def generate_azure_function_call_reply(
                         result = {
                             "ok": False,
                             "code": "INVALID_TOOL_RESULT",
-                            "message": "The backend did not return a valid tool result. Do not claim success.",
+                            "message": INVALID_TOOL_RESULT,
                         }
                 except Exception:
                     result = {
                         "ok": False,
                         "code": "TOOL_EXECUTION_FAILED",
-                        "message": "The backend tool failed. Do not claim that the operation succeeded.",
+                        "message": TOOL_EXECUTION_FAILED,
                     }
             executed_calls += 1
             # Log the outcome, never the payload: email and repository content is

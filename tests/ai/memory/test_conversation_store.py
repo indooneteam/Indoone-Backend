@@ -48,28 +48,76 @@ def test_sqlite_enforces_message_foreign_key_and_cascade(tmp_path: Path) -> None
     assert remaining == 0
 
 
-def test_legacy_messages_schema_is_migrated_to_foreign_key(tmp_path: Path) -> None:
-    db = tmp_path / "conversations.sqlite3"
-    store = ConversationStore(db)
-    with store._connect() as connection:
-        connection.execute("INSERT INTO conversations(conversation_id, user_id) VALUES (?, ?)", ("c1", OWNER))
-        connection.execute("DROP TABLE messages")
-        connection.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
-        connection.execute("INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)", ("c1", "user", "legacy"))
+def _legacy_database(path: Path, *, messages: list[tuple[str, str, str]]) -> None:
+    """A database as an older release left it: no version table, no foreign key.
 
-    reopened = ConversationStore(db)
-    with reopened._connect() as connection:
+    Written with sqlite3 directly, not through the store, because the point is to
+    arrive at the store the way an existing deployment does - a database that predates
+    migrations, with data in it.
+    """
+
+    connection = sqlite3.connect(str(path))
+    try:
+        connection.execute(
+            """CREATE TABLE conversations (
+                conversation_id TEXT PRIMARY KEY,
+                user_id TEXT,
+                status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('open', 'closed')),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                closed_at TEXT
+            )"""
+        )
+        connection.execute(
+            """CREATE TABLE messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id TEXT NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+        for conversation_id, role, content in messages:
+            connection.execute(
+                "INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)",
+                (conversation_id, role, content),
+            )
+        connection.commit()
+    finally:
+        connection.close()
+
+
+def test_a_legacy_database_gains_the_message_foreign_key(tmp_path: Path) -> None:
+    """The repair is revision 0002 now, and it must still happen on an old database."""
+
+    db = tmp_path / "conversations.sqlite3"
+    _legacy_database(db, messages=[("c1", "user", "legacy")])
+    connection = sqlite3.connect(str(db))
+    try:
+        connection.execute(
+            "INSERT INTO conversations(conversation_id, user_id) VALUES (?, ?)", ("c1", OWNER)
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    store = ConversationStore(db)
+
+    with store._connect() as connection:
         assert connection.execute("PRAGMA foreign_key_list(messages)").fetchall()
-        assert connection.execute("SELECT content FROM messages WHERE conversation_id=?", ("c1",)).fetchone()[0] == "legacy"
+        assert (
+            connection.execute(
+                "SELECT content FROM messages WHERE conversation_id=?", ("c1",)
+            ).fetchone()[0]
+            == "legacy"
+        )
 
 
-def test_legacy_orphaned_messages_block_migration(tmp_path: Path) -> None:
+def test_legacy_orphaned_messages_block_the_migration(tmp_path: Path) -> None:
+    """A row with no conversation aborts the repair rather than being dropped."""
+
     db = tmp_path / "conversations.sqlite3"
-    store = ConversationStore(db)
-    with store._connect() as connection:
-        connection.execute("DROP TABLE messages")
-        connection.execute("CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP)")
-        connection.execute("INSERT INTO messages(conversation_id, role, content) VALUES (?, ?, ?)", ("missing", "user", "orphan"))
+    _legacy_database(db, messages=[("missing", "user", "orphan")])
 
     with pytest.raises(sqlite3.IntegrityError, match="orphaned messages"):
         ConversationStore(db)

@@ -8,14 +8,13 @@ address a device when it has something to deliver.
 from __future__ import annotations
 
 import os
-import sqlite3
 from contextlib import closing
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from app.storage import database
 from app.api.security.dependencies import current_user_id
 
 router = APIRouter(tags=["notifications"])
@@ -24,16 +23,18 @@ MAX_TOKEN_LENGTH = 4096
 DEFAULT_PLATFORM = "android"
 
 
-def _db_path() -> Path:
-    return Path(os.getenv("INDOONE_NOTIFICATION_DB", "data/indoone_notifications.db"))
+def _database_path() -> str:
+    """The notification store keeps its own file unless a database URL says otherwise."""
+
+    return os.getenv("INDOONE_NOTIFICATION_DB", "data/indoone_notifications.db")
 
 
-def _connect() -> sqlite3.Connection:
-    db_path = _db_path()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(db_path)
-    connection.row_factory = sqlite3.Row
-    return connection
+def _connect() -> database.Connection:
+    """Open the notification store, whichever database INDOONE_DATABASE_URL names."""
+
+    if database.is_postgres():
+        return database.connect()
+    return database.connect(_database_path())
 
 
 def initialize() -> None:

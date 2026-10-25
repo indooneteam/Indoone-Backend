@@ -3,17 +3,12 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-import os
-import sqlite3
 from contextlib import closing
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-
-def _db_path() -> Path:
-    return Path(os.getenv("INDOONE_CAPABILITY_DB", "data/indoone_capabilities.db"))
+from app.storage import database
 
 
 # Reply rules are set by the business that connected a channel account. The
@@ -28,18 +23,16 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _connect() -> sqlite3.Connection:
-    db_path = _db_path()
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(db_path)
-    connection.row_factory = sqlite3.Row
-    return connection
+def _connect() -> database.Connection:
+    """Open the capability store, whichever database INDOONE_DATABASE_URL names."""
+    return database.connect()
 
 
 def initialize() -> None:
     with closing(_connect()) as db:
+        blob = database.blob_type()
         db.executescript(
-            """
+            f"""
             CREATE TABLE IF NOT EXISTS memories (
                 id TEXT PRIMARY KEY,
                 user_id TEXT NOT NULL,
@@ -105,8 +98,8 @@ def initialize() -> None:
             CREATE TABLE IF NOT EXISTS integration_tokens (
                 user_id TEXT NOT NULL,
                 integration_id TEXT NOT NULL,
-                access_token BLOB NOT NULL,
-                refresh_token BLOB,
+                access_token {blob} NOT NULL,
+                refresh_token {blob},
                 token_type TEXT NOT NULL,
                 scope TEXT NOT NULL,
                 expires_at TEXT,
@@ -119,7 +112,7 @@ def initialize() -> None:
                 conversation_id TEXT NOT NULL,
                 integration_id TEXT NOT NULL,
                 action_type TEXT NOT NULL,
-                encrypted_payload BLOB NOT NULL,
+                encrypted_payload {blob} NOT NULL,
                 created_at TEXT NOT NULL,
                 expires_at TEXT NOT NULL,
                 PRIMARY KEY (user_id, conversation_id)
@@ -155,13 +148,13 @@ def initialize() -> None:
             CREATE INDEX IF NOT EXISTS idx_agent_runs_user_updated ON agent_runs(user_id, updated_at DESC);
             """
         )
-        columns = {row[1] for row in db.execute("PRAGMA table_info(projects)").fetchall()}
+        columns = db.table_columns("projects")
         if "archived" not in columns:
             db.execute("ALTER TABLE projects ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
         db.commit()
 
 
-def _row_dict(row: sqlite3.Row | None) -> dict[str, Any] | None:
+def _row_dict(row: Any | None) -> dict[str, Any] | None:
     return dict(row) if row is not None else None
 
 
@@ -169,7 +162,10 @@ def create_oauth_state(state: str, user_id: str, integration_id: str, redirect_u
     initialize()
     with closing(_connect()) as db:
         db.execute(
-            "INSERT OR REPLACE INTO oauth_states(state, user_id, integration_id, redirect_uri, created_at) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO oauth_states(state, user_id, integration_id, redirect_uri, created_at) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(state) DO UPDATE SET user_id = excluded.user_id, "
+            "integration_id = excluded.integration_id, redirect_uri = excluded.redirect_uri, "
+            "created_at = excluded.created_at",
             (state, user_id, integration_id, redirect_uri, _now()),
         )
         db.commit()
@@ -193,7 +189,7 @@ def consume_oauth_state(state: str, integration_id: str, max_age_seconds: int = 
     initialize()
     max_age_seconds = max(0, int(max_age_seconds))
     with closing(_connect()) as db:
-        db.execute("BEGIN IMMEDIATE")
+        db.begin_write()
         cutoff = (datetime.now(timezone.utc) - timedelta(seconds=max_age_seconds)).isoformat()
         db.execute("DELETE FROM oauth_states WHERE created_at < ?", (cutoff,))
         row = db.execute(
@@ -235,9 +231,12 @@ def record_oauth_state_success(state: str, integration_id: str, user_id: str, pr
         )
         db.execute(
             """
-            INSERT OR REPLACE INTO oauth_state_results
+            INSERT INTO oauth_state_results
                 (state_hash, integration_id, user_id, code_hash, created_at)
             VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(state_hash, integration_id) DO UPDATE SET
+                user_id = excluded.user_id, code_hash = excluded.code_hash,
+                created_at = excluded.created_at
             """,
             (state_hash, normalized_integration, normalized_user, code_hash, now.isoformat()),
         )
@@ -365,7 +364,8 @@ def claim_channel_inbound_event(event_key: str, retry_after_seconds: int = 600) 
     timestamp = _now()
     with closing(_connect()) as db:
         cursor = db.execute(
-            "INSERT OR IGNORE INTO channel_inbound_events(event_key, status, created_at, updated_at) VALUES (?, 'processing', ?, ?)",
+            "INSERT INTO channel_inbound_events(event_key, status, created_at, updated_at) VALUES (?, 'processing', ?, ?) "
+            "ON CONFLICT(event_key) DO NOTHING",
             (normalized, timestamp, timestamp),
         )
         if cursor.rowcount > 0:
@@ -628,7 +628,7 @@ def get_project(user_id: str, project_id: str) -> dict[str, Any] | None:
     initialize()
     with closing(_connect()) as db:
         row = db.execute(
-            "SELECT * FROM projects WHERE user_id = ? AND id = ?",
+            "SELECT * FROM projects WHERE user_id = ? AND id = ?" + database.for_update(),
             (user_id, project_id),
         ).fetchone()
     if row is None:
@@ -651,9 +651,9 @@ def update_project(user_id: str, project_id: str, name: str | None = None, instr
     initialize()
     timestamp = _now()
     with closing(_connect()) as db:
-        db.execute("BEGIN IMMEDIATE")
+        db.begin_write()
         row = db.execute(
-            "SELECT * FROM projects WHERE user_id = ? AND id = ?",
+            "SELECT * FROM projects WHERE user_id = ? AND id = ?" + database.for_update(),
             (user_id, project_id),
         ).fetchone()
         if row is None:
@@ -756,7 +756,7 @@ def list_agent_runs(user_id: str, limit: int = 50) -> list[dict[str, Any]]:
     return [{**{key: row[key] for key in row.keys() if key not in {"steps", "results", "blocked_steps", "retry_counts"}}, "steps": json.loads(row["steps"]), "results": json.loads(row["results"]), "blocked_steps": json.loads(row["blocked_steps"]), "retry_counts": json.loads(row["retry_counts"])} for row in rows]
 
 
-def _channel_rule_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
+def _channel_rule_row(row: Any | None) -> dict[str, Any] | None:
     if row is None:
         return None
     data = dict(row)
@@ -807,10 +807,12 @@ def upsert_channel_rule(
 
     with closing(_connect()) as db:
         if existing is None:
+            # Read the count by name: a positional read only works on SQLite, and
+            # the store now runs on either database.
             stored = db.execute(
-                "SELECT COUNT(*) FROM channel_rules WHERE user_id = ? AND channel = ?",
+                "SELECT COUNT(*) AS rule_count FROM channel_rules WHERE user_id = ? AND channel = ?",
                 (normalized_user, normalized_channel),
-            ).fetchone()[0]
+            ).fetchone()["rule_count"]
             if stored >= _CHANNEL_RULE_MAX_PER_CHANNEL:
                 raise ValueError(f"a channel may hold at most {_CHANNEL_RULE_MAX_PER_CHANNEL} rules")
         db.execute(

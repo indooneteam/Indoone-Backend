@@ -6,6 +6,8 @@ The API key stays server-side in GEMINI_API_KEY and is never sent to the Android
 
 from __future__ import annotations
 
+from app.ai.execution.history_window import history_window
+
 import asyncio
 import base64
 import json
@@ -126,7 +128,7 @@ def _build_contents(
     contents: list[dict[str, Any]] = []
 
     if history:
-        for role, content in history[-12:]:
+        for role, content in history_window(history):
             clean_content = _content_text(content)
             if not clean_content or role not in {"user", "assistant"}:
                 continue

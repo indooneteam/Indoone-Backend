@@ -14,6 +14,7 @@ import threading
 from typing import TYPE_CHECKING
 import time
 
+from app.ai.execution.history_window import history_window
 from app.ai.language.language_detection import detect_response_language
 from app.storage.github_release import GitHubReleaseStorageError, get_github_release_storage
 
@@ -292,7 +293,7 @@ class LocalAIService:
 
         if history:
             history_lines = []
-            for role, content in history[-12:]:
+            for role, content in history_window(history):
                 clean_content = " ".join(str(content).split()).strip()
                 if clean_content:
                     history_lines.append(f"{role}: {clean_content[:4_000]}")

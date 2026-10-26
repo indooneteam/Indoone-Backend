@@ -49,6 +49,7 @@ from app.plugins.email.email_tools import (
     handle_email_chat,
     handle_email_chat_with_tools,
 )
+from app.ai.execution.conversation_digest import conversation_history_answer
 from app.plugins.festivals.calendar import festival_answer
 from app.plugins.github.chat_tools import handle_github_chat_with_tools
 
@@ -430,6 +431,14 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             # "unread emails" can only mean one thing, so the model was spending tokens to
             # choose a tool the words already named. A write is left alone: it is held for
             # confirmation and that path knows how to hold it.
+            # A question about the thread itself is answered from a digest of what is
+            # stored. The model only sees four messages, so it could not answer this - and
+            # sending the whole thread to answer it would undo the saving.
+            if tool_reply is None and not email_owns_this:
+                tool_reply = await conversation_history_answer(
+                    user_id, conversation_id, body.message
+                )
+
             if tool_reply is None and not email_owns_this:
                 tool_reply = await email_read_fast_path(
                     user_id, conversation_id, body.message

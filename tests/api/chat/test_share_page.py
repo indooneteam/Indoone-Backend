@@ -46,8 +46,10 @@ def test_the_page_renders_the_thread(shared: str) -> None:
     assert "show me a python snippet" in body
     assert "Indoone AI" in body
     # The banner and its button.
-    assert "Shared via Indoone AI" in body
+    assert "Shared conversation • Read only" in body
     assert "Try Indoone" in body
+    # Branding sits above the thread title.
+    assert '<div class="brand">Indoone AI</div>' in body
 
 
 def test_code_and_bold_are_rendered_cleanly(shared: str) -> None:
@@ -87,7 +89,7 @@ def test_an_unknown_link_is_a_clean_404() -> None:
     response = TestClient(app).get("/share/" + "0" * 32)
 
     assert response.status_code == 404
-    assert "Chat not found or link expired" in response.text
+    assert "Chat not found or link has expired" in response.text
     # Still a page, not a JSON error.
     assert "<!doctype html>" in response.text.lower()
 

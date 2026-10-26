@@ -426,3 +426,73 @@ def test_an_old_refusal_is_dropped_from_the_channel_history(tmp_path, monkeypatc
 
     history = seen.get("history") or []
     assert all("don't have access" not in content for _role, content in history)
+
+
+# ---- a write proposed on a channel can be confirmed on that channel -------- #
+# A held write is keyed by conversation, and a channel conversation id is the one the
+# proposal was stored under. Without this the proposal made on WhatsApp could never be
+# confirmed: there is no approval screen on a channel.
+
+
+def test_a_pending_write_is_resolved_before_the_loop(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "cap.db"))
+    monkeypatch.setenv("INDOONE_WHATSAPP_AI_REPLY_ENABLED", "true")
+    monkeypatch.setenv("INDOONE_WHATSAPP_AI_OWNER_USER_ID", "owner-1")
+    monkeypatch.setenv("INDOONE_MODEL_BACKEND", "gemini")
+    monkeypatch.setattr(
+        channel_common, "ConversationStore", lambda: ConversationStore(tmp_path / "conv.sqlite3")
+    )
+
+    resolved: list[dict] = []
+
+    async def fake_handler(user_id, message, **kwargs):
+        resolved.append({"user_id": user_id, "message": message, **kwargs})
+        return "Branch created and verified."
+
+    async def fake_loop(*_args, **_kwargs):
+        raise AssertionError("a pending confirmation must not go to the model loop")
+
+    async def fake_send(*_args, **_kwargs):
+        return {"sent": True}
+
+    monkeypatch.setattr(
+        "app.capabilities.connectors.store.get_pending_github_action",
+        lambda user_id, conversation_id: {"tool": "github_create_branch"},
+    )
+    monkeypatch.setattr(
+        "app.plugins.github.chat_tools.handle_github_chat_with_tools", fake_handler
+    )
+    monkeypatch.setattr(channel_common, "run_tool_loop", fake_loop)
+    monkeypatch.setattr(whatsapp_ai_reply, "send_whatsapp_text_message", fake_send)
+
+    assert asyncio.run(whatsapp_ai_reply.process_whatsapp_message(_message("yes, do it"))) is True
+
+    assert resolved and resolved[0]["message"] == "yes, do it"
+    assert resolved[0]["conversation_id"] == channel_common._conversation_id(
+        "whatsapp", "919999999999"
+    )
+
+
+def test_nothing_pending_leaves_the_ordinary_path_alone(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_CAPABILITY_DB", str(tmp_path / "cap.db"))
+    monkeypatch.setenv("INDOONE_WHATSAPP_AI_REPLY_ENABLED", "true")
+    monkeypatch.setenv("INDOONE_WHATSAPP_AI_OWNER_USER_ID", "owner-1")
+    monkeypatch.delenv("INDOONE_MODEL_BACKEND", raising=False)
+    monkeypatch.setattr(
+        channel_common, "ConversationStore", lambda: ConversationStore(tmp_path / "conv.sqlite3")
+    )
+
+    async def fake_generate_reply(message, history=None, **kwargs):
+        return "Plain answer"
+
+    async def fake_send(*_args, **_kwargs):
+        return {"sent": True}
+
+    monkeypatch.setattr(
+        "app.capabilities.connectors.store.get_pending_github_action",
+        lambda user_id, conversation_id: None,
+    )
+    monkeypatch.setattr(channel_common, "generate_reply", fake_generate_reply)
+    monkeypatch.setattr(whatsapp_ai_reply, "send_whatsapp_text_message", fake_send)
+
+    assert asyncio.run(whatsapp_ai_reply.process_whatsapp_message(_message("hello"))) is True

@@ -279,6 +279,37 @@ class ConversationStore:
 
         return [(str(item["role"]), str(item["content"])) for item in rows]
 
+    def shared_thread_view(self, share_id: str) -> dict[str, object] | None:
+        """The share link's thread with its title, or None when the link does not exist.
+
+        Same read-only contract as shared_thread, plus the name the owner gave the thread -
+        a shared page with no title is a wall of bubbles with nothing to identify it.
+        """
+        if not share_id:
+            return None
+
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT s.conversation_id, c.title "
+                "FROM conversation_shares s "
+                "LEFT JOIN conversations c ON c.conversation_id = s.conversation_id "
+                "WHERE s.share_id=?",
+                (share_id,),
+            ).fetchone()
+
+            if row is None:
+                return None
+
+            rows = connection.execute(
+                "SELECT role, content FROM messages WHERE conversation_id=? ORDER BY id",
+                (str(row["conversation_id"]),),
+            ).fetchall()
+
+        return {
+            "title": str(row["title"] or "").strip(),
+            "messages": [(str(item["role"]), str(item["content"])) for item in rows],
+        }
+
     def purge_expired_closed(self, max_age_days: int = 7) -> int:
         """Delete conversations closed at least max_age_days ago.
 

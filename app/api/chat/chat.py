@@ -45,6 +45,7 @@ from datetime import datetime, timedelta, timezone
 
 _IST = timezone(timedelta(hours=5, minutes=30))
 from app.plugins.email.email_tools import (
+    email_read_fast_path,
     handle_email_chat,
     handle_email_chat_with_tools,
 )
@@ -425,6 +426,15 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             #
             # The router returns None when the message is not a GitHub request, so this
             # costs a regex pass on everything else.
+            # A read-only mailbox question is answered deterministically on every backend.
+            # "unread emails" can only mean one thing, so the model was spending tokens to
+            # choose a tool the words already named. A write is left alone: it is held for
+            # confirmation and that path knows how to hold it.
+            if tool_reply is None and not email_owns_this:
+                tool_reply = await email_read_fast_path(
+                    user_id, conversation_id, body.message
+                )
+
             if tool_reply is None and not email_owns_this:
                 tool_reply = await handle_github_chat_with_tools(
                     user_id,

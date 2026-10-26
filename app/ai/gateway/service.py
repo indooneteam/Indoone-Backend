@@ -14,6 +14,7 @@ import threading
 from typing import TYPE_CHECKING
 import time
 
+from app.ai.execution.history_window import history_window
 from app.ai.language.language_detection import detect_response_language
 from app.storage.github_release import GitHubReleaseStorageError, get_github_release_storage
 

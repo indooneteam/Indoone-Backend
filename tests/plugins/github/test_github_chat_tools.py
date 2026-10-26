@@ -40,7 +40,11 @@ async def test_github_repository_chat_uses_authenticated_read_tool(monkeypatch) 
 
     assert reply is not None
     assert "indooneteam/indoone" in reply
-    assert "1. [indoone](https://github.com/indooneteam/indoone)" in reply
+    # The name is plain text and the URL sits on its own line, so the client renders the
+    # link row it already has - with its copy button - instead of an inline markdown link.
+    assert "1. indoone" in reply
+    assert "https://github.com/indooneteam/indoone" in reply
+    assert "[indoone](" not in reply
     assert calls[0][0] == "github_list_repositories"
     assert calls[0][1]["user_id"] == "user-123"
     assert calls[0][2]["user_id"] == "user-123"

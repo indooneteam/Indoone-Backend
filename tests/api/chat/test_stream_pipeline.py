@@ -39,7 +39,11 @@ def _auth_headers(user_id: str = "user-one") -> dict[str, str]:
 
 
 @pytest.fixture(autouse=True)
-def _env(monkeypatch):
+def _no_quota(monkeypatch):
+    # Admission control is per user and shared across the whole run. A contract test must
+    # not fail because earlier tests spent the daily allowance - it is asserting the stream,
+    # not the quota, and the quota has its own tests.
+    monkeypatch.setattr("app.api.chat.chat._admit", lambda *_args, **_kwargs: None)
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
 
 

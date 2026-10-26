@@ -55,6 +55,40 @@ def _instruction(owner_user_id: str) -> str:
     )
 
 
+async def _resolve_pending_write(
+    owner_user_id: str, conversation_id: str, text: str, history: list[tuple[str, str]]
+) -> str | None:
+    """Answer a confirmation (or a cancellation) for a write this conversation holds.
+
+    Returns the reply to send, or None when there is nothing pending. The pending
+    action is keyed by conversation, and the channel conversation id is the one the
+    proposal was stored under, so this is the same lookup the app does - just reached
+    from a surface that has no other way to confirm anything.
+    """
+
+    from app.capabilities.connectors.store import get_pending_github_action
+    from app.plugins.github.chat_tools import handle_github_chat_with_tools
+
+    try:
+        pending = get_pending_github_action(owner_user_id, conversation_id)
+    except Exception:
+        # A store that cannot answer must not swallow the user's message.
+        return None
+    if pending is None:
+        return None
+
+    try:
+        return await handle_github_chat_with_tools(
+            owner_user_id,
+            text,
+            history=history,
+            conversation_id=conversation_id,
+        )
+    except Exception:
+        logger.exception("channel confirmation failed", extra={"conversation_id": conversation_id})
+        return None
+
+
 async def _generate_with_history(owner_user_id: str, channel: str, sender_id: str, text: str) -> str:
     """Answer a channel message through the same loop the app uses.
 
@@ -80,6 +114,19 @@ async def _generate_with_history(owner_user_id: str, channel: str, sender_id: st
     # connected - the model reads its own last answer as evidence.
     history = without_stale_refusals(history, owner_user_id) or []
     instruction = _instruction(owner_user_id)
+
+    # A write held earlier in this conversation is resolved before anything else. A bare
+    # "yes" names no repository, so nothing else could find it - and on a channel there
+    # is no approval screen to fall back to, which makes this the only way a proposal
+    # made on WhatsApp can ever be confirmed.
+    pending_reply = await _resolve_pending_write(owner_user_id, conversation_id, text, history)
+    if pending_reply is not None:
+        store.append(
+            conversation_id,
+            [("user", text), ("assistant", pending_reply)],
+            user_id=owner_user_id,
+        )
+        return pending_reply
 
     reply: str | None = None
     if _tool_loop_available():

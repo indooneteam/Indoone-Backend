@@ -59,7 +59,10 @@ _TOOL_ONLY_RULES = (
     "When the user asks to list, create or delete a branch, do it with the GitHub tools - "
     "github_list_branches, github_create_branch, github_delete_branch. Never answer with "
     "git commands for the user to run instead of doing it, and never state a branch count "
-    "that the tool did not return."
+    "that the tool did not return. "
+    "Never invent a branch, commit, file or repository name: if a tool returns nothing, say "
+    "so plainly - an invented name cannot be told apart from a real one by the person "
+    "reading it."
 )
 TOOL_SYSTEM_INSTRUCTION = ANSWER_SYSTEM_INSTRUCTION + "\n\n" + _TOOL_ONLY_RULES
 

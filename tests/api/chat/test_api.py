@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.ai.memory.conversation_store import ConversationStore
 from app.api.security.request_context import clear_principal_id, get_principal_id, require_principal_id, set_principal_id
+from app.ai.execution import request_context as ai_request_context
 from app.main import app
 
 
@@ -239,30 +240,35 @@ def test_chat_returns_grounded_research_sources(monkeypatch) -> None:
 
 def test_user_name_line_uses_the_stored_name_only(monkeypatch) -> None:
     """Only the name reaches the prompt; nothing else stored about the user does."""
-    from app.api.chat import chat
+    # The lookup lives in request_context now, so that is where the patch has to land:
+    # patching the chat module would set an attribute nothing reads.
     monkeypatch.setattr(
-        chat,
+        ai_request_context,
         "list_memories",
         lambda user_id, limit=20: [
             {"key": "profession", "value": "Student"},
             {"key": "name", "value": "  Yashwanth  "},
         ],
     )
-    assert chat._user_name_line("u1") == "The user's name is Yashwanth."
+    assert ai_request_context.user_name_line("u1") == "The user's name is Yashwanth."
 
-    monkeypatch.setattr(chat, "list_memories", lambda user_id, limit=20: [])
-    assert chat._user_name_line("u1") == ""
+    monkeypatch.setattr(ai_request_context, "list_memories", lambda user_id, limit=20: [])
+    assert ai_request_context.user_name_line("u1") == ""
 
-    monkeypatch.setattr(chat, "list_memories", lambda user_id, limit=20: [{"key": "nickname", "value": "Chinni"}])
-    assert chat._user_name_line("u1") == "The user's name is Chinni."
+    monkeypatch.setattr(
+        ai_request_context,
+        "list_memories",
+        lambda user_id, limit=20: [{"key": "nickname", "value": "Chinni"}],
+    )
+    assert ai_request_context.user_name_line("u1") == "The user's name is Chinni."
 
-    assert chat._user_name_line("") == ""
+    assert ai_request_context.user_name_line("") == ""
 
 
 def test_now_line_gives_today_in_ist() -> None:
     """The model must be told today's date, or it answers from training memory."""
     from app.api.chat import chat
-    line = chat._now_line()
+    line = ai_request_context.now_line()
     assert line.startswith("Today is ")
     assert line.endswith(" IST.")
     today = chat.datetime.now(chat._IST).strftime("%Y-%m-%d")

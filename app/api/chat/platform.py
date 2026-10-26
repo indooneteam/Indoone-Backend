@@ -11,10 +11,12 @@ from pydantic import BaseModel, Field
 from app.ai.quality.answer_quality import assess_answer
 from app.ai.execution.account_context import accounts_instruction, without_stale_refusals
 from app.ai.execution.tool_loop import run_tool_loop
+from app.ai.execution import action_chips
 from app.ai.memory.conversation_store import ConversationStore
 from app.ai.memory.file_context import read_text_file
 from app.ai.memory.memory import extract_memory_candidates
 from app.ai.gateway.service import generate_reply
+from app.plugins.github.chat_tools import handle_github_chat_with_tools
 from app.api.security.errors import REQUEST_FAILED_MESSAGE, provider_failure
 
 router = APIRouter(tags=["platform"])
@@ -39,11 +41,19 @@ class MemoryCandidatesRequest(BaseModel):
 @router.post("/chat/stream")
 async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingResponse:
     user_id = str(getattr(request.state, "principal_id", "")).strip()
+
     conversation_id = body.conversation_id or str(uuid4())
-    if _stream_store.is_closed(conversation_id):
+    if _stream_store.is_closed(conversation_id, user_id):
         conversation_id = str(uuid4())
 
-    history = without_stale_refusals(_stream_store.recent(conversation_id), user_id) or []
+    # A conversation that does not exist yet has no history - that is a new thread, not an
+    # error. Reading it used to raise "conversation not found" and fail the whole request.
+    try:
+        history = without_stale_refusals(
+            _stream_store.recent(conversation_id, user_id), user_id
+        ) or []
+    except (ValueError, PermissionError):
+        history = []
     accounts = accounts_instruction(user_id)
     document_context = ""
     if body.file_id:
@@ -52,16 +62,36 @@ async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingRes
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+    # Same admission control as /api/chat. A streaming request that skips the quota is a
+    # second, unmetered door into the same model.
+    if user_id:
+        from app.api.chat.chat import _admit
+
+        _admit(request, user_id)
+
+    action_chips.begin()
+
     try:
-        # Use the same unified tool loop as /api/chat so streaming answers get
-        # the user's tools too. It only runs for a signed-in user.
+        # The same pipeline as /api/chat, not a lesser copy of it.
+        #
+        # The GitHub router runs before the model, for the same reason it does there: a
+        # model answering a repository question from memory invents branch names. Streaming
+        # must not become the endpoint where that comes back.
         tool_reply: str | None = None
         if user_id:
             try:
-                tool_reply = await run_tool_loop(
-                    user_id, conversation_id, body.message, history=history,
-                    extra_system_instruction=accounts,
+                tool_reply = await handle_github_chat_with_tools(
+                    user_id,
+                    body.message,
+                    history=history,
+                    conversation_id=conversation_id,
                 )
+
+                if tool_reply is None:
+                    tool_reply = await run_tool_loop(
+                        user_id, conversation_id, body.message, history=history,
+                        extra_system_instruction=accounts,
+                    )
             except Exception:
                 tool_reply = None
         reply = tool_reply if tool_reply is not None else await generate_reply(
@@ -82,6 +112,7 @@ async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingRes
         _stream_store.append(
             conversation_id,
             [("user", body.message), ("assistant", reply)],
+            user_id=user_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -92,10 +123,20 @@ async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingRes
             payload = {"type": "delta", "text": reply[chunk_start : chunk_start + 48]}
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0)
-        yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        # The chips ride on the last event, so a client that only streams has the same
+        # follow-ups the blocking endpoint returns: Confirm/Cancel for a held write, the
+        # obvious next step after a list.
+        yield f"data: {json.dumps({'type': 'done', 'reply': reply, 'action_chips': action_chips.collected()}, ensure_ascii=False)}\n\n"
+
+    async def events_with_reset():
+        try:
+            async for event in events():
+                yield event
+        finally:
+            action_chips.reset()
 
     return StreamingResponse(
-        events(),
+        events_with_reset(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

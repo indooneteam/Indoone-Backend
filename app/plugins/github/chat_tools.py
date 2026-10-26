@@ -534,10 +534,19 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
         # The name and a link, nothing else. The owner prefix, the visibility and the
         # default branch are metadata nobody asked to read; the link carries the full path
         # for anyone who needs it. The number is still what a follow-up can refer to.
+        # The name on one line, the raw URL on the next, one blank line between items.
+        #
+        # An inline [name](url) was tried and reverted: it wrapped across lines in the
+        # bubble. A URL on its own line is what the clients already know how to draw - a
+        # link row with a copy button - so the name stays plain text and the link keeps the
+        # control it had before.
         lines = []
+        number = 0
+
         for item in repos[:30]:
             if not isinstance(item, dict):
                 continue
+
             # The label is the repository name alone. When the API gives only the full
             # name, the owner prefix is dropped here rather than shown to the user.
             repo_name = str(item.get("name") or "").strip()
@@ -547,10 +556,16 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
 
             repo_name = repo_name or "Unknown repository"
             url = str(item.get("html_url") or "").strip()
-            lines.append(
-                f"{len(lines) + 1}. " + (f"[{repo_name}]({url})" if url else repo_name)
-            )
-        return "\n".join(lines)
+
+            number += 1
+            lines.append(f"{number}. {repo_name}")
+
+            if url:
+                lines.append(url)
+
+            lines.append("")
+
+        return "\n".join(lines).rstrip()
 
     if name == "github_list_assigned_issues":
         items = data.get("issues")
@@ -902,7 +917,11 @@ async def handle_github_chat_with_tools(
         if not value:
             continue
 
-        resolved = reference_resolution.resolve_from_history(value, history)
+        resolved = reference_resolution.resolve_from_history(
+            value,
+            history,
+            kind="branch" if key == "branch" else "repository",
+        )
 
         if resolved and resolved != value:
             resolved_arguments[key] = resolved

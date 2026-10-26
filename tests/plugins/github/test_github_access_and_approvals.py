@@ -113,7 +113,8 @@ def test_repositories_are_numbered_by_name_only() -> None:
     )
 
     lines = text.splitlines()
-    # No count header, no default branch, no visibility, and no owner prefix: the name
-    # alone, numbered.
+    # No count header, no default branch, no visibility, no owner prefix: the name alone,
+    # numbered, with a blank line between items (the URL goes on its own line when the API
+    # gave one, so the client can draw its link row and copy button).
     assert lines[0] == "1. one"
-    assert lines[1] == "2. two"
+    assert lines[2] == "2. two"

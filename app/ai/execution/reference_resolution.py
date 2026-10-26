@@ -15,6 +15,8 @@ from __future__ import annotations
 import re
 
 _NUMBERED = re.compile(r"^\s*(\d{1,3})[.)]\s+(.+?)\s*$")
+# A repository URL on its own line: the item above it is that repository.
+_REPOSITORY_URL = re.compile(r"github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)")
 _ORDINAL_WORDS = {
     "first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5,
     "1st": 1, "2nd": 2, "3rd": 3, "4th": 4, "5th": 5,
@@ -54,19 +56,45 @@ def _clean_item(text: str) -> str:
 
 
 def parse_numbered_items(text: str) -> list[str]:
-    """Every numbered item in a message, in order."""
+    """Every numbered item in a message, in order.
+
+    A repository list puts the URL on the line under the name, so the link can keep its own
+    row and its copy button. When that line is a GitHub URL, the item resolves to
+    owner/name - the form a tool can actually use - rather than to the bare label.
+    """
+    lines = (text or "").splitlines()
     items: list[str] = []
 
-    for line in (text or "").splitlines():
+    for index, line in enumerate(lines):
         match = _NUMBERED.match(line)
 
         if not match:
             continue
 
         cleaned = _clean_item(match.group(2))
+        from_url = ""
 
-        if cleaned:
-            items.append(cleaned)
+        # The first non-blank line after the item may be its URL - unless it is the next
+        # numbered item, in which case the item has no URL of its own and must not borrow
+        # the one below it.
+        for follow in lines[index + 1 : index + 3]:
+            if not follow.strip():
+                continue
+
+            if _NUMBERED.match(follow):
+                break
+
+            found = _REPOSITORY_URL.search(follow)
+
+            if found:
+                from_url = f"{found.group(1)}/{found.group(2)}"
+
+            break
+
+        resolved = from_url or cleaned
+
+        if resolved:
+            items.append(resolved)
 
     return items
 
@@ -122,8 +150,22 @@ def resolve_selection(value: str, items: list[str]) -> str | None:
     return None
 
 
-def resolve_from_history(value: str, history: list[tuple[str, str]] | None) -> str | None:
+def _looks_like_repository_list(text: str) -> bool:
+    """A repository list carries GitHub URLs; a branch list carries names only."""
+    return bool(_REPOSITORY_URL.search(text or ""))
+
+
+def resolve_from_history(
+    value: str,
+    history: list[tuple[str, str]] | None,
+    *,
+    kind: str = "",
+) -> str | None:
     """Resolve a value against the most recent assistant message that listed something.
+
+    ``kind`` keeps the two lists apart. A repository ordinal must never be resolved against
+    a branch list: with a branch list of "1. develop, 2. main, 3. terminal", "3" was being
+    read as the third repository and the wrong repository was opened.
 
     Only the previous answers are read, never the user's own words - the user's message is
     what is being resolved, so reading it back would resolve it to itself.
@@ -133,6 +175,12 @@ def resolve_from_history(value: str, history: list[tuple[str, str]] | None) -> s
 
     for role, text in reversed(history):
         if role != "assistant":
+            continue
+
+        if kind == "repository" and not _looks_like_repository_list(text):
+            continue
+
+        if kind == "branch" and _looks_like_repository_list(text):
             continue
 
         items = parse_numbered_items(text)
@@ -197,10 +245,18 @@ def recent_repository(
     window = [text for _role, text in history[-max(1, turns):] if text]
 
     for text in reversed(window):
-        found = _REPOSITORY_IN_TEXT.findall(text)
+        # A GitHub URL is the reliable form: the generic owner/name matcher also matches
+        # "github.com/other-org" inside a link, which is not a repository.
+        found = _REPOSITORY_URL.findall(text)
 
         if found:
             # The last mention in the message is the one being discussed.
-            return found[-1]
+            owner, repo = found[-1]
+            return f"{owner}/{repo}"
+
+        named = _REPOSITORY_IN_TEXT.findall(text)
+
+        if named:
+            return named[-1]
 
     return ""

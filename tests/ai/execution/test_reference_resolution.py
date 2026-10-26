@@ -28,10 +28,15 @@ BRANCH_LIST = """Branches in indooneteam/indoone (3 returned):
 2. develop · b2c3d4e5f6
 3. terminal · c3d4e5f6a7"""
 
-REPO_LIST = """Most recently updated accessible GitHub repositories (3 returned):
-1. indooneteam/indoone (main) — Public
-2. indooneteam/Indoone-Backend (develop) — Private
-3. other-org/site (main) — Public"""
+REPO_LIST = """Most recently updated accessible GitHub repositories:
+1. indoone
+https://github.com/indooneteam/indoone
+
+2. Indoone-Backend
+https://github.com/indooneteam/Indoone-Backend
+
+3. site
+https://github.com/other-org/site"""
 
 
 def test_items_are_read_without_their_annotations() -> None:
@@ -88,6 +93,24 @@ def test_a_link_item_still_resolves_to_a_usable_name() -> None:
         "indooneteam/Indoone-Backend",
     ]
     assert resolve_selection("2", parse_numbered_items(text)) == "indooneteam/Indoone-Backend"
+
+
+def test_a_repository_ordinal_is_not_read_off_a_branch_list() -> None:
+    """The bug: "3 alli branch" opened the wrong repository.
+
+    The previous answer was a branch list, and "3" was being matched to its third branch
+    instead of the third repository.
+    """
+    history = [
+        ("assistant", REPO_LIST),
+        ("user", "show branches of 1"),
+        ("assistant", BRANCH_LIST),
+    ]
+
+    # With the kind known, the branch list is skipped and the repository list answers.
+    assert resolve_from_history("3", history, kind="repository") == "other-org/site"
+    # And a branch ordinal still resolves against the branch list.
+    assert resolve_from_history("3", history, kind="branch") == "terminal"
 
 
 def test_history_is_read_from_the_assistant_not_the_user() -> None:

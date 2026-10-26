@@ -13,6 +13,7 @@ from typing import Any
 
 from app.ai.execution.confirmation import CANCEL, CONFIRM, classify_reply_async, waiting_prompt
 from app.ai.gateway.ai_rules import CONFIRM_OR_CANCEL
+from app.ai.execution import action_chips
 from app.ai.execution.approval import issue_approval_token
 from app.ai.execution.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
 from app.capabilities.connectors.store import (
@@ -337,6 +338,7 @@ async def _execute_github_tool(
             _pending_payload({"tool": name, "arguments": arguments, "token": token}),
             expires_at,
         )
+        action_chips.emit(action_chips.APPROVE, action_chips.CANCEL)
         return {
             "ok": False,
             "code": "APPROVAL_REQUIRED",
@@ -633,6 +635,10 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
         repository = str(data.get("repository") or "the selected repository")
         if not branches:
             return f"No branches were returned for {repository}."
+        # The one follow-up that needs no guessing: the repository is already known.
+        action_chips.emit(
+            {"label": "Create a branch", "action": f"create a branch in {repository}"}
+        )
         lines = [f"Branches in {repository} ({len(branches)} returned):"]
         for item in branches[:100]:
             name_text = str(item.get("name") or "")

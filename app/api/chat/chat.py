@@ -12,6 +12,7 @@ from app.ai.memory.conversation_store import ConversationStore
 from app.ai.memory.file_context import read_text_file
 from app.ai.gateway.service import generate_reply
 from app.ai.execution.connector_authorization import authorize_connector
+from app.ai.execution import action_chips
 from app.plugins.github.service import (
     MAX_REPOSITORY_FILE_BYTES,
     _redact_repository_secrets,
@@ -193,10 +194,22 @@ class ChatSource(BaseModel):
     url: str
 
 
+class ActionChip(BaseModel):
+    """One clickable follow-up under a reply."""
+
+    label: str
+    # The exact text this chip sends as the user's next message. "CONFIRM" is the same
+    # word the reply asks for, so a button and typing cannot diverge.
+    action: str
+
+
 class ChatResponse(BaseModel):
     conversation_id: str
     reply: str
     sources: list[ChatSource] = Field(default_factory=list)
+    # Empty for most replies. A held write carries Confirm/Cancel, so the user presses a
+    # button instead of typing a word the reply had to spell out.
+    action_chips: list[ActionChip] = Field(default_factory=list)
 
 
 def _principal(request: Request) -> str:
@@ -231,6 +244,7 @@ def _admit(request: Request, user_id: str) -> None:
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, body: ChatRequest) -> ChatResponse:
+    action_chips.begin()
     user_id = _principal(request)
     _admit(request, user_id)
     is_new_conversation = body.conversation_id is None
@@ -519,10 +533,14 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    chips = action_chips.collected()
+    action_chips.reset()
+
     return ChatResponse(
         conversation_id=conversation_id,
         reply=reply,
         sources=[ChatSource(title=source.title, url=source.url) for source in web_sources],
+        action_chips=[ActionChip(label=chip["label"], action=chip["action"]) for chip in chips],
     )
 
 @router.post("/code-edit-suggestion")

@@ -8,7 +8,8 @@ import os
 import re
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote_plus, urlparse
+import html as html_module
+from urllib.parse import parse_qs, quote_plus, urlparse
 
 import httpx
 
@@ -205,6 +206,126 @@ class TavilyResearchProvider(ResearchProvider):
                 continue
             results.append(ResearchResult(title, source_url, snippet))
         return results
+
+class DuckDuckGoResearchProvider(ResearchProvider):
+    """Free web search, with no API key and no per-query cost.
+
+    It reads the HTML endpoint rather than adding a dependency: `duckduckgo-search` is a
+    heavier install, and it is blocked or rate-limited from datacentre IPs often enough
+    that wrapping it would not make this more reliable.
+
+    The timeout is deliberately short. A search that hangs is worse than a search that
+    fails: the chat stream is waiting on it, and the answer can always be written without
+    it.
+    """
+
+    ENDPOINT = "https://html.duckduckgo.com/html/"
+    TIMEOUT_SECONDS = 6.0
+
+    def __init__(self, timeout: float = TIMEOUT_SECONDS) -> None:
+        if timeout <= 0 or timeout > MAX_RESEARCH_TIMEOUT_SECONDS:
+            raise ValueError("timeout must not exceed 60 seconds and must be greater than zero")
+
+        self.timeout = timeout
+
+    async def search(self, query: str, limit: int = 5) -> list[ResearchResult]:
+        query = query.strip()
+
+        if not query:
+            raise ValueError("query cannot be empty")
+
+        if limit < 1 or limit > 20:
+            raise ValueError("limit must be between 1 and 20")
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; IndooneResearch/1.0)",
+            "Accept": "text/html",
+        }
+
+        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+            response = await client.post(self.ENDPOINT, data={"q": query}, headers=headers)
+            response.raise_for_status()
+            html = response.text
+
+        return parse_duckduckgo_results(html, limit=limit)
+
+
+def _strip_markup(value: str) -> str:
+    """Plain text from a fragment of HTML: tags gone, entities decoded, whitespace tidy."""
+    without_tags = re.sub(r"<[^>]+>", " ", value or "")
+    unescaped = html_module.unescape(without_tags)
+
+    return " ".join(unescaped.split())
+
+
+def _canonical_url(href: str) -> str:
+    """DuckDuckGo wraps every result in a redirect; the real URL is in `uddg`."""
+    raw = (href or "").strip()
+
+    if not raw:
+        return ""
+
+    if raw.startswith("//"):
+        raw = "https:" + raw
+
+    parsed = urlparse(raw)
+    forwarded = parse_qs(parsed.query).get("uddg")
+
+    if forwarded and forwarded[0]:
+        return _safe_source_url(forwarded[0])
+
+    return _safe_source_url(raw)
+
+
+def parse_duckduckgo_results(markup: str, *, limit: int = 5) -> list[ResearchResult]:
+    """Results from the DuckDuckGo HTML page, in page order.
+
+    Written as a parser rather than a scrape of one exact class name: the markup changes
+    now and then, and a result that carries a title and a real URL is worth keeping even
+    when the snippet is missing.
+    """
+    results: list[ResearchResult] = []
+    seen: set[str] = set()
+
+    pattern = re.compile(
+        r'<a[^>]+class="[^"]*result__a[^"]*"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    for match in pattern.finditer(markup or ""):
+        url = _canonical_url(match.group(1))
+
+        if not url or url in seen:
+            continue
+
+        title = _strip_markup(match.group(2))[:MAX_TITLE_LENGTH]
+
+        if not title:
+            continue
+
+        seen.add(url)
+        results.append(ResearchResult(title=title, url=url, snippet=""))
+
+        if len(results) >= limit:
+            break
+
+    snippets = [
+        _strip_markup(item)[:MAX_SNIPPET_LENGTH]
+        for item in re.findall(
+            r'<a[^>]+class="[^"]*result__snippet[^"]*"[^>]*>(.*?)</a>',
+            markup or "",
+            re.IGNORECASE | re.DOTALL,
+        )
+    ]
+
+    for index, snippet in enumerate(snippets):
+        if index < len(results) and snippet:
+            results[index] = ResearchResult(
+                title=results[index].title, url=results[index].url, snippet=snippet
+            )
+
+    return results
+
 
 class WikipediaResearchProvider(ResearchProvider):
     """Adapt the existing Wikipedia knowledge provider into research evidence."""
@@ -494,6 +615,7 @@ class MultiSourceResearchProvider(ResearchProvider):
         max_query_variants: int = MAX_QUERY_VARIANTS,
     ) -> None:
         self.providers = providers or [
+            DuckDuckGoResearchProvider(),
             WikipediaResearchProvider(),
             WikidataResearchProvider(),
             GoogleNewsRssResearchProvider(),

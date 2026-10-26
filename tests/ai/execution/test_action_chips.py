@@ -79,9 +79,14 @@ def test_a_branch_list_offers_the_one_follow_up_that_needs_no_guessing() -> None
     )
 
     chips = action_chips.collected()
-    assert len(chips) == 1
-    assert chips[0]["label"] == "Create a branch"
-    assert "owner/repo" in chips[0]["action"]
+    # Three follow-ups, each carrying a complete request rather than a name to retype.
+    assert [chip["label"] for chip in chips] == [
+        "Create a branch",
+        "View commits",
+        "Create a pull request",
+    ]
+    for chip in chips:
+        assert "owner/repo" in chip["action"]
 
 
 def test_an_ordinary_reply_carries_nothing() -> None:

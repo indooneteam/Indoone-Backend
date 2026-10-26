@@ -636,9 +636,12 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
         repository = str(data.get("repository") or "the selected repository")
         if not branches:
             return f"No branches were returned for {repository}."
-        # The one follow-up that needs no guessing: the repository is already known.
+        # Follow-ups that need no guessing: the repository is already known, so each chip
+        # carries a complete request rather than a name the user would have to retype.
         action_chips.emit(
-            {"label": "Create a branch", "action": f"create a branch in {repository}"}
+            {"label": "Create a branch", "action": f"create a branch in {repository}"},
+            {"label": "View commits", "action": f"show commits in {repository}"},
+            {"label": "Create a pull request", "action": f"create a PR in {repository}"},
         )
         lines = [f"Branches in {repository} ({len(branches)} returned):"]
         for item in branches[:100]:

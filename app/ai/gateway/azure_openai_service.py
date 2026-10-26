@@ -18,6 +18,8 @@ Android app or the web.
 
 from __future__ import annotations
 
+from app.ai.execution.history_window import history_window
+
 import asyncio
 import json
 import logging
@@ -151,7 +153,7 @@ def _build_messages(
     ]
 
     if history:
-        for role, content in history[-12:]:
+        for role, content in history_window(history):
             clean_content = _content_text(content)
             if not clean_content or role not in {"user", "assistant"}:
                 continue

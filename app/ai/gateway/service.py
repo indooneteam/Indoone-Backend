@@ -292,7 +292,7 @@ class LocalAIService:
 
         if history:
             history_lines = []
-            for role, content in history[-12:]:
+            for role, content in history_window(history):
                 clean_content = " ".join(str(content).split()).strip()
                 if clean_content:
                     history_lines.append(f"{role}: {clean_content[:4_000]}")

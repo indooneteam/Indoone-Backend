@@ -1,9 +1,11 @@
 import os
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from app.ai.memory.conversation_store import ConversationStore
+from app.api.chat.share_page import render_not_found, render_share_page
 from app.api.security.dependencies import current_user_id
 
 router = APIRouter(tags=["conversations"])
@@ -37,6 +39,7 @@ class SharedMessage(BaseModel):
 
 class SharedThreadResponse(BaseModel):
     messages: list[SharedMessage]
+    title: str = ""
 
 
 class ConversationActionResponse(BaseModel):
@@ -119,6 +122,27 @@ async def rename_thread(
     return ConversationActionResponse(conversation_id=thread_id, status=title)
 
 
+# A page, not an API: registered without the /api prefix in main.py, because the link
+# people paste into a chat is https://indoone.ai/share/<id>.
+page_router = APIRouter(tags=["share"])
+
+
+@page_router.get("/share/{share_id}", response_class=HTMLResponse)
+async def shared_thread_page(share_id: str) -> HTMLResponse:
+    """The read-only transcript page a share link opens.
+
+    Server-rendered from the same store call the JSON endpoint uses, so the page needs no
+    JavaScript and has nothing to fetch.
+    """
+    view = _store.shared_thread_view(share_id)
+
+    if view is None:
+        return HTMLResponse(content=render_not_found(), status_code=404)
+
+    return HTMLResponse(
+        content=render_share_page(str(view.get("title") or ""), view.get("messages") or [])
+    )
+
 @router.get("/chat/shared/{share_id}", response_model=SharedThreadResponse)
 async def read_shared_thread(share_id: str) -> SharedThreadResponse:
     """Public and read-only: this is what the link is for.
@@ -126,11 +150,15 @@ async def read_shared_thread(share_id: str) -> SharedThreadResponse:
     Deliberately unauthenticated, and deliberately unable to write. It returns the messages
     and nothing about the owner - no user id, no conversation id, no status.
     """
-    messages = _store.shared_thread(share_id)
+    view = _store.shared_thread_view(share_id)
 
-    if messages is None:
+    if view is None:
         raise HTTPException(status_code=404, detail="This share link does not exist")
 
     return SharedThreadResponse(
-        messages=[SharedMessage(role=role, text=text) for role, text in messages]
+        title=str(view.get("title") or ""),
+        messages=[
+            SharedMessage(role=role, text=text)
+            for role, text in (view.get("messages") or [])
+        ],
     )

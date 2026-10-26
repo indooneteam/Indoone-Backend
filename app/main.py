@@ -17,7 +17,7 @@ from app.api.chat.agent_async import router as agent_async_router
 from app.web_research.api import router as web_research_router
 from app.api.chat.chat import router as chat_router
 from app.api.connectors.connector_security import enforce_connector_user_scope
-from app.api.chat.conversations import router as conversations_router
+from app.api.chat.conversations import page_router, router as conversations_router
 from app.api.content.documents import router as documents_router
 from app.api.content.files import router as files_router
 from app.api.security.errors import error_response
@@ -308,6 +308,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 app.include_router(zoho_mail_oauth_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(conversations_router, prefix="/api")
+app.include_router(page_router)
 app.include_router(platform_router, prefix="/api")
 app.include_router(observability_router, prefix="/api")
 app.include_router(memory_router, prefix="/api")

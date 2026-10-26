@@ -99,7 +99,8 @@ body {
   background: #703BE2; color: #fff; text-decoration: none; font-weight: 600; font-size: 13px;
 }
 main { max-width: 720px; margin: 0 auto; }
-h1 { font-size: 19px; line-height: 1.3; margin: 6px 0 18px; word-break: break-word; }
+h1 { font-size: 19px; line-height: 1.3; margin: 2px 0 18px; word-break: break-word; }
+.brand { font-size: 12px; font-weight: 700; letter-spacing: .04em; color: #703BE2; text-transform: uppercase; margin: 4px 0 6px; }
 .row { display: flex; margin-bottom: 10px; }
 .row.user { justify-content: flex-end; }
 .bubble {
@@ -132,7 +133,7 @@ def _page(title: str, inner: str) -> str:
 </head>
 <body>
 <div class="banner">
-  <span>Shared via Indoone AI</span>
+  <span>Shared conversation • Read only</span>
   <a href="https://indoone.ai" rel="noopener">Try Indoone</a>
 </div>
 <main>
@@ -150,7 +151,7 @@ def render_share_page(title: str, messages: list[tuple[str, str]]) -> str:
 
     if not messages:
         inner = (
-            f"<h1>{html.escape(heading)}</h1>"
+            f'<div class="brand">Indoone AI</div><h1>{html.escape(heading)}</h1>'
             '<p class="empty">This conversation has no messages yet.</p>'
         )
 
@@ -167,7 +168,10 @@ def render_share_page(title: str, messages: list[tuple[str, str]]) -> str:
             f"</div>"
         )
 
-    inner = f"<h1>{html.escape(heading)}</h1>" + "".join(rows)
+    inner = (
+        f'<div class="brand">Indoone AI</div><h1>{html.escape(heading)}</h1>'
+        + "".join(rows)
+    )
 
     return _page(f"{heading} — Indoone AI", inner)
 
@@ -179,7 +183,7 @@ def render_not_found() -> str:
     say whether a share id ever existed.
     """
     inner = (
-        "<h1>Chat not found or link expired</h1>"
+        "<h1>Chat not found or link has expired</h1>"
         '<p class="empty">This link does not point to a shared conversation. '
         "It may have been withdrawn by the person who created it.</p>"
     )

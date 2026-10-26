@@ -314,6 +314,77 @@ class LocalAIService:
             max_output_tokens=_MODEL_MAX_NEW_TOKENS,
         )
 
+async def stream_generate(
+    message: str,
+    history: list[tuple[str, str]] | None = None,
+    document_context: str = "",
+    extra_system_instruction: str = "",
+):
+    """Yield the answer as it is produced, instead of returning it whole.
+
+    The contract is a plain async generator of text chunks. Two things matter about it:
+
+    * A provider that cannot stream still works. It yields the finished reply as ONE chunk,
+      which is exactly what the old 48-character replay pretended to be - but this says so
+      instead of chopping a complete string to look busy.
+    * A streaming failure mid-answer is not silent. Anything the provider raises after the
+      first chunk propagates, so the caller can tell the difference between "the answer is
+      long" and "the connection died".
+
+    Provider streaming is behind INDOONE_STREAM_PROVIDERS because it cannot be verified
+    from a test suite: it is a live HTTP contract with Gemini and Azure. Until that is
+    verified on a deployment, this returns the blocking reply as a single chunk - correct,
+    just not incremental.
+    """
+    if os.getenv("INDOONE_STREAM_PROVIDERS", "").strip().casefold() in {"1", "true", "yes"}:
+        provider_stream = _provider_stream()
+
+        if provider_stream is not None:
+            async for chunk in provider_stream(
+                message,
+                history=history,
+                document_context=document_context,
+                extra_system_instruction=extra_system_instruction,
+            ):
+                yield chunk
+            return
+
+    reply = await generate_reply(
+        message,
+        history=history,
+        document_context=document_context,
+        extra_system_instruction=extra_system_instruction,
+    )
+
+    if reply:
+        yield reply
+
+
+def _provider_stream():
+    """The streaming generator for the configured backend, or None.
+
+    Chosen the same way the blocking call is chosen, so the two can never disagree about
+    which provider is active.
+    """
+    # A provider that has no streaming generator yet must not break the request: the
+    # caller falls back to one chunk of the finished reply, which is correct, just not
+    # incremental.
+    try:
+        if _gemini_backend_enabled():
+            from app.ai.gateway.gemini_service import stream_gemini_reply
+
+            return stream_gemini_reply
+
+        if _azure_backend_enabled():
+            from app.ai.gateway.azure_openai_service import stream_azure_reply
+
+            return stream_azure_reply
+    except ImportError:
+        return None
+
+    return None
+
+
 async def generate_reply(
     message: str,
     history: list[tuple[str, str]] | None = None,

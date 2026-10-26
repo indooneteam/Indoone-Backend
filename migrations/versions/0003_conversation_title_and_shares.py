@@ -12,7 +12,7 @@ Two small pieces of schema for the export and management suite:
 Both steps are conditional, so this revision is safe on a database the baseline created and
 on one that has already been migrated.
 
-Revision ID: 0003_conversation_title_and_shares
+Revision ID: 0003_title_and_shares
 Revises: 0002_legacy_schema_repairs
 Create Date: 2026-10-26
 """
@@ -22,7 +22,7 @@ from __future__ import annotations
 from alembic import op
 from sqlalchemy import inspect
 
-revision = "0003_conversation_title_and_shares"
+revision = "0003_title_and_shares"
 down_revision = "0002_legacy_schema_repairs"
 branch_labels = None
 depends_on = None

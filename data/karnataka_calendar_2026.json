@@ -1,0 +1,202 @@
+{
+  "_source": "Karnataka DPAR holiday list 2026 and the central-government list for offices in Karnataka. Where the two disagree, both dates are recorded and the entry says so - a wrong festival date is worse than a stated uncertainty.",
+  "_year": 2026,
+  "events": [
+    {
+      "date": "2026-01-01",
+      "name_en": "New Year's Day",
+      "name_kn": "ಹೊಸ ವರ್ಷದ ದಿನ",
+      "is_public_holiday": false,
+      "description": "Restricted holiday."
+    },
+    {
+      "date": "2026-01-14",
+      "name_en": "Makara Sankranti",
+      "name_kn": "ಮಕರ ಸಂಕ್ರಾಂತಿ",
+      "is_public_holiday": true,
+      "description": "Uttarayana Punyakala. A Karnataka public holiday."
+    },
+    {
+      "date": "2026-01-26",
+      "name_en": "Republic Day",
+      "name_kn": "ಗಣರಾಜ್ಯೋತ್ಸವ",
+      "is_public_holiday": true,
+      "description": "National holiday."
+    },
+    {
+      "date": "2026-02-15",
+      "name_en": "Maha Shivaratri",
+      "name_kn": "ಮಹಾ ಶಿವರಾತ್ರಿ",
+      "is_public_holiday": false,
+      "description": "Falls on a Sunday in 2026, so it is not a separate general holiday."
+    },
+    {
+      "date": "2026-03-19",
+      "name_en": "Ugadi",
+      "name_kn": "ಯುಗಾದಿ",
+      "is_public_holiday": true,
+      "description": "Kannada New Year. A Karnataka public holiday."
+    },
+    {
+      "date": "2026-03-21",
+      "name_en": "Id-ul-Fitr",
+      "name_kn": "ಈದ್-ಉಲ್-ಫಿತರ್",
+      "is_public_holiday": true,
+      "description": "Khutba-e-Ramzan in the state list. May shift by a day with the moon sighting."
+    },
+    {
+      "date": "2026-03-31",
+      "name_en": "Mahaveera Jayanthi",
+      "name_kn": "ಮಹಾವೀರ ಜಯಂತಿ",
+      "is_public_holiday": true,
+      "description": "A Karnataka public holiday."
+    },
+    {
+      "date": "2026-04-03",
+      "name_en": "Good Friday",
+      "name_kn": "ಗುಡ್ ಫ್ರೈಡೇ",
+      "is_public_holiday": true,
+      "description": "A Karnataka public holiday."
+    },
+    {
+      "date": "2026-04-14",
+      "name_en": "Dr. B. R. Ambedkar Jayanthi",
+      "name_kn": "ಡಾ. ಬಿ. ಆರ್. ಅಂಬೇಡ್ಕರ್ ಜಯಂತಿ",
+      "is_public_holiday": true,
+      "description": "A Karnataka public holiday."
+    },
+    {
+      "date": "2026-04-20",
+      "name_en": "Basava Jayanthi / Akshaya Tritiya",
+      "name_kn": "ಬಸವ ಜಯಂತಿ / ಅಕ್ಷಯ ತೃತೀಯ",
+      "is_public_holiday": true,
+      "description": "A Karnataka public holiday."
+    },
+    {
+      "date": "2026-05-01",
+      "name_en": "May Day",
+      "name_kn": "ಮೇ ದಿನ",
+      "is_public_holiday": true,
+      "description": "Labour Day. A Karnataka public holiday."
+    },
+    {
+      "date": "2026-05-27",
+      "name_en": "Bakrid (Id-ul-Zuha)",
+      "name_kn": "ಬಕ್ರೀದ್",
+      "is_public_holiday": true,
+      "description": "The central list for Karnataka gives 27 May; the state list gives 28 May. Confirm locally."
+    },
+    {
+      "date": "2026-05-28",
+      "name_en": "Bakrid (Id-ul-Zuha)",
+      "name_kn": "ಬಕ್ರೀದ್",
+      "is_public_holiday": true,
+      "description": "The Karnataka state list date. The central list gives 27 May."
+    },
+    {
+      "date": "2026-06-26",
+      "name_en": "Muharram",
+      "name_kn": "ಮುಹರ್ರಮ್",
+      "is_public_holiday": true,
+      "description": "Last day of Muharram in the state list."
+    },
+    {
+      "date": "2026-08-15",
+      "name_en": "Independence Day",
+      "name_kn": "ಸ್ವಾತಂತ್ರ್ಯ ದಿನ",
+      "is_public_holiday": true,
+      "description": "National holiday."
+    },
+    {
+      "date": "2026-08-26",
+      "name_en": "Eid-Milad",
+      "name_kn": "ಮಿಲಾದ್-ಉನ್-ನಬಿ",
+      "is_public_holiday": true,
+      "description": "Prophet's birthday. May shift with the moon sighting."
+    },
+    {
+      "date": "2026-09-14",
+      "name_en": "Ganesh Chaturthi",
+      "name_kn": "ಗಣೇಶ ಚತುರ್ಥಿ",
+      "is_public_holiday": true,
+      "description": "Varasiddhi Vinayaka Vrata. A Karnataka public holiday."
+    },
+    {
+      "date": "2026-10-02",
+      "name_en": "Gandhi Jayanti",
+      "name_kn": "ಗಾಂಧಿ ಜಯಂತಿ",
+      "is_public_holiday": true,
+      "description": "National holiday."
+    },
+    {
+      "date": "2026-10-10",
+      "name_en": "Mahalaya Amavasya",
+      "name_kn": "ಮಹಾಲಯ ಅಮಾವಾಸ್ಯೆ",
+      "is_public_holiday": false,
+      "description": "Falls on a second Saturday in 2026, so it is not a separate general holiday."
+    },
+    {
+      "date": "2026-10-19",
+      "name_en": "Mahanavami / Ayudha Pooja",
+      "name_kn": "ಮಹಾನವಮಿ / ಆಯುಧ ಪೂಜೆ",
+      "is_public_holiday": true,
+      "description": "The central list gives 19 October for Mahanavami."
+    },
+    {
+      "date": "2026-10-20",
+      "name_en": "Vijayadasami",
+      "name_kn": "ವಿಜಯದಶಮಿ",
+      "is_public_holiday": true,
+      "description": "The central list gives 20 October; the Karnataka state list gives 21 October."
+    },
+    {
+      "date": "2026-10-21",
+      "name_en": "Vijayadasami",
+      "name_kn": "ವಿಜಯದಶಮಿ",
+      "is_public_holiday": true,
+      "description": "The Karnataka state list date. The central list gives 20 October."
+    },
+    {
+      "date": "2026-11-01",
+      "name_en": "Kannada Rajyotsava",
+      "name_kn": "ಕನ್ನಡ ರಾಜ್ಯೋತ್ಸವ",
+      "is_public_holiday": false,
+      "description": "Karnataka Formation Day. Falls on a Sunday in 2026, so it is not a separate general holiday."
+    },
+    {
+      "date": "2026-11-08",
+      "name_en": "Deepavali / Naraka Chaturdashi",
+      "name_kn": "ದೀಪಾವಳಿ / ನರಕ ಚತುರ್ದಶಿ",
+      "is_public_holiday": true,
+      "description": "The central list gives 8 November; the Karnataka state list observes 9 November."
+    },
+    {
+      "date": "2026-11-09",
+      "name_en": "Deepavali (Balipadyami)",
+      "name_kn": "ದೀಪಾವಳಿ (ಬಲಿಪಾಡ್ಯಮಿ)",
+      "is_public_holiday": true,
+      "description": "The Karnataka state list date. The central list gives 8 November."
+    },
+    {
+      "date": "2026-11-24",
+      "name_en": "Guru Nanak Jayanti",
+      "name_kn": "ಗುರು ನಾನಕ್ ಜಯಂತಿ",
+      "is_public_holiday": true,
+      "description": "A gazetted holiday."
+    },
+    {
+      "date": "2026-11-27",
+      "name_en": "Kanakadasa Jayanthi",
+      "name_kn": "ಕನಕದಾಸ ಜಯಂತಿ",
+      "is_public_holiday": true,
+      "description": "A Karnataka public holiday."
+    },
+    {
+      "date": "2026-12-25",
+      "name_en": "Christmas",
+      "name_kn": "ಕ್ರಿಸ್ಮಸ್",
+      "is_public_holiday": true,
+      "description": "A gazetted holiday."
+    }
+  ]
+}

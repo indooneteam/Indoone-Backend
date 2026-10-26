@@ -48,6 +48,7 @@ from app.plugins.email.email_tools import (
     handle_email_chat,
     handle_email_chat_with_tools,
 )
+from app.plugins.festivals.calendar import festival_answer
 from app.plugins.github.chat_tools import handle_github_chat_with_tools
 
 logger = logging.getLogger("indoone.chat")
@@ -344,6 +345,31 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     document_context = "\n\n".join(document_context_parts)[:120_000]
 
     try:
+        # A festival or holiday question is answered from the calendar file before
+        # anything else runs: no agent, no gateway, no tokens. The dates follow a lunar
+        # calendar and a state gazette, so they cannot be computed - and a model asked for
+        # one will produce a confident date that is wrong.
+        calendar_reply = festival_answer(body.message)
+
+        if calendar_reply is not None:
+            # Answered from the file. Nothing below this runs: no agent, no gateway, no
+            # tokens - which is the whole point of the module.
+            try:
+                _store.append(
+                    conversation_id,
+                    [("user", body.message), ("assistant", calendar_reply)],
+                    user_id=user_id,
+                )
+            except (ValueError, PermissionError):
+                pass
+
+            return ChatResponse(
+                conversation_id=conversation_id,
+                reply=calendar_reply,
+                sources=[],
+                action_chips=[],
+            )
+
         tool_reply = None
         # Two short lines: the user's name, and today's date and time. Together they
         # cost about 16 tokens; the date line is what stops the model answering a

@@ -12,6 +12,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
+from uuid import uuid4
 
 from app.storage import database
 from app.storage.migrations import ensure_schema
@@ -202,6 +203,81 @@ class ConversationStore:
             self._assert_owner(row, user_id)
             connection.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
             connection.execute("DELETE FROM conversations WHERE conversation_id = ?", (conversation_id,))
+
+    def rename(self, conversation_id: str, title: str, user_id: str | None = None) -> str:
+        """Give a thread a name the user chose, and return it as stored.
+
+        Cleaned before it is stored: a title is shown in a list, and a newline or a run of
+        spaces in it makes that list look broken.
+        """
+        if not conversation_id:
+            raise ValueError("conversation_id cannot be empty")
+
+        cleaned = " ".join(str(title or "").split())
+
+        if not cleaned:
+            raise ValueError("title cannot be empty")
+
+        if len(cleaned) > 120:
+            raise ValueError("title must be at most 120 characters")
+
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)
+            ).fetchone()
+            self._assert_owner(row, user_id)
+            connection.execute(
+                "UPDATE conversations SET title=?, updated_at=CURRENT_TIMESTAMP "
+                "WHERE conversation_id=?",
+                (cleaned, conversation_id),
+            )
+
+        return cleaned
+
+    def create_share(self, conversation_id: str, user_id: str | None = None) -> str:
+        """A non-guessable link id for this thread, owned by the person who made it."""
+        if not conversation_id:
+            raise ValueError("conversation_id cannot be empty")
+
+        share_id = uuid4().hex
+
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT user_id FROM conversations WHERE conversation_id=?", (conversation_id,)
+            ).fetchone()
+            self._assert_owner(row, user_id)
+            connection.execute(
+                "INSERT INTO conversation_shares (share_id, conversation_id, user_id) "
+                "VALUES (?, ?, ?)",
+                (share_id, conversation_id, user_id),
+            )
+
+        return share_id
+
+    def shared_thread(self, share_id: str) -> list[tuple[str, str]] | None:
+        """The messages behind a share link, or None when the link does not exist.
+
+        No owner check on purpose: the whole point of a share link is that someone else can
+        read it. It is read-only by construction - nothing here writes.
+        """
+        if not share_id:
+            return None
+
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT conversation_id FROM conversation_shares WHERE share_id=?",
+                (share_id,),
+            ).fetchone()
+
+            if row is None:
+                return None
+
+            rows = connection.execute(
+                "SELECT role, content FROM messages WHERE conversation_id=? ORDER BY id",
+                (str(row["conversation_id"]),),
+            ).fetchall()
+
+        return [(str(item["role"]), str(item["content"])) for item in rows]
 
     def purge_expired_closed(self, max_age_days: int = 7) -> int:
         """Delete conversations closed at least max_age_days ago.

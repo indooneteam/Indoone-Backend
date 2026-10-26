@@ -14,6 +14,7 @@ from typing import Any
 from app.ai.execution.confirmation import CANCEL, CONFIRM, classify_reply_async, waiting_prompt
 from app.ai.gateway.ai_rules import CONFIRM_OR_CANCEL
 from app.ai.execution import action_chips
+from app.ai.execution import reference_resolution
 from app.ai.execution.approval import issue_approval_token
 from app.ai.execution.tool_registry import GITHUB_TOOL_DECLARATIONS, GITHUB_WRITE_TOOL_DECLARATIONS
 from app.capabilities.connectors.store import (
@@ -866,5 +867,44 @@ async def handle_github_chat_with_tools(
     # the real list, and the model summarised it. Nothing that reaches the user
     # goes through a model any more.
     tool_name, tool_arguments = request
+
+    # "create a branch in 2" and "show files in indoone": the user was just handed a
+    # numbered list, so a selection in the request is resolved against it instead of being
+    # refused for not being a canonical name. Only a value that IS a selection resolves -
+    # two matches is ambiguity, and picking one would be a guess dressed up as an answer.
+    resolved_arguments = dict(tool_arguments)
+
+    # "show branches of 2" names no repository the parser recognises, so the selection in
+    # the message itself is the reference. Only when the request named no repository at all
+    # - an explicit one always wins over a bare number.
+    if not str(resolved_arguments.get("repository") or "").strip() and not str(
+        resolved_arguments.get("repository_hint") or ""
+    ).strip():
+        selection = reference_resolution.selection_token(message)
+
+        if selection:
+            resolved_arguments["repository_hint"] = selection
+
+    for key in ("repository", "repository_hint", "branch"):
+        value = str(resolved_arguments.get(key) or "").strip()
+
+        if not value:
+            continue
+
+        resolved = reference_resolution.resolve_from_history(value, history)
+
+        if resolved and resolved != value:
+            resolved_arguments[key] = resolved
+
+    # A resolved selection is a real repository, not a hint: the field the executor reads
+    # first must carry it, or the fuzzy lookup would run again on a name that is already
+    # canonical.
+    if not str(resolved_arguments.get("repository") or "").strip():
+        hint = str(resolved_arguments.get("repository_hint") or "").strip()
+
+        if _REPOSITORY_NAME_RE.fullmatch(hint):
+            resolved_arguments["repository"] = hint
+
+    tool_arguments = resolved_arguments
     result = await _execute_github_tool(user, tool_name, tool_arguments, (), conversation_id, message=message)
     return _format_github_result(tool_name, result)

@@ -96,16 +96,35 @@ def _repository_hint_from_message(text: str) -> str:
     return ""
 
 
+# "ralli" and "alli" are how a branch is named in ordinary Kannada chat; the tool must
+# understand the request before any model is asked about it.
+_BRANCH_WORD = re.compile(r"\b(branch(?:es)?|ralli|ralli\u0304|alli)\b|ಶಾಖೆ|ಬ್ರಾಂಚ್", re.IGNORECASE)
+
+
 def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple[str, dict[str, Any]] | str | None:
     text = message.strip()
-    if not text or not _ACTION_RE.search(text) or not _GITHUB_TARGET_RE.search(text):
+
+    # A branch word is both the action and the target: "1 ralli" names no verb and no
+    # repository, yet it is a complete request in Kannada - the repository is the one the
+    # thread is already about. Without this it fell through to the model, which invented
+    # branch names instead of calling the tool.
+    branch_word = bool(_BRANCH_WORD.search(text))
+
+    if not text:
+        return None
+
+    if not (branch_word or _ACTION_RE.search(text)):
+        return None
+
+    if not (branch_word or _GITHUB_TARGET_RE.search(text)):
         return None
     recent_context = " ".join(str(item or "") for role, item in (history or [])[-6:] if role == "user")
     has_context = bool(
         re.search(r"\bgithub\b", text, re.IGNORECASE)
         or re.search(r"\bgithub\b", recent_context, re.IGNORECASE)
         or re.search(r"\b(repo|repos|repository|repositories)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)", text, re.IGNORECASE)
-        or re.search(r"\b(branch|branches|checks?)\b|ಶಾಖೆ|ಬ್ರಾಂಚ್|ಚೆಕ್", text, re.IGNORECASE)
+        or _BRANCH_WORD.search(text)
+        or re.search(r"\b(checks?)\b|ಚೆಕ್", text, re.IGNORECASE)
         or re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", text, re.IGNORECASE)
         or re.search(r"(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ", text, re.IGNORECASE)
         or _REPOSITORY_NAME_RE.search(text)
@@ -227,7 +246,7 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
         return "github_read_repository_file", {"repository": repository, "repository_hint": repository_hint, "path": path, "ref": ""}
     if file_list_intent:
         return "github_list_repository_contents", {"repository": repository, "repository_hint": repository_hint, "path": "", "ref": ""}
-    if re.search(r"\b(branch(?:es)?)\b|ಶಾಖೆ|ಬ್ರಾಂಚ್", text, re.IGNORECASE):
+    if _BRANCH_WORD.search(text):
         # A write IS routed here now. It used to return None so the model would
         # handle it - but the model then looped on the confirmation and invented
         # branch names. The handler answers it deterministically instead: it holds

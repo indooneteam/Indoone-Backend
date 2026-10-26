@@ -377,6 +377,23 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                     approval_tokens=tuple(body.approval_tokens or ()),
                     conversation_id=conversation_id,
                 )
+            # A GitHub request is answered by the deterministic router on EVERY backend,
+            # not only the local one. This is the fix for invented branch lists: the model
+            # path leaves the choice of calling a tool to the model, and a model that
+            # answers from memory produces names that never came from the API - instantly,
+            # with no network latency to give it away.
+            #
+            # The router returns None when the message is not a GitHub request, so this
+            # costs a regex pass on everything else.
+            if tool_reply is None and not email_owns_this:
+                tool_reply = await handle_github_chat_with_tools(
+                    user_id,
+                    body.message,
+                    history=history,
+                    approval_tokens=tuple(body.approval_tokens or ()),
+                    conversation_id=conversation_id,
+                )
+
             # No gate on whether to offer tools: the model is given four small
             # declarations and find_tools, so an ordinary message costs a few hundred
             # tokens rather than the whole catalogue. A message that needs nothing is

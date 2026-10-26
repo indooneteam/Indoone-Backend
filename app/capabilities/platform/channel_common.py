@@ -4,6 +4,9 @@ import hashlib
 import logging
 import os
 
+from app.ai.execution.account_context import accounts_instruction, without_stale_refusals
+from app.ai.execution.request_context import now_line, user_name_line
+from app.ai.execution.tool_loop import run_tool_loop
 from app.ai.gateway.service import generate_reply
 from app.ai.memory.conversation_store import ConversationStore
 
@@ -28,7 +31,44 @@ def _conversation_id(channel: str, sender_id: str) -> str:
     return f"channel:{channel}:{digest}"
 
 
+def _tool_loop_available() -> bool:
+    """Whether a model backend with function calling is configured."""
+
+    return os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold() in {"gemini", "azure"}
+
+
+def _instruction(owner_user_id: str) -> str:
+    """The same two or three lines the app's chat endpoint adds, for a channel message.
+
+    Built here rather than in the channel handlers so WhatsApp, Telegram and Instagram
+    cannot drift from each other, and from the app.
+    """
+
+    return " ".join(
+        line
+        for line in (
+            user_name_line(owner_user_id),
+            now_line(),
+            accounts_instruction(owner_user_id),
+        )
+        if line
+    )
+
+
 async def _generate_with_history(owner_user_id: str, channel: str, sender_id: str, text: str) -> str:
+    """Answer a channel message through the same loop the app uses.
+
+    These handlers used to call the model directly, which meant a message on WhatsApp
+    was answered with no tools at all, no date, and no statement about the user's
+    connected accounts - so it could not look anything up, and it answered a date
+    question from training memory. The app and the channels were two different
+    assistants that happened to share a model.
+
+    Now: the same history cleaning, the same instruction lines, and the same unified
+    tool loop. The loop returns None when the model chooses no tool, which is the
+    ordinary conversational case, and that falls back to a plain reply.
+    """
+
     conversation_id = _conversation_id(channel, sender_id)
     store = ConversationStore()
     try:
@@ -36,12 +76,34 @@ async def _generate_with_history(owner_user_id: str, channel: str, sender_id: st
     except (ValueError, PermissionError):
         history = []
 
-    try:
-        reply = await generate_reply(text, history=history)
-    except Exception:
-        # A channel message must never be left unanswered.
-        logger.exception("channel reply failed", extra={"channel": channel})
-        reply = _FALLBACK_REPLY
+    # An old "I don't have access" must not be replayed now that an account is
+    # connected - the model reads its own last answer as evidence.
+    history = without_stale_refusals(history, owner_user_id) or []
+    instruction = _instruction(owner_user_id)
+
+    reply: str | None = None
+    if _tool_loop_available():
+        try:
+            reply = await run_tool_loop(
+                owner_user_id,
+                conversation_id,
+                text,
+                history=history,
+                extra_system_instruction=instruction,
+            )
+        except Exception:
+            # The plain reply below is the fallback: one provider hiccup must not cost
+            # the user an answer on a channel they cannot retry from.
+            logger.exception("channel tool loop failed", extra={"channel": channel})
+            reply = None
+
+    if reply is None:
+        try:
+            reply = await generate_reply(text, history=history, extra_system_instruction=instruction)
+        except Exception:
+            # A channel message must never be left unanswered.
+            logger.exception("channel reply failed", extra={"channel": channel})
+            reply = _FALLBACK_REPLY
     store.append(
         conversation_id,
         [("user", text), ("assistant", reply)],

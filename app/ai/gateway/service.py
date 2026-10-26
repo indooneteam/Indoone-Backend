@@ -314,6 +314,18 @@ class LocalAIService:
             max_output_tokens=_MODEL_MAX_NEW_TOKENS,
         )
 
+async def _close_stream(stream) -> None:
+    """Close a provider generator, ignoring whatever it throws on the way out.
+
+    The original failure is the one worth reporting; an error raised while unwinding the
+    stream would replace it with a less useful one.
+    """
+    try:
+        await stream.aclose()
+    except Exception:  # noqa: BLE001 - closing is best effort by design
+        return
+
+
 async def stream_generate(
     message: str,
     history: list[tuple[str, str]] | None = None,
@@ -341,30 +353,55 @@ async def stream_generate(
     streaming_on = os.getenv("INDOONE_STREAM_PROVIDERS", "true").strip().casefold() not in {
         "0", "false", "no", "off",
     }
-    provider_stream = _provider_stream() if streaming_on else None
+    providers = _provider_streams() if streaming_on else []
+    arguments = {
+        "history": history,
+        "document_context": document_context,
+        "extra_system_instruction": extra_system_instruction,
+    }
 
-    if provider_stream is not None:
-        started = False
+    for position, (label, provider_stream) in enumerate(providers):
+        stream = provider_stream(message, **arguments)
+        first = ""
 
         try:
-            async for chunk in provider_stream(
-                message,
-                history=history,
-                document_context=document_context,
-                extra_system_instruction=extra_system_instruction,
-            ):
-                started = True
-                yield chunk
-
-            if started:
-                return
+            first = await asyncio.wait_for(
+                stream.__anext__(), timeout=_STREAM_FIRST_CHUNK_SECONDS
+            )
+        except StopAsyncIteration:
+            logger.warning("%s stream ended without a chunk; failing over", label)
+            await _close_stream(stream)
+            continue
         except Exception as exc:
-            # Nothing has been sent yet, so falling back costs the user nothing but a
-            # short wait. Once a chunk has gone out the failure is real: swallowing it
-            # would leave a half answer standing as if it were complete.
-            if started:
-                raise
-            logger.warning("provider streaming failed before the first chunk: %s", exc)
+            # Timeout, 429, 5xx, a socket error - all the same decision: the next provider
+            # answers instead. Nothing has reached the client yet, so this costs only time.
+            next_label = (
+                providers[position + 1][0]
+                if position + 1 < len(providers)
+                else "the blocking path"
+            )
+            logger.warning(
+                "%s stream failed before the first chunk; failing over to %s: %s",
+                label,
+                next_label,
+                exc,
+            )
+            await _close_stream(stream)
+            continue
+
+        if first:
+            yield first
+
+        # The first chunk is out, so the answer is live: a failure from here is real and
+        # propagates. Swallowing it would leave half an answer standing as if it were whole.
+        try:
+            async for chunk in stream:
+                if chunk:
+                    yield chunk
+        finally:
+            await _close_stream(stream)
+
+        return
 
     reply = await generate_reply(
         message,
@@ -375,6 +412,59 @@ async def stream_generate(
 
     if reply:
         yield reply
+
+
+# How long the primary gets to produce its FIRST chunk before the secondary takes over.
+# A provider that accepts the connection and then stalls is the case this exists for: the
+# client would otherwise wait until its own timeout and show "taking too long".
+_STREAM_FIRST_CHUNK_SECONDS = 8.0
+
+
+def _azure_stream_configured() -> bool:
+    """Whether Azure OpenAI has enough configuration to be tried at all."""
+    return all(
+        os.getenv(name, "").strip()
+        for name in ("AZURE_OPENAI_API_KEY", "AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_DEPLOYMENT")
+    )
+
+
+def _gemini_stream_configured() -> bool:
+    return bool(os.getenv("GEMINI_API_KEY", "").strip())
+
+
+def _provider_streams() -> list[tuple[str, object]]:
+    """The stream generators to try, in order: primary first, then the paid secondary.
+
+    The secondary is offered when it is *configured*, not only when it is the selected
+    backend - a Gemini deployment that has Azure credentials can still fail over, which is
+    the whole point of having them.
+    """
+    streams: list[tuple[str, object]] = []
+
+    try:
+        if _azure_backend_enabled():
+            from app.ai.gateway.azure_openai_service import stream_azure_reply
+
+            streams.append(("Azure OpenAI", stream_azure_reply))
+
+            if _gemini_stream_configured():
+                from app.ai.gateway.gemini_service import stream_gemini_reply
+
+                streams.append(("Gemini", stream_gemini_reply))
+        else:
+            if _gemini_backend_enabled() and _gemini_stream_configured():
+                from app.ai.gateway.gemini_service import stream_gemini_reply
+
+                streams.append(("Gemini", stream_gemini_reply))
+
+            if _azure_stream_configured():
+                from app.ai.gateway.azure_openai_service import stream_azure_reply
+
+                streams.append(("Azure OpenAI", stream_azure_reply))
+    except ImportError:  # a provider module that is not installed is simply not offered
+        return streams
+
+    return streams
 
 
 def _provider_stream():

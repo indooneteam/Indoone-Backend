@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.ai.gateway.observability import track
 from app.ai.gateway.ai_rules import CONFIRM_OR_CANCEL
+from app.ai.execution import action_chips
 from app.ai.execution.approval import issue_approval_token, validate_approval_token
 from app.ai.agents.code_sandbox import sandbox_execution_tool
 from app.ai.execution.connector_authorization import authorize_tool
@@ -655,6 +656,9 @@ def _hold_write(
     # Written for the USER, because this text is the reply now - not a note to a
     # model. Nothing has happened yet and it says so.
     reason = protected_reason.strip()
+    # The same two answers the sentence asks for, as data: the client renders them as
+    # buttons, and pressing one sends exactly the word the user would have typed.
+    action_chips.emit(action_chips.APPROVE, action_chips.CANCEL)
     return json.dumps({
         "ok": False,
         "code": "APPROVAL_REQUIRED",

@@ -455,6 +455,11 @@ message = "Fix GitHub API response robustness and commit-history fallback handli
 # ---------------------------------------------------------------------------
 
 
+# A repository with more branches than this is not a real branch list any more; the
+# read stops and says so rather than paging forever.
+_MAX_BRANCHES = 1000
+
+
 async def list_github_branches(
     user_id: str, repository: str, per_page: int = 30
 ) -> dict[str, object]:
@@ -465,16 +470,43 @@ async def list_github_branches(
     repo = _validated_repository(repository)
     if per_page < 1 or per_page > 100:
         raise ValueError("per_page must be between 1 and 100")
+    # Every page, not the first one. The list used to stop at per_page (30 by default),
+    # so a repository with 40 branches was reported as having 30 - a wrong number stated
+    # with confidence, which is worse than an error. The cap is a guard against a
+    # pathological repository, and it is reported rather than hidden.
+    headers = _github_headers(_github_token(user))
+    body: list[object] = []
+    page = 1
+    # Stopping at the cap is not the same as reaching the end: the loop has to say which
+    # one happened, or the count reads as complete when it is not.
+    truncated = False
+
     async with httpx.AsyncClient(timeout=20.0) as client:
-        response = await client.get(
-            f"{_GITHUB_REPOS_BASE_URL}/{repo}/branches",
-            headers=_github_headers(_github_token(user)),
-            params={"per_page": per_page},
-        )
-        response.raise_for_status()
-        body = response.json()
-    if not isinstance(body, list):
-        raise RuntimeError("GitHub returned an invalid branch list")
+        while True:
+            if len(body) >= _MAX_BRANCHES:
+                truncated = True
+                break
+
+            response = await client.get(
+                f"{_GITHUB_REPOS_BASE_URL}/{repo}/branches",
+                headers=headers,
+                params={"per_page": per_page, "page": page},
+            )
+            response.raise_for_status()
+            batch = response.json()
+
+            if not isinstance(batch, list):
+                raise RuntimeError("GitHub returned an invalid branch list")
+
+            body.extend(batch)
+
+            # A short page is the last page.
+            if len(batch) < per_page:
+                break
+
+            page += 1
+
+    body = body[:_MAX_BRANCHES]
     branches: list[dict[str, object]] = []
     for item in body[:100]:
         if not isinstance(item, dict):
@@ -488,7 +520,10 @@ async def list_github_branches(
         })
     return {
         "integration": "github", "repository": repo,
-        "branches": branches, "count": len(branches), "secrets_exposed": False,
+        "branches": branches, "count": len(branches),
+        # True only when the cap stopped the read, so the model can say "the first N"
+        # instead of claiming that is all there is.
+        "truncated": truncated, "secrets_exposed": False,
     }
 
 

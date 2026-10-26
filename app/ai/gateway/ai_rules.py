@@ -55,7 +55,11 @@ _TOOL_ONLY_RULES = (
     "back and found. Never say a change was made unless it is true. When it is false, say "
     "what you could not confirm and stop - do not retry on your own. "
     "If the request needs something none of the tools you have can do, call find_tools "
-    "with a short English query, then use what it returns."
+    "with a short English query, then use what it returns. "
+    "When the user asks to list, create or delete a branch, do it with the GitHub tools - "
+    "github_list_branches, github_create_branch, github_delete_branch. Never answer with "
+    "git commands for the user to run instead of doing it, and never state a branch count "
+    "that the tool did not return."
 )
 TOOL_SYSTEM_INSTRUCTION = ANSWER_SYSTEM_INSTRUCTION + "\n\n" + _TOOL_ONLY_RULES
 

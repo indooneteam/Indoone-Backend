@@ -338,6 +338,15 @@ async def github_merge_pull_request(
     normalized_method = method.strip().lower() or "squash"
     if normalized_method not in {"squash", "merge", "rebase"}:
         raise ValueError("method must be squash, merge or rebase")
+
+    # Ask before merging, not after: GitHub's 405 says "conflicts or checks", which is
+    # neither the name of the check that failed nor whether it is still running.
+    from app.plugins.github.checks_gate import merge_blockers
+
+    blockers = await merge_blockers(user, repo, number)
+    if blockers:
+        raise RuntimeError(" ".join(blockers))
+
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.put(
             f"{_GITHUB_BASE}/{repo}/pulls/{number}/merge",

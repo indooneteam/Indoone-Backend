@@ -200,7 +200,11 @@ def test_the_whole_catalogue_is_not_sent_any_more() -> None:
     declarations = tool_loop.model_tool_declarations("u1")
     names = [item["name"] for item in declarations]
 
-    assert names == ["find_tools", "calculator", "text_stats", "search_web"]
+    # search_web left this set deliberately: its declaration is a hundred-odd tokens on
+    # every turn, for a tool most messages never need. It is still one find_tools call
+    # away, and the instruction now says when to make that call.
+    assert names == ["find_tools", "calculator", "text_stats"]
+    assert "search_web" not in names
     assert len(json.dumps(declarations)) // 4 < 600
 
 

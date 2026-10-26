@@ -99,7 +99,10 @@ def _azure_backend_enabled() -> bool:
 # Kept on purpose: find_tools (the way to everything else), search_web (the
 # instruction tells the model to look up current facts, so it must not need a round
 # trip to get it), and the two cheap local tools that plain messages use most.
-ALWAYS_ON_TOOL_NAMES = frozenset({"find_tools", "search_web", "calculator", "text_stats"})
+# search_web used to be here. Its declaration is a hundred-odd tokens on every single
+# turn, for a tool most messages never need. It is still one find_tools call away, and the
+# instruction now says when to make that call.
+ALWAYS_ON_TOOL_NAMES = frozenset({"find_tools", "calculator", "text_stats"})
 
 # How many tools one find_tools call returns. Five is what the tool is for: enough to
 # choose from, few enough that the model still picks rather than guesses.

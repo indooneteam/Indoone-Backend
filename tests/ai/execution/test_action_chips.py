@@ -144,9 +144,12 @@ def test_the_chat_endpoint_returns_them() -> None:
     _ = monkeypatch_target
     chat_module.generate_reply = fake_reply
 
+    # An ordinary message, deliberately: this test is about the response SHAPE. A branch
+    # request now routes to the deterministic GitHub handler, which is a different path
+    # with its own tests.
     response = client.post(
         "/api/chat",
-        json={"message": "delete the branch feat/x in owner/repo"},
+        json={"message": "hello there"},
         headers=headers,
     )
 

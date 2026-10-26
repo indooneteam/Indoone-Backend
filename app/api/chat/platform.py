@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
@@ -15,9 +16,11 @@ from app.ai.execution import action_chips
 from app.ai.memory.conversation_store import ConversationStore
 from app.ai.memory.file_context import read_text_file
 from app.ai.memory.memory import extract_memory_candidates
-from app.ai.gateway.service import generate_reply
+from app.ai.gateway.service import stream_generate
 from app.plugins.github.chat_tools import handle_github_chat_with_tools
 from app.api.security.errors import REQUEST_FAILED_MESSAGE, provider_failure
+
+logger = logging.getLogger("indoone.chat.stream")
 
 router = APIRouter(tags=["platform"])
 _stream_store = ConversationStore()
@@ -71,62 +74,90 @@ async def stream_chat(request: Request, body: StreamChatRequest) -> StreamingRes
 
     action_chips.begin()
 
-    try:
-        # The same pipeline as /api/chat, not a lesser copy of it.
-        #
-        # The GitHub router runs before the model, for the same reason it does there: a
-        # model answering a repository question from memory invents branch names. Streaming
-        # must not become the endpoint where that comes back.
-        tool_reply: str | None = None
-        if user_id:
-            try:
-                tool_reply = await handle_github_chat_with_tools(
-                    user_id,
-                    body.message,
-                    history=history,
-                    conversation_id=conversation_id,
+    # The same pipeline as /api/chat, not a lesser copy of it.
+    #
+    # The GitHub router runs before the model, for the same reason it does there: a model
+    # answering a repository question from memory invents branch names. Streaming must not
+    # become the endpoint where that comes back. Its answer is deterministic, so it is sent
+    # as one chunk - there is nothing to reveal gradually.
+    tool_reply: str | None = None
+    if user_id:
+        try:
+            tool_reply = await handle_github_chat_with_tools(
+                user_id,
+                body.message,
+                history=history,
+                conversation_id=conversation_id,
+            )
+
+            if tool_reply is None:
+                tool_reply = await run_tool_loop(
+                    user_id, conversation_id, body.message, history=history,
+                    extra_system_instruction=accounts,
                 )
+        except Exception:
+            tool_reply = None
 
-                if tool_reply is None:
-                    tool_reply = await run_tool_loop(
-                        user_id, conversation_id, body.message, history=history,
-                        extra_system_instruction=accounts,
-                    )
-            except Exception:
-                tool_reply = None
-        reply = tool_reply if tool_reply is not None else await generate_reply(
-            body.message,
-            history=history,
-            document_context=document_context,
-            extra_system_instruction=accounts,
-        )
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-
-    quality = assess_answer(body.message, reply)
-    if not quality.passed:
-        logger.error("Model answer failed quality checks: %s", quality.reason)
-        raise HTTPException(status_code=503, detail=REQUEST_FAILED_MESSAGE)
-
-    try:
-        _stream_store.append(
-            conversation_id,
-            [("user", body.message), ("assistant", reply)],
-            user_id=user_id,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    def event(payload: dict) -> str:
+        return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     async def events():
-        yield f"data: {json.dumps({'type': 'meta', 'conversation_id': conversation_id}, ensure_ascii=False)}\n\n"
-        for chunk_start in range(0, len(reply), 48):
-            payload = {"type": "delta", "text": reply[chunk_start : chunk_start + 48]}
-            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-            await asyncio.sleep(0)
+        yield event({"type": "meta", "conversation_id": conversation_id})
+
+        text = ""
+        failed = False
+
+        try:
+            if tool_reply is not None:
+                text = tool_reply
+                yield event({"type": "delta", "text": text})
+            else:
+                # Live chunks, not a finished string chopped into 48-character pieces.
+                async for chunk in stream_generate(
+                    body.message,
+                    history=history,
+                    document_context=document_context,
+                    extra_system_instruction=accounts,
+                ):
+                    if not chunk:
+                        continue
+                    text += chunk
+                    yield event({"type": "delta", "text": chunk})
+        except RuntimeError as exc:
+            # The answer had already started, so a 503 is no longer possible: the headers
+            # are gone. The last event carries the failure instead, and the client replaces
+            # what it streamed with it.
+            logger.error("Streaming answer failed: %s", exc)
+            failed = True
+
+        if failed:
+            yield event(
+                {"type": "done", "reply": REQUEST_FAILED_MESSAGE, "action_chips": []}
+            )
+            return
+
+        quality = assess_answer(body.message, text)
+        reply = text
+
+        if not quality.passed:
+            logger.error("Model answer failed quality checks: %s", quality.reason)
+            reply = REQUEST_FAILED_MESSAGE
+
+        try:
+            _stream_store.append(
+                conversation_id,
+                [("user", body.message), ("assistant", reply)],
+                user_id=user_id,
+            )
+        except (ValueError, PermissionError) as exc:
+            logger.warning("Streaming answer could not be stored: %s", exc)
+
         # The chips ride on the last event, so a client that only streams has the same
         # follow-ups the blocking endpoint returns: Confirm/Cancel for a held write, the
         # obvious next step after a list.
-        yield f"data: {json.dumps({'type': 'done', 'reply': reply, 'action_chips': action_chips.collected()}, ensure_ascii=False)}\n\n"
+        yield event(
+            {"type": "done", "reply": reply, "action_chips": action_chips.collected()}
+        )
 
     async def events_with_reset():
         try:

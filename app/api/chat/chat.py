@@ -419,18 +419,6 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                     approval_tokens=tuple(body.approval_tokens or ()),
                     conversation_id=conversation_id,
                 )
-            # A GitHub request is answered by the deterministic router on EVERY backend,
-            # not only the local one. This is the fix for invented branch lists: the model
-            # path leaves the choice of calling a tool to the model, and a model that
-            # answers from memory produces names that never came from the API - instantly,
-            # with no network latency to give it away.
-            #
-            # The router returns None when the message is not a GitHub request, so this
-            # costs a regex pass on everything else.
-            # A read-only mailbox question is answered deterministically on every backend.
-            # "unread emails" can only mean one thing, so the model was spending tokens to
-            # choose a tool the words already named. A write is left alone: it is held for
-            # confirmation and that path knows how to hold it.
             # A question about the thread itself is answered from a digest of what is
             # stored. The model only sees four messages, so it could not answer this - and
             # sending the whole thread to answer it would undo the saving.
@@ -439,11 +427,23 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                     user_id, conversation_id, body.message
                 )
 
+            # A read-only mailbox question is answered deterministically on every backend.
+            # "unread emails" can only mean one thing, so the model was spending tokens to
+            # choose a tool the words already named. A write is left alone: it is held for
+            # confirmation and that path knows how to hold it.
             if tool_reply is None and not email_owns_this:
                 tool_reply = await email_read_fast_path(
                     user_id, conversation_id, body.message
                 )
 
+            # A GitHub request is answered by the deterministic router on EVERY backend,
+            # not only the local one. This is the fix for invented branch lists: the model
+            # path leaves the choice of calling a tool to the model, and a model that
+            # answers from memory produces names that never came from the API - instantly,
+            # with no network latency to give it away.
+            #
+            # The router returns None when the message is not a GitHub request, so this
+            # costs a regex pass on everything else.
             if tool_reply is None and not email_owns_this:
                 tool_reply = await handle_github_chat_with_tools(
                     user_id,

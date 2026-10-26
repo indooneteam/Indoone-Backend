@@ -905,6 +905,17 @@ async def handle_github_chat_with_tools(
         if _REPOSITORY_NAME_RE.fullmatch(hint):
             resolved_arguments["repository"] = hint
 
+    # The thread is already about a repository: bind it rather than asking which one.
+    #
+    # "Branch estu ede adralli" names nothing, and the old answer was "Which repository
+    # should I open? Choose an exact owner/name" - asking the user to repeat what the last
+    # two turns had already settled.
+    if not str(resolved_arguments.get("repository") or "").strip():
+        active = reference_resolution.recent_repository(history)
+
+        if active:
+            resolved_arguments["repository"] = active
+
     tool_arguments = resolved_arguments
     result = await _execute_github_tool(user, tool_name, tool_arguments, (), conversation_id, message=message)
     return _format_github_result(tool_name, result)

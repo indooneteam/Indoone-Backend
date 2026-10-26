@@ -117,7 +117,7 @@ def test_the_router_resolves_a_selection_before_executing(monkeypatch) -> None:
     assert captured["arguments"]["repository"] == "indooneteam/Indoone-Backend"
 
 
-def test_an_unresolvable_selection_is_left_alone(monkeypatch) -> None:
+def test_an_unresolvable_selection_falls_back_to_the_active_repository(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     async def fake_execute(user_id, name, arguments, approval_tokens=(), conversation_id=None, message=""):
@@ -136,6 +136,9 @@ def test_an_unresolvable_selection_is_left_alone(monkeypatch) -> None:
         )
     )
 
-    # Past the end of the list: nothing is invented. The value is passed through and the
-    # ordinary validation path answers with its own message.
-    assert not str(captured["arguments"].get("repository") or "").strip()
+    # Past the end of the list: item 9 is not invented. What happens instead is that the
+    # repository the thread is already about is bound - the last one named in the previous
+    # answer - rather than the literal "9" being sent or the user being asked which repo.
+    repository = str(captured["arguments"].get("repository") or "").strip()
+    assert repository != "9"
+    assert repository == "other-org/site"

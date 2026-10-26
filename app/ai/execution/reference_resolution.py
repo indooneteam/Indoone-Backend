@@ -160,3 +160,35 @@ def selection_token(message: str) -> str:
         return match.group(1)
 
     return match.group(3)
+
+
+# A repository name as it appears anywhere in a sentence: owner/name.
+_REPOSITORY_IN_TEXT = re.compile(r"\b([A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100})\b")
+
+
+def recent_repository(
+    history: list[tuple[str, str]] | None, turns: int = 3
+) -> str:
+    """The repository the conversation is already about, or "".
+
+    "Branch estu ede adralli" names no repository, and answering it with "Which repository
+    should I open?" makes the user repeat something the thread already settled. The last few
+    turns are read for a repository name - either listed or named in prose - and the most
+    recent one is the active target.
+
+    Only ``turns`` messages are read, so a repository discussed ten messages ago is not
+    silently reused for a question that has moved on.
+    """
+    if not history:
+        return ""
+
+    window = [text for _role, text in history[-max(1, turns):] if text]
+
+    for text in reversed(window):
+        found = _REPOSITORY_IN_TEXT.findall(text)
+
+        if found:
+            # The last mention in the message is the one being discussed.
+            return found[-1]
+
+    return ""

@@ -76,6 +76,20 @@ def test_a_number_past_the_end_resolves_to_nothing() -> None:
     assert resolve_selection("", items) is None
 
 
+def test_a_link_item_still_resolves_to_a_usable_name() -> None:
+    # The list shows [name](url); the ordinal must still produce owner/name, or a
+    # follow-up could not call a tool with it.
+    text = """Most recently updated accessible GitHub repositories:
+1. [indoone](https://github.com/indooneteam/indoone)
+2. [Indoone-Backend](https://github.com/indooneteam/Indoone-Backend)"""
+
+    assert parse_numbered_items(text) == [
+        "indooneteam/indoone",
+        "indooneteam/Indoone-Backend",
+    ]
+    assert resolve_selection("2", parse_numbered_items(text)) == "indooneteam/Indoone-Backend"
+
+
 def test_history_is_read_from_the_assistant_not_the_user() -> None:
     history = [
         ("user", "branch list kodu"),

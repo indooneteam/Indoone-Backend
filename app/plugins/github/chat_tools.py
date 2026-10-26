@@ -531,15 +531,24 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
         repos = items if isinstance(items, list) else []
         if not repos:
             return "GitHub is connected, but no accessible repositories were returned."
-        lines = [f"Most recently updated accessible GitHub repositories ({len(repos)} returned):"]
+        # The name and a link, nothing else. The owner prefix, the visibility and the
+        # default branch are metadata nobody asked to read; the link carries the full path
+        # for anyone who needs it. The number is still what a follow-up can refer to.
+        lines = []
         for item in repos[:30]:
             if not isinstance(item, dict):
                 continue
-            repo_name = str(item.get("full_name") or item.get("name") or "Unknown repository")
-            visibility = "Private" if item.get("private") is True else "Public"
-            branch = str(item.get("default_branch") or "").strip()
+            # The label is the repository name alone. When the API gives only the full
+            # name, the owner prefix is dropped here rather than shown to the user.
+            repo_name = str(item.get("name") or "").strip()
+
+            if not repo_name:
+                repo_name = str(item.get("full_name") or "").strip().rsplit("/", 1)[-1]
+
+            repo_name = repo_name or "Unknown repository"
+            url = str(item.get("html_url") or "").strip()
             lines.append(
-                f"{len(lines)}. {repo_name} ({branch or 'no default branch'}) — {visibility}"
+                f"{len(lines) + 1}. " + (f"[{repo_name}]({url})" if url else repo_name)
             )
         return "\n".join(lines)
 
@@ -643,16 +652,15 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
             {"label": "View commits", "action": f"show commits in {repository}"},
             {"label": "Create a pull request", "action": f"create a PR in {repository}"},
         )
-        lines = [f"Branches in {repository} ({len(branches)} returned):"]
+        # The branch name, one per line, numbered. No SHA and no flags: they made the list
+        # unreadable and told the user nothing they could act on. The number is what a
+        # follow-up refers to.
+        lines = []
         for item in branches[:100]:
-            name_text = str(item.get("name") or "")
-            sha = str(item.get("sha") or "")[:10]
-            protected = " · protected" if item.get("protected") is True else ""
-            # Numbered and one per line: a list collapsed into one paragraph cannot be
-            # read, and the web bubble keeps the newlines (white-space: pre-wrap).
-            lines.append(
-                f"{len(lines)}. {name_text}" + (f" · {sha}" if sha else "") + protected
-            )
+            name_text = str(item.get("name") or "").strip()
+
+            if name_text:
+                lines.append(f"{len(lines) + 1}. {name_text}")
         return "\n".join(lines)
 
     if name == "github_list_pull_request_files":

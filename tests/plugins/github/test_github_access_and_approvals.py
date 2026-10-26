@@ -92,12 +92,13 @@ def test_branches_are_numbered_one_per_line() -> None:
     )
 
     lines = text.splitlines()
-    assert lines[1].startswith("1. main")
-    assert lines[2].startswith("2. develop")
+    # No header line, no SHA, no flags: the list starts at the first branch.
+    assert lines[0] == "1. main"
+    assert lines[1] == "2. develop"
     assert "- " not in text
 
 
-def test_repositories_are_numbered_with_their_default_branch() -> None:
+def test_repositories_are_numbered_by_name_only() -> None:
     text = _format_github_result(
         "github_list_repositories",
         {
@@ -112,5 +113,7 @@ def test_repositories_are_numbered_with_their_default_branch() -> None:
     )
 
     lines = text.splitlines()
-    assert lines[1].startswith("1. owner/one (main)")
-    assert lines[2].startswith("2. owner/two (develop)")
+    # No count header, no default branch, no visibility, and no owner prefix: the name
+    # alone, numbered.
+    assert lines[0] == "1. one"
+    assert lines[1] == "2. two"

@@ -413,8 +413,10 @@ def test_vibe_sends_the_github_summary_instead_of_the_raw_payload(
     )
 
     assert result["ok"] is True
-    assert "indooneteam/Indoone-Backend" in result["output"]
-    assert "Private" in result["output"]
+    # The summary carries the name and a link; visibility is no longer part of the list,
+    # so the assertion follows what the formatter actually produces.
+    assert "Indoone-Backend" in result["output"]
+    assert "https://github.com/indooneteam/Indoone-Backend" in result["output"]
     assert "repositories" not in result
 
 

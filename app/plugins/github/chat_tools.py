@@ -535,7 +535,9 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
             repo_name = str(item.get("full_name") or item.get("name") or "Unknown repository")
             visibility = "Private" if item.get("private") is True else "Public"
             branch = str(item.get("default_branch") or "").strip()
-            lines.append(f"- {repo_name} — {visibility}" + (f" · default branch: {branch}" if branch else ""))
+            lines.append(
+                f"{len(lines)}. {repo_name} ({branch or 'no default branch'}) — {visibility}"
+            )
         return "\n".join(lines)
 
     if name == "github_list_assigned_issues":
@@ -636,7 +638,11 @@ def _format_github_result(name: str, result: dict[str, Any]) -> str:
             name_text = str(item.get("name") or "")
             sha = str(item.get("sha") or "")[:10]
             protected = " · protected" if item.get("protected") is True else ""
-            lines.append(f"- {name_text}" + (f" · {sha}" if sha else "") + protected)
+            # Numbered and one per line: a list collapsed into one paragraph cannot be
+            # read, and the web bubble keeps the newlines (white-space: pre-wrap).
+            lines.append(
+                f"{len(lines)}. {name_text}" + (f" · {sha}" if sha else "") + protected
+            )
         return "\n".join(lines)
 
     if name == "github_list_pull_request_files":

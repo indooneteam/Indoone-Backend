@@ -336,18 +336,35 @@ async def stream_generate(
     verified on a deployment, this returns the blocking reply as a single chunk - correct,
     just not incremental.
     """
-    if os.getenv("INDOONE_STREAM_PROVIDERS", "").strip().casefold() in {"1", "true", "yes"}:
-        provider_stream = _provider_stream()
+    # On by default: the generators exist for both providers now. A deployment that needs
+    # the old behaviour sets INDOONE_STREAM_PROVIDERS=false.
+    streaming_on = os.getenv("INDOONE_STREAM_PROVIDERS", "true").strip().casefold() not in {
+        "0", "false", "no", "off",
+    }
+    provider_stream = _provider_stream() if streaming_on else None
 
-        if provider_stream is not None:
+    if provider_stream is not None:
+        started = False
+
+        try:
             async for chunk in provider_stream(
                 message,
                 history=history,
                 document_context=document_context,
                 extra_system_instruction=extra_system_instruction,
             ):
+                started = True
                 yield chunk
-            return
+
+            if started:
+                return
+        except Exception as exc:
+            # Nothing has been sent yet, so falling back costs the user nothing but a
+            # short wait. Once a chunk has gone out the failure is real: swallowing it
+            # would leave a half answer standing as if it were complete.
+            if started:
+                raise
+            logger.warning("provider streaming failed before the first chunk: %s", exc)
 
     reply = await generate_reply(
         message,

@@ -515,6 +515,50 @@ async def execute_email_tool(
     return {"ok": False, "code": "UNKNOWN_TOOL", "message": "This email operation is not implemented."}
 
 
+# A question about what is in the mailbox, and nothing else. "Send", "reply", "delete",
+# "draft" and "forward" are deliberately absent: those are writes, they are held for
+# confirmation, and they must keep the path that knows how to hold them.
+_EMAIL_READ_INTENT = re.compile(
+    r"\b(unread|inbox|mailbox|check\s+(?:my\s+)?(?:mail|email|inbox)|"
+    r"(?:list|show|read|any)\s+(?:my\s+)?(?:new\s+)?(?:mails?|emails?)|"
+    r"latest\s+(?:mails?|emails?))\b|"
+    r"inbox\s*thorisu|ಮೇಲ್\s*ತೋರಿಸು|ಇನ್‌ಬಾಕ್ಸ್",
+    re.IGNORECASE,
+)
+_EMAIL_WRITE_INTENT = re.compile(
+    r"\b(send|reply|forward|delete|draft|compose|write)\b|ಕಳಿಸು|ಕಳುಹಿಸು|ಅಳಿಸು|ಉತ್ತರ",
+    re.IGNORECASE,
+)
+
+
+async def email_read_fast_path(
+    user_id: str, conversation_id: str, message: str
+) -> str | None:
+    """Answer a read-only mailbox question without spending a token.
+
+    On a Gemini or Azure deployment the email path goes through the model, which picks a
+    tool the words already named: "unread emails" can only mean one thing. The answer is
+    identical and the tokens are not spent.
+
+    Returns None for anything else - a write, a pending confirmation, or a message that is
+    not about the mailbox at all - so the existing path keeps its behaviour.
+    """
+    text = (message or "").strip()
+
+    if not text or not user_id.strip() or not conversation_id.strip():
+        return None
+
+    if _EMAIL_WRITE_INTENT.search(text) or not _EMAIL_READ_INTENT.search(text):
+        return None
+
+    # A held action owns the conversation: "yes" after a preview must reach the path that
+    # can execute it, not a listing.
+    if get_pending_email_action(user_id.strip(), conversation_id.strip()):
+        return None
+
+    return await handle_email_chat(user_id, conversation_id, message)
+
+
 async def handle_email_chat_with_tools(
     user_id: str,
     conversation_id: str,

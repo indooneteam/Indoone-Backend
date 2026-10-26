@@ -30,6 +30,18 @@ def _clean_item(text: str) -> str:
     """
     value = text.strip()
 
+    # A repository is now shown as [name](url). The link target is the only place the
+    # full owner/name survives, so the ordinal still resolves to something a tool can use.
+    link = re.search(r"\[([^\]]+)\]\(([^)]+)\)", value)
+
+    if link:
+        target = re.search(r"github\.com/([^/]+)/([^/?#\s]+)", link.group(2))
+
+        if target:
+            return f"{target.group(1)}/{target.group(2)}"
+
+        return link.group(1).strip()
+
     for marker in (" — ", " - ", " · ", "\t"):
         if marker in value:
             value = value.split(marker, 1)[0].strip()

@@ -22,6 +22,45 @@ _GITHUB_PULLS_BASE_URL = f"{_GITHUB_BASE}/repos"
 _GITHUB_REPO_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
 
 
+class GitHubAuthError(RuntimeError):
+    """The stored GitHub credential is missing, expired, or was rejected."""
+
+
+def _raise_github_error(response: "httpx.Response") -> None:
+    """Turn a GitHub status into a message a user can act on.
+
+    The plain raise_for_status produced "Client error '401 Unauthorized' for url ..." -
+    an httpx sentence, repeated on every retry, that never said the token needed
+    re-linking. These do.
+    """
+    status = int(getattr(response, "status_code", 0) or 0)
+
+    if status < 400:
+        return
+
+    if status == 401:
+        raise GitHubAuthError(
+            "GitHub rejected the stored token (HTTP 401). The account is not linked "
+            "properly or the token expired - re-authenticate GitHub and ask again. "
+            "Nothing was read and nothing was changed."
+        )
+
+    if status == 403:
+        raise GitHubAuthError(
+            "GitHub refused the request (HTTP 403). The token is missing a scope this "
+            "needs, or the rate limit is spent - check the token's repo scope and "
+            "re-authenticate if needed. Nothing was changed."
+        )
+
+    if status == 404:
+        raise RuntimeError(
+            "GitHub returned 404: the repository, branch, pull request or file was not "
+            "found with this token's access. Nothing was changed."
+        )
+
+    _raise_github_error(response)
+
+
 def _github_headers(access_token: str) -> dict[str, str]:
     return {
         "Authorization": f"Bearer {access_token}",
@@ -36,7 +75,14 @@ def _github_token(user_id: str) -> str:
         raise ValueError("user_id is required")
     token_row = get_integration_token(user, "github")
     if token_row is None:
-        raise ValueError("integration is not connected for user")
+        # Same sentence as the 401, because it is the same problem for the user - but a
+        # ValueError, because "not connected yet" is a configuration answer the caller
+        # reports as 400, not a server fault. A token GitHub actually rejected is the
+        # GitHubAuthError above.
+        raise ValueError(
+            "GitHub is not connected for this account, or the token expired. "
+            "Connect or re-authenticate GitHub and ask again. Nothing was changed."
+        )
     try:
         return _fernet().decrypt(bytes(token_row["access_token"])).decode("utf-8")
     except Exception as exc:
@@ -64,7 +110,7 @@ async def list_github_repositories(
             headers=_github_headers(_github_token(user)),
             params=params,
         )
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if not isinstance(body, list):
         raise RuntimeError("github provider returned invalid repository response")
@@ -101,7 +147,7 @@ async def list_github_issues(
             headers=_github_headers(_github_token(user)),
             params=params,
         )
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if not isinstance(body, list):
         raise RuntimeError("github provider returned invalid issues response")
@@ -142,7 +188,7 @@ async def list_github_pull_requests(
             headers=_github_headers(_github_token(user)),
             params=params,
         )
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if not isinstance(body, list):
         raise RuntimeError("github provider returned invalid pull request response")
@@ -236,7 +282,7 @@ async def list_github_repository_contents(
             headers=_github_headers(_github_token(user)),
             params=params,
         )
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if isinstance(body, dict):
         if body.get("type") == "file":
@@ -283,7 +329,7 @@ async def read_github_repository_file(
             headers=_github_headers(_github_token(user)),
             params=params,
         )
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if not isinstance(body, dict) or body.get("type") != "file":
         raise ValueError("the selected path is not a readable file")
@@ -331,7 +377,7 @@ async def search_github_repository_code(
             _GITHUB_CODE_SEARCH_URL, headers=headers,
             params={"q": f"{normalized_query} repo:{repo}", "per_page": per_page},
         )
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if not isinstance(body, dict) or not isinstance(body.get("items"), list):
         raise RuntimeError("GitHub returned an invalid code-search response")
@@ -373,7 +419,7 @@ async def list_github_repository_commits(
             f"{_GITHUB_REPOS_BASE_URL}/{repo}/commits",
             headers=_github_headers(_github_token(user)), params=params,
         )
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if isinstance(body, dict) and isinstance(body.get("items"), list):
         body = body["items"]
@@ -419,7 +465,7 @@ async def compare_github_repository_commits(
     )
     async with httpx.AsyncClient(timeout=20.0) as client:
         response = await client.get(compare_path, headers=_github_headers(_github_token(user)))
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if not isinstance(body, dict):
         raise RuntimeError("GitHub returned an invalid commit-comparison response")
@@ -492,7 +538,7 @@ async def list_github_branches(
                 headers=headers,
                 params={"per_page": per_page, "page": page},
             )
-            response.raise_for_status()
+            _raise_github_error(response)
             batch = response.json()
 
             if not isinstance(batch, list):
@@ -545,7 +591,7 @@ async def list_github_pull_request_files(
             headers=_github_headers(_github_token(user)),
             params={"per_page": per_page},
         )
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if not isinstance(body, list):
         raise RuntimeError("GitHub returned an invalid pull-request file list")
@@ -593,7 +639,7 @@ async def list_github_check_runs(
                 "integration": "github", "repository": repo, "ref": normalized_ref,
                 "check_runs": [], "count": 0, "conclusion": "none", "secrets_exposed": False,
             }
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if isinstance(body, dict):
         items = body.get("check_runs")
@@ -642,7 +688,7 @@ async def get_github_commit(
             f"{_GITHUB_REPOS_BASE_URL}/{repo}/commits/{quote(normalized_sha, safe='')}",
             headers=_github_headers(_github_token(user)),
         )
-        response.raise_for_status()
+        _raise_github_error(response)
         body = response.json()
     if not isinstance(body, dict):
         raise RuntimeError("GitHub returned an invalid commit response")

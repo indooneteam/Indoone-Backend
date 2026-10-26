@@ -370,6 +370,104 @@ def _system_instruction(extra_system_instruction: str) -> str:
     return instruction
 
 
+def _stream_delta_text(frame: dict[str, Any]) -> str:
+    """The text in one streamed Azure chunk, or "" when the chunk carries none."""
+    choices = frame.get("choices")
+
+    if not isinstance(choices, list) or not choices:
+        return ""
+
+    first = choices[0]
+    delta = first.get("delta") if isinstance(first, dict) else None
+
+    if not isinstance(delta, dict):
+        return ""
+
+    content = delta.get("content")
+
+    return content if isinstance(content, str) else ""
+
+
+async def stream_azure_reply(
+    message: str,
+    history: list[tuple[str, str]] | None = None,
+    document_context: str = "",
+    extra_system_instruction: str = "",
+    media_attachment: dict[str, object] | None = None,
+    media_attachments: list[dict[str, object]] | None = None,
+):
+    """Yield Azure's own token deltas as they arrive.
+
+    Same request as the blocking call with "stream": true. The provider ends the stream
+    with a literal [DONE] frame, which is not JSON and is skipped rather than parsed.
+    """
+    cleaned = message.strip()
+
+    if not cleaned:
+        raise ValueError("message cannot be empty")
+
+    api_key, endpoint, deployment, api_version = _get_config()
+    set_model(deployment)
+    url = _chat_url(endpoint, deployment, api_version)
+
+    payload: dict[str, Any] = {
+        "messages": _build_messages(
+            cleaned,
+            history,
+            document_context,
+            _system_instruction(extra_system_instruction),
+            media_attachment,
+            media_attachments,
+        ),
+        "stream": True,
+    }
+
+    headers = {
+        "api-key": api_key,
+        "content-type": "application/json",
+        "Accept": "text/event-stream",
+    }
+
+    async with httpx.AsyncClient(timeout=httpx.Timeout(_TIMEOUT_SECONDS, connect=15.0)) as client:
+        async with client.stream("POST", url, headers=headers, json=payload) as response:
+            if response.status_code != 200:
+                detail = (await response.aread()).decode("utf-8", "ignore")[:400]
+                detail = detail.replace("\n", " ").strip()
+                logger.error(
+                    "Azure stream returned HTTP %s: %s", response.status_code, detail
+                )
+
+                if response.status_code == 429:
+                    raise ModelBusyError(BUSY_MESSAGE)
+
+                raise RuntimeError(f"Azure OpenAI returned HTTP {response.status_code}")
+
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+
+                raw = line[len("data: "):].strip()
+
+                if not raw:
+                    continue
+
+                if raw == "[DONE]":
+                    break
+
+                try:
+                    frame = json.loads(raw)
+                except ValueError:
+                    continue
+
+                if not isinstance(frame, dict):
+                    continue
+
+                text = _stream_delta_text(frame)
+
+                if text:
+                    yield text
+
+
 @measured_model_call("azure")
 async def generate_azure_reply(
     message: str,

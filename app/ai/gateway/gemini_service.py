@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import os
 from typing import Any
@@ -289,6 +290,29 @@ async def _post_generate_content(
         raise RuntimeError("Gemini API returned invalid response data")
     _record_usage(response_data)
     return response_data
+
+
+def _delta_text(frame: dict[str, Any]) -> str:
+    """The text in one streamed Gemini frame, or "" when the frame carries none.
+
+    A frame can carry usage metadata, a finish reason, or nothing at all, so every level
+    is checked rather than assumed.
+    """
+    candidates = frame.get("candidates")
+
+    if not isinstance(candidates, list) or not candidates:
+        return ""
+
+    first = candidates[0]
+    content = first.get("content") if isinstance(first, dict) else None
+    parts = content.get("parts") if isinstance(content, dict) else None
+
+    if not isinstance(parts, list):
+        return ""
+
+    return "".join(
+        str(part.get("text") or "") for part in parts if isinstance(part, dict)
+    )
 
 
 def _record_usage(response_data: dict[str, Any]) -> None:
@@ -575,3 +599,92 @@ async def generate_gemini_function_call_reply(
         "I couldn't complete that email request safely. Please try again; "
         "no action without explicit confirmation was performed."
     )
+
+
+async def stream_gemini_reply(
+    message: str,
+    history: list[tuple[str, str]] | None = None,
+    document_context: str = "",
+    extra_system_instruction: str = "",
+    media_attachment: dict[str, object] | None = None,
+    media_attachments: list[dict[str, object]] | None = None,
+):
+    """Yield Gemini's own token deltas as they arrive.
+
+    Same request as the blocking call, with :streamGenerateContent?alt=sse. Usage metadata
+    arrives on the frames too, so quota accounting still sees the real token counts rather
+    than a guess.
+    """
+    cleaned = message.strip()
+
+    if not cleaned:
+        raise ValueError("message cannot be empty")
+
+    api_key, model = _get_config()
+    set_model(model)
+    encoded_model = quote(model, safe="")
+    url = f"{_API_BASE_URL}/models/{encoded_model}:streamGenerateContent?alt=sse"
+
+    system_instruction = _SYSTEM_INSTRUCTION + "\n\n" + build_grounded_prompt_instruction()
+
+    if extra_system_instruction.strip():
+        system_instruction += "\n\n" + extra_system_instruction.strip()
+
+    payload: dict[str, Any] = {
+        "systemInstruction": {"parts": [{"text": system_instruction}]},
+        "contents": _build_contents(
+            cleaned, history, document_context, media_attachment, media_attachments
+        ),
+        "generationConfig": _generation_config(model),
+    }
+
+    headers = {
+        "x-goog-api-key": api_key,
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+    }
+    timeout = httpx.Timeout(_TIMEOUT_SECONDS, connect=15.0)
+
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        async with client.stream("POST", url, headers=headers, json=payload) as response:
+            if response.status_code != 200:
+                detail = (await response.aread()).decode("utf-8", "ignore")[:400]
+                detail = detail.replace("\n", " ").strip()
+
+                if response.status_code == 429:
+                    logger.warning("Gemini stream rate limit reached: %s", detail[:300])
+                    raise ModelBusyError(BUSY_MESSAGE)
+
+                logger.error(
+                    "Gemini stream returned HTTP %s: %s", response.status_code, detail
+                )
+
+                if response.status_code in {401, 403}:
+                    raise RuntimeError("Gemini API authentication failed")
+
+                raise RuntimeError(f"Gemini API returned HTTP {response.status_code}")
+
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+
+                raw = line[len("data: "):].strip()
+
+                if not raw or raw == "[DONE]":
+                    continue
+
+                try:
+                    frame = json.loads(raw)
+                except ValueError:
+                    continue
+
+                if not isinstance(frame, dict):
+                    continue
+
+                # The provider reports tokens on the frames; record them as they come.
+                _record_usage(frame)
+
+                text = _delta_text(frame)
+
+                if text:
+                    yield text

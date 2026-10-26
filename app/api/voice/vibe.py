@@ -13,7 +13,7 @@ import websockets
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.api.security.auth import extract_principal
-from app.api.chat.chat import _now_line, _user_name_line
+from app.ai.execution.request_context import now_line as _now_line, user_name_line as _user_name_line
 from app.ai.execution.tool_loop import (
     _GITHUB_TOOL_NAMES,
     dispatch_tool,

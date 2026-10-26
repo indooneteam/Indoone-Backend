@@ -30,6 +30,7 @@ from app.web_research.grounding import split_grounded_sources
 from app.api.security.dependencies import current_user_id
 from app.ai.gateway.gemini_service import ModelBusyError
 from app.ai.execution.account_context import accounts_instruction, without_stale_refusals
+from app.ai.execution.request_context import now_line, user_name_line
 from app.ai.execution.confirmation import classify_reply_async
 from app.ai.execution import limits as chat_limits
 from app.ai.execution.tool_loop import run_tool_loop
@@ -335,7 +336,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         # date question from its training memory.
         extra_lines = [
             line
-            for line in (_user_name_line(user_id), _now_line(), accounts_instruction(user_id))
+            for line in (user_name_line(user_id), now_line(), accounts_instruction(user_id))
             if line
         ]
         extra_instruction = " ".join(extra_lines)
@@ -550,34 +551,3 @@ async def code_edit_suggestion(request: Request, body: CodeEditSuggestionRequest
     }
 
 
-def _user_name_line(user_id: str) -> str:
-    """Return a one-line instruction naming the user, or "" when unknown.
-
-    The name lives in the memory store, so it is read fresh on every request. Only
-    the name is sent: no other stored detail reaches the model.
-    """
-    normalized = user_id.strip()
-    if not normalized:
-        return ""
-    try:
-        rows = list_memories(normalized, limit=20)
-    except Exception:
-        return ""
-    for wanted in ("name", "nickname"):
-        for row in rows:
-            if str(row.get("key") or "").strip().casefold() != wanted:
-                continue
-            value = " ".join(str(row.get("value") or "").split()).strip()
-            if value:
-                return f"The user's name is {value[:60]}."
-    return ""
-
-
-def _now_line() -> str:
-    """Return one short line giving today's date and time in IST.
-
-    Without it the model answers a date question from its training memory, which
-    is years out of date. The line is built per request from the server clock.
-    """
-    now = datetime.now(_IST)
-    return f"Today is {now:%Y-%m-%d} ({now:%A}), {now:%H:%M} IST."

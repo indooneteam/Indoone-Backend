@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-27T12:17:50.386710+00:00",
+  "updated_at": "2026-10-27T22:18:37.338859+00:00",
   "items": [
     {
       "source": "NASA News",
@@ -209,6 +209,22 @@
       "summary": "Photos taken using a microscope reveal the colorful, kaleidoscope-like crystal structure of a new NASA-made material that could be used for manufacturing during future space missions. Developed at NASA’s Glenn Research Center in Cleveland, the material could be created directly on the Moon or Mars, allowing NASA to pack fewer supplies — saving weight and […]",
       "published": "Tue, 29 Sep 2026 14:00:00 +0000",
       "fingerprint": "7e083e0e8d512bd0422d8f2f05514106012dcabd70c32127a65ac4c3eebfe464"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA Invites Media to Crew Completion of Yearlong Mars Simulation",
+      "url": "https://www.nasa.gov/?post_type=press-release&p=1059680",
+      "summary": "The four volunteers who lived and worked in a simulated NASA Mars mission for more than a year will exit their habitat on Saturday, Oct. 31, after 378 days of isolation in a facility at the agency’s Johnson Space Center in Houston. Health and performance data collected from the simulation can help NASA develop methods […]",
+      "published": "Tue, 27 Oct 2026 19:27:22 +0000",
+      "fingerprint": "8f07da01ecc22579d219fadf36ab2710fa23e111205355fe45d90c763ea24684"
+    },
+    {
+      "source": "NASA News",
+      "title": "NASA’s Neo Surveyor Sunshade",
+      "url": "https://www.nasa.gov/?post_type=image-article&p=1059371",
+      "summary": "A technician inspects the large sunshade of NASA’s Near-Earth Object (NEO) Surveyor mission in this image released on Oct. 26, 2026. The sunshade structure, which stands 20 feet (6 meters) tall and measures 8 feet (2.4 meters) wide at its base, will keep the infrared space telescope cool as it searches for near-Earth asteroids and […]",
+      "published": "Tue, 27 Oct 2026 17:58:57 +0000",
+      "fingerprint": "23aebe8963d0ee7479336ccaa17d656867600c421e29549a08afe2fbe9c1c654"
     },
     {
       "source": "NASA News",

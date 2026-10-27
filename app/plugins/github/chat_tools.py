@@ -101,8 +101,27 @@ def _repository_hint_from_message(text: str) -> str:
 _BRANCH_WORD = re.compile(r"\b(branch(?:es)?|ralli|ralli\u0304|alli)\b|ಶಾಖೆ|ಬ್ರಾಂಚ್", re.IGNORECASE)
 
 
+from app.ai.execution.intent_normalizer import normalize
+
+_SUB_RESOURCE_WORDS = {
+    "branches": "branches",
+    "commits": "commits",
+    "pull_requests": "pull requests",
+    "issues": "issues",
+    "files": "files",
+    "repositories": "repositories",
+}
+
+
 def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple[str, dict[str, Any]] | str | None:
     text = message.strip()
+
+    # The normalised reading widens the gates below and nothing more. An earlier version
+    # rewrote the message into English ("list commits") before the patterns ran, and that
+    # discarded the very verbs the branches depend on: "hosa branch madi" became "list
+    # branches", "repo holage en ide" became "list repositories". Reading the message is
+    # additive; rewriting it is destructive.
+    _norm = normalize(text)
 
     # A branch word is both the action and the target: "1 ralli" names no verb and no
     # repository, yet it is a complete request in Kannada - the repository is the one the
@@ -113,14 +132,21 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     if not text:
         return None
 
-    if not (branch_word or _ACTION_RE.search(text)):
+    # A question about a noun is not a request for that noun: "explain why branches
+    # diverge" names branches and asks for reasoning, so it belongs to the model. An
+    # explicit ordinal still counts as a request - "explain the diff of pr 3" wants the PR.
+    if _norm.leave_alone and _norm.ordinal is None:
         return None
 
-    if not (branch_word or _GITHUB_TARGET_RE.search(text)):
+    if not (branch_word or _norm.sub_resource or _ACTION_RE.search(text)):
+        return None
+
+    if not (branch_word or _norm.sub_resource or _GITHUB_TARGET_RE.search(text)):
         return None
     recent_context = " ".join(str(item or "") for role, item in (history or [])[-6:] if role == "user")
     has_context = bool(
-        re.search(r"\bgithub\b", text, re.IGNORECASE)
+        _norm.sub_resource
+        or re.search(r"\bgithub\b", text, re.IGNORECASE)
         or re.search(r"\bgithub\b", recent_context, re.IGNORECASE)
         or re.search(r"\b(repo|repos|repository|repositories)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)", text, re.IGNORECASE)
         or _BRANCH_WORD.search(text)
@@ -221,6 +247,16 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
             "repository": repository, "repository_hint": repository_hint,
             "path": path, "content": "", "message": "", "expected_sha": "",
             "branch": _branch_name(text), "create": False,
+        }
+
+    # "commits helu", "repo 2 commits": the noun is the whole request. The history branch
+    # below needs a word like "history" or "log" to fire, which Kannada does not supply.
+    if _norm.sub_resource == "commits" and not _norm.is_write:
+        return "github_list_repository_commits", {
+            "repository": repository,
+            "repository_hint": repository_hint,
+            "path": path,
+            "per_page": 10,
         }
 
     if search_intent:

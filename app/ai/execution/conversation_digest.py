@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 
+from app.ai.execution.intent_normalizer import normalize
 from app.ai.memory.conversation_store import ConversationStore
 
 # Asking about the conversation itself, rather than about the world.
@@ -88,7 +89,14 @@ async def conversation_history_answer(
     """The digest for an explicit question about the thread, or None to let it through."""
     text = (message or "").strip()
 
-    if not text or not _TRIGGERS.search(text):
+    if not text:
+        return None
+
+    # "namma maatu helu", "conversation thorisu": the noun is here and the verb is a read,
+    # which is the same request as "what did we discuss" in English.
+    _norm = normalize(text)
+
+    if not _TRIGGERS.search(text) and not (_norm.is_history and _norm.is_read):
         return None
 
     if not user_id.strip() or not conversation_id.strip():

@@ -5,6 +5,8 @@ and side-effect confirmation stays in the authenticated backend.
 """
 from __future__ import annotations
 
+from app.ai.execution.intent_normalizer import normalize
+
 import logging
 
 from app.ai.gateway.ai_rules import EMAIL_PENDING_ACTION
@@ -548,7 +550,18 @@ async def email_read_fast_path(
     if not text or not user_id.strip() or not conversation_id.strip():
         return None
 
-    if _EMAIL_WRITE_INTENT.search(text) or not _EMAIL_READ_INTENT.search(text):
+    if _EMAIL_WRITE_INTENT.search(text):
+        return None
+
+    # "inbox thorisu", "mail helu", "inbox nodu" - the mailbox named, a read verb attached
+    # in Kannada or Kanglish. The pattern below lists the English shapes; the normaliser
+    # covers the rest, so a new verb does not mean a new regex.
+    _norm = normalize(text)
+    wants_read = bool(_EMAIL_READ_INTENT.search(text)) or (
+        _norm.is_email and _norm.is_read and not _norm.is_write
+    )
+
+    if not wants_read:
         return None
 
     # A held action owns the conversation: "yes" after a preview must reach the path that

@@ -5,6 +5,12 @@ pointed at, which CI does with a service container and which a developer can do 
 INDOONE_TEST_DATABASE_URL. When neither is available the module skips, so a checkout
 with no Postgres still has a green suite.
 
+Every test here is marked `postgres`, so `pytest -m postgres` selects exactly this file's
+eleven tests and `pytest -m "not postgres"` leaves them out. They are skipped locally
+because there is no server, not because anything is missing or out of date: the assertions
+are about Postgres itself - the dialect, BYTEA blobs, FOR UPDATE - and running them against
+SQLite would pass while testing the wrong database.
+
 What is checked is the part that could silently differ between the two databases: the
 schema builds, the upserts replace rather than fail, the single-use paths stay single
 use, and a row reads back by column name.
@@ -21,6 +27,9 @@ from app.storage import database
 
 _POSTGRES_URL = os.getenv("INDOONE_TEST_DATABASE_URL", "").strip()
 
+# Selected by `-m postgres`, run in CI by the `postgres-store` job.
+pytestmark = pytest.mark.postgres
+
 
 def _url() -> str:
     """Return the Postgres to test against, or skip.
@@ -32,7 +41,10 @@ def _url() -> str:
     """
 
     if not _POSTGRES_URL:
-        pytest.skip("set INDOONE_TEST_DATABASE_URL to run the Postgres store tests")
+        pytest.skip(
+            "needs a Postgres: set INDOONE_TEST_DATABASE_URL, or run the "
+            "postgres-store CI job, which supplies one"
+        )
     return _POSTGRES_URL
 
 

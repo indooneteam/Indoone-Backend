@@ -1,0 +1,174 @@
+{
+  "_source": "Government of Karnataka, DPAR notification No. DPAR 16 HHL 2024 (published 21 November 2024): the list of General Holidays for 2025. Festivals that fell on a Sunday or a second Saturday are recorded with is_public_holiday false, because the notification itself says they are not separate holidays.",
+  "_year": 2025,
+  "events": [
+    {
+      "date": "2025-01-14",
+      "name_en": "Makara Sankranti",
+      "name_kn": "ಮಕರ ಸಂಕ್ರಾಂತಿ",
+      "is_public_holiday": true,
+      "description": "Uttarayana Punyakala. A Karnataka general holiday."
+    },
+    {
+      "date": "2025-01-26",
+      "name_en": "Republic Day",
+      "name_kn": "ಗಣರಾಜ್ಯೋತ್ಸವ",
+      "is_public_holiday": false,
+      "description": "National holiday. Falls on a Sunday in 2025, so it is not a separate general holiday."
+    },
+    {
+      "date": "2025-02-26",
+      "name_en": "Maha Shivaratri",
+      "name_kn": "ಮಹಾ ಶಿವರಾತ್ರಿ",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday."
+    },
+    {
+      "date": "2025-03-30",
+      "name_en": "Ugadi",
+      "name_kn": "ಯುಗಾದಿ",
+      "is_public_holiday": false,
+      "description": "Kannada New Year. Falls on a Sunday in 2025, so it is not a separate general holiday."
+    },
+    {
+      "date": "2025-03-31",
+      "name_en": "Khutub-E-Ramzan (Id-ul-Fitr)",
+      "name_kn": "ಈದ್-ಉಲ್-ಫಿತರ್",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday. May shift by a day with the moon sighting."
+    },
+    {
+      "date": "2025-04-10",
+      "name_en": "Mahaveera Jayanthi",
+      "name_kn": "ಮಹಾವೀರ ಜಯಂತಿ",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday."
+    },
+    {
+      "date": "2025-04-14",
+      "name_en": "Dr. B. R. Ambedkar Jayanthi",
+      "name_kn": "ಡಾ. ಬಿ. ಆರ್. ಅಂಬೇಡ್ಕರ್ ಜಯಂತಿ",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday."
+    },
+    {
+      "date": "2025-04-18",
+      "name_en": "Good Friday",
+      "name_kn": "ಗುಡ್ ಫ್ರೈಡೇ",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday."
+    },
+    {
+      "date": "2025-04-30",
+      "name_en": "Basava Jayanthi / Akshaya Tritiya",
+      "name_kn": "ಬಸವ ಜಯಂತಿ / ಅಕ್ಷಯ ತೃತೀಯ",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday."
+    },
+    {
+      "date": "2025-05-01",
+      "name_en": "May Day",
+      "name_kn": "ಮೇ ದಿನ",
+      "is_public_holiday": true,
+      "description": "Labour Day. A Karnataka general holiday."
+    },
+    {
+      "date": "2025-06-07",
+      "name_en": "Bakrid (Id-ul-Zuha)",
+      "name_kn": "ಬಕ್ರೀದ್",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday. May shift with the moon sighting."
+    },
+    {
+      "date": "2025-07-06",
+      "name_en": "Muharram",
+      "name_kn": "ಮುಹರ್ರಮ್",
+      "is_public_holiday": false,
+      "description": "Last day of Muharram. Falls on a Sunday in 2025, so it is not a separate general holiday."
+    },
+    {
+      "date": "2025-08-15",
+      "name_en": "Independence Day",
+      "name_kn": "ಸ್ವಾತಂತ್ರ್ಯ ದಿನ",
+      "is_public_holiday": true,
+      "description": "National holiday."
+    },
+    {
+      "date": "2025-08-27",
+      "name_en": "Ganesh Chaturthi",
+      "name_kn": "ಗಣೇಶ ಚತುರ್ಥಿ",
+      "is_public_holiday": true,
+      "description": "Varasiddhi Vinayaka Vrata. A Karnataka general holiday."
+    },
+    {
+      "date": "2025-09-05",
+      "name_en": "Eid-Milad",
+      "name_kn": "ಮಿಲಾದ್-ಉನ್-ನಬಿ",
+      "is_public_holiday": true,
+      "description": "Prophet's birthday. A Karnataka general holiday."
+    },
+    {
+      "date": "2025-09-21",
+      "name_en": "Mahalaya Amavasye",
+      "name_kn": "ಮಹಾಲಯ ಅಮಾವಾಸ್ಯೆ",
+      "is_public_holiday": false,
+      "description": "Falls on a Sunday in 2025, so it is not a separate general holiday."
+    },
+    {
+      "date": "2025-10-01",
+      "name_en": "Mahanavami / Ayudha Pooja / Vijayadasami",
+      "name_kn": "ಮಹಾನವಮಿ / ಆಯುಧ ಪೂಜೆ / ವಿಜಯದಶಮಿ",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday."
+    },
+    {
+      "date": "2025-10-02",
+      "name_en": "Gandhi Jayanti",
+      "name_kn": "ಗಾಂಧಿ ಜಯಂತಿ",
+      "is_public_holiday": true,
+      "description": "National holiday."
+    },
+    {
+      "date": "2025-10-07",
+      "name_en": "Maharshi Valmiki Jayanthi",
+      "name_kn": "ಮಹರ್ಷಿ ವಾಲ್ಮೀಕಿ ಜಯಂತಿ",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday."
+    },
+    {
+      "date": "2025-10-20",
+      "name_en": "Naraka Chaturdashi",
+      "name_kn": "ನರಕ ಚತುರ್ದಶಿ",
+      "is_public_holiday": true,
+      "description": "Deepavali eve. A Karnataka general holiday."
+    },
+    {
+      "date": "2025-10-22",
+      "name_en": "Deepavali (Balipadyami)",
+      "name_kn": "ದೀಪಾವಳಿ (ಬಲಿಪಾಡ್ಯಮಿ)",
+      "is_public_holiday": true,
+      "description": "The main Deepavali holiday in the state list."
+    },
+    {
+      "date": "2025-11-01",
+      "name_en": "Kannada Rajyotsava",
+      "name_kn": "ಕನ್ನಡ ರಾಜ್ಯೋತ್ಸವ",
+      "is_public_holiday": true,
+      "description": "Karnataka Formation Day. A Karnataka general holiday."
+    },
+    {
+      "date": "2025-11-08",
+      "name_en": "Kanakadasa Jayanthi",
+      "name_kn": "ಕನಕದಾಸ ಜಯಂತಿ",
+      "is_public_holiday": false,
+      "description": "Falls on a second Saturday in 2025, so it is not a separate general holiday."
+    },
+    {
+      "date": "2025-12-25",
+      "name_en": "Christmas",
+      "name_kn": "ಕ್ರಿಸ್ಮಸ್",
+      "is_public_holiday": true,
+      "description": "A Karnataka general holiday."
+    }
+  ]
+}

@@ -20,6 +20,8 @@ from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+from app.ai.execution.text_match import is_pleasantry, mentions
+
 INDIA = ZoneInfo("Asia/Kolkata")
 
 _DATA_DIR = Path(__file__).resolve().parents[3] / "data"
@@ -161,46 +163,32 @@ def events_between(start: date, end: date) -> list[dict]:
     return sorted(found, key=lambda item: str(item.get("date")))
 
 
-# A query shorter than this is a word, not a festival name. It exists because the match
-# below used to be a plain substring test, and "hi" is inside "Maha Shivaratri" - so a
-# greeting came back with the holiday calendar. "a", "go", "di", "ra" and "yu" all did the
-# same thing against other names.
-_MIN_NAME_QUERY = 4
-
-_WORD = re.compile(r"[a-z0-9\u0c80-\u0cff]+")
-
-
 def find_by_name(query: str, *, year: int | None = None) -> list[dict]:
     """Every event whose name matches, in the year asked about - never a guess.
 
-    A match is an alias the message contains, a name word the query starts, a phrase the
-    query spells out, or the event's full name typed inside a sentence. It is deliberately
-    not "the query appears anywhere inside the name": that is what made "hi" a festival.
+    The match is word-level, through ``text_match``: an alias the message contains, a name
+    the message mentions ("deep" finds Deepavali), or the full name typed inside a sentence.
+    It used to be a substring test, which is how "hi" found "Maha Shivaratri".
     """
     text = query.casefold().strip()
 
     if not text:
         return []
 
-    wanted = {target for alias, target in _ALIASES.items() if alias in text}
-    long_enough = len(text) >= _MIN_NAME_QUERY
-    is_phrase = " " in text
+    wanted = {target for alias, target in _ALIASES.items() if mentions(text, alias)}
     matches = []
 
     for item in _events(year):
         name = f"{item.get('name_en', '')} {item.get('name_kn', '')}".casefold()
         key = str(item.get("name_en", "")).casefold()
 
-        hit = any(target and target in name for target in wanted)
+        hit = any(target and mentions(name, target) for target in wanted)
 
-        if not hit and long_enough:
-            hit = any(word.startswith(text) for word in _WORD.findall(name))
+        if not hit:
+            hit = mentions(name, text)
 
-        if not hit and long_enough and is_phrase:
-            hit = text in name
-
-        if not hit and key and key in text:
-            hit = True
+        if not hit and key:
+            hit = mentions(text, key)
 
         if hit:
             matches.append(item)
@@ -266,6 +254,12 @@ def festival_answer(message: str, *, now: datetime | None = None) -> str | None:
     text = (message or "").strip()
 
     if not text:
+        return None
+
+    # "hi", "namaskara", "good morning": conversation, not a question about the calendar.
+    # The word-level match below already refuses these; this refuses them one layer earlier,
+    # so no future edit to the match can bring the holiday calendar back for a greeting.
+    if is_pleasantry(text):
         return None
 
     today = (now or datetime.now(INDIA)).astimezone(INDIA).date()

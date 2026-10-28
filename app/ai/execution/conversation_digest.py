@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 
+from app.ai.execution.text_match import is_pleasantry
 from app.ai.execution.intent_normalizer import normalize
 from app.ai.memory.conversation_store import ConversationStore
 
@@ -90,6 +91,10 @@ async def conversation_history_answer(
     text = (message or "").strip()
 
     if not text:
+        return None
+
+    # A greeting is not a question about the thread.
+    if is_pleasantry(text):
         return None
 
     # "namma maatu helu", "conversation thorisu": the noun is here and the verb is a read,

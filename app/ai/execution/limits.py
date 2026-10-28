@@ -114,6 +114,80 @@ def daily_quota() -> int:
     return max(1, _env_int("INDOONE_CHAT_DAILY_QUOTA", _DEFAULT_DAILY_QUOTA))
 
 
+# ---- the API burst limiter -------------------------------------------------- #
+#
+# The chat limiter protects the expensive path. Nothing protected the rest: /api/projects,
+# /api/tasks, /api/agent/runs and the share page could be walked as fast as a client could
+# ask, which is enumeration and a cheap denial of service. This is the same token bucket,
+# keyed by client address, with its own numbers - generous enough that a person never sees
+# it, low enough that a script does.
+
+_API_DEFAULT_PER_MINUTE = 120
+_API_DEFAULT_BURST = 60
+
+_api_buckets: dict[str, _Bucket] = {}
+_api_lock = threading.Lock()
+
+
+def _api_per_minute() -> float:
+    return _env_float("INDOONE_API_RATE_PER_MINUTE", float(_API_DEFAULT_PER_MINUTE))
+
+
+def _api_burst() -> int:
+    return max(1, _env_int("INDOONE_API_RATE_BURST", _API_DEFAULT_BURST))
+
+
+def api_limits_enabled() -> bool:
+    raw = os.getenv("INDOONE_API_LIMITS_ENABLED", "").strip().casefold()
+    return raw not in {"0", "false", "no", "off"}
+
+
+def take_api_burst(subject: str, *, now: float | None = None) -> Admission:
+    """One token for a client address, or a refusal with the seconds until one is free."""
+    per_minute = _api_per_minute()
+    burst = _api_burst()
+    refill_per_second = per_minute / 60.0
+    moment = time.monotonic() if now is None else now
+
+    with _api_lock:
+        bucket = _api_buckets.get(subject)
+
+        if bucket is None:
+            bucket = _Bucket(float(burst), moment)
+            _api_buckets[subject] = bucket
+        else:
+            elapsed = max(0.0, moment - bucket.updated)
+            bucket.tokens = min(float(burst), bucket.tokens + elapsed * refill_per_second)
+            bucket.updated = moment
+
+        if bucket.tokens >= 1.0:
+            bucket.tokens -= 1.0
+
+            if len(_api_buckets) > _PRUNE_AT:
+                _api_prune(moment, refill_per_second, burst)
+
+            return _ALLOWED
+
+        missing = 1.0 - bucket.tokens
+        wait = missing / refill_per_second if refill_per_second > 0 else 60.0
+
+        return Admission(
+            False,
+            code=RATE_LIMITED,
+            retry_after=max(1, int(round(wait))),
+            message="Too many requests. Try again in a moment.",
+        )
+
+
+def _api_prune(now: float, refill_per_second: float, burst: int) -> None:
+    """Drop buckets that have refilled to full. Called with the lock held."""
+    for key, bucket in list(_api_buckets.items()):
+        refilled = bucket.tokens + max(0.0, now - bucket.updated) * refill_per_second
+
+        if refilled >= burst:
+            del _api_buckets[key]
+
+
 # ---- the burst limiter ----------------------------------------------------- #
 
 

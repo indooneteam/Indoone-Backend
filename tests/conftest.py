@@ -28,3 +28,7 @@ import os
 # by default in the application now, so it is switched off here once, for the whole run,
 # rather than in every test that happens to hit an endpoint.
 os.environ.setdefault("INDOONE_AUTH_REQUIRED", "false")
+# The suite makes hundreds of requests from one client address, which the API burst limit
+# would read as an attack. It is switched off for the run, exactly as auth is; the tests
+# that exercise it turn it back on and clear the buckets first.
+os.environ.setdefault("INDOONE_API_LIMITS_ENABLED", "false")

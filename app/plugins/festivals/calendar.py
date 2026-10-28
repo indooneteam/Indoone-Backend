@@ -161,23 +161,48 @@ def events_between(start: date, end: date) -> list[dict]:
     return sorted(found, key=lambda item: str(item.get("date")))
 
 
+# A query shorter than this is a word, not a festival name. It exists because the match
+# below used to be a plain substring test, and "hi" is inside "Maha Shivaratri" - so a
+# greeting came back with the holiday calendar. "a", "go", "di", "ra" and "yu" all did the
+# same thing against other names.
+_MIN_NAME_QUERY = 4
+
+_WORD = re.compile(r"[a-z0-9\u0c80-\u0cff]+")
+
+
 def find_by_name(query: str, *, year: int | None = None) -> list[dict]:
-    """Every event whose name matches, in the year asked about - never a guess."""
+    """Every event whose name matches, in the year asked about - never a guess.
+
+    A match is an alias the message contains, a name word the query starts, a phrase the
+    query spells out, or the event's full name typed inside a sentence. It is deliberately
+    not "the query appears anywhere inside the name": that is what made "hi" a festival.
+    """
     text = query.casefold().strip()
 
     if not text:
         return []
 
     wanted = {target for alias, target in _ALIASES.items() if alias in text}
+    long_enough = len(text) >= _MIN_NAME_QUERY
+    is_phrase = " " in text
     matches = []
 
     for item in _events(year):
         name = f"{item.get('name_en', '')} {item.get('name_kn', '')}".casefold()
         key = str(item.get("name_en", "")).casefold()
 
-        if any(target and target in name for target in wanted) or (text and text in name):
-            matches.append(item)
-        elif key and key in text:
+        hit = any(target and target in name for target in wanted)
+
+        if not hit and long_enough:
+            hit = any(word.startswith(text) for word in _WORD.findall(name))
+
+        if not hit and long_enough and is_phrase:
+            hit = text in name
+
+        if not hit and key and key in text:
+            hit = True
+
+        if hit:
             matches.append(item)
 
     return sorted(matches, key=lambda item: str(item.get("date")))

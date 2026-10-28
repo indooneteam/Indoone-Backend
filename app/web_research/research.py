@@ -11,6 +11,8 @@ from typing import Any
 import html as html_module
 from urllib.parse import parse_qs, quote_plus, urlparse
 
+import xml.etree.ElementTree as ElementTree
+
 import httpx
 
 from app.ai.language.language_detection import detect_response_language

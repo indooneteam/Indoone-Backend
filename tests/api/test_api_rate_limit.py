@@ -80,3 +80,14 @@ def test_the_bucket_refills_over_time(monkeypatch) -> None:
     assert first.allowed and second.allowed
     assert not blocked.allowed
     assert refilled.allowed
+
+
+def test_the_limits_can_be_read_from_outside() -> None:
+    """The numbers live in environment variables; this endpoint says what they are."""
+    body = TestClient(app).get("/api/ops/limits").json()
+
+    assert set(body) >= {"chat", "api", "configured_by", "documented_in"}
+    assert "per_minute" in body["chat"] and "burst" in body["chat"]
+    assert "per_minute" in body["api"] and "burst" in body["api"]
+    # The names are listed so the reader knows which variable to change.
+    assert "INDOONE_API_RATE_PER_MINUTE" in body["configured_by"]

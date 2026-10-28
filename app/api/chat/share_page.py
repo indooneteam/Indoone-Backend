@@ -189,3 +189,16 @@ def render_not_found() -> str:
     )
 
     return _page("Chat not found — Indoone AI", inner)
+
+
+# A shared page is the only HTML this service renders, so it is the one place a policy is
+# worth setting: no script at all, no frame, inline styles only because the page carries
+# its own stylesheet.
+SHARE_PAGE_HEADERS = {
+    "Content-Security-Policy": (
+        "default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
+        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    ),
+    "Referrer-Policy": "no-referrer",
+    "X-Robots-Tag": "noindex, nofollow",
+}

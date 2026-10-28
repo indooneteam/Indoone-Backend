@@ -110,6 +110,15 @@ def _burst() -> int:
     return max(1, _env_int("INDOONE_CHAT_RATE_BURST", _DEFAULT_BURST))
 
 
+def chat_per_minute() -> float:
+    """The chat rate, readable by the ops endpoint and by anyone reading the config."""
+    return _per_minute()
+
+
+def chat_burst() -> int:
+    return _burst()
+
+
 def daily_quota() -> int:
     return max(1, _env_int("INDOONE_CHAT_DAILY_QUOTA", _DEFAULT_DAILY_QUOTA))
 
@@ -135,6 +144,14 @@ def _api_per_minute() -> float:
 
 def _api_burst() -> int:
     return max(1, _env_int("INDOONE_API_RATE_BURST", _API_DEFAULT_BURST))
+
+
+def api_per_minute() -> float:
+    return _api_per_minute()
+
+
+def api_burst() -> int:
+    return _api_burst()
 
 
 def api_limits_enabled() -> bool:

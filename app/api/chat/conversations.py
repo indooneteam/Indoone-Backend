@@ -155,10 +155,13 @@ async def read_shared_thread(share_id: str) -> SharedThreadResponse:
     if view is None:
         raise HTTPException(status_code=404, detail="This share link does not exist")
 
+    from app.ai.memory.conversation_store import SHARED_MESSAGE_LIMIT
+
+    # The store hands back one message more than the limit so the page can say it was cut.
+    # A JSON caller gets exactly the limit - the extra one is a signal, not content.
+    messages = list(view.get("messages") or [])[:SHARED_MESSAGE_LIMIT]
+
     return SharedThreadResponse(
         title=str(view.get("title") or ""),
-        messages=[
-            SharedMessage(role=role, text=text)
-            for role, text in (view.get("messages") or [])
-        ],
+        messages=[SharedMessage(role=role, text=text) for role, text in messages],
     )

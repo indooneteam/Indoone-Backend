@@ -146,8 +146,17 @@ def _page(title: str, inner: str) -> str:
 
 def render_share_page(title: str, messages: list[tuple[str, str]]) -> str:
     """The transcript page. Nothing here accepts input."""
+    from app.ai.memory.conversation_store import SHARED_MESSAGE_LIMIT
+
     heading = (title or "").strip() or "Shared conversation"
     heading = heading[:_TITLE_LIMIT]
+
+    # The store reads one more than the limit so the page can say it was cut, rather than
+    # quietly showing a thread that looks complete and is not.
+    truncated = len(messages) > SHARED_MESSAGE_LIMIT
+
+    if truncated:
+        messages = messages[-SHARED_MESSAGE_LIMIT:]
 
     if not messages:
         inner = (
@@ -168,8 +177,16 @@ def render_share_page(title: str, messages: list[tuple[str, str]]) -> str:
             f"</div>"
         )
 
+    note = (
+        f'<p class="empty">Showing the last {SHARED_MESSAGE_LIMIT} messages of this '
+        "conversation.</p>"
+        if truncated
+        else ""
+    )
+
     inner = (
         f'<div class="brand">Indoone AI</div><h1>{html.escape(heading)}</h1>'
+        + note
         + "".join(rows)
     )
 

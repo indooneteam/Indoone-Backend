@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
 from app.ai.memory.conversation_store import ConversationStore
-from app.api.chat.share_page import SHARE_PAGE_HEADERS, render_not_found, render_share_page
+from app.api.chat.share_page import render_not_found, render_share_page
 from app.api.security.dependencies import current_user_id
 
 router = APIRouter(tags=["conversations"])
@@ -137,11 +137,10 @@ async def shared_thread_page(share_id: str) -> HTMLResponse:
     view = _store.shared_thread_view(share_id)
 
     if view is None:
-        return HTMLResponse(content=render_not_found(), status_code=404, headers=SHARE_PAGE_HEADERS)
+        return HTMLResponse(content=render_not_found(), status_code=404)
 
     return HTMLResponse(
-        content=render_share_page(str(view.get("title") or ""), view.get("messages") or []),
-        headers=SHARE_PAGE_HEADERS,
+        content=render_share_page(str(view.get("title") or ""), view.get("messages") or [])
     )
 
 @router.get("/chat/shared/{share_id}", response_model=SharedThreadResponse)

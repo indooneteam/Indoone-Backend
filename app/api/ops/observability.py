@@ -36,41 +36,6 @@ def _require_token(provided: str) -> None:
         raise HTTPException(status_code=401, detail="invalid observability token")
 
 
-@router.get("/ops/limits")
-async def effective_limits() -> dict[str, object]:
-    """The limits in force, as the running process reads them.
-
-    The numbers live in environment variables, which means the only way to know what a
-    deployment is actually enforcing was to read its env file. This answers that from the
-    outside: what is on, and what each limit is, without exposing a secret.
-    """
-    from app.ai.execution import limits
-
-    return {
-        "chat": {
-            "enabled": limits.limits_enabled(),
-            "per_minute": limits.chat_per_minute(),
-            "burst": limits.chat_burst(),
-            "daily_quota": limits.daily_quota(),
-        },
-        "api": {
-            "enabled": limits.api_limits_enabled(),
-            "per_minute": limits.api_per_minute(),
-            "burst": limits.api_burst(),
-        },
-        "configured_by": [
-            "INDOONE_CHAT_LIMITS_ENABLED",
-            "INDOONE_CHAT_RATE_PER_MINUTE",
-            "INDOONE_CHAT_RATE_BURST",
-            "INDOONE_CHAT_DAILY_QUOTA",
-            "INDOONE_API_LIMITS_ENABLED",
-            "INDOONE_API_RATE_PER_MINUTE",
-            "INDOONE_API_RATE_BURST",
-        ],
-        "documented_in": ".env.example",
-    }
-
-
 @router.get("/observability")
 async def observability_snapshot(
     x_indoone_observability_token: str = Header(default=""),

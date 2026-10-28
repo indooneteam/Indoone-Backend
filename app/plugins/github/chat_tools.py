@@ -11,6 +11,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from app.ai.execution.text_match import is_pleasantry
 from app.ai.execution.confirmation import CANCEL, CONFIRM, classify_reply_async, waiting_prompt
 from app.ai.gateway.ai_rules import CONFIRM_OR_CANCEL
 from app.ai.execution import action_chips
@@ -131,6 +132,10 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     # repository, yet it is a complete request in Kannada - the repository is the one the
     # thread is already about. Without this it fell through to the model, which invented
     # branch names instead of calling the tool.
+    # A greeting is not a request, whatever words the router looks for.
+    if is_pleasantry(text):
+        return None
+
     branch_word = bool(_BRANCH_WORD.search(text))
     checks_word = bool(_CHECKS_WORD.search(text))
 

@@ -5,6 +5,7 @@ and side-effect confirmation stays in the authenticated backend.
 """
 from __future__ import annotations
 
+from app.ai.execution.text_match import is_pleasantry
 from app.ai.execution.intent_normalizer import normalize
 
 import logging
@@ -548,6 +549,10 @@ async def email_read_fast_path(
     text = (message or "").strip()
 
     if not text or not user_id.strip() or not conversation_id.strip():
+        return None
+
+    # A greeting is not a mailbox question.
+    if is_pleasantry(text):
         return None
 
     if _EMAIL_WRITE_INTENT.search(text):

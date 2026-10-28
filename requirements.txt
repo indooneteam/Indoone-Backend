@@ -8,7 +8,7 @@ cryptography>=44,<46
 # it runs. See migrations/ and app/storage/migrations.py.
 alembic>=1.13,<2.0
 pytest>=8.0,<9.0
-pytest-asyncio>=0.26,<1.0
+pytest-asyncio>=1.4.0,<2.0
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch==2.14.0+cpu
 numpy>=1.26,<3.0

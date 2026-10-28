@@ -20,6 +20,37 @@ _PRIVATE_QUERY_PATTERNS = (
 )
 
 
+# "web research maadu", "search the web for ...", "internet alli huduku", "ಜಾಲದಲ್ಲಿ ಹುಡುಕು".
+# A message that asks for research or names the web is asking for a search, and the
+# declaration must not depend on the model choosing to discover the tool first - it did not,
+# and answered from training memory instead.
+#
+# Kannada is matched without word boundaries: it agglutinates, so "ಜಾಲ" arrives as
+# "ಜಾಲದಲ್ಲಿ" and a \b on either side of the stem would never fire.
+_RESEARCH_ASK = re.compile(r"\b(research|researching)\b|huduku|huduk|ಸಂಶೋಧ|ಹುಡುಕ", re.IGNORECASE)
+_WEB_PLACE = re.compile(r"\b(web|internet|online|google)\b|ವೆಬ್|ಇಂಟರ್ನೆಟ್|ಜಾಲ|ನೆಟ್", re.IGNORECASE)
+_NEWS_ASK = re.compile(r"\bnews\b|ಸುದ್ದಿ", re.IGNORECASE)
+_SEARCH_VERB = re.compile(r"\b(search|find|look\s*up|google)\b|ಹುಡುಕ|huduku|huduk", re.IGNORECASE)
+
+
+def wants_web_research(message: str) -> bool:
+    """True when the message asks for a web search in so many words.
+
+    Deliberately narrow: research, news, or a place (web, internet, online, Google) together
+    with a search verb. "search my emails" and "search the repository" name a different
+    place, and a bare "search" does not mean the web.
+    """
+    text = (message or "").strip()
+
+    if not text:
+        return False
+
+    if _RESEARCH_ASK.search(text) or _NEWS_ASK.search(text):
+        return True
+
+    return bool(_WEB_PLACE.search(text)) and bool(_SEARCH_VERB.search(text))
+
+
 @dataclass(frozen=True)
 class SearchWebToolCall:
     query: str

@@ -117,3 +117,24 @@ def test_a_malformed_feed_is_a_runtime_error_not_a_name_error() -> None:
         research.httpx.AsyncClient = original
 
     assert "RSS" in str(failed.value)
+
+
+def test_auth_is_required_when_the_variable_is_unset(monkeypatch) -> None:
+    """The default is secure: forgetting the variable must not open the API.
+
+    It used to default to false, so a deployment that simply never set it served every
+    /api route to anyone. The suite switches auth off in conftest - a local checkout -
+    so this test removes the variable to see what an unconfigured deployment gets.
+    """
+    monkeypatch.delenv("INDOONE_AUTH_REQUIRED", raising=False)
+
+    # /api/projects takes its user from the query and has no per-route guard, so a 401
+    # here can only come from the middleware - which is the thing under test.
+    assert TestClient(app).get("/api/projects?user_id=u1").status_code == 401
+
+
+def test_auth_can_still_be_switched_off_explicitly(monkeypatch) -> None:
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "false")
+
+    # No token, and the route is reached rather than refused.
+    assert TestClient(app).get("/api/projects?user_id=u1").status_code == 200

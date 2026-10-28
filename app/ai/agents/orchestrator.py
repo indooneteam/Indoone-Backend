@@ -40,7 +40,6 @@ def _extract_payload(message: str, prefixes: tuple[str, ...]) -> str | None:
 
 def _rule_plan(message: str, intent: Intent) -> Plan:
     text = message.strip()
-    lower = text.casefold()
 
     if intent.needs_calculation:
         expression = _extract_arithmetic(text)

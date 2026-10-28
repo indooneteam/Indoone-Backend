@@ -343,7 +343,6 @@ async def _github_update_repository_file(payload: str) -> str:
     message = str(data.get("message", "")).strip()
     expected_sha = str(data.get("sha", "")).strip()
     create = bool(data.get("create", False))
-    approval_token = str(data.get("approval_token", "")).strip()
     if not user_id or not repository or not path or not isinstance(content, str) or not message:
         raise ValueError("user_id, repository, path, content and commit message are required")
     if not create and not expected_sha:
@@ -644,7 +643,7 @@ def _hold_write(
         conversation = str(data.get("conversation_id") or "").strip() or _PENDING_CONVERSATION
         expires_at = (datetime.now(timezone.utc) + timedelta(seconds=300)).isoformat()
         save_pending_github_action(user_id, conversation, payload, expires_at)
-    except (RuntimeError, ValueError, ImportError) as exc:
+    except (RuntimeError, ValueError, ImportError):
         return json.dumps({
             "ok": False,
             "code": "APPROVAL_UNAVAILABLE",

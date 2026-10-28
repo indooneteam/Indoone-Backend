@@ -48,7 +48,7 @@ def validate_production_security_config() -> None:
     if environment not in _PRODUCTION_ENVIRONMENTS:
         return
 
-    auth_required = os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true"
+    auth_required = os.getenv("INDOONE_AUTH_REQUIRED", "true").strip().lower() == "true"
     if not auth_required:
         raise RuntimeError("INDOONE_AUTH_REQUIRED must be true in production")
 

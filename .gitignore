@@ -18,3 +18,7 @@ data/indoone_capabilities.db
 data/indoone_capabilities.db-*
 data/indoone_conversations.sqlite3
 data/indoone_conversations.sqlite3-*
+data/indoone_notifications.db
+data/indoone_notifications.db-*
+# Uploaded media and other runtime artefacts: created by the app, never part of a checkout.
+data/media/

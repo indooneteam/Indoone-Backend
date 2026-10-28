@@ -19,11 +19,13 @@ class MemoryPolicy:
             raise ValueError("min_confidence must be between 0 and 1")
 
 
-def should_store(confidence: float, policy: MemoryPolicy = MemoryPolicy()) -> bool:
+def should_store(confidence: float, policy: MemoryPolicy | None = None) -> bool:
+    policy = policy or MemoryPolicy()
     return policy.allow_automatic_write and 0.0 <= confidence <= 1.0 and confidence >= policy.min_confidence
 
 
-def normalize_memory_value(value: str, policy: MemoryPolicy = MemoryPolicy()) -> str:
+def normalize_memory_value(value: str, policy: MemoryPolicy | None = None) -> str:
+    policy = policy or MemoryPolicy()
     normalized = " ".join(str(value).split())
     if len(normalized) > policy.max_value_chars:
         raise ValueError("memory value exceeds policy limit")

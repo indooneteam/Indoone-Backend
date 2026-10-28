@@ -224,7 +224,7 @@ async def request_context_middleware(request: Request, call_next):
             response = _error_response_with_request_id(401, "AUTH_INVALID", str(exc), request_id)
             _log_request(request, request_id, started, response.status_code)
             return response
-    elif not authentication_exempt and os.getenv("INDOONE_AUTH_REQUIRED", "false").strip().lower() == "true":
+    elif not authentication_exempt and os.getenv("INDOONE_AUTH_REQUIRED", "true").strip().lower() == "true":
         response = _error_response_with_request_id(401, "AUTH_REQUIRED", "bearer authentication required", request_id)
         _log_request(request, request_id, started, response.status_code)
         return response

@@ -7,8 +7,8 @@ from app.ai.memory.memory import extract_memory_candidates, rank_memory_matches,
 from app.ai.memory.memory_policy import MemoryPolicy, normalize_memory_key, normalize_memory_value, should_store
 from app.capabilities.connectors import store
 class MemoryService:
-    def __init__(self, policy: MemoryPolicy = MemoryPolicy()) -> None:
-        self.policy = policy
+    def __init__(self, policy: MemoryPolicy | None = None) -> None:
+        self.policy = policy or MemoryPolicy()
 
     def extract(self, message: str):
         return extract_memory_candidates(message)

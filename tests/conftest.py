@@ -21,3 +21,10 @@ def pytest_configure(config) -> None:
         "postgres: needs a real Postgres; set INDOONE_TEST_DATABASE_URL, or let the "
         "postgres-store CI job supply one",
     )
+
+import os
+
+# The suite calls /api without a token, exactly as a local checkout does. Auth is required
+# by default in the application now, so it is switched off here once, for the whole run,
+# rather than in every test that happens to hit an endpoint.
+os.environ.setdefault("INDOONE_AUTH_REQUIRED", "false")

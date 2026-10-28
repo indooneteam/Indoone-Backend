@@ -52,9 +52,10 @@ def resolve_memory_update(
     existing: Mapping[str, str],
     candidates: list[MemoryCandidate],
     *,
-    policy: MemoryPolicy = MemoryPolicy(),
+    policy: MemoryPolicy | None = None,
 ) -> dict[str, str]:
     """Resolve an in-memory candidate update; persistence policy is enforced at write time."""
+    policy = policy or MemoryPolicy()
     updated = {
         normalize_memory_key(key): normalize_memory_value(value, policy)
         for key, value in existing.items()

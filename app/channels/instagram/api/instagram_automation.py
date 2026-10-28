@@ -74,9 +74,9 @@ async def execute(request: ExecuteRequest) -> dict[str, object]:
             results.append({"action": normalized_action, "success": True, "result": result})
         except (ValueError, PermissionError) as exc:
             results.append({"action": action.action, "success": False, "error": str(exc)})
-        except httpx.HTTPError as exc:
+        except httpx.HTTPError:
             results.append({"action": action.action, "success": False, "error": REQUEST_FAILED_MESSAGE})
-        except RuntimeError as exc:
+        except RuntimeError:
             results.append({"action": action.action, "success": False, "error": REQUEST_FAILED_MESSAGE})
 
     return {

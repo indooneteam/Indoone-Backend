@@ -324,7 +324,7 @@ def measured_model_call(provider: str):
     def decorate(function):
         @functools.wraps(function)
         async def measured(*args: Any, **kwargs: Any) -> Any:
-            async with track("model.call", "model", provider=provider) as span:
+            async with track("model.call", "model", provider=provider):
                 return await function(*args, **kwargs)
 
         return measured

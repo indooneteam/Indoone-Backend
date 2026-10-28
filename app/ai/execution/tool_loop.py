@@ -204,7 +204,6 @@ def model_tool_declarations(
 
     declarations = [tool_declaration(spec) for spec in TOOL_SPECS if wanted(spec)]
 
-    email_names = {str(item["name"]) for item in EMAIL_TOOL_DECLARATIONS}
     if full:
         declarations += [dict(item) for item in EMAIL_TOOL_DECLARATIONS]
     else:

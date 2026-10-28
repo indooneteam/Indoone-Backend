@@ -492,17 +492,26 @@ async def _forward_client_messages(
             continue
 
         if message_type == "stop":
+            # A failure here must not stop the session ending: the socket is already going
+            # away. It must not vanish either - a bare pass made "the session would not
+            # close" impossible to diagnose from the logs.
             try:
                 await _send_gemini_message(
                     gemini, send_lock, {"realtimeInput": {"audioStreamEnd": True}}
                 )
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 - best effort on a closing socket
+                logger.info(
+                    "vibe: audioStreamEnd was not delivered while stopping",
+                    extra={"exception_type": type(exc).__name__},
+                )
             try:
                 await _send_client(websocket, client_lock, {"type": "stopped"})
                 await websocket.close(code=1000, reason="Vibe ended")
-            except Exception:
-                pass
+            except Exception as exc:  # noqa: BLE001 - the client may already be gone
+                logger.info(
+                    "vibe: the client was not told the session ended",
+                    extra={"exception_type": type(exc).__name__},
+                )
             return
 
         if message_type == "audio_stream_end":

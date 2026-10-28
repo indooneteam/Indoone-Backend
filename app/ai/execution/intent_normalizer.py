@@ -66,22 +66,6 @@ _WRITE_VERBS = re.compile(
     re.IGNORECASE,
 )
 
-# What the message is about. Longest first, so "pull request" wins over "request".
-_SUB_RESOURCES: tuple[tuple[str, str], ...] = (
-    ("pull requests", "pull_requests"),
-    ("pull request", "pull_requests"),
-    ("repositories", "repositories"),
-    ("repository", "repositories"),
-    ("commits", "commits"),
-    ("commit", "commits"),
-    ("branches", "branches"),
-    ("branch", "branches"),
-    ("issues", "issues"),
-    ("issue", "issues"),
-    ("files", "files"),
-    ("file", "files"),
-)
-
 _SUB_RESOURCE_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"\b(pull\s*requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", re.IGNORECASE), "pull_requests"),
     (re.compile(r"\b(repos?|repositories|repository)\b|ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ", re.IGNORECASE), "repositories"),
@@ -130,8 +114,13 @@ class NormalizedQuery:
 
     @property
     def is_github(self) -> bool:
-        """A GitHub request names a repository sub-resource, or a branch in any language."""
-        return bool(self.sub_resource) and self.sub_resource != "repositories" or self.sub_resource == "repositories"
+        """A GitHub request names a repository sub-resource.
+
+        This read ``bool(x) and x != "repositories" or x == "repositories"``, which is just
+        ``bool(x)`` written the long way - the two halves cancelled out. Simplified rather
+        than left to puzzle the next reader.
+        """
+        return bool(self.sub_resource)
 
 
 _STANDALONE_POSTPOSITIONS = frozenset(
@@ -207,8 +196,3 @@ def normalize(message: str) -> NormalizedQuery:
         is_history=bool(_HISTORY_WORD.search(text)),
         leave_alone=bool(_LEAVE_ALONE.search(text)),
     )
-
-
-def sub_resource_words() -> tuple[str, ...]:
-    """The plain words, for tests and for a caller that wants to build a prompt."""
-    return tuple(word for word, _ in _SUB_RESOURCES)

@@ -101,3 +101,21 @@ def test_a_2027_kannada_question_says_the_same_thing() -> None:
 def test_a_year_alone_is_not_enough_to_hijack_ordinary_talk() -> None:
     # "2026" appears, but nothing about a festival or a holiday.
     assert festival_answer("2026 was a hard year for me", now=at(2026, 10, 27)) is None
+
+
+def test_the_header_follows_the_resolved_date_not_the_wall_clock() -> None:
+    """"Today:" must describe the date the question was resolved for.
+
+    The header used to compare against datetime.now(), so a caller passing now= - which is
+    how every other test in this file works - could get a range label on a single day, or
+    "Today:" over a range, depending on what the clock said at the time.
+    """
+    today_answer = festival_answer("today festival", now=at(2026, 1, 14))
+    assert today_answer is not None
+    assert today_answer.startswith("Today:")
+
+    # A range that ends today is not today.
+    month_answer = festival_answer("this month holidays", now=at(2026, 10, 1))
+    assert month_answer is not None
+    assert not month_answer.startswith("Today:")
+    assert month_answer.startswith("2026-10-01")

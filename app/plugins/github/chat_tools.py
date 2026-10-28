@@ -98,6 +98,10 @@ def _repository_hint_from_message(text: str) -> str:
 
 # "ralli" and "alli" are how a branch is named in ordinary Kannada chat; the tool must
 # understand the request before any model is asked about it.
+# "checks" and "ci" name the request by themselves - a Kannada or short English message
+# carries no verb - but the bare verb "check" does not: it is ordinary English.
+_CHECKS_WORD = re.compile(r"\b(checks|check\s*runs?|ci|ci\s*status)\b|ಚೆಕ್|ಸಿಐ", re.IGNORECASE)
+
 _BRANCH_WORD = re.compile(r"\b(branch(?:es)?|ralli|ralli\u0304|alli)\b|ಶಾಖೆ|ಬ್ರಾಂಚ್", re.IGNORECASE)
 
 
@@ -128,6 +132,7 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     # thread is already about. Without this it fell through to the model, which invented
     # branch names instead of calling the tool.
     branch_word = bool(_BRANCH_WORD.search(text))
+    checks_word = bool(_CHECKS_WORD.search(text))
 
     if not text:
         return None
@@ -138,10 +143,10 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     if _norm.leave_alone and _norm.ordinal is None:
         return None
 
-    if not (branch_word or _norm.sub_resource or _ACTION_RE.search(text)):
+    if not (branch_word or checks_word or _norm.sub_resource or _ACTION_RE.search(text)):
         return None
 
-    if not (branch_word or _norm.sub_resource or _GITHUB_TARGET_RE.search(text)):
+    if not (branch_word or checks_word or _norm.sub_resource or _GITHUB_TARGET_RE.search(text)):
         return None
     recent_context = " ".join(str(item or "") for role, item in (history or [])[-6:] if role == "user")
     has_context = bool(
@@ -150,7 +155,7 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
         or re.search(r"\bgithub\b", recent_context, re.IGNORECASE)
         or re.search(r"\b(repo|repos|repository|repositories)\b|(?:ರಿಪೊಸಿಟರಿ|ರೆಪೊಸಿಟರಿ)", text, re.IGNORECASE)
         or _BRANCH_WORD.search(text)
-        or re.search(r"\b(checks?)\b|ಚೆಕ್", text, re.IGNORECASE)
+        or checks_word
         or re.search(r"\b(pull\s+requests?|prs?)\b|ಪುಲ್\s*ರಿಕ್ವೆಸ್ಟ್|ಪಿಆರ್", text, re.IGNORECASE)
         or re.search(r"(?:ಅಸೈನ್ಡ್\s*)?ಇಶ್ಯೂ", text, re.IGNORECASE)
         or _REPOSITORY_NAME_RE.search(text)
@@ -298,7 +303,9 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
                 return "What should I call the new branch?"
             return "github_create_branch", {"repository": repository, "repository_hint": repository_hint, "branch": name}
         return "github_list_branches", {"repository": repository, "repository_hint": repository_hint, "per_page": 30}
-    if re.search(r"\b(checks?|ci|workflow\s+runs?|build\s+status)\b|ಚೆಕ್|ಸಿಐ", text, re.IGNORECASE):
+    # "checks", not "check": the bare verb is ordinary English, and "check the text" or
+    # "check my mail" were being answered with the repository's CI status.
+    if re.search(r"\b(checks|check\s*runs?|ci|workflow\s+runs?|build\s+status)\b|ಚೆಕ್|ಸಿಐ", text, re.IGNORECASE):
         return "github_list_check_runs", {"repository": repository, "repository_hint": repository_hint, "ref": ""}
     if re.search(r"\b(commit)\b", text, re.IGNORECASE) and re.search(r"\b([0-9a-f]{7,40})\b", text, re.IGNORECASE):
         sha = re.search(r"\b([0-9a-f]{7,40})\b", text, re.IGNORECASE)

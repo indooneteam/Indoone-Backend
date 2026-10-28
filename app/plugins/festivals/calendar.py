@@ -264,31 +264,41 @@ def festival_answer(message: str, *, now: datetime | None = None) -> str | None:
         return None
 
     if _TODAY.search(text) and (asks_event or asks_when):
-        return _for_days(today, today, kannada=kannada, empty="ಇಂದು ಯಾವುದೇ ಹಬ್ಬ ಅಥವಾ ರಜೆ ಇಲ್ಲ." if kannada else "No festival or holiday today.")
+        return _for_days(today, today, kannada=kannada, today=today, empty="ಇಂದು ಯಾವುದೇ ಹಬ್ಬ ಅಥವಾ ರಜೆ ಇಲ್ಲ." if kannada else "No festival or holiday today.")
 
     if _TOMORROW.search(text) and (asks_event or asks_when):
         day = today + timedelta(days=1)
-        return _for_days(day, day, kannada=kannada, empty="ನಾಳೆ ಯಾವುದೇ ಹಬ್ಬ ಅಥವಾ ರಜೆ ಇಲ್ಲ." if kannada else "No festival or holiday tomorrow.")
+        return _for_days(day, day, kannada=kannada, today=today, empty="ನಾಳೆ ಯಾವುದೇ ಹಬ್ಬ ಅಥವಾ ರಜೆ ಇಲ್ಲ." if kannada else "No festival or holiday tomorrow.")
 
     if _WEEK.search(text) and (asks_event or asks_when):
-        return _for_days(today, today + timedelta(days=6), kannada=kannada, empty="ಈ ವಾರ ಯಾವುದೇ ಹಬ್ಬ ಅಥವಾ ರಜೆ ಇಲ್ಲ." if kannada else "No festival or holiday this week.")
+        return _for_days(today, today + timedelta(days=6), kannada=kannada, today=today, empty="ಈ ವಾರ ಯಾವುದೇ ಹಬ್ಬ ಅಥವಾ ರಜೆ ಇಲ್ಲ." if kannada else "No festival or holiday this week.")
 
     if _MONTH.search(text) and (asks_event or asks_when):
         end = (today.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-        return _for_days(today, end, kannada=kannada, empty="ಈ ತಿಂಗಳು ಯಾವುದೇ ಹಬ್ಬ ಅಥವಾ ರಜೆ ಇಲ್ಲ." if kannada else "No festival or holiday this month.")
+        return _for_days(today, end, kannada=kannada, today=today, empty="ಈ ತಿಂಗಳು ಯಾವುದೇ ಹಬ್ಬ ಅಥವಾ ರಜೆ ಇಲ್ಲ." if kannada else "No festival or holiday this month.")
 
     return None
 
 
-def _for_days(start: date, end: date, *, kannada: bool, empty: str) -> str:
+def _for_days(
+    start: date, end: date, *, kannada: bool, empty: str, today: date | None = None
+) -> str:
+    """A day or a range, headed the way it should be read.
+
+    ``today`` is the date the question was resolved for, not the wall clock. It used to be
+    read from ``datetime.now()`` here, so a request that started before midnight - or a
+    caller passing ``now=`` - could label a range "Today:" or label today with a date.
+    """
     found = events_between(start, end)
 
     if not found:
         return empty
 
+    reference = today or datetime.now(INDIA).date()
+
     if kannada:
-        head = "ಇಂದು:" if start == end == datetime.now(INDIA).date() else f"{start.isoformat()} ರಿಂದ {end.isoformat()} ವರೆಗೆ:"
+        head = "ಇಂದು:" if start == end == reference else f"{start.isoformat()} ರಿಂದ {end.isoformat()} ವರೆಗೆ:"
     else:
-        head = "Today:" if start == end == datetime.now(INDIA).date() else f"{start.isoformat()} to {end.isoformat()}:"
+        head = "Today:" if start == end == reference else f"{start.isoformat()} to {end.isoformat()}:"
 
     return head + "\n\n" + "\n\n".join(_describe(item, kannada=kannada) for item in found[:8])

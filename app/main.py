@@ -229,6 +229,23 @@ async def request_context_middleware(request: Request, call_next):
         _log_request(request, request_id, started, response.status_code)
         return response
 
+    # One burst limit for the whole API surface, keyed by client address. Provider webhooks
+    # are excluded: they are bursty by nature and already authenticated by signature.
+    if request.url.path.startswith("/api/") and not provider_webhook:
+        from app.ai.execution import limits as api_limits
+
+        if api_limits.api_limits_enabled():
+            client = request.client.host if request.client else "unknown"
+            admission = api_limits.take_api_burst(f"ip:{client}")
+
+            if not admission.allowed:
+                response = _error_response_with_request_id(
+                    429, admission.code, admission.message, request_id
+                )
+                response.headers["Retry-After"] = str(admission.retry_after)
+                _log_request(request, request_id, started, response.status_code)
+                return response
+
     content_length = request.headers.get("content-length")
     max_request_bytes = _max_request_bytes()
     if content_length:

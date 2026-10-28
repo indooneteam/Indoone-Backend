@@ -17,6 +17,10 @@ from uuid import uuid4
 from app.storage import database
 from app.storage.migrations import ensure_schema
 
+# How much of a thread a share link renders. A conversation is unbounded; a public
+# page that renders all of it is a way to make the server spend memory on request.
+SHARED_MESSAGE_LIMIT = 500
+
 DEFAULT_DB_PATH = Path(os.getenv("INDOONE_CONVERSATION_DB", "data/indoone_conversations.sqlite3"))
 DEFAULT_MAX_MESSAGES: int | None = None
 
@@ -272,10 +276,14 @@ class ConversationStore:
             if row is None:
                 return None
 
+            # A share link is public, unauthenticated and unlimited: rendering a
+            # thousand-message thread is a free way to spend the server's memory. The
+            # newest messages are the ones a reader came for, so the cap keeps those.
             rows = connection.execute(
-                "SELECT role, content FROM messages WHERE conversation_id=? ORDER BY id",
-                (str(row["conversation_id"]),),
-            ).fetchall()
+                "SELECT role, content FROM messages WHERE conversation_id=? "
+                "ORDER BY id DESC LIMIT ?",
+                (str(row["conversation_id"]), SHARED_MESSAGE_LIMIT),
+            ).fetchall()[::-1]
 
         return [(str(item["role"]), str(item["content"])) for item in rows]
 
@@ -300,10 +308,13 @@ class ConversationStore:
             if row is None:
                 return None
 
+            # One more than the limit, so the page can say it was cut instead of showing a
+            # thread that looks complete and is not.
             rows = connection.execute(
-                "SELECT role, content FROM messages WHERE conversation_id=? ORDER BY id",
-                (str(row["conversation_id"]),),
-            ).fetchall()
+                "SELECT role, content FROM messages WHERE conversation_id=? "
+                "ORDER BY id DESC LIMIT ?",
+                (str(row["conversation_id"]), SHARED_MESSAGE_LIMIT + 1),
+            ).fetchall()[::-1]
 
         return {
             "title": str(row["title"] or "").strip(),

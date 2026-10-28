@@ -152,8 +152,16 @@ def parse_feed(content: bytes, source: SourceDefinition) -> list[FeedItem]:
     if len(content) > MAX_FEED_BYTES:
         raise ValueError("feed exceeds configured size limit")
 
+    # defusedxml refuses entity expansion; the stdlib parser performs it, so a feed with a
+    # billion-laughs payload would expand into memory far past the size limit that was just
+    # checked. The research module already reads feeds this way.
     try:
-        root = ET.fromstring(content)
+        from defusedxml.ElementTree import fromstring as _safe_fromstring
+        from defusedxml.common import DefusedXmlException
+
+        root = _safe_fromstring(content)
+    except DefusedXmlException as exc:
+        raise ValueError("feed uses XML features that are not accepted") from exc
     except ET.ParseError as exc:
         raise ValueError("feed is not valid XML") from exc
 
@@ -219,6 +227,12 @@ def fetch_feed(
 ) -> list[FeedItem]:
     if timeout_seconds <= 0 or timeout_seconds > 120:
         raise ValueError("timeout_seconds must be between 0 and 120")
+
+    # urlopen honours any scheme it knows. A source that said file:// would read this
+    # machine's disk, so only http(s) reaches the opener at all.
+    parsed = urlparse(source.url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("feed source must be an absolute http(s) URL")
 
     request = Request(
         source.url,

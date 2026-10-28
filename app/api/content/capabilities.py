@@ -5,7 +5,7 @@ from typing import Any
 from secrets import token_urlsafe
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
@@ -192,6 +192,24 @@ async def integration_callback(integration_id: str, request: IntegrationCallback
         raise provider_failure("oauth exchange", exc) from exc
 
 
+def _scoped_user(request: Request, requested: str) -> str:
+    """The user a request is allowed to act for.
+
+    These endpoints took `user_id` from the query or the body and trusted it. The token is
+    validated by the middleware, but nothing compared the two - so any authenticated caller
+    could read or write another person's projects, tasks and agent runs by typing their id.
+    When a principal is present it must match; when the deployment runs without auth (the
+    default for a local checkout) the supplied id is used as before.
+    """
+    principal = str(getattr(request.state, "principal_id", "")).strip()
+    supplied = str(requested or "").strip()
+
+    if principal and supplied and principal != supplied:
+        raise HTTPException(status_code=403, detail="user scope mismatch")
+
+    return principal or supplied
+
+
 @router.get("/integrations/{integration_id}/callback", response_class=HTMLResponse)
 async def integration_callback_browser(
     integration_id: str,
@@ -222,7 +240,8 @@ async def integration_callback_browser(
 
 
 @router.get("/integrations/{integration_id}/status")
-async def integration_status(integration_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+async def integration_status(request: Request, integration_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    user_id = _scoped_user(request, user_id)
     if get_integration(integration_id) is None:
         raise HTTPException(status_code=404, detail="integration not found")
     metadata = get_integration_token_metadata(user_id, integration_id.strip().lower())
@@ -230,12 +249,14 @@ async def integration_status(integration_id: str, user_id: str = Query(..., min_
 
 
 @router.post("/projects")
-async def create_project_endpoint(request: ProjectRequest) -> dict[str, object]:
+async def create_project_endpoint(http_request: Request, request: ProjectRequest) -> dict[str, object]:
+    _scoped_user(http_request, request.user_id)
     return {"project": create_project(request.user_id, request.name, request.instructions, request.context)}
 
 
 @router.get("/projects")
 async def get_projects(
+    request: Request,
     user_id: str = Query(..., min_length=1, max_length=256),
     include_archived: bool = False,
     limit: int = Query(default=100, ge=1, le=500),
@@ -246,7 +267,8 @@ async def get_projects(
 
 
 @router.get("/projects/{project_id}")
-async def get_project_endpoint(project_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+async def get_project_endpoint(request: Request, project_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    user_id = _scoped_user(request, user_id)
     project = get_project(user_id, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
@@ -254,7 +276,8 @@ async def get_project_endpoint(project_id: str, user_id: str = Query(..., min_le
 
 
 @router.patch("/projects/{project_id}")
-async def update_project_endpoint(project_id: str, request: ProjectUpdateRequest) -> dict[str, object]:
+async def update_project_endpoint(http_request: Request, project_id: str, request: ProjectUpdateRequest) -> dict[str, object]:
+    _scoped_user(http_request, request.user_id)
     project = update_project(request.user_id, project_id, request.name, request.instructions, request.context, request.archived)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
@@ -262,29 +285,34 @@ async def update_project_endpoint(project_id: str, request: ProjectUpdateRequest
 
 
 @router.delete("/projects/{project_id}")
-async def delete_project_endpoint(project_id: str, request: ProjectDeleteRequest) -> dict[str, bool]:
+async def delete_project_endpoint(http_request: Request, project_id: str, request: ProjectDeleteRequest) -> dict[str, bool]:
+    _scoped_user(http_request, request.user_id)
     if not delete_project(request.user_id, request.project_id):
         raise HTTPException(status_code=404, detail="project not found")
     return {"deleted": True}
 
 
 @router.post("/tasks")
-async def create_task_endpoint(request: TaskRequest) -> dict[str, object]:
+async def create_task_endpoint(http_request: Request, request: TaskRequest) -> dict[str, object]:
+    _scoped_user(http_request, request.user_id)
     return {"task": create_task(request.user_id, request.title, request.prompt, request.schedule, request.enabled)}
 
 
 @router.get("/tasks")
-async def get_tasks(user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+async def get_tasks(request: Request, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    user_id = _scoped_user(request, user_id)
     return {"tasks": list_tasks(user_id)}
 
 
 @router.get("/agent/runs")
-async def agent_runs(user_id: str = Query(..., min_length=1, max_length=256), limit: int = Query(default=50, ge=1, le=100)) -> dict[str, object]:
+async def agent_runs(request: Request, user_id: str = Query(..., min_length=1, max_length=256), limit: int = Query(default=50, ge=1, le=100)) -> dict[str, object]:
+    user_id = _scoped_user(request, user_id)
     return {"runs": list_agent_runs(user_id, limit)}
 
 
 @router.get("/agent/runs/{run_id}")
-async def agent_run(run_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+async def agent_run(request: Request, run_id: str, user_id: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    user_id = _scoped_user(request, user_id)
     result = get_agent_run(user_id, run_id)
     if result is None:
         raise HTTPException(status_code=404, detail="agent run not found")

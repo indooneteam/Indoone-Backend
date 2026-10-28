@@ -194,6 +194,13 @@ async def request_context_middleware(request: Request, call_next):
         request.method.upper() == "GET"
         and request.url.path in {"/health", "/ready"}
     )
+    # A shared conversation is a public page by design: the whole point of the link is that
+    # someone without an account can open it. Without this, turning INDOONE_AUTH_REQUIRED on
+    # - which production does - answered every share link with 401.
+    public_share_page = (
+        request.method.upper() == "GET"
+        and request.url.path.startswith("/share/")
+    )
     # A CORS preflight carries no credentials, by design: the browser sends it
     # before it will send the real request. This middleware runs before the CORS
     # middleware, so refusing a preflight here means the browser never receives
@@ -205,6 +212,7 @@ async def request_context_middleware(request: Request, call_next):
         provider_webhook
         or public_oauth_callback
         or public_health_check
+        or public_share_page
         or preflight
     )
     principal = ""

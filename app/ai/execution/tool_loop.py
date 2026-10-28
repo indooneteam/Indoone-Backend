@@ -102,6 +102,8 @@ def _azure_backend_enabled() -> bool:
 # search_web used to be here. Its declaration is a hundred-odd tokens on every single
 # turn, for a tool most messages never need. It is still one find_tools call away, and the
 # instruction now says when to make that call.
+from app.web_research.tools import wants_web_research
+
 ALWAYS_ON_TOOL_NAMES = frozenset({"find_tools", "calculator", "text_stats"})
 
 # How many tools one find_tools call returns. Five is what the tool is for: enough to
@@ -173,6 +175,7 @@ def model_tool_declarations(
     *,
     discovered: Iterable[str] = (),
     full: bool = False,
+    wants_web: bool = False,
 ) -> list[dict[str, Any]]:
     """The tools the model is given for this turn.
 
@@ -186,6 +189,12 @@ def model_tool_declarations(
     always-on set is about 400.
     """
     wanted_names = None if full else set(ALWAYS_ON_TOOL_NAMES) | {str(name) for name in discovered}
+
+    # A message that asks for web research gets search_web without a discovery step. The
+    # model used to have to call find_tools first and often did not, so an explicit request
+    # for research was answered from training memory.
+    if wanted_names is not None and wants_web:
+        wanted_names.add("search_web")
     if wanted_names is not None and str(user_id or "").strip():
         wanted_names |= _connected_read_tools(str(user_id).strip())
 
@@ -369,7 +378,11 @@ async def run_tool_loop(
         Called once per round by the provider, so a tool discovered in round one is
         callable in round two without re-sending the catalogue.
         """
-        return model_tool_declarations(user_id, discovered=tuple(discovered))
+        return model_tool_declarations(
+            user_id,
+            discovered=tuple(discovered),
+            wants_web=wants_web_research(message),
+        )
 
     async def execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         if name == "find_tools":

@@ -7,6 +7,7 @@ import os
 from app.ai.execution.account_context import accounts_instruction, without_stale_refusals
 from app.ai.execution.request_context import now_line, user_name_line
 from app.plugins.festivals.calendar import festival_answer
+from app.web_research.fast_path import web_research_answer
 from app.ai.execution.tool_loop import run_tool_loop
 from app.ai.gateway.service import generate_reply
 from app.ai.memory.conversation_store import ConversationStore
@@ -109,6 +110,11 @@ async def _generate_with_history(owner_user_id: str, channel: str, sender_id: st
     # The same calendar answer the app gets, before any gateway: a festival question on
     # WhatsApp costs nothing and cannot be invented either.
     calendar_reply = festival_answer(text)
+
+    # A research request is answered here too: the search runs first, so the
+    # model is never left to promise a lookup it does not perform.
+    if calendar_reply is None:
+        calendar_reply = await web_research_answer(text)
 
     store = ConversationStore()
     if calendar_reply is not None:

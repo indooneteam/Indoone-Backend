@@ -27,6 +27,7 @@ from app.capabilities.media.document_extract import (
     extract_document,
 )
 from app.capabilities.media.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
+from app.web_research.fast_path import web_research_answer
 from app.web_research.grounding import split_grounded_sources
 from app.api.security.dependencies import current_user_id
 from app.ai.gateway.gemini_service import ModelBusyError
@@ -452,6 +453,13 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                     approval_tokens=tuple(body.approval_tokens or ()),
                     conversation_id=conversation_id,
                 )
+
+            # A web-research request is answered in THIS turn. The search runs here,
+            # before the model speaks, so there is nothing left for it to promise: the
+            # app used to reply "one moment, I will fetch it" and then not fetch it, and
+            # the user had to send "kodu" for the answer the first message should carry.
+            if tool_reply is None and not email_owns_this:
+                tool_reply = await web_research_answer(body.message, history=history)
 
             # No gate on whether to offer tools: the model is given four small
             # declarations and find_tools, so an ordinary message costs a few hundred

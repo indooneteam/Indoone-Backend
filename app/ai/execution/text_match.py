@@ -96,3 +96,44 @@ def mentions(text: str, phrase: str, *, min_prefix: int = 4) -> bool:
             return True
 
     return False
+
+
+# The subject a message is about, when it says so plainly. The festival calendar answers a
+# question about a date; it must not answer a question about the mailbox, the conversation
+# or the repository that merely mentions a festival. Measured before this existed:
+# "what did we discuss about deepavali" and "unread emails about deepavali" both came back
+# with the holiday calendar.
+_SUBJECTS = {
+    "email": re.compile(
+        r"\b(emails?|mails?|inbox|gmail|zoho|outlook|unread)\b|ಮೇಲ್|ಇನ್‌ಬಾಕ್ಸ್|ಮೈಲ್",
+        re.IGNORECASE,
+    ),
+    "conversation": re.compile(
+        r"\b(discuss(ed)?|conversations?|chats?|thread|history|summar(y|ise|ize)|talked|we\s+said|"
+        r"maatu|maatadu|matu|maathaadid)\b|ಮಾತು|ಸಂಭಾಷಣೆ|ಚಾಟ್|ಸಾರಾಂಶ|ಮಾತಾಡಿದ",
+        re.IGNORECASE,
+    ),
+    "code": re.compile(
+        r"\b(repos?|repositor(y|ies)|branch(es)?|commits?|pull\s*requests?|prs?|issues?|github|"
+        r"workflows?|pipelines?)\b|ರೆಪೊ|ಶಾಖೆ|ಕಮಿಟ್",
+        re.IGNORECASE,
+    ),
+}
+
+
+def subject_of(text: str) -> str | None:
+    """The subject a message names, or None when it names none of them.
+
+    Deliberately one answer, not a set: a router that answers dates asks this and stands
+    down for anything that is plainly about another subject.
+    """
+    cleaned = (text or "").strip()
+
+    if not cleaned:
+        return None
+
+    for name, pattern in _SUBJECTS.items():
+        if pattern.search(cleaned):
+            return name
+
+    return None

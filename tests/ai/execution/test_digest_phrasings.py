@@ -17,7 +17,11 @@ from app.ai.memory.conversation_store import ConversationStore
 
 @pytest.fixture()
 def thread(tmp_path, monkeypatch) -> str:
+    from app.ai.execution import conversation_digest
+
     store = ConversationStore(tmp_path / "c.sqlite3")
+    # the digest builds its own store, so the fixture must hand it this one
+    monkeypatch.setattr(conversation_digest, "ConversationStore", lambda: store)
     store.append(
         "c-digest",
         [("user", "deepavali planning maadona"), ("assistant", "Deepavali is on 8 November 2026.")],

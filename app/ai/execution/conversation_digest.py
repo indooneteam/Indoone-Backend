@@ -19,9 +19,14 @@ from app.ai.memory.conversation_store import ConversationStore
 # Asking about the conversation itself, rather than about the world.
 _TRIGGERS = re.compile(
     r"(conversation\s*(check|summary|history)|chat\s*history|"
-    r"what\s+did\s+we\s+discuss|discuss(ed)?\s+earlier|earlier\s+(chat|conversation)|"
+    r"what\s+did\s+we\s+(discuss|talk)|we\s+(talked|discussed)|"
+    r"discuss(ed)?\s+earlier|earlier\s+(chat|conversation)|"
+    # "summarise this chat", "summarize the conversation", "summary of this thread" -
+    # the same request as "what did we discuss", and it used to reach the model instead.
+    r"summar(y|ise|ize)\s+(this|the|our)\s+(chat|conversation|thread)|"
+    r"(summary|gist)\s+of\s+(this|the|our)\s+(chat|conversation|thread)|"
     r"namma\s+(maatu|conversation)|hindina\s+maatu|"
-    r"ಸಂಭಾಷಣೆ|ಹಿಂದಿನ\s*ಮಾತು|ಚಾಟ್\s*ಹಿಸ್ಟರಿ)",
+    r"ಸಂಭಾಷಣೆ|ಹಿಂದಿನ\s*ಮಾತು|ಚಾಟ್\s*ಹಿಸ್ಟರಿ|ಸಾರಾಂಶ)",
     re.IGNORECASE,
 )
 

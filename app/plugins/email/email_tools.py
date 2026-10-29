@@ -524,7 +524,10 @@ async def execute_email_tool(
 _EMAIL_READ_INTENT = re.compile(
     r"\b(unread|inbox|mailbox|check\s+(?:my\s+)?(?:mail|email|inbox)|"
     r"(?:list|show|read|any)\s+(?:my\s+)?(?:new\s+)?(?:mails?|emails?)|"
-    r"latest\s+(?:mails?|emails?))\b|"
+    r"latest\s+(?:mails?|emails?)|"
+    # "mail from boss", "emails about the invoice": a read of the mailbox that names what
+    # it is looking for. "send a mail to ravi" is a write and is caught above.
+    r"(?:mails?|emails?)\s+(?:from|about|regarding|with\s+subject))\b|"
     r"inbox\s*thorisu|ಮೇಲ್\s*ತೋರಿಸು|ಇನ್‌ಬಾಕ್ಸ್",
     re.IGNORECASE,
 )

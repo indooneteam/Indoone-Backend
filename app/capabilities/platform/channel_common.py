@@ -7,8 +7,10 @@ import os
 from app.ai.execution.account_context import accounts_instruction, without_stale_refusals
 from app.ai.execution.request_context import now_line, user_name_line
 from app.plugins.festivals.calendar import festival_answer
-from app.web_research.fast_path import web_research_answer
+from app.web_research.fast_path import answer_instead_of_promise, web_research_answer
+from app.ai.execution.conversation_digest import conversation_history_answer
 from app.ai.execution.tool_loop import run_tool_loop
+from app.plugins.email.email_tools import email_read_fast_path
 from app.ai.gateway.service import generate_reply
 from app.ai.memory.conversation_store import ConversationStore
 
@@ -111,6 +113,16 @@ async def _generate_with_history(owner_user_id: str, channel: str, sender_id: st
     # WhatsApp costs nothing and cannot be invented either.
     calendar_reply = festival_answer(text)
 
+    # A question about the thread itself is answered from the digest here too. Without
+    # this the same question got a different answer on WhatsApp than in the app: the
+    # channel path had the calendar and the tool loop, but not the digest.
+    if calendar_reply is None:
+        calendar_reply = await conversation_history_answer(owner_user_id, conversation_id, text)
+
+    # A read-only mailbox question, deterministically, on every channel.
+    if calendar_reply is None:
+        calendar_reply = await email_read_fast_path(owner_user_id, conversation_id, text)
+
     # A research request is answered here too: the search runs first, so the
     # model is never left to promise a lookup it does not perform.
     if calendar_reply is None:
@@ -175,6 +187,12 @@ async def _generate_with_history(owner_user_id: str, channel: str, sender_id: st
             # A channel message must never be left unanswered.
             logger.exception("channel reply failed", extra={"channel": channel})
             reply = _FALLBACK_REPLY
+
+    # A promise is not an answer, on a channel least of all: there is no second screen to
+    # send "kodu" from. Outside the try above, so a failure here still leaves the reply.
+    replacement = await answer_instead_of_promise(reply, text, history=history)
+    if replacement:
+        reply = replacement
     store.append(
         conversation_id,
         [("user", text), ("assistant", reply)],

@@ -20,7 +20,7 @@ from functools import lru_cache
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from app.ai.execution.text_match import is_pleasantry, mentions
+from app.ai.execution.text_match import is_pleasantry, mentions, subject_of
 
 INDIA = ZoneInfo("Asia/Kolkata")
 
@@ -260,6 +260,12 @@ def festival_answer(message: str, *, now: datetime | None = None) -> str | None:
     # The word-level match below already refuses these; this refuses them one layer earlier,
     # so no future edit to the match can bring the holiday calendar back for a greeting.
     if is_pleasantry(text):
+        return None
+
+    # A date question is answered here; a question about the mailbox, the thread or the
+    # repository is not, even when it names a festival. Without this, "unread emails about
+    # deepavali" was answered with Deepavali's date and the mailbox never looked at.
+    if subject_of(text):
         return None
 
     today = (now or datetime.now(INDIA)).astimezone(INDIA).date()

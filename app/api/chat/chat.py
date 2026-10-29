@@ -27,7 +27,7 @@ from app.capabilities.media.document_extract import (
     extract_document,
 )
 from app.capabilities.media.vision import ALLOWED_IMAGE_MIMES, MAX_IMAGE_BYTES, analyze_image
-from app.web_research.fast_path import web_research_answer
+from app.web_research.fast_path import answer_instead_of_promise, web_research_answer
 from app.web_research.grounding import split_grounded_sources
 from app.api.security.dependencies import current_user_id
 from app.ai.gateway.gemini_service import ModelBusyError
@@ -573,6 +573,14 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 "Please try again in a moment."
             ),
         ) from exc
+
+    # Whatever reached this point is the answer, unless it is a promise: "one moment, I
+    # will fetch it" is not an answer, and the app showed it as one.
+    replacement = await answer_instead_of_promise(
+        reply_with_sources, body.message, history=history
+    )
+    if replacement:
+        reply_with_sources = replacement
 
     reply, web_sources = split_grounded_sources(reply_with_sources)
 

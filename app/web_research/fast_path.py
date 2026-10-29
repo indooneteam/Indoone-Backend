@@ -19,6 +19,8 @@ import logging
 import re
 
 from app.ai.gateway.service import generate_reply
+from app.ai.quality.promise import is_promise
+from app.ai.execution.text_match import subject_of
 from app.web_research.grounding import GroundedEvidence, append_sources
 from app.web_research.research import format_results
 from app.web_research.tools import (
@@ -90,9 +92,14 @@ async def web_research_answer(
     message: str,
     *,
     history: list[tuple[str, str]] | None = None,
+    force: bool = False,
 ) -> str | None:
-    """The grounded answer for a research request, or None when this is not one."""
-    if not wants_web_research(message):
+    """The grounded answer for a research request, or None when this is not one.
+
+    ``force`` skips the gate: used when the model has already promised a lookup, which is
+    its own statement that the question needs one.
+    """
+    if not force and not wants_web_research(message):
         return None
 
     query = search_query_from(message)
@@ -145,3 +152,24 @@ async def web_research_answer(
     except Exception:
         # A quality check on the phrasing must not cost the user the answer.
         return answer
+
+
+async def answer_instead_of_promise(
+    reply: str,
+    message: str,
+    *,
+    history: list[tuple[str, str]] | None = None,
+) -> str | None:
+    """The answer a promise was standing in for, or None when the reply is not a promise.
+
+    A reply that names another subject - the mailbox, the thread, the repository - is left
+    alone: those have deterministic routers, and forcing a web search over one would answer
+    the wrong question.
+    """
+    if not is_promise(reply):
+        return None
+
+    if subject_of(message) is not None:
+        return None
+
+    return await web_research_answer(message, history=history, force=True)

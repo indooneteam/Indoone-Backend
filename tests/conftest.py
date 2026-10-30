@@ -85,3 +85,5 @@ os.environ.setdefault("INDOONE_COST_LEDGER_ENABLED", "false")
 os.environ.setdefault("INDOONE_CIRCUIT_HEALER_ENABLED", "false")
 # The kingdom auditor is exercised by its own suite.
 os.environ.setdefault("INDOONE_KINGDOM_AUDITOR_ENABLED", "false")
+# The capability gate is exercised by its own suite.
+os.environ.setdefault("INDOONE_CAPABILITY_GATE_ENABLED", "false")

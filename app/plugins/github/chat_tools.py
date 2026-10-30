@@ -136,6 +136,14 @@ def _github_action(message: str, history: list[tuple[str, str]] | None) -> tuple
     if is_pleasantry(text):
         return None
 
+    # "explain git branches" names branches and asks for reasoning. The gate can only refuse;
+    # the branches below still decide what the request means.
+    from app.agents import capability_gate
+
+    _gate = capability_gate()
+    if not _gate.wants(text, _gate.GITHUB):
+        return None
+
     branch_word = bool(_BRANCH_WORD.search(text))
     checks_word = bool(_CHECKS_WORD.search(text))
 

@@ -130,3 +130,8 @@ def host_sentry() -> ModuleType:
 def whatsapp_ingress() -> ModuleType:
     """Agent 18 - the WhatsApp door: prove it came from Meta, then flatten it."""
     return load("18_whatsapp_ingress")
+
+
+def telegram_ingress() -> ModuleType:
+    """Agent 19 - the Telegram door: same discipline as WhatsApp, different shape."""
+    return load("19_telegram_bot_marshaller")

@@ -129,8 +129,15 @@ async def set_webhook(url: str, approved: bool = False, drop_pending_updates: bo
 
 
 def validate_webhook_secret(received: str | None) -> bool:
+    """Whether this webhook came from Telegram, compared in constant time.
+
+    ``==`` returns at the first differing byte, which tells an attacker how much of the
+    secret was right - one character per request.
+    """
+    import hmac
+
     configured = _secret_token()
-    return bool(configured and received and received == configured)
+    return bool(configured and received and hmac.compare_digest(str(received), configured))
 
 
 async def delete_webhook(approved: bool = False, drop_pending_updates: bool = False) -> dict[str, object]:

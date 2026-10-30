@@ -21,38 +21,6 @@ the database paths and the Fernet key. `.env.example` lists every variable the c
 with placeholder values; that file *is* in the repository and is the reference for what
 `/etc/indoone/indoone.env` needs.
 
-## Deploying a change
-
-Two ways, and they run the same script:
-
-**By hand**, on the box:
-
-```bash
-bash /home/ubuntu/Indoone-Backend/scripts/ops/deploy.sh
-```
-
-**Automatically**, on a push to `main` that touches the backend, by
-`.github/workflows/deploy.yml`. It opens an SSH connection to the instance and runs that
-same script, then checks two things the script cannot check from where it stands: that the
-commit the box is on is the commit that was just deployed, and - when
-`INDOONE_PUBLIC_HEALTH_URL` is set - that the public endpoint answers.
-
-It needs these repository secrets (Settings → Secrets and variables → Actions):
-
-| Secret | Needed | What it is |
-|---|---|---|
-| `LIGHTSAIL_HOST` | yes | the instance address |
-| `LIGHTSAIL_SSH_KEY` | yes | the private key whose public half is in `ubuntu`'s `authorized_keys` |
-| `LIGHTSAIL_USER` | no | defaults to `ubuntu` |
-| `LIGHTSAIL_KNOWN_HOSTS` | no | pins the host key; without it the workflow warns and trusts first contact |
-| `INDOONE_PUBLIC_HEALTH_URL` | no | e.g. `https://indooneai.duckdns.org/health` |
-
-Without the first two the workflow stops at its preflight step with a message naming what
-is missing, rather than failing halfway through a deploy.
-
-The job runs in the `production` environment, so GitHub's environment protection rules
-apply to it: if a reviewer is required there, a deploy waits for one.
-
 ## First-time setup on a fresh instance
 
 ```bash

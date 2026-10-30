@@ -201,10 +201,13 @@ async def request_context_middleware(request: Request, call_next):
     )
     # Liveness/readiness probes are intentionally public so reverse proxies and
     # deployment monitors can check the process without app-user credentials.
-    # Detailed health remains authenticated because it exposes operational state.
+    # /health/kingdom is public for the same reason: a monitor that needs an app-user token
+    # cannot report that the app is down. It does expose operational state - subsystem
+    # statuses, pool saturation, quota state - so it is a deliberate trade: reachability of
+    # the monitor, in exchange for publishing how the fleet is doing.
     public_health_check = (
         request.method.upper() == "GET"
-        and request.url.path in {"/health", "/ready"}
+        and request.url.path in {"/health", "/ready", "/health/kingdom"}
     )
     # A shared conversation is a public page by design: the whole point of the link is that
     # someone without an account can open it. Without this, turning INDOONE_AUTH_REQUIRED on

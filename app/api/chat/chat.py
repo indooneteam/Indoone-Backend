@@ -316,6 +316,22 @@ def _marshal(request: Request, message: str) -> None:
     request.state.linguistics = agent.analyze(message)
 
 
+def _read_intent(request: Request, message: str) -> None:
+    """Read the request's action and resource, and attach the verdict.
+
+    This does not route. The routers below already answer these questions, and a second
+    router that also answers them is how one message ends up claimed twice - the bug this
+    whole pipeline was rebuilt to remove. What it is for is the case that matters and was
+    invisible: the agent is sure this is answerable for free, and no router answered it.
+    """
+    agent = _agents.intent()
+
+    if not agent.enabled():
+        return
+
+    request.state.intent = agent.extract(message)
+
+
 def _admit(request: Request, user_id: str) -> None:
     """Refuse a request before it spends anything, or let it through.
 
@@ -343,6 +359,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     body.message = _inquisitor(user_id, body.message)
     body.message = _vault(user_id, body.message)
     _marshal(request, body.message)
+    _read_intent(request, body.message)
     _admit(request, user_id)
     is_new_conversation = body.conversation_id is None
     conversation_id = body.conversation_id or str(uuid4())
@@ -622,6 +639,18 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                         approval_tokens=tuple(body.approval_tokens or ()),
                         conversation_id=conversation_id,
                     )
+
+        # The verdict said this was answerable for free and nothing answered it. That is a
+        # gap between the routers and the words, and it used to be silent: the message went
+        # to the model, which answered from memory. Now it is a log line with a name.
+        _intent = getattr(request.state, "intent", None)
+        if _intent is not None and _intent.is_fast_path and tool_reply is None:
+            logger.warning(
+                "intent said %s (confidence %.2f) but no router answered: %s",
+                _intent.fast_path_target,
+                _intent.confidence_score,
+                body.message[:80],
+            )
 
         if tool_reply is not None:
             reply_with_sources = tool_reply

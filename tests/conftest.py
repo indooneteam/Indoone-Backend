@@ -41,3 +41,5 @@ os.environ.setdefault("INDOONE_SENTINEL_ENABLED", "false")
 os.environ.setdefault("INDOONE_VAULT_GUARDIAN_ENABLED", "false")
 # The language marshal is metadata only; its own suite turns it back on.
 os.environ.setdefault("INDOONE_POLYGLOT_MARSHAL_ENABLED", "false")
+# The intent extractor is metadata plus a log line; its own suite turns it back on.
+os.environ.setdefault("INDOONE_INTENT_EXTRACTOR_ENABLED", "false")

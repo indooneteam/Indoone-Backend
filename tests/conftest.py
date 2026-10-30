@@ -59,3 +59,5 @@ os.environ.setdefault("INDOONE_MAIL_SUPERVISOR_ENABLED", "false")
 os.environ.setdefault("INDOONE_CALENDAR_SUPERVISOR_ENABLED", "false")
 # The web supervisor is exercised by its own suite.
 os.environ.setdefault("INDOONE_WEB_SUPERVISOR_ENABLED", "false")
+# The code sandbox spawns a child process; its own suite turns it on.
+os.environ.setdefault("INDOONE_CODE_SANDBOX_ENABLED", "false")

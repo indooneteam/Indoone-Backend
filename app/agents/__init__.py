@@ -110,3 +110,8 @@ def calendar_supervisor() -> ModuleType:
 def web_supervisor() -> ModuleType:
     """Agent 14 - the web supervisor: the internet, through one narrow door."""
     return load("14_web_search_supervisor")
+
+
+def code_sandbox() -> ModuleType:
+    """Agent 15 - the sandbox: run the arithmetic, not the machine."""
+    return load("15_code_sandbox_runner")

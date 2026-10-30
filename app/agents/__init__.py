@@ -59,3 +59,8 @@ def vault() -> ModuleType:
 def marshal() -> ModuleType:
     """Agent 04 - the language marshal: script, dialect, canonical verb, register."""
     return load("04_indic_polyglot_marshal")
+
+
+def intent() -> ModuleType:
+    """Agent 05 - the intent extractor: case markers, action, resource, free-path verdict."""
+    return load("05_intent_purity_extractor")

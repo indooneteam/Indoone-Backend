@@ -120,3 +120,8 @@ def code_sandbox() -> ModuleType:
 def stack_trace_debugger() -> ModuleType:
     """Agent 16 - the debugger: find the bug, not the framework."""
     return load("16_stack_trace_debugger")
+
+
+def host_sentry() -> ModuleType:
+    """Agent 17 - the host sentry: ask the machine, do not command it."""
+    return load("17_system_diagnostics_sentry")

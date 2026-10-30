@@ -252,11 +252,15 @@ def _frontline(request: Request, user_id: str, message: str) -> str:
             if verdict.refusal.status_code == 429
             else None
         )
-        raise HTTPException(
+        refusal = HTTPException(
             status_code=verdict.refusal.status_code,
             detail=verdict.refusal.detail,
             headers=headers,
         )
+        # The machine-readable reason rides on the exception, so the handler can put
+        # SECURITY_REJECTED in the envelope instead of a bare HTTP_400.
+        refusal.code = verdict.refusal.code  # type: ignore[attr-defined]
+        raise refusal
 
     # The verdict travels with the request: the endpoint reads it later to notice a
     # message this pipeline expected to answer for free that no router actually answered.

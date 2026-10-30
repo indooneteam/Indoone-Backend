@@ -307,9 +307,12 @@ async def request_context_middleware(request: Request, call_next):
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     message = exc.detail if isinstance(exc.detail, str) else "request failed"
+    # A refusal raised by the frontline carries its own code ("SECURITY_REJECTED"); a plain
+    # HTTPException has none, and falls back to the status.
+    code = getattr(exc, "code", "") or f"HTTP_{exc.status_code}"
     return _error_response_with_request_id(
         exc.status_code,
-        f"HTTP_{exc.status_code}",
+        code,
         message,
         get_request_id() or str(getattr(request.state, "request_id", "")),
         headers=dict(getattr(exc, "headers", None) or {}),

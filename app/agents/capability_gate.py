@@ -63,6 +63,9 @@ class CapabilityDecision:
     capability: str = CONVERSATION
     confidence: float = 0.0
     reason: str = ""
+    # True when this gate found nothing either way and left the decision to the router.
+    # A deferral is not a low-confidence allow: it means the router's own matcher decides.
+    deferred: bool = False
 
     @property
     def is_capability(self) -> bool:
@@ -91,7 +94,7 @@ def decide(text: str, *, capability: str) -> CapabilityDecision:
 
     # The router matched a noun and nothing argues against it: leave the router's decision
     # alone rather than inventing a refusal.
-    return CapabilityDecision(capability, 0.6, "the router's own match stands")
+    return CapabilityDecision(capability, 0.6, "the router's own match stands", deferred=True)
 
 
 def wants(text: str, capability: str) -> bool:

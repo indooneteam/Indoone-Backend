@@ -90,3 +90,8 @@ def arbiter() -> ModuleType:
 def model_arbiter() -> ModuleType:
     """Agent 10 - the egress arbiter: leak shield, chips, and channel formatting."""
     return load("10_model_arbiter")
+
+
+def github_supervisor() -> ModuleType:
+    """Agent 11 - the GitHub supervisor: the only door to the API."""
+    return load("11_github_supervisor")

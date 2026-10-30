@@ -67,3 +67,5 @@ os.environ.setdefault("INDOONE_STACK_TRACE_DEBUGGER_ENABLED", "false")
 os.environ.setdefault("INDOONE_HOST_SENTRY_ENABLED", "false")
 # The WhatsApp ingress is exercised by its own suite.
 os.environ.setdefault("INDOONE_WHATSAPP_INGRESS_ENABLED", "false")
+# The Telegram ingress is exercised by its own suite.
+os.environ.setdefault("INDOONE_TELEGRAM_INGRESS_ENABLED", "false")

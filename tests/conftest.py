@@ -39,3 +39,5 @@ os.environ.setdefault("INDOONE_GATEKEEPER_ENABLED", "false")
 os.environ.setdefault("INDOONE_SENTINEL_ENABLED", "false")
 # The privacy guardian rewrites prompts; its own suite turns it back on.
 os.environ.setdefault("INDOONE_VAULT_GUARDIAN_ENABLED", "false")
+# The language marshal is metadata only; its own suite turns it back on.
+os.environ.setdefault("INDOONE_POLYGLOT_MARSHAL_ENABLED", "false")

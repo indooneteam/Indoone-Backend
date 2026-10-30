@@ -300,6 +300,22 @@ def _vault(user_id: str, message: str) -> str:
     return verdict.redacted_prompt
 
 
+def _marshal(request: Request, message: str) -> None:
+    """Name the language, the dialect and the register, and attach it to the request.
+
+    Nothing about the message changes: this is metadata, and it is attached rather than
+    applied so a caller that wants it can read it and a caller that does not is unaffected.
+    Rewriting the user's words here would be the same mistake as translating a message
+    before the routers read it - it destroys the evidence they match on.
+    """
+    agent = _agents.marshal()
+
+    if not agent.enabled():
+        return
+
+    request.state.linguistics = agent.analyze(message)
+
+
 def _admit(request: Request, user_id: str) -> None:
     """Refuse a request before it spends anything, or let it through.
 
@@ -326,6 +342,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     _citadel(request, user_id, body.message)
     body.message = _inquisitor(user_id, body.message)
     body.message = _vault(user_id, body.message)
+    _marshal(request, body.message)
     _admit(request, user_id)
     is_new_conversation = body.conversation_id is None
     conversation_id = body.conversation_id or str(uuid4())

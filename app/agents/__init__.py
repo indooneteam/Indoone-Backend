@@ -54,3 +54,8 @@ def sentinel() -> ModuleType:
 def vault() -> ModuleType:
     """Agent 03 - the privacy guardian: identifiers, cards, keys, credentials."""
     return load("03_vault_guardian")
+
+
+def marshal() -> ModuleType:
+    """Agent 04 - the language marshal: script, dialect, canonical verb, register."""
+    return load("04_indic_polyglot_marshal")

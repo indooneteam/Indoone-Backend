@@ -760,7 +760,21 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    chips = action_chips.collected()
+    # Agent 10 is the last thing between the model and the person: it strips a leaked
+    # instruction preamble, keeps the chips a tool emitted (or infers them when it did not),
+    # and formats the reply for the channel it came from.
+    synthesized = _agents.model_arbiter().synthesize(
+        reply,
+        "app",
+        getattr(getattr(request.state, "intent", None), "action", "") or "",
+        getattr(getattr(request.state, "linguistics", None), "primary_language", "") or "",
+        action_chips.collected(),
+    )
+
+    if synthesized.formatted_text:
+        reply = synthesized.formatted_text
+
+    chips = synthesized.action_chips or action_chips.collected()
     action_chips.reset()
 
     return ChatResponse(

@@ -85,3 +85,8 @@ def condenser() -> ModuleType:
 def arbiter() -> ModuleType:
     """Agent 09 - the token budget arbiter: what a turn may cost, and what is left."""
     return load("09_token_budget_arbiter")
+
+
+def model_arbiter() -> ModuleType:
+    """Agent 10 - the egress arbiter: leak shield, chips, and channel formatting."""
+    return load("10_model_arbiter")

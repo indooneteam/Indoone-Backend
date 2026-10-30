@@ -4,6 +4,7 @@ import hashlib
 import logging
 import os
 
+from app.agents import load as load_agent
 from app.ai.execution.account_context import accounts_instruction, without_stale_refusals
 from app.ai.execution.request_context import now_line, user_name_line
 from app.plugins.festivals.calendar import festival_answer
@@ -193,6 +194,17 @@ async def _generate_with_history(owner_user_id: str, channel: str, sender_id: st
     replacement = await answer_instead_of_promise(reply, text, history=history)
     if replacement:
         reply = replacement
+
+    # The same reply, said in this channel's own conventions. Sending the app's Markdown to
+    # Instagram is how a channel shows raw asterisks to a customer, and a table does not
+    # render in a WhatsApp message at all.
+    try:
+        synthesized = load_agent("10_model_arbiter").synthesize(reply, channel)
+        if synthesized.formatted_text:
+            reply = synthesized.formatted_text
+    except Exception:  # a formatting problem must never swallow the answer
+        logger.warning("channel formatting failed", exc_info=True)
+
     store.append(
         conversation_id,
         [("user", text), ("assistant", reply)],

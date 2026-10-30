@@ -55,3 +55,5 @@ os.environ.setdefault("INDOONE_MODEL_ARBITER_ENABLED", "false")
 os.environ.setdefault("INDOONE_GITHUB_SUPERVISOR_ENABLED", "false")
 # The mail supervisor is exercised by its own suite.
 os.environ.setdefault("INDOONE_MAIL_SUPERVISOR_ENABLED", "false")
+# The calendar supervisor is exercised by its own suite.
+os.environ.setdefault("INDOONE_CALENDAR_SUPERVISOR_ENABLED", "false")

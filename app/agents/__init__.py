@@ -100,3 +100,8 @@ def github_supervisor() -> ModuleType:
 def mail_supervisor() -> ModuleType:
     """Agent 12 - the mail supervisor: reading is free, sending needs a person."""
     return load("12_zoho_mail_supervisor")
+
+
+def calendar_supervisor() -> ModuleType:
+    """Agent 13 - the calendar supervisor: dates are arithmetic, not memory."""
+    return load("13_calendar_supervisor")

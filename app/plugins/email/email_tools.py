@@ -612,6 +612,15 @@ async def handle_email_chat_with_tools(
     if not EMAIL_CONTEXT_RE.search(text) and not has_recent_email_context:
         return None
 
+    # "what is email?" contains the word email and asks for an explanation, not an inbox.
+    # The gate can only refuse here; it never lets through something the check above would
+    # have rejected.
+    if EMAIL_CONTEXT_RE.search(text):
+        from app.agents import capability_gate
+
+        if not capability_gate().wants(text, capability_gate().MAIL):
+            return None
+
     # Keep the local-model fallback available; Gemini or Azure handles the tools.
     import os
     _model_backend = os.getenv("INDOONE_MODEL_BACKEND", "").strip().casefold()

@@ -175,3 +175,8 @@ def circuit_healer() -> ModuleType:
 def kingdom_auditor() -> ModuleType:
     """Agent 27 - the auditor: one answer to "is the system well?", and it never crashes."""
     return load("27_master_kingdom_health_auditor")
+
+
+def capability_gate() -> ModuleType:
+    """The gate: a question about a tool is not a request for the tool."""
+    return load("capability_gate")

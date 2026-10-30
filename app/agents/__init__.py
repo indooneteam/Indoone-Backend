@@ -150,3 +150,8 @@ def app_streamer() -> ModuleType:
 def quota_guard() -> ModuleType:
     """Agent 22 - the quota guard: a free tier is a budget, and a budget needs a ceiling."""
     return load("22_omnichannel_quota_guard")
+
+
+def pool_watchdog() -> ModuleType:
+    """Agent 23 - the pool watchdog: watch the pool, never touch the data."""
+    return load("23_postgres_pool_watchdog")

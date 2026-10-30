@@ -32,3 +32,6 @@ os.environ.setdefault("INDOONE_AUTH_REQUIRED", "false")
 # would read as an attack. It is switched off for the run, exactly as auth is; the tests
 # that exercise it turn it back on and clear the buckets first.
 os.environ.setdefault("INDOONE_API_LIMITS_ENABLED", "false")
+# The ingress defender refuses on cadence, which would make a test depend on how many
+# requests it happened to make. Its own suite turns it back on.
+os.environ.setdefault("INDOONE_GATEKEEPER_ENABLED", "false")

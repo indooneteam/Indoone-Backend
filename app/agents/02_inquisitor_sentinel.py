@@ -109,6 +109,36 @@ _OVERRIDE = (
     r"നിയമങ്ങൾ\s*(മറക്കുക|വിടുക)",
     r"নিয়ম\s*(ভুলে|ছেড়ে)",
     r"નિયમો\s*(ભૂલી|છોડી)",
+
+    # ---------------------------------------------------------------- Pan-Indic, by stem
+    #
+    # The patterns above match whole words: "ನಿರ್ಲಕ್ಷಿಸು" but not "ನಿರ್ಲಕ್ಷಿಸಿ", "भूल जाओ" but
+    # not "भूल जाएं". A native-script attack is the same attack with a different verb ending,
+    # and it walked straight through. These match the STEM, so every conjugation of the same
+    # verb is one pattern, and they tolerate words between the qualifier and the verb because
+    # "ಹಿಂದಿನ ಎಲ್ಲಾ ನಿಯಮಗಳನ್ನು ನಿರ್ಲಕ್ಷಿಸಿ" has three words in between.
+
+    # Kannada
+    r"(?:ಹಿಂದಿನ|ಹಳೆಯ|ಮೊದಲಿನ|ಎಲ್ಲಾ|ಎಲ್ಲ)[^\n]{0,40}(?:ನಿರ್ಲಕ್ಷಿಸ|ಮರೆತುಬಿಡ|ಬಿಟ್ಟುಬಿಡ|ರದ್ದುಮಾಡ|ಕಡೆಗಣಿಸ|ಮೀರಿ)",
+    r"(?:ನಿರ್ಲಕ್ಷಿಸ|ಮರೆತುಬಿಡ|ಬಿಟ್ಟುಬಿಡ|ಕಡೆಗಣಿಸ)[^\n]{0,30}(?:ನಿಯಮ|ಸೂಚನ|ಆದೇಶ|ನಿರ್ಬಂಧ)",
+    # Devanagari - Hindi and Marathi
+    r"(?:पिछल|पुरान|पहल|सभी|सारे|सगळ)[^\n]{0,40}(?:भूल|अनदेखा|नजरअंदाज|रद्द|छोड़\s*दो|विसर)",
+    r"(?:भूल|अनदेखा|नजरअंदाज|रद्द|विसर)[^\n]{0,30}(?:नियम|निर्देश|हिदायत|सूचन|निर्बंध)",
+    # Telugu
+    r"(?:మునుపటి|గత|పాత|అన్ని)[^\n]{0,40}(?:విస్మరించ|మర్చిపో|వదిలేయ|రద్దు)",
+    r"(?:విస్మరించ|మర్చిపో|వదిలేయ)[^\n]{0,30}(?:నియమ|సూచన|ఆదేశ)",
+    # Tamil
+    r"(?:முந்தைய|பழைய|அனைத்து|எல்லா)[^\n]{0,40}(?:புறக்கணி|மறந்துவிட|தவிர்|ரத்து)",
+    r"(?:புறக்கணி|மறந்துவிட|தவிர்)[^\n]{0,30}(?:விதி|வழிமுறை|கட்டளை)",
+    # Malayalam
+    r"(?:മുമ്പത്തെ|പഴയ|എല്ലാ)[^\n]{0,40}(?:അവഗണിക്ക|മറക്ക|വിട്ടുകളയ|റദ്ദാക്ക)",
+    r"(?:അവഗണിക്ക|മറക്ക|വിട്ടുകളയ)[^\n]{0,30}(?:നിയമ|നിർദ്ദേശ|നിർബന്ധ)",
+    # Bengali
+    r"(?:পূর্ববর্তী|আগের|পুরনো|সব)[^\n]{0,40}(?:উপেক্ষা|ভুলে|বাতিল)",
+    r"(?:উপেক্ষা|ভুলে|বাতিল)[^\n]{0,30}(?:নিয়ম|নির্দেশ|সূচনা)",
+    # Gujarati
+    r"(?:પાછલી|જૂની|બધી|બધા)[^\n]{0,40}(?:ભૂલી|અવગણો|છોડી|રદ)",
+    r"(?:ભૂલી|અવગણો|છોડી)[^\n]{0,30}(?:નિયમ|સૂચન|આદેશ)",
 )
 
 _PERSONA = (
@@ -135,6 +165,35 @@ _LEAK = (
     r"ನಿಮ್ಮ\s+(ಸೂಚನೆಗಳು|ಪ್ರಾಂಪ್ಟ್|ರಹಸ್ಯ)",
     r"(apna|tumhara)\s+(prompt|instructions?)\s*(batao|dikhao)",
     r"உங்கள்\s+(வழிமுறை|ரகசிய|உள்)",
+
+    # ---------------------------------------------------------------- Pan-Indic, by stem
+    #
+    # Same reasoning as the override list: the secret is named in the user's own script, and
+    # the verb that demands it comes in one of a dozen conjugations. A demand needs BOTH a
+    # secret term and a verb - "ಕನ್ನಡದಲ್ಲಿ ಸಿಸಿಟಮ್ ಆರ್ಕಿಟೆಕ್ಚರ್ ವಿವರಿಸಿ" names a system and is
+    # a legitimate question, so a secret word alone is not enough.
+
+    # Kannada
+    r"(?:ಸಿಸ್ಟಮ್\s*ಪ್ರಾಂಪ್ಟ್|ಆಂತರಿಕ\s*(?:ಸೂಚನ|ನಿಯಮ)|ರಹಸ್ಯ\s*(?:ಪ್ರಾಂಪ್ಟ್|ಸೂಚನ)|ಮೂಲ\s*ಆದೇಶ)[^\n]{0,40}(?:ತೋರಿಸ|ಪ್ರಿಂಟ್|ಹೇಳ|ಕೊಡು|ಬಹಿರಂಗ|ತಿಳಿಸ)",
+    r"(?:ತೋರಿಸ|ಹೇಳ|ಕೊಡು|ಪ್ರಿಂಟ್)[^\n]{0,25}(?:ಸಿಸ್ಟಮ್\s*ಪ್ರಾಂಪ್ಟ್|ಆಂತರಿಕ\s*ಸೂಚನ|ರಹಸ್ಯ\s*ಪ್ರಾಂಪ್ಟ್)",
+    # Devanagari
+    r"(?:सिस्टम\s*प्रॉम्प्ट|सिस्टम\s*प्रोम्प्ट|आंतरिक\s*(?:निर्देश|नियम)|गुप्त\s*(?:निर्देश|नियम)|सीक्रेट\s*(?:सिस्टम\s*)?प्रॉम्प्ट)[^\n]{0,40}(?:दिखाओ|दिखा|प्रिंट|बताओ|बता|साझा|प्रकट)",
+    r"(?:दिखाओ|बताओ|प्रिंट|दिखा|बता)[^\n]{0,25}(?:सिस्टम\s*प्रॉम्प्ट|आंतरिक\s*निर्देश|गुप्त\s*निर्देश)",
+    # Telugu
+    r"(?:సిస్టమ్\s*ప్రాంప్ట్|అంతర్గత\s*(?:సూచన|నియమ)|రహస్య\s*(?:నియమ|సూచన))[^\n]{0,40}(?:చూపించ|చెప్ప|ప్రింట్|వెల్లడించ)",
+    r"(?:చూపించ|చెప్ప|ప్రింట్)[^\n]{0,25}(?:సిస్టమ్\s*ప్రాంప్ట్|అంతర్గత\s*సూచన)",
+    # Tamil
+    r"(?:சிஸ்டம்\s*ப்ராம்ப்ட்|கணினி\s*கட்டளை|உள்\s*வழிமுறை|ரகசிய\s*விதி)[^\n]{0,40}(?:காட்டு|வெளியிடு|பிரிண்ட்|சொல்)",
+    r"(?:காட்டு|சொல்|வெளியிடு)[^\n]{0,25}(?:சிஸ்டம்\s*ப்ராம்ப்ட்|உள்\s*வழிமுறை)",
+    # Malayalam
+    r"(?:സിസ്റ്റം\s*പ്രോംപ്റ്റ്|ആന്തരിക\s*(?:നിർദ്ദേശ|നിയമ)|രഹസ്യ\s*നിർദ്ദേശ)[^\n]{0,40}(?:കാണിക്ക|പറയ|പ്രിന്റ്|വെളിപ്പെടുത്ത)",
+    r"(?:കാണിക്ക|പറയ)[^\n]{0,25}(?:സിസ്റ്റം\s*പ്രോംപ്റ്റ്|ആന്തരിക\s*നിർദ്ദേശ)",
+    # Bengali
+    r"(?:সিস্টেম\s*প্রম্পট|অভ্যন্তরীণ\s*(?:নির্দেশ|নিয়ম)|গোপন\s*(?:নিয়ম|নির্দেশ))[^\n]{0,40}(?:দেখাও|বলো|প্রিন্ট|প্রকাশ)",
+    r"(?:দেখাও|বলো|প্রিন্ট)[^\n]{0,25}(?:সিস্টেম\s*প্রম্পট|অভ্যন্তরীণ\s*নির্দেশ)",
+    # Gujarati
+    r"(?:સિસ્ટમ\s*પ્રોમ્પ્ટ|આંતરિક\s*(?:સૂચન|નિયમ)|ગુપ્ત\s*(?:નિયમ|સૂચન))[^\n]{0,40}(?:બતાવો|કહો|પ્રિન્ટ|જાહેર)",
+    r"(?:બતાવો|કહો)[^\n]{0,25}(?:સિસ્ટમ\s*પ્રોમ્પ્ટ|આંતરિક\s*સૂચન)",
 )
 
 _EXPLOIT = (
@@ -193,13 +252,15 @@ _REJECTIONS = {
     "en": "I can't act on that request. Please ask your question another way.",
 }
 
+_FLAGS = re.IGNORECASE | re.UNICODE
+
 _COMPILED = {
-    "override": tuple(re.compile(pattern, re.IGNORECASE) for pattern in _OVERRIDE),
-    "persona": tuple(re.compile(pattern, re.IGNORECASE) for pattern in _PERSONA),
-    "leak": tuple(re.compile(pattern, re.IGNORECASE) for pattern in _LEAK),
-    "exploit": tuple(re.compile(pattern, re.IGNORECASE) for pattern in _EXPLOIT),
-    "education": tuple(re.compile(pattern, re.IGNORECASE) for pattern in _EDUCATION),
-    "demand": tuple(re.compile(pattern, re.IGNORECASE) for pattern in _DEMAND),
+    "override": tuple(re.compile(pattern, _FLAGS) for pattern in _OVERRIDE),
+    "persona": tuple(re.compile(pattern, _FLAGS) for pattern in _PERSONA),
+    "leak": tuple(re.compile(pattern, _FLAGS) for pattern in _LEAK),
+    "exploit": tuple(re.compile(pattern, _FLAGS) for pattern in _EXPLOIT),
+    "education": tuple(re.compile(pattern, _FLAGS) for pattern in _EDUCATION),
+    "demand": tuple(re.compile(pattern, _FLAGS) for pattern in _DEMAND),
 }
 
 _SCATTERED = re.compile(r"(?:\b\w[.\-_*]\s?){4,}\w\b")

@@ -80,3 +80,8 @@ def treasury() -> ModuleType:
 def condenser() -> ModuleType:
     """Agent 08 - the context condenser: what history this turn actually needs."""
     return load("08_context_condenser")
+
+
+def arbiter() -> ModuleType:
+    """Agent 09 - the token budget arbiter: what a turn may cost, and what is left."""
+    return load("09_token_budget_arbiter")

@@ -47,3 +47,5 @@ os.environ.setdefault("INDOONE_INTENT_EXTRACTOR_ENABLED", "false")
 os.environ.setdefault("INDOONE_TREASURY_CACHE_ENABLED", "false")
 # The condenser changes what history the model is given; its own suite turns it back on.
 os.environ.setdefault("INDOONE_CONTEXT_CONDENSER_ENABLED", "false")
+# The arbiter refuses turns and keeps a ledger; its own suite turns it back on.
+os.environ.setdefault("INDOONE_TOKEN_ARBITER_ENABLED", "false")

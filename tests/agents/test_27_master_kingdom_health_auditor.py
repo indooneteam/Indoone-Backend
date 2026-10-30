@@ -221,3 +221,32 @@ def test_the_plain_health_endpoint_is_unchanged(monkeypatch) -> None:
     monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
 
     assert TestClient(app).get("/health").json() == {"status": "ok"}
+
+
+def test_the_kingdom_endpoint_is_reachable_without_a_token(monkeypatch) -> None:
+    """A monitor that needs an app-user token cannot report that the app is down."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+
+    response = TestClient(app).get("/health/kingdom")
+
+    assert response.status_code == 200
+    assert response.json()["status"] in {"HEALTHY", "DEGRADED", "CRITICAL"}
+
+
+def test_a_chat_request_is_still_refused_without_a_token(monkeypatch) -> None:
+    """The exemption is a path, not a hole in the auth."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    monkeypatch.setenv("INDOONE_AUTH_SECRET", "x" * 32)
+    monkeypatch.setenv("INDOONE_AUTH_REQUIRED", "true")
+
+    response = TestClient(app).post("/api/chat", json={"message": "hello"})
+
+    assert response.status_code == 401

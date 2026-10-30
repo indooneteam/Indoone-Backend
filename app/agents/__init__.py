@@ -125,3 +125,8 @@ def stack_trace_debugger() -> ModuleType:
 def host_sentry() -> ModuleType:
     """Agent 17 - the host sentry: ask the machine, do not command it."""
     return load("17_system_diagnostics_sentry")
+
+
+def whatsapp_ingress() -> ModuleType:
+    """Agent 18 - the WhatsApp door: prove it came from Meta, then flatten it."""
+    return load("18_whatsapp_ingress")

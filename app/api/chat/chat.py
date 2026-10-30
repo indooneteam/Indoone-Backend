@@ -12,6 +12,7 @@ from app.ai.memory.conversation_store import ConversationStore
 from app.ai.memory.file_context import read_text_file
 from app.ai.gateway.service import generate_reply
 from app.ai.execution.connector_authorization import authorize_connector
+import app.agents as _agents
 from app.ai.execution import action_chips
 from app.plugins.github.service import (
     MAX_REPOSITORY_FILE_BYTES,
@@ -227,6 +228,34 @@ def _client_ip(request: Request) -> str:
     return str(getattr(client, "host", "") or "")
 
 
+def _citadel(request: Request, user_id: str, message: str) -> None:
+    """The ingress defender's verdict, before the counter-based limiter.
+
+    Two different questions, both worth asking: this one reads the request (size, shape,
+    cadence, repetition) and the limiter below counts it against a budget. Neither replaces
+    the other, so a burst is refused by whichever notices first.
+    """
+    agent = _agents.gatekeeper()
+
+    if not agent.enabled():
+        return
+
+    decision = agent.evaluate(
+        subject=user_id,
+        payload=message,
+        client_ip=_client_ip(request),
+    )
+
+    if decision.allowed:
+        return
+
+    raise HTTPException(
+        status_code=429,
+        detail=decision.client_message or "Too many requests. Try again shortly.",
+        headers={"Retry-After": str(max(1, decision.retry_after))},
+    )
+
+
 def _admit(request: Request, user_id: str) -> None:
     """Refuse a request before it spends anything, or let it through.
 
@@ -250,6 +279,7 @@ def _admit(request: Request, user_id: str) -> None:
 async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     action_chips.begin()
     user_id = _principal(request)
+    _citadel(request, user_id, body.message)
     _admit(request, user_id)
     is_new_conversation = body.conversation_id is None
     conversation_id = body.conversation_id or str(uuid4())

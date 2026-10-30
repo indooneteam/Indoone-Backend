@@ -102,10 +102,22 @@ def _limited_receive(receive, max_bytes: int):
     return wrapped_receive
 
 
-def _error_response_with_request_id(status_code: int, code: str, message: str, request_id: str, details=None) -> JSONResponse:
+def _error_response_with_request_id(
+    status_code: int,
+    code: str,
+    message: str,
+    request_id: str,
+    details=None,
+    headers: dict[str, str] | None = None,
+) -> JSONResponse:
     response = JSONResponse(status_code=status_code, content=error_response(code, message, details))
     response.headers["X-Request-ID"] = request_id
     response.headers["Cache-Control"] = "no-store"
+    # A refusal that carries Retry-After must keep it. This handler used to rebuild the
+    # response and drop the header, so every 429 told the client to back off without
+    # saying for how long - the one thing the header exists for.
+    for name, value in (headers or {}).items():
+        response.headers[name] = value
     return response
 
 
@@ -292,7 +304,13 @@ async def request_context_middleware(request: Request, call_next):
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
     message = exc.detail if isinstance(exc.detail, str) else "request failed"
-    return _error_response_with_request_id(exc.status_code, f"HTTP_{exc.status_code}", message, get_request_id() or str(getattr(request.state, "request_id", "")))
+    return _error_response_with_request_id(
+        exc.status_code,
+        f"HTTP_{exc.status_code}",
+        message,
+        get_request_id() or str(getattr(request.state, "request_id", "")),
+        headers=dict(getattr(exc, "headers", None) or {}),
+    )
 
 
 @app.exception_handler(RequestValidationError)

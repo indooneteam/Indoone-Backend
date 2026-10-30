@@ -43,11 +43,36 @@ _WORD = re.compile(r"[a-z0-9]+|[\u0900-\u0dff]+")
 # that two unknown words are the same word is how a cache starts answering the wrong thing.
 _FOLD: dict[str, str] = {
     "naale": "tomorrow", "nale": "tomorrow", "naaley": "tomorrow", "ನಾಳೆ": "tomorrow",
+    "कल": "tomorrow", "kal": "tomorrow", "kall": "tomorrow",
+    "repu": "tomorrow", "naalai": "tomorrow", "aaj": "today", "రేపు": "tomorrow", "நாளை": "tomorrow", "কাল": "tomorrow",
+    "కాలే": "tomorrow", "നാളെ": "tomorrow", "કાલે": "tomorrow",
     "ivattu": "today", "ivathu": "today", "indu": "today", "ಇಂದು": "today",
+    "आज": "today", "ఈరోజు": "today", "இன்று": "today", "আজ": "today",
+    "ഇന്ന്": "today", "આજે": "today",
     "raja": "rajyotsava", "rajyotsava": "rajyotsava", "ರಾಜ": "rajyotsava",
     "ರಾಜ್ಯೋತ್ಸವ": "rajyotsava",
     "habba": "holiday", "habbha": "holiday", "ಹಬ್ಬ": "holiday", "holiday": "holiday",
-    "holidays": "holiday", "raje": "holiday", "ರಜೆ": "holiday", "chutti": "holiday",
+    "holidays": "holiday", "raje": "holiday", "chutti": "holiday",
+    "chhutti": "holiday", "selavu": "holiday", "vidumurai": "holiday",
+    # One concept, seven scripts and three spellings of the Romanised form. A user who asks
+    # in Devanagari and a user who types "kal chutti hai kya" are asking the same question,
+    # and the treasury must not answer it twice.
+    "ರಜಾ": "holiday", "ರಜೆ": "holiday", "ಛುಟ್ಟಿ": "holiday",
+    "छुट्टी": "holiday", "अवकाश": "holiday", "बंद": "holiday", "छुट्टियां": "holiday",
+    "సెలవు": "holiday", "సెలవ": "holiday", "పండుగ": "holiday",
+    "விடுமுறை": "holiday", "பண்டிகை": "holiday",
+    "ছুটি": "holiday", "উৎসব": "holiday",
+    "રજા": "holiday", "તહેવાર": "holiday",
+    "അവധി": "holiday", "ഉത്സവം": "holiday",
+
+    # Words that only ask. They change how a question is phrased, not what it asks, so they
+    # fold away - otherwise "कल छुट्टी है क्या" and "kal chutti hai kya" are two entries for
+    # one question.
+    "है": "", "हैं": "", "क्या": "", "hai": "", "kya": "",
+    "ఉందా": "", "ఉంది": "", "இருக்கிறதா": "", "உண்டா": "", "ಇದೆಯಾ": "", "ಇದೆ": "",
+    "আছে": "", "কি": "", "છે": "", "ഉണ്ടോ": "",
+    # The Kannada question particle, which is a word on its own and never a noun.
+    "na": "", "naa": "", "ideya": "", "ide": "", "undaa": "", "unda": "", "ahe": "",
     "deepavali": "deepavali", "diwali": "deepavali", "ದೀಪಾವಳಿ": "deepavali",
     "ugadi": "ugadi", "ಯುಗಾದಿ": "ugadi",
     "dusra": "second", "doosra": "second", "second": "second",
@@ -139,8 +164,9 @@ def canonical_key(cleaned_query: str, language: str = "", register: str = "") ->
     reply rather than the informal one that was cached first.
     """
     tokens = [
-        _FOLD.get(token, token)
+        folded
         for token in _WORD.findall((cleaned_query or "").casefold())
+        if (folded := _FOLD.get(token, token))
     ]
 
     body = " ".join(tokens)

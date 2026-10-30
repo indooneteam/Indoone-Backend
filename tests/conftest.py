@@ -49,3 +49,5 @@ os.environ.setdefault("INDOONE_TREASURY_CACHE_ENABLED", "false")
 os.environ.setdefault("INDOONE_CONTEXT_CONDENSER_ENABLED", "false")
 # The arbiter refuses turns and keeps a ledger; its own suite turns it back on.
 os.environ.setdefault("INDOONE_TOKEN_ARBITER_ENABLED", "false")
+# The egress arbiter rewrites replies; its own suite turns it back on.
+os.environ.setdefault("INDOONE_MODEL_ARBITER_ENABLED", "false")

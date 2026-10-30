@@ -52,6 +52,19 @@ _SAFE_BUILTINS = (
 # an import statement - and "no imports at all" stays a rule with no exceptions.
 _SAFE_MODULES = ("math", "re", "json", "datetime", "collections", "itertools", "statistics", "fractions", "decimal")
 
+# Hoisted out of the audit: this tuple was rebuilt on every call, which is most of the
+# budget for a check that is meant to be free.
+_ALLOWED_NODES = (
+        ast.Module, ast.Expr, ast.Assign, ast.AugAssign, ast.AnnAssign, ast.For, ast.While,
+        ast.If, ast.IfExp, ast.FunctionDef, ast.Return, ast.Pass, ast.Break, ast.Continue,
+        ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp, ast.comprehension,
+        ast.Compare, ast.BoolOp, ast.BinOp, ast.UnaryOp, ast.Call, ast.Attribute, ast.Name,
+        ast.Constant, ast.List, ast.Tuple, ast.Dict, ast.Set, ast.Subscript, ast.Slice,
+        ast.JoinedStr, ast.FormattedValue, ast.keyword, ast.arguments, ast.arg,
+        ast.Load, ast.Store, ast.operator, ast.unaryop, ast.cmpop, ast.boolop, ast.expr_context,
+    ast.Starred, ast.Import, ast.ImportFrom, ast.alias,
+)
+
 _MESSAGES = {
     "BLOCKED_SECURITY_VIOLATION": {
         "kn": "ಈ ಕೋಡ್ ಸುರಕ್ಷಿತವಲ್ಲ, ಹಾಗಾಗಿ ರನ್ ಮಾಡಿಲ್ಲ.",
@@ -128,6 +141,9 @@ def _is_banned_name(name: str) -> bool:
     return name.startswith("_")
 
 
+_CALLABLE_NAMES = frozenset(_SAFE_BUILTINS) | frozenset(_SAFE_MODULES)
+
+
 def audit_ast_safety(code: str) -> tuple[bool, str | None]:
     """Whether this snippet may run at all.
 
@@ -146,13 +162,15 @@ def audit_ast_safety(code: str) -> tuple[bool, str | None]:
     except SyntaxError as exc:
         return False, f"syntax error: {exc.msg}"
 
+    # One walk, collected once: the tree is traversed for names first, then checked.
+    nodes = list(ast.walk(tree))
+
     # Names the snippet may call: the injected builtins, the injected modules, and whatever
     # it defined itself. A call to anything else - open, eval, exec, compile, input - is
     # refused by absence rather than by a list of forbidden words.
-    callable_names = set(_SAFE_BUILTINS) | set(_SAFE_MODULES)
     defined: set[str] = set()
 
-    for node in ast.walk(tree):
+    for node in nodes:
         if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
             defined.add(node.name)
         elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
@@ -160,37 +178,28 @@ def audit_ast_safety(code: str) -> tuple[bool, str | None]:
         elif isinstance(node, ast.arg):
             defined.add(node.arg)
 
-    callable_names |= defined
+    callable_names = _CALLABLE_NAMES | defined
 
-    allowed_nodes = (
-        ast.Module, ast.Expr, ast.Assign, ast.AugAssign, ast.AnnAssign, ast.For, ast.While,
-        ast.If, ast.IfExp, ast.FunctionDef, ast.Return, ast.Pass, ast.Break, ast.Continue,
-        ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp, ast.comprehension,
-        ast.Compare, ast.BoolOp, ast.BinOp, ast.UnaryOp, ast.Call, ast.Attribute, ast.Name,
-        ast.Constant, ast.List, ast.Tuple, ast.Dict, ast.Set, ast.Subscript, ast.Slice,
-        ast.JoinedStr, ast.FormattedValue, ast.keyword, ast.arguments, ast.arg,
-        ast.Load, ast.Store, ast.operator, ast.unaryop, ast.cmpop, ast.boolop, ast.expr_context,
-        ast.Starred, ast.Import, ast.ImportFrom, ast.alias,
-    )
-
-    for node in ast.walk(tree):
-        if not isinstance(node, allowed_nodes):
+    for node in nodes:
+        # isinstance, not type(): ast.Add is an ast.operator, and the concrete class is
+        # what the walk yields.
+        if not isinstance(node, _ALLOWED_NODES):
             return False, f"{type(node).__name__} is not allowed"
 
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
+        if isinstance(node, ast.Import) or isinstance(node, ast.ImportFrom):
             return False, "imports are not allowed; maths, re and json are already available"
 
-        if isinstance(node, ast.Attribute) and _is_banned_name(node.attr):
-            return False, f"attribute {node.attr!r} is not allowed"
-
-        if isinstance(node, ast.Name) and _is_banned_name(node.id):
-            return False, f"name {node.id!r} is not allowed"
-
-        if isinstance(node, ast.FunctionDef) and _is_banned_name(node.name):
-            return False, f"function name {node.name!r} is not allowed"
-
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id not in callable_names:
+        if isinstance(node, ast.Attribute):
+            if node.attr.startswith("_"):
+                return False, f"attribute {node.attr!r} is not allowed"
+        elif isinstance(node, ast.Name):
+            if node.id.startswith("_"):
+                return False, f"name {node.id!r} is not allowed"
+        elif isinstance(node, ast.FunctionDef):
+            if node.name.startswith("_"):
+                return False, f"function name {node.name!r} is not allowed"
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id not in callable_names:
                 return False, f"{node.func.id}() is not available here"
 
     return True, None

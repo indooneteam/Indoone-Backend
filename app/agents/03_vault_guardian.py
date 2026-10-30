@@ -64,6 +64,26 @@ _API_KEYS = (
 # scheme://user:password@host - only the credentials go, so the shape stays readable.
 _DB_URI = re.compile(r"\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis|amqp)://[^\s:/@]+:([^\s@]+)@", re.IGNORECASE)
 
+# Native digits, mapped to ASCII before any validator runs. An Aadhaar number written in
+# Kannada is the same Aadhaar number; the regexes only knew 0-9, so a native-script number
+# travelled to the provider untouched - the worst kind of miss, because the user did nothing
+# unusual. unicodedata cannot do this (NFKD leaves Indic digits as digits), so it is a table.
+_INDIC_DIGITS = (
+    "\u0ce6\u0ce7\u0ce8\u0ce9\u0cea\u0ceb\u0cec\u0ced\u0cee\u0cef"  # Kannada
+    "\u0966\u0967\u0968\u0969\u096a\u096b\u096c\u096d\u096e\u096f"  # Devanagari
+    "\u0c66\u0c67\u0c68\u0c69\u0c6a\u0c6b\u0c6c\u0c6d\u0c6e\u0c6f"  # Telugu
+    "\u0be6\u0be7\u0be8\u0be9\u0bea\u0beb\u0bec\u0bed\u0bee\u0bef"  # Tamil
+    "\u09e6\u09e7\u09e8\u09e9\u09ea\u09eb\u09ec\u09ed\u09ee\u09ef"  # Bengali
+    "\u0ae6\u0ae7\u0ae8\u0ae9\u0aea\u0aeb\u0aec\u0aed\u0aee\u0aef"  # Gujarati
+    "\u0d66\u0d67\u0d68\u0d69\u0d6a\u0d6b\u0d6c\u0d6d\u0d6e\u0d6f"  # Malayalam
+)
+
+_DIGIT_TABLE = {
+    ord(character): str(index)
+    for script in range(0, len(_INDIC_DIGITS), 10)
+    for index, character in enumerate(_INDIC_DIGITS[script : script + 10])
+}
+
 _AADHAAR = re.compile(r"(?<![\d])([2-9]\d{3})[\s-]?(\d{4})[\s-]?(\d{4})(?![\d])")
 _PAN = re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")
 _IFSC = re.compile(r"\b[A-Z]{4}0[A-Z0-9]{6}\b")
@@ -190,7 +210,9 @@ def redact(message: str) -> VaultVerdict:
     """Return the same message with what must not leave the machine removed."""
     started = time.perf_counter()
     original = message or ""
-    working = original
+    # Native digits become ASCII first: every validator below reads 0-9, and a number the
+    # user typed in Kannada is the same number.
+    working = original.translate(_DIGIT_TABLE)
     found: list[str] = []
     evaluated = 0
 

@@ -63,8 +63,16 @@ _ACTIONS: dict[str, tuple[str, ...]] = {
     "LIST": ("list", "show", "get", "display", "thorisu", "torusu", "heli", "helu", "dikhao",
              "batao", "kaattu", "chupinchu", "tೋrisu"),
     "DIFF": ("diff", "difference", "compare", "badla", "change", "enu change", "kya badla"),
-    "CHECK_HOLIDAY": ("holiday", "festival", "raja", "chutti", "pandaga", "habba", "calendar",
-                      "deepavali", "ugadi", "dasara", "holidays"),
+    "CHECK_HOLIDAY": (
+        "holiday", "festival", "raja", "chutti", "pandaga", "habba", "calendar",
+        "deepavali", "ugadi", "dasara", "holidays",
+        # The same question in the user's own script. A holiday asked in Kannada is still a
+        # calendar question, and it was going to the model because the marker list was
+        # Romanised and English.
+        "ರಜಾ", "ರಜೆ", "ಹಬ್ಬ", "ಹಬ್ಬಗಳು", "ಛುಟ್ಟಿ", "बंद", "छुट्टी", "अवकाश", "त्योहार",
+        "त्यौहार", "సెలవ", "పండుగ", "விடுமுறை", "பண்டிகை", "ছুটি", "উৎসব",
+        "રજા", "તહેવાર", "അവധി", "ഉത്സവം",
+    ),
     "READ_EMAIL": ("unread", "inbox", "mail", "mails", "email", "emails", "patra"),
 }
 
@@ -85,7 +93,7 @@ _TARGETS = {
     "email": "email_read",
 }
 
-_WORD = re.compile(r"[a-z]+|\d+")
+_WORD = re.compile(r"[a-z]+|\d+|[\u0900-\u0dff]+")
 
 # Words that carry no intent of their own. Their presence does not make a request impure.
 _STOPWORDS = frozenset(
@@ -122,6 +130,26 @@ def enabled() -> bool:
 
 
 # ---------------------------------------------------------------- the stripper
+
+
+_POSTPOSITIONS = (
+    "ನಲ್ಲಿ", "ನಿಂದ", "ಗೆ", "ಅನ್ನು", "ಅಲ್ಲಿ",   # Kannada
+    "में", "से", "को", "का", "की", "के",        # Hindi
+    "లో", "ని", "కి", "ను",                     # Telugu
+    "இல்", "ஐ", "க்கு",                        # Tamil
+)
+
+
+def peel_postposition(token: str) -> str:
+    """Drop a case marker from the end of a native-script word.
+
+    Only when what remains is still a word - a postposition is a suffix on a noun, so
+    "auth branch ನಲ್ಲಿ" is the branch, and "ಮೇಲೆ" is not "ಮೇ" plus something.
+    """
+    for marker in _POSTPOSITIONS:
+        if token.endswith(marker) and len(token) > len(marker) + 1:
+            return token[: -len(marker)]
+    return token
 
 
 def _strip_roman(token: str) -> str:
@@ -202,8 +230,38 @@ def _ordinal(query: str) -> int | None:
     return None
 
 
+_NATIVE_WORD = re.compile(r"[\u0900-\u0dff]+")
+
+# The words that hold a native question together - a day, an auxiliary, an interrogative.
+# They carry no intent of their own, exactly like "when" and "is" in English, and leaving
+# them out is what made a Kannada holiday question score 0.85 instead of 1.0.
+_NATIVE_STOPWORDS = frozenset({
+    # Kannada
+    "ನಾಳೆ", "ನಾಳೆಯ", "ಇವತ್ತು", "ಇಂದು", "ಇದೆಯಾ", "ಇದೆ", "ಯಾವುದು", "ಯಾವಾಗ", "ಮುಂದಿನ",
+    "ಮುಂದೆ", "ನನಗೆ", "ನನ್ನ", "ಏನು", "ಹೇಳಿ", "ದಯವಿಟ್ಟು", "ಒಂದು", "ಮತ್ತು",
+    # Hindi / Marathi
+    "कल", "आज", "है", "हैं", "क्या", "कब", "कौन", "कहाँ", "अगली", "अगला", "मुझे", "मेरा",
+    "मेरी", "बताओ", "बताइए", "कोई", "और", "में", "का", "की", "के", "से", "को", "आहे",
+    # Telugu
+    "రేపు", "ఈరోజు", "ఉందా", "ఎప్పుడు", "తదుపరి", "నాకు", "నా", "చెప్పు", "ఏమి",
+    # Tamil
+    "நாளை", "இன்று", "உண்டா", "எப்போது", "அடுத்த", "எனக்கு", "என்", "சொல்லு", "என்ன",
+    # Bengali
+    "কাল", "আজ", "কি", "আছে", "কবে", "পরের", "আমার", "বলো", "কী",
+    # Gujarati
+    "કાલે", "આજે", "છે", "શું", "ક્યારે", "આગળી", "મારું", "કહો",
+    # Malayalam
+    "നാളെ", "ഇന്ന്", "ഉണ്ടോ", "എപ്പോൾ", "അടുത്ത", "എന്റെ", "പറയൂ", "എന്ത്",
+})
+
+
 def _action(lowered: str, words: set[str]) -> tuple[str, bool]:
-    if any(marker in words or marker in lowered for marker in _ACTIONS["CHECK_HOLIDAY"]):
+    native_words = set(_NATIVE_WORD.findall(lowered))
+
+    if any(
+        marker in words or marker in native_words or marker in lowered
+        for marker in _ACTIONS["CHECK_HOLIDAY"]
+    ):
         return "CHECK_HOLIDAY", True
 
     if any(marker in words for marker in _ACTIONS["DIFF"]):
@@ -253,12 +311,35 @@ def extract(message: str) -> IntentVerdict:
     # Purity: a request made only of a recognised action and a recognised resource is the
     # one case that can be answered without reading it again. Every word accounted for is
     # the evidence; one unknown content word is enough to send it to the model.
-    recognised = set(_RESOURCES) | set(_ROMAN_MARKERS) | _STOPWORDS | set(_ORDINAL_WORDS)
+    recognised = (
+        set(_RESOURCES) | set(_ROMAN_MARKERS) | _STOPWORDS | set(_ORDINAL_WORDS) | _NATIVE_STOPWORDS
+    )
     for markers in _ACTIONS.values():
         recognised |= set(markers)
+        # The native-script markers are recognised words too: a question made only of
+        # "छुट्टी" and a day is as pure as one made of "holiday" and a day.
+        recognised |= {marker for marker in markers if not marker.isascii()}
 
-    content = [word for word in _WORD.findall(lowered) if word not in _STOPWORDS]
-    pure = bool(content) and all(word in recognised or word.isdigit() for word in content)
+    content = [
+        word
+        for word in _WORD.findall(lowered)
+        if word not in _STOPWORDS and word not in _NATIVE_STOPWORDS
+    ]
+
+    native_markers = {
+        marker for markers in _ACTIONS.values() for marker in markers if not marker.isascii()
+    }
+
+    def _known(word: str) -> bool:
+        if word in recognised or word.isdigit():
+            return True
+        # An Indic word carries its grammar on the end - సెలవు, సెలవా, వிடுமுறை, விடுமுறையா -
+        # so the stem is what was listed and the word is what arrived.
+        if not word.isascii():
+            return any(marker in word for marker in native_markers)
+        return False
+
+    pure = bool(content) and all(_known(word) for word in content)
 
     confidence = 0.0
     if action_found:

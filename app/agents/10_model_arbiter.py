@@ -25,6 +25,7 @@ Bounded, standard library only, module-level patterns so nothing compiles per ca
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass, field
 
 APP = "app"
@@ -207,6 +208,50 @@ def _tables_to_lists(text: str) -> str:
     return "\n".join(output)
 
 
+# A virama joins the consonant after it, so a slice between them breaks the glyph. The
+# danda-like marks and the vowel signs are combining characters, and unicodedata says so.
+_VIRAMA = frozenset({"\u0ccd", "\u094d", "\u0c4d", "\u0bcd", "\u09cd", "\u0acd", "\u0d4d"})
+
+
+def _is_safe_boundary(text: str, index: int) -> bool:
+    """Whether cutting before ``index`` leaves both sides renderable.
+
+    Cutting mid-cluster is what produces the boxes and broken conjuncts people see on
+    Instagram: a dependent vowel sign with no consonant, or a virama with nothing to join.
+    """
+    if index <= 0 or index >= len(text):
+        return True
+
+    following = text[index]
+
+    if unicodedata.combining(following):
+        return False
+
+    if text[index - 1] in _VIRAMA:
+        return False
+
+    return True
+
+
+def _safe_cut(text: str, limit: int) -> int:
+    """The largest index at or below ``limit`` that does not split a cluster."""
+    cut = limit
+
+    while cut > 0 and not _is_safe_boundary(text, cut):
+        cut -= 1
+
+    if cut <= 0:
+        return 0
+
+    # Then prefer a word boundary, so the cut reads as an ending rather than a chop.
+    for separator in (" ", "\n", "\u0964", "\u0965", "|", "."):
+        position = text.rfind(separator, 0, cut)
+        if position > cut // 2:
+            return position
+
+    return cut
+
+
 def _split(text: str, limit: int) -> list[str]:
     """Break at a paragraph, then a line, then a word - never inside a word."""
     body = text or ""
@@ -228,6 +273,7 @@ def _split(text: str, limit: int) -> list[str]:
         if cut <= 0:
             cut = limit
 
+        cut = _safe_cut(remaining, cut) or cut
         chunks.append(remaining[:cut].rstrip())
         remaining = remaining[cut:].lstrip()
 
@@ -283,9 +329,8 @@ def to_instagram(text: str) -> dict[str, object]:
     body = " ".join(body.split())
 
     if len(body) > INSTAGRAM_LIMIT:
-        cut = body[: INSTAGRAM_LIMIT - 1]
-        space = cut.rfind(" ")
-        body = (cut[:space] if space > INSTAGRAM_LIMIT // 2 else cut).rstrip() + "…"
+        cut = _safe_cut(body, INSTAGRAM_LIMIT - 1)
+        body = body[:cut].rstrip() + "…"
 
     return {"text": body, "format": "instagram", "truncated": len(body) >= INSTAGRAM_LIMIT - 1}
 

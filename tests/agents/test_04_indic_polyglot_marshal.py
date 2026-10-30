@@ -151,7 +151,7 @@ def test_the_contract_is_complete() -> None:
 
 
 def test_a_typical_prompt_costs_under_a_tenth_of_a_millisecond() -> None:
-    """Measured as CPU time, because the work is pure computation.
+    """Measured as this thread's CPU time, because the work is pure computation.
 
     Wall-clock on a shared CI box counts the time the process was scheduled out, which says
     more about the machine than the agent. CPU time is the honest measure of what this costs
@@ -164,10 +164,10 @@ def test_a_typical_prompt_costs_under_a_tenth_of_a_millisecond() -> None:
 
 
 def _mean_cpu_milliseconds(message: str) -> float:
-    started = time.process_time()
+    started = time.thread_time()
     for _ in range(500):
         marshal.analyze(message)
-    return (time.process_time() - started) * 1000 / 500
+    return (time.thread_time() - started) * 1000 / 500
 
 
 def test_one_call_reports_its_own_cost() -> None:

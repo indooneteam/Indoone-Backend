@@ -1,0 +1,143 @@
+name: Deploy Backend
+
+# The same deploy we run by hand, wrapped so it happens on its own and leaves a record.
+#
+# It does not invent a new deployment method: it opens an SSH connection to the Lightsail
+# box and runs scripts/ops/deploy.sh, which is the script that already pulls, installs,
+# syncs the systemd unit, restarts, waits for active and curls /health. If that script is
+# the truth about how this service is deployed, this file is only the hand that runs it.
+#
+# What it needs in the repository settings (Settings -> Secrets -> Actions):
+#   LIGHTSAIL_HOST        the box's address
+#   LIGHTSAIL_SSH_KEY     the private key whose public half is in ubuntu's authorized_keys
+#   LIGHTSAIL_USER        optional, defaults to ubuntu
+#   LIGHTSAIL_KNOWN_HOSTS optional, pins the host key instead of trusting the first one
+#   INDOONE_PUBLIC_HEALTH_URL optional, e.g. https://indooneai.duckdns.org/health
+#
+# Without the first two it stops at the preflight step with a message saying so, rather
+# than failing halfway through a deploy.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - "app/**"
+      - "scripts/**"
+      - "deploy/**"
+      - "migrations/**"
+      - "alembic.ini"
+      - "requirements.txt"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why this deploy is being run by hand"
+        required: false
+        default: "manual"
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Lightsail
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 15
+
+    steps:
+      - name: Check that the deploy is configured
+        id: preflight
+        env:
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+        run: |
+          missing=""
+          [ -z "$HOST" ] && missing="$missing LIGHTSAIL_HOST"
+          [ -z "$KEY" ] && missing="$missing LIGHTSAIL_SSH_KEY"
+
+          if [ -n "$missing" ]; then
+            echo "::error::Deploy is not configured. Add these repository secrets:$missing"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
+      - name: Put the key where ssh will find it
+        if: steps.preflight.outputs.configured == 'true'
+        env:
+          KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          if [ -n "$KNOWN_HOSTS" ]; then
+            printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          else
+            # No pinned key: trust the host on first contact and say so in the log, because
+            # an unpinned host is a real (if small) risk and should not be silent.
+            echo "::warning::LIGHTSAIL_KNOWN_HOSTS is not set - trusting the host key on first contact."
+            ssh-keyscan -H "${{ secrets.LIGHTSAIL_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy
+        if: steps.preflight.outputs.configured == 'true'
+        env:
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          USER_NAME: ${{ secrets.LIGHTSAIL_USER }}
+        run: |
+          target="${USER_NAME:-ubuntu}@${HOST}"
+          echo "==> deploying to $target"
+
+          ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes -o ConnectTimeout=20 "$target" \
+            'bash /home/ubuntu/Indoone-Backend/scripts/ops/deploy.sh'
+
+      - name: Confirm the commit that is actually running
+        if: steps.preflight.outputs.configured == 'true'
+        env:
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
+          USER_NAME: ${{ secrets.LIGHTSAIL_USER }}
+        run: |
+          target="${USER_NAME:-ubuntu}@${HOST}"
+          running="$(ssh -i ~/.ssh/deploy_key -o IdentitiesOnly=yes "$target" \
+            'cd /home/ubuntu/Indoone-Backend && git rev-parse HEAD')"
+          echo "running: $running"
+          echo "expected: $GITHUB_SHA"
+
+          # The box must be on the commit this workflow deployed. If it is not, the pull
+          # silently did nothing and the deploy that "succeeded" changed no code.
+          if [ "$running" != "$GITHUB_SHA" ]; then
+            echo "::error::The box is on $running, not $GITHUB_SHA - the pull did not land."
+            exit 1
+          fi
+
+      - name: Check the public endpoint
+        if: steps.preflight.outputs.configured == 'true'
+        env:
+          HEALTH_URL: ${{ secrets.INDOONE_PUBLIC_HEALTH_URL }}
+        run: |
+          if [ -z "$HEALTH_URL" ]; then
+            echo "::notice::INDOONE_PUBLIC_HEALTH_URL is not set - the box's own /health check already ran."
+            exit 0
+          fi
+
+          for attempt in 1 2 3 4 5; do
+            if body="$(curl -fsS --max-time 10 "$HEALTH_URL")"; then
+              echo "public health: $body"
+              exit 0
+            fi
+            echo "attempt $attempt failed, waiting 5s"
+            sleep 5
+          done
+
+          echo "::error::The public endpoint did not answer after five attempts."
+          exit 1

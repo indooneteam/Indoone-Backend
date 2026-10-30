@@ -95,3 +95,8 @@ def model_arbiter() -> ModuleType:
 def github_supervisor() -> ModuleType:
     """Agent 11 - the GitHub supervisor: the only door to the API."""
     return load("11_github_supervisor")
+
+
+def mail_supervisor() -> ModuleType:
+    """Agent 12 - the mail supervisor: reading is free, sending needs a person."""
+    return load("12_zoho_mail_supervisor")

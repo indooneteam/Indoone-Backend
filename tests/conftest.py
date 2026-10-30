@@ -61,3 +61,5 @@ os.environ.setdefault("INDOONE_CALENDAR_SUPERVISOR_ENABLED", "false")
 os.environ.setdefault("INDOONE_WEB_SUPERVISOR_ENABLED", "false")
 # The code sandbox spawns a child process; its own suite turns it on.
 os.environ.setdefault("INDOONE_CODE_SANDBOX_ENABLED", "false")
+# The traceback debugger is exercised by its own suite.
+os.environ.setdefault("INDOONE_STACK_TRACE_DEBUGGER_ENABLED", "false")

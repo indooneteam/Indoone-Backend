@@ -115,3 +115,8 @@ def web_supervisor() -> ModuleType:
 def code_sandbox() -> ModuleType:
     """Agent 15 - the sandbox: run the arithmetic, not the machine."""
     return load("15_code_sandbox_runner")
+
+
+def stack_trace_debugger() -> ModuleType:
+    """Agent 16 - the debugger: find the bug, not the framework."""
+    return load("16_stack_trace_debugger")

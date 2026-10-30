@@ -81,3 +81,5 @@ os.environ.setdefault("INDOONE_POOL_WATCHDOG_ENABLED", "false")
 os.environ.setdefault("INDOONE_LRU_PRUNER_ENABLED", "false")
 # The cost ledger is exercised by its own suite.
 os.environ.setdefault("INDOONE_COST_LEDGER_ENABLED", "false")
+# The circuit healer is exercised by its own suite.
+os.environ.setdefault("INDOONE_CIRCUIT_HEALER_ENABLED", "false")

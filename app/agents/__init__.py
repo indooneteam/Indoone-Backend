@@ -155,3 +155,8 @@ def quota_guard() -> ModuleType:
 def pool_watchdog() -> ModuleType:
     """Agent 23 - the pool watchdog: watch the pool, never touch the data."""
     return load("23_postgres_pool_watchdog")
+
+
+def lru_pruner() -> ModuleType:
+    """Agent 24 - the pruner: keep the process alive, and decide what to forget."""
+    return load("24_lru_state_pruner")

@@ -50,6 +50,9 @@ class Refusal:
     detail: str
     retry_after: int = 0
     agent: str = ""
+    # The machine-readable reason, for a client that wants to act rather than display. The
+    # detail is for the person; this is for the code that receives it.
+    code: str = ""
 
 
 @dataclass(slots=True, frozen=True)
@@ -110,6 +113,7 @@ def process(
                 prompt=prompt,
                 refusal=Refusal(
                     status_code=429,
+                    code="RATE_LIMITED",
                     detail=decision.client_message or "Too many requests. Try again shortly.",
                     retry_after=max(1, decision.retry_after),
                     agent="01_gatekeeper",
@@ -133,6 +137,7 @@ def process(
                     status_code=400,
                     detail=verdict.client_message.get("primary") or verdict.client_message.get("en", ""),
                     agent="02_sentinel",
+                    code="SECURITY_REJECTED",
                 ),
                 elapsed_microseconds=int((time.perf_counter() - started) * 1_000_000),
                 ran=tuple(ran),

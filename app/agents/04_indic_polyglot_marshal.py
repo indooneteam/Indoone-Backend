@@ -267,3 +267,58 @@ def analyze(message: str) -> MarshalVerdict:
             script_distribution=distribution,
         ),
     )
+
+
+# ---------------------------------------------------------------- routing arbitration
+
+TOOL_CONFIDENCE_THRESHOLD = 0.85
+
+
+def route(text: str) -> dict[str, object]:
+    """Whether a message may reach an external capability, and how sure we are.
+
+    The marshal reads the language; the capability gate reads the intent. Neither alone is
+    enough: a Kannada message can name a mailbox without asking for one, and an English one
+    can ask for GitHub in four words. So the decision is taken here, once, against a stated
+    threshold - below it the turn is conversation, and no tool is dispatched.
+    """
+    from app.agents import capability_gate
+
+    gate = capability_gate()
+    capability = gate.GITHUB if _names_github(text) else gate.MAIL if _names_mail(text) else gate.CONVERSATION
+    decision = gate.decide(text, capability=capability)
+
+    confidence = float(decision.confidence)
+    # A deferral means this gate found nothing either way, so the router's own matcher
+    # decides - not a low-confidence allow, and not a refusal.
+    is_tool = bool(decision.is_capability) and (
+        confidence >= TOOL_CONFIDENCE_THRESHOLD or getattr(decision, "deferred", False)
+    )
+
+    return {
+        "capability": decision.capability,
+        "confidence": confidence,
+        "use_tool": is_tool,
+        "reason": decision.reason,
+    }
+
+
+def _names_github(text: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:git|github|repo|repository|branch|branches|commit|commits|pr|prs|pull\s+request|"
+            r"merge|diff|issue|issues)\b|ರೆಪೊ|ಶಾಖೆ|ಬ್ರಾಂಚ್|कमिट|ब्रांच",
+            text or "",
+            re.IGNORECASE,
+        )
+    )
+
+
+def _names_mail(text: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:mail|email|emails|inbox|zoho|gmail|message|draft)\b|ಇಮೇಲ್|ಮೇಲ್|मेल|इमेल",
+            text or "",
+            re.IGNORECASE,
+        )
+    )

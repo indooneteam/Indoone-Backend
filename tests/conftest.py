@@ -51,3 +51,5 @@ os.environ.setdefault("INDOONE_CONTEXT_CONDENSER_ENABLED", "false")
 os.environ.setdefault("INDOONE_TOKEN_ARBITER_ENABLED", "false")
 # The egress arbiter rewrites replies; its own suite turns it back on.
 os.environ.setdefault("INDOONE_MODEL_ARBITER_ENABLED", "false")
+# The GitHub supervisor is exercised by its own suite.
+os.environ.setdefault("INDOONE_GITHUB_SUPERVISOR_ENABLED", "false")

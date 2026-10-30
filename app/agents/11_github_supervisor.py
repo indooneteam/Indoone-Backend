@@ -255,6 +255,18 @@ def validate_arguments(call: GitHubToolCall) -> tuple[dict[str, Any] | None, str
 # ---------------------------------------------------------------- the scrubber
 
 
+# Cheap evidence that a payload might carry something the vault knows about: a provider key
+# prefix, a bearer token, a JWT, or a long digit run that could be an Indian identifier.
+_MAYBE_SECRET = re.compile(
+    r"AKIA|sk-|ghp_|gh[pousr]_|github_pat_|AIza|xox[baprs]-|eyJ|Bearer|\d{10,}",
+    re.IGNORECASE,
+)
+
+
+def _may_contain_secret(text: str) -> bool:
+    return _MAYBE_SECRET.search(text) is not None
+
+
 def sanitize_payload(raw_content: str, *, limit: int = MAX_DIFF_CHARS) -> str:
     """Remove what must not reach a model, then bound what is left.
 
@@ -269,14 +281,17 @@ def sanitize_payload(raw_content: str, *, limit: int = MAX_DIFF_CHARS) -> str:
     body = _URL_PASSWORD.sub(lambda match: f"{match.group(1)}{REDACTED}{match.group(3)}", body)
     body = _ASSIGNMENT.sub(lambda match: f"{match.group(1)}={REDACTED}", body)
 
-    # The vault's patterns cover the provider keys - AWS, GitHub, Gemini, JWTs - and it is
-    # already the one place that knows them.
-    try:
-        from app.agents import vault as _vault
+    # The vault's patterns cover the provider keys - AWS, GitHub, Gemini, JWTs - and the
+    # Indian identifiers, and it is already the one place that knows them. It is also the
+    # expensive part, so it runs only when the text could plausibly contain one: most diffs
+    # are code, and a code diff should not pay for a PII scan it cannot need.
+    if _may_contain_secret(body):
+        try:
+            from app.agents import vault as _vault
 
-        body = _vault().redact(body).redacted_prompt
-    except Exception:  # a scrubber that breaks must not hand back the unscrubbed text
-        pass
+            body = _vault().redact(body).redacted_prompt
+        except Exception:  # a scrubber that breaks must not hand back the unscrubbed text
+            pass
 
     if len(body) > limit:
         kept = body[:limit]

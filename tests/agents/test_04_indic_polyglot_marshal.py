@@ -151,19 +151,23 @@ def test_the_contract_is_complete() -> None:
 
 
 def test_a_typical_prompt_costs_under_a_tenth_of_a_millisecond() -> None:
-    """Best of three rounds: on a shared CI box one round can be scheduled out mid-loop,
-    and an average that includes that says more about the machine than the agent."""
+    """Measured as CPU time, because the work is pure computation.
+
+    Wall-clock on a shared CI box counts the time the process was scheduled out, which says
+    more about the machine than the agent. CPU time is the honest measure of what this costs
+    a caller who is waiting for it.
+    """
     message = "web research maadu jio ipo estakke listing agide antha heli"
-    best = min(_mean_milliseconds(message) for _ in range(3))
+    best = min(_mean_cpu_milliseconds(message) for _ in range(3))
 
-    assert best < 0.1, f"best mean latency {best:.4f} ms"
+    assert best < 0.1, f"best mean CPU {best:.4f} ms"
 
 
-def _mean_milliseconds(message: str) -> float:
-    started = time.perf_counter()
+def _mean_cpu_milliseconds(message: str) -> float:
+    started = time.process_time()
     for _ in range(500):
         marshal.analyze(message)
-    return (time.perf_counter() - started) * 1000 / 500
+    return (time.process_time() - started) * 1000 / 500
 
 
 def test_one_call_reports_its_own_cost() -> None:

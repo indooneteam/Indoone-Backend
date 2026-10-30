@@ -13,6 +13,7 @@ from app.ai.memory.file_context import read_text_file
 from app.ai.gateway.service import generate_reply
 from app.ai.execution.connector_authorization import authorize_connector
 import app.agents as _agents
+from app.agents import pipeline as _pipeline
 from app.ai.execution import action_chips
 from app.plugins.github.service import (
     MAX_REPOSITORY_FILE_BYTES,
@@ -228,108 +229,41 @@ def _client_ip(request: Request) -> str:
     return str(getattr(client, "host", "") or "")
 
 
-def _citadel(request: Request, user_id: str, message: str) -> None:
-    """The ingress defender's verdict, before the counter-based limiter.
+def _frontline(request: Request, user_id: str, message: str) -> str:
+    """Run the five frontline agents and hand back the prompt the rest may see.
 
-    Two different questions, both worth asking: this one reads the request (size, shape,
-    cadence, repetition) and the limiter below counts it against a budget. Neither replaces
-    the other, so a burst is refused by whichever notices first.
+    One call, one order, one place to change it. The agents themselves are unchanged: what
+    moved here is the sequence that used to be five lines of this endpoint, which is exactly
+    the kind of thing that gets reordered by accident.
+
+    A refusal is raised here rather than inside the pipeline, so the pipeline stays usable
+    from a worker or a channel handler that has no HTTP response to fill in.
     """
-    agent = _agents.gatekeeper()
-
-    if not agent.enabled():
-        return
-
-    decision = agent.evaluate(
+    verdict = _agents.pipeline.process(
+        message,
         subject=user_id,
-        payload=message,
         client_ip=_client_ip(request),
     )
 
-    if decision.allowed:
-        return
-
-    raise HTTPException(
-        status_code=429,
-        detail=decision.client_message or "Too many requests. Try again shortly.",
-        headers={"Retry-After": str(max(1, decision.retry_after))},
-    )
-
-
-def _inquisitor(user_id: str, message: str) -> str:
-    """Read the intent, and hand back the text the rest of the pipeline may see.
-
-    A refusal here costs one regex pass and saves the whole model call, which is the point
-    of putting it before anything else: a jailbreak should not reach a provider at all.
-
-    The message returned is the *sanitised* one - zero-width characters removed, homoglyphs
-    folded, smuggled base64 decoded - so what the model reads is what a person would have
-    read.
-    """
-    agent = _agents.sentinel()
-
-    if not agent.enabled():
-        return message
-
-    verdict = agent.evaluate(message)
-
-    if verdict.rejected:
+    if verdict.refused and verdict.refusal is not None:
+        headers = (
+            {"Retry-After": str(max(1, verdict.refusal.retry_after))}
+            if verdict.refusal.status_code == 429
+            else None
+        )
         raise HTTPException(
-            status_code=400,
-            detail=verdict.client_message.get("primary") or verdict.client_message.get("en", ""),
+            status_code=verdict.refusal.status_code,
+            detail=verdict.refusal.detail,
+            headers=headers,
         )
 
-    return verdict.safe_prompt or message
+    # The verdict travels with the request: the endpoint reads it later to notice a
+    # message this pipeline expected to answer for free that no router actually answered.
+    request.state.frontline = verdict
+    request.state.linguistics = verdict.linguistics
+    request.state.intent = verdict.intent
 
-
-def _vault(user_id: str, message: str) -> str:
-    """Remove what must not leave the machine, and hand the rest on.
-
-    Runs on the sentinel's output, so the order is: is this a legitimate request, and only
-    then - what in it is private. The redacted text is what the model reads, what the
-    history stores and what any log line will hold, so a leak cannot happen downstream of
-    this point by forgetting to redact.
-    """
-    agent = _agents.vault()
-
-    if not agent.enabled():
-        return message
-
-    verdict = agent.redact(message)
-
-    return verdict.redacted_prompt
-
-
-def _marshal(request: Request, message: str) -> None:
-    """Name the language, the dialect and the register, and attach it to the request.
-
-    Nothing about the message changes: this is metadata, and it is attached rather than
-    applied so a caller that wants it can read it and a caller that does not is unaffected.
-    Rewriting the user's words here would be the same mistake as translating a message
-    before the routers read it - it destroys the evidence they match on.
-    """
-    agent = _agents.marshal()
-
-    if not agent.enabled():
-        return
-
-    request.state.linguistics = agent.analyze(message)
-
-
-def _read_intent(request: Request, message: str) -> None:
-    """Read the request's action and resource, and attach the verdict.
-
-    This does not route. The routers below already answer these questions, and a second
-    router that also answers them is how one message ends up claimed twice - the bug this
-    whole pipeline was rebuilt to remove. What it is for is the case that matters and was
-    invisible: the agent is sure this is answerable for free, and no router answered it.
-    """
-    agent = _agents.intent()
-
-    if not agent.enabled():
-        return
-
-    request.state.intent = agent.extract(message)
+    return verdict.prompt
 
 
 def _admit(request: Request, user_id: str) -> None:
@@ -355,11 +289,7 @@ def _admit(request: Request, user_id: str) -> None:
 async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     action_chips.begin()
     user_id = _principal(request)
-    _citadel(request, user_id, body.message)
-    body.message = _inquisitor(user_id, body.message)
-    body.message = _vault(user_id, body.message)
-    _marshal(request, body.message)
-    _read_intent(request, body.message)
+    body.message = _frontline(request, user_id, body.message)
     _admit(request, user_id)
     is_new_conversation = body.conversation_id is None
     conversation_id = body.conversation_id or str(uuid4())

@@ -204,9 +204,13 @@ def test_the_verdict_is_attached_to_the_request_state(monkeypatch) -> None:
     from app.api.chat import chat as chat_module
 
     monkeypatch.setenv("INDOONE_INTENT_EXTRACTOR_ENABLED", "true")
+    monkeypatch.setenv("INDOONE_GATEKEEPER_ENABLED", "false")
+    monkeypatch.setenv("INDOONE_SENTINEL_ENABLED", "false")
+    monkeypatch.setenv("INDOONE_VAULT_GUARDIAN_ENABLED", "false")
+    monkeypatch.setenv("INDOONE_POLYGLOT_MARSHAL_ENABLED", "false")
 
     request = SimpleNamespace(state=SimpleNamespace())
-    chat_module._read_intent(request, "unread emails")
+    chat_module._frontline(request, "u1", "unread emails")
 
     assert request.state.intent.is_fast_path is True
     assert request.state.intent.fast_path_target == "email_read"
@@ -218,10 +222,14 @@ def test_the_attachment_does_not_rewrite_the_message(monkeypatch) -> None:
     from app.api.chat import chat as chat_module
 
     monkeypatch.setenv("INDOONE_INTENT_EXTRACTOR_ENABLED", "true")
+    monkeypatch.setenv("INDOONE_GATEKEEPER_ENABLED", "false")
+    monkeypatch.setenv("INDOONE_SENTINEL_ENABLED", "false")
+    monkeypatch.setenv("INDOONE_VAULT_GUARDIAN_ENABLED", "false")
+    monkeypatch.setenv("INDOONE_POLYGLOT_MARSHAL_ENABLED", "false")
 
     request = SimpleNamespace(state=SimpleNamespace())
     message = "branches ko dikhao"
-    chat_module._read_intent(request, message)
+    chat_module._frontline(request, "u1", message)
 
     # the state carries the cleaned query; the message itself is untouched by the caller
     assert request.state.intent.cleaned_query == "branch dikhao"

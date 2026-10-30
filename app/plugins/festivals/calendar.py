@@ -65,6 +65,10 @@ _ALIASES = {
     "vijayadasami": "vijayadasami",
     "ವಿಜಯದಶಮಿ": "vijayadasami",
     "rajyotsava": "kannada rajyotsava",
+    # People say "raja" for Rajyotsava and never the whole word: "naale raja na?" is the
+    # question this app is asked every November.
+    "raja": "kannada rajyotsava",
+    "ರಾಜ": "kannada rajyotsava",
     "ಕನ್ನಡ ರಾಜ್ಯೋತ್ಸವ": "kannada rajyotsava",
     "christmas": "christmas",
     "ಕ್ರಿಸ್ಮಸ್": "christmas",

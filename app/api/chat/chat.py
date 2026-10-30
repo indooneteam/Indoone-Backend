@@ -256,6 +256,32 @@ def _citadel(request: Request, user_id: str, message: str) -> None:
     )
 
 
+def _inquisitor(user_id: str, message: str) -> str:
+    """Read the intent, and hand back the text the rest of the pipeline may see.
+
+    A refusal here costs one regex pass and saves the whole model call, which is the point
+    of putting it before anything else: a jailbreak should not reach a provider at all.
+
+    The message returned is the *sanitised* one - zero-width characters removed, homoglyphs
+    folded, smuggled base64 decoded - so what the model reads is what a person would have
+    read.
+    """
+    agent = _agents.sentinel()
+
+    if not agent.enabled():
+        return message
+
+    verdict = agent.evaluate(message)
+
+    if verdict.rejected:
+        raise HTTPException(
+            status_code=400,
+            detail=verdict.client_message.get("primary") or verdict.client_message.get("en", ""),
+        )
+
+    return verdict.safe_prompt or message
+
+
 def _admit(request: Request, user_id: str) -> None:
     """Refuse a request before it spends anything, or let it through.
 
@@ -280,6 +306,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     action_chips.begin()
     user_id = _principal(request)
     _citadel(request, user_id, body.message)
+    body.message = _inquisitor(user_id, body.message)
     _admit(request, user_id)
     is_new_conversation = body.conversation_id is None
     conversation_id = body.conversation_id or str(uuid4())

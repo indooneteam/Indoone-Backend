@@ -44,3 +44,8 @@ def load(name: str) -> ModuleType:
 def gatekeeper() -> ModuleType:
     """Agent 01 - the ingress defender."""
     return load("01_citadel_gatekeeper")
+
+
+def sentinel() -> ModuleType:
+    """Agent 02 - the intent reader: jailbreak, system leak, exploit, obfuscation."""
+    return load("02_inquisitor_sentinel")

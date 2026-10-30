@@ -35,3 +35,5 @@ os.environ.setdefault("INDOONE_API_LIMITS_ENABLED", "false")
 # The ingress defender refuses on cadence, which would make a test depend on how many
 # requests it happened to make. Its own suite turns it back on.
 os.environ.setdefault("INDOONE_GATEKEEPER_ENABLED", "false")
+# The intent reader refuses on phrasing; its own suite turns it back on.
+os.environ.setdefault("INDOONE_SENTINEL_ENABLED", "false")

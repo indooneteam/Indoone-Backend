@@ -71,3 +71,5 @@ os.environ.setdefault("INDOONE_WHATSAPP_INGRESS_ENABLED", "false")
 os.environ.setdefault("INDOONE_TELEGRAM_INGRESS_ENABLED", "false")
 # The Instagram adapter is exercised by its own suite.
 os.environ.setdefault("INDOONE_INSTAGRAM_INGRESS_ENABLED", "false")
+# The app streamer is exercised by its own suite.
+os.environ.setdefault("INDOONE_APP_STREAMER_ENABLED", "false")

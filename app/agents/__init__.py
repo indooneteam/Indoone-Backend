@@ -140,3 +140,8 @@ def telegram_ingress() -> ModuleType:
 def instagram_ingress() -> ModuleType:
     """Agent 20 - the Instagram door: a DM has no markdown and a thousand characters."""
     return load("20_instagram_dm_adapter")
+
+
+def app_streamer() -> ModuleType:
+    """Agent 21 - the streamer: tokens as they are produced, nothing after the client leaves."""
+    return load("21_app_streamer")

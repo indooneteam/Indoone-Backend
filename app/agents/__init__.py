@@ -64,3 +64,9 @@ def marshal() -> ModuleType:
 def intent() -> ModuleType:
     """Agent 05 - the intent extractor: case markers, action, resource, free-path verdict."""
     return load("05_intent_purity_extractor")
+
+
+# The circuit breaker is imported by the gateway, which reads it as a module rather than
+# calling an accessor: `circuit_breaker.GEMINI`, `circuit_breaker.preferred_order()`. It is
+# loaded once here so the gateway does not carry the loading rule.
+circuit_breaker = load("06_circuit_breaker")

@@ -661,6 +661,27 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
             else []
         )
 
+        # Agent 09 decides what this turn may cost. The size of the prompt is checked before
+        # the quota, because a prompt that is too large is refused whether or not the user
+        # can afford it - and both are checked before a provider is called.
+        arbiter = _agents.arbiter()
+        arbitration = arbiter.evaluate(
+            user_id,
+            body.message,
+            [{"role": role, "content": content} for role, content in history],
+            getattr(getattr(request.state, "intent", None), "action", "") or "",
+            getattr(getattr(request.state, "linguistics", None), "primary_language", "") or "",
+        )
+
+        if not arbitration.allowed:
+            raise HTTPException(
+                status_code=413 if arbitration.rejection_reason == "PROMPT_TOO_LARGE" else 429,
+                detail=(arbitration.client_message or {}).get("primary")
+                or "This request cannot be processed right now.",
+            )
+
+        request.state.budget = arbitration
+
         if treasury_reply is not None:
             reply_with_sources = treasury_reply
         elif tool_reply is not None:
@@ -716,6 +737,16 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         reply_with_sources = replacement
 
     _treasury_store(request, body.message, reply_with_sources)
+
+    # What the turn actually cost: the prompt that was sent plus the answer that came back.
+    # Recorded after the reply, so a failed turn is not charged for an answer it never got.
+    try:
+        _agents.arbiter().record_usage(
+            user_id,
+            arbitration.estimated_prompt_tokens + _agents.arbiter().estimate_tokens(reply_with_sources),
+        )
+    except Exception:  # the ledger must never fail a turn that already succeeded
+        logger.warning("could not record token usage for %s", user_id, exc_info=True)
 
     reply, web_sources = split_grounded_sources(reply_with_sources)
 

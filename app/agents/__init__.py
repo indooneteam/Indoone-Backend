@@ -145,3 +145,8 @@ def instagram_ingress() -> ModuleType:
 def app_streamer() -> ModuleType:
     """Agent 21 - the streamer: tokens as they are produced, nothing after the client leaves."""
     return load("21_app_streamer")
+
+
+def quota_guard() -> ModuleType:
+    """Agent 22 - the quota guard: a free tier is a budget, and a budget needs a ceiling."""
+    return load("22_omnichannel_quota_guard")

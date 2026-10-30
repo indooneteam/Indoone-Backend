@@ -73,3 +73,5 @@ os.environ.setdefault("INDOONE_TELEGRAM_INGRESS_ENABLED", "false")
 os.environ.setdefault("INDOONE_INSTAGRAM_INGRESS_ENABLED", "false")
 # The app streamer is exercised by its own suite.
 os.environ.setdefault("INDOONE_APP_STREAMER_ENABLED", "false")
+# The quota guard is exercised by its own suite.
+os.environ.setdefault("INDOONE_QUOTA_GUARD_ENABLED", "false")

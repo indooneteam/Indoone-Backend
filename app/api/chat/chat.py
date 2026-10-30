@@ -645,6 +645,22 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 body.message[:80],
             )
 
+        # Agent 08 decides what context this turn gets. It runs here, after the routers
+        # (which need the whole thread to answer "what did we discuss") and before the
+        # payload is built: a self-contained question is sent alone, and a follow-up is sent
+        # with its last two turns plus one line describing the older ones.
+        condensed = _agents.condenser().condense(
+            body.message,
+            history,
+            getattr(request.state, "linguistics", None),
+            getattr(request.state, "intent", None),
+        )
+        history = (
+            [(item["role"], item["content"]) for item in condensed.condensed_messages]
+            if condensed.requires_history
+            else []
+        )
+
         if treasury_reply is not None:
             reply_with_sources = treasury_reply
         elif tool_reply is not None:

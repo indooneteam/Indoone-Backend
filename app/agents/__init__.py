@@ -75,3 +75,8 @@ circuit_breaker = load("06_circuit_breaker")
 def treasury() -> ModuleType:
     """Agent 07 - the answer cache: public facts only, bounded, TTL'd."""
     return load("07_treasury_cache")
+
+
+def condenser() -> ModuleType:
+    """Agent 08 - the context condenser: what history this turn actually needs."""
+    return load("08_context_condenser")

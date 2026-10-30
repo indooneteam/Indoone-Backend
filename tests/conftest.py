@@ -45,3 +45,5 @@ os.environ.setdefault("INDOONE_POLYGLOT_MARSHAL_ENABLED", "false")
 os.environ.setdefault("INDOONE_INTENT_EXTRACTOR_ENABLED", "false")
 # The treasury serves stored answers; its own suite turns it back on and empties it.
 os.environ.setdefault("INDOONE_TREASURY_CACHE_ENABLED", "false")
+# The condenser changes what history the model is given; its own suite turns it back on.
+os.environ.setdefault("INDOONE_CONTEXT_CONDENSER_ENABLED", "false")

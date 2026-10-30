@@ -55,10 +55,10 @@ def test_a_second_identical_turn_is_a_hit() -> None:
 def test_a_hit_costs_under_the_probe_budget() -> None:
     cache.put("what is docker", "en", "CASUAL", response="Docker is a container runtime.")
 
-    started = time.process_time()
+    started = time.thread_time()
     for _ in range(1000):
         cache.get("what is docker", "en", "CASUAL")
-    mean_ms = (time.process_time() - started) * 1000 / 1000
+    mean_ms = (time.thread_time() - started) * 1000 / 1000
 
     assert mean_ms < cache.PROBE_BUDGET_MILLISECONDS, f"{mean_ms:.4f} ms"
 

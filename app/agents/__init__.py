@@ -170,3 +170,8 @@ def cost_ledger() -> ModuleType:
 def circuit_healer() -> ModuleType:
     """Agent 26 - the healer: find out whether Gemini is back, without asking a user."""
     return load("26_circuit_breaker_healer")
+
+
+def kingdom_auditor() -> ModuleType:
+    """Agent 27 - the auditor: one answer to "is the system well?", and it never crashes."""
+    return load("27_master_kingdom_health_auditor")

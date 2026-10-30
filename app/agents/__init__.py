@@ -70,3 +70,8 @@ def intent() -> ModuleType:
 # calling an accessor: `circuit_breaker.GEMINI`, `circuit_breaker.preferred_order()`. It is
 # loaded once here so the gateway does not carry the loading rule.
 circuit_breaker = load("06_circuit_breaker")
+
+
+def treasury() -> ModuleType:
+    """Agent 07 - the answer cache: public facts only, bounded, TTL'd."""
+    return load("07_treasury_cache")

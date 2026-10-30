@@ -13,6 +13,7 @@ from app.ai.memory.file_context import read_text_file
 from app.ai.gateway.service import generate_reply
 from app.ai.execution.connector_authorization import authorize_connector
 import app.agents as _agents
+from app.ai.execution.text_match import subject_of as _subject_of
 from app.agents import pipeline as _pipeline
 from app.ai.execution import action_chips
 from app.plugins.github.service import (
@@ -266,6 +267,62 @@ def _frontline(request: Request, user_id: str, message: str) -> str:
     return verdict.prompt
 
 
+def _treasury_key_parts(request: Request, message: str) -> tuple[str, str, str, str]:
+    """The query, language, register and subject the treasury keys on."""
+    intent = getattr(request.state, "intent", None)
+    linguistics = getattr(request.state, "linguistics", None)
+
+    cleaned = getattr(intent, "cleaned_query", "") or message
+    language = getattr(linguistics, "primary_language", "") or ""
+    register = getattr(linguistics, "register_tone", "") or ""
+
+    return cleaned, language, register, _subject_of(cleaned)
+
+
+def _treasury_probe(request: Request, message: str) -> str | None:
+    """An answer already given, if this question has been asked before.
+
+    It runs before the routers rather than after, because the most repeatable questions in
+    this product - "when is deepavali", "what is docker" - are the ones a router answers.
+    A cache behind the routers would never see them.
+    """
+    agent = _agents.treasury()
+
+    if not agent.enabled():
+        return None
+
+    cleaned, language, register, _subject = _treasury_key_parts(request, message)
+    result = agent.get(cleaned, language, register)
+
+    if not result.cache_hit:
+        return None
+
+    logger.info(
+        "treasury hit: %s (%d tokens saved, %.3f ms)",
+        result.canonical_key,
+        result.tokens_saved,
+        result.telemetry_micros / 1000,
+    )
+    return result.cached_response
+
+
+def _treasury_store(request: Request, message: str, reply: str) -> None:
+    """Remember an answer, if the question is one that may be remembered."""
+    agent = _agents.treasury()
+
+    if not agent.enabled() or not reply:
+        return
+
+    cleaned, language, register, subject = _treasury_key_parts(request, message)
+    agent.put(
+        cleaned,
+        language,
+        register,
+        response=reply,
+        subject=subject,
+    )
+
+
 def _admit(request: Request, user_id: str) -> None:
     """Refuse a request before it spends anything, or let it through.
 
@@ -388,11 +445,17 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     document_context = "\n\n".join(document_context_parts)[:120_000]
 
     try:
+        # The treasury is asked first, before any router: the most repeatable questions in
+        # this product - "when is deepavali", "what is docker" - are answered by the
+        # calendar and by the model, and a cache behind them would never see either. A hit
+        # costs one dictionary lookup and no provider call at all.
+        treasury_reply = _treasury_probe(request, body.message)
+
         # A festival or holiday question is answered from the calendar file before
         # anything else runs: no agent, no gateway, no tokens. The dates follow a lunar
         # calendar and a state gazette, so they cannot be computed - and a model asked for
         # one will produce a confident date that is wrong.
-        calendar_reply = festival_answer(body.message)
+        calendar_reply = None if treasury_reply else festival_answer(body.message)
 
         if calendar_reply is not None:
             # Answered from the file. Nothing below this runs: no agent, no gateway, no
@@ -582,7 +645,9 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 body.message[:80],
             )
 
-        if tool_reply is not None:
+        if treasury_reply is not None:
+            reply_with_sources = treasury_reply
+        elif tool_reply is not None:
             reply_with_sources = tool_reply
         elif not media_attachments:
             reply_with_sources = await generate_reply(
@@ -633,6 +698,8 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     )
     if replacement:
         reply_with_sources = replacement
+
+    _treasury_store(request, body.message, reply_with_sources)
 
     reply, web_sources = split_grounded_sources(reply_with_sources)
 

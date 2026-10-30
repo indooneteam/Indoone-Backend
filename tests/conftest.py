@@ -69,3 +69,5 @@ os.environ.setdefault("INDOONE_HOST_SENTRY_ENABLED", "false")
 os.environ.setdefault("INDOONE_WHATSAPP_INGRESS_ENABLED", "false")
 # The Telegram ingress is exercised by its own suite.
 os.environ.setdefault("INDOONE_TELEGRAM_INGRESS_ENABLED", "false")
+# The Instagram adapter is exercised by its own suite.
+os.environ.setdefault("INDOONE_INSTAGRAM_INGRESS_ENABLED", "false")

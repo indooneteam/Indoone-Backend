@@ -135,3 +135,8 @@ def whatsapp_ingress() -> ModuleType:
 def telegram_ingress() -> ModuleType:
     """Agent 19 - the Telegram door: same discipline as WhatsApp, different shape."""
     return load("19_telegram_bot_marshaller")
+
+
+def instagram_ingress() -> ModuleType:
+    """Agent 20 - the Instagram door: a DM has no markdown and a thousand characters."""
+    return load("20_instagram_dm_adapter")

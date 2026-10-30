@@ -10,6 +10,8 @@ import asyncio
 from pathlib import Path
 import logging
 import os
+
+from app.agents import circuit_breaker as _breaker
 import threading
 from typing import TYPE_CHECKING
 import time
@@ -278,11 +280,29 @@ class LocalAIService:
                     extra_system_instruction=extra_system_instruction,
                 )
 
-            _azure_first = _azure_backend_enabled()
-            return await run_with_provider_fallback(
-                lambda: _reply_with(generate_azure_reply if _azure_first else generate_gemini_reply),
-                lambda: _reply_with(generate_gemini_reply if _azure_first else generate_azure_reply),
-            )
+            # The order is the breaker's decision, not this function's. Gemini is first by
+            # policy; Azure is first only while Gemini is tripped. Each attempt is recorded,
+            # so three consecutive failures open the circuit and the next turn skips Gemini
+            # without paying for the timeout again.
+            _providers = {
+                _breaker.GEMINI: generate_gemini_reply,
+                _breaker.AZURE: generate_azure_reply,
+            }
+            _first, _second = _breaker.preferred_order()
+
+            def _tracked(provider):
+                async def run():
+                    try:
+                        answer = await _reply_with(_providers[provider])
+                    except Exception as exc:
+                        _breaker.note_failure(provider, str(exc))
+                        raise
+                    _breaker.note_success(provider)
+                    return answer
+
+                return run
+
+            return await run_with_provider_fallback(_tracked(_first), _tracked(_second))
 
         if media_attachment is not None or media_attachments:
             raise RuntimeError(
@@ -387,8 +407,12 @@ async def stream_generate(
                 next_label,
                 exc,
             )
+            _breaker.note_failure(_breaker.provider_for(label), str(exc))
             await _close_stream(stream)
             continue
+
+        # The first chunk arrived: this provider is answering.
+        _breaker.note_success(_breaker.provider_for(label))
 
         if first:
             yield first
@@ -440,32 +464,26 @@ def _provider_streams() -> list[tuple[str, object]]:
     backend - a Gemini deployment that has Azure credentials can still fail over, which is
     the whole point of having them.
     """
-    streams: list[tuple[str, object]] = []
+    available: dict[str, tuple[str, object]] = {}
 
     try:
-        if _azure_backend_enabled():
+        if _gemini_stream_configured() and (_gemini_backend_enabled() or _azure_stream_configured()):
+            from app.ai.gateway.gemini_service import stream_gemini_reply
+
+            available[_breaker.GEMINI] = ("Gemini", stream_gemini_reply)
+
+        if _azure_stream_configured():
             from app.ai.gateway.azure_openai_service import stream_azure_reply
 
-            streams.append(("Azure OpenAI", stream_azure_reply))
-
-            if _gemini_stream_configured():
-                from app.ai.gateway.gemini_service import stream_gemini_reply
-
-                streams.append(("Gemini", stream_gemini_reply))
-        else:
-            if _gemini_backend_enabled() and _gemini_stream_configured():
-                from app.ai.gateway.gemini_service import stream_gemini_reply
-
-                streams.append(("Gemini", stream_gemini_reply))
-
-            if _azure_stream_configured():
-                from app.ai.gateway.azure_openai_service import stream_azure_reply
-
-                streams.append(("Azure OpenAI", stream_azure_reply))
+            available[_breaker.AZURE] = ("Azure OpenAI", stream_azure_reply)
     except ImportError:  # a provider module that is not installed is simply not offered
-        return streams
+        return []
 
-    return streams
+    # The order is the breaker's: Gemini first, Azure first only while Gemini is OPEN.
+    # This used to be an `if _azure_backend_enabled()` here, which meant a deployment that
+    # selected Azure never offered Gemini at all - a preference expressed twice, and
+    # differently in the two paths.
+    return [available[key] for key in _breaker.preferred_order() if key in available]
 
 
 def _provider_stream():

@@ -37,3 +37,5 @@ os.environ.setdefault("INDOONE_API_LIMITS_ENABLED", "false")
 os.environ.setdefault("INDOONE_GATEKEEPER_ENABLED", "false")
 # The intent reader refuses on phrasing; its own suite turns it back on.
 os.environ.setdefault("INDOONE_SENTINEL_ENABLED", "false")
+# The privacy guardian rewrites prompts; its own suite turns it back on.
+os.environ.setdefault("INDOONE_VAULT_GUARDIAN_ENABLED", "false")

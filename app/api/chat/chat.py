@@ -282,6 +282,24 @@ def _inquisitor(user_id: str, message: str) -> str:
     return verdict.safe_prompt or message
 
 
+def _vault(user_id: str, message: str) -> str:
+    """Remove what must not leave the machine, and hand the rest on.
+
+    Runs on the sentinel's output, so the order is: is this a legitimate request, and only
+    then - what in it is private. The redacted text is what the model reads, what the
+    history stores and what any log line will hold, so a leak cannot happen downstream of
+    this point by forgetting to redact.
+    """
+    agent = _agents.vault()
+
+    if not agent.enabled():
+        return message
+
+    verdict = agent.redact(message)
+
+    return verdict.redacted_prompt
+
+
 def _admit(request: Request, user_id: str) -> None:
     """Refuse a request before it spends anything, or let it through.
 
@@ -307,6 +325,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     user_id = _principal(request)
     _citadel(request, user_id, body.message)
     body.message = _inquisitor(user_id, body.message)
+    body.message = _vault(user_id, body.message)
     _admit(request, user_id)
     is_new_conversation = body.conversation_id is None
     conversation_id = body.conversation_id or str(uuid4())

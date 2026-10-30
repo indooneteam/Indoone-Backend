@@ -160,3 +160,8 @@ def pool_watchdog() -> ModuleType:
 def lru_pruner() -> ModuleType:
     """Agent 24 - the pruner: keep the process alive, and decide what to forget."""
     return load("24_lru_state_pruner")
+
+
+def cost_ledger() -> ModuleType:
+    """Agent 25 - the ledger: what the system spent, and what it did not have to."""
+    return load("25_token_cost_ledger")

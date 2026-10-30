@@ -165,3 +165,8 @@ def lru_pruner() -> ModuleType:
 def cost_ledger() -> ModuleType:
     """Agent 25 - the ledger: what the system spent, and what it did not have to."""
     return load("25_token_cost_ledger")
+
+
+def circuit_healer() -> ModuleType:
+    """Agent 26 - the healer: find out whether Gemini is back, without asking a user."""
+    return load("26_circuit_breaker_healer")

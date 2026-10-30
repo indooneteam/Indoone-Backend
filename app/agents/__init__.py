@@ -105,3 +105,8 @@ def mail_supervisor() -> ModuleType:
 def calendar_supervisor() -> ModuleType:
     """Agent 13 - the calendar supervisor: dates are arithmetic, not memory."""
     return load("13_calendar_supervisor")
+
+
+def web_supervisor() -> ModuleType:
+    """Agent 14 - the web supervisor: the internet, through one narrow door."""
+    return load("14_web_search_supervisor")

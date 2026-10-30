@@ -49,3 +49,8 @@ def gatekeeper() -> ModuleType:
 def sentinel() -> ModuleType:
     """Agent 02 - the intent reader: jailbreak, system leak, exploit, obfuscation."""
     return load("02_inquisitor_sentinel")
+
+
+def vault() -> ModuleType:
+    """Agent 03 - the privacy guardian: identifiers, cards, keys, credentials."""
+    return load("03_vault_guardian")

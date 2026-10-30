@@ -63,3 +63,5 @@ os.environ.setdefault("INDOONE_WEB_SUPERVISOR_ENABLED", "false")
 os.environ.setdefault("INDOONE_CODE_SANDBOX_ENABLED", "false")
 # The traceback debugger is exercised by its own suite.
 os.environ.setdefault("INDOONE_STACK_TRACE_DEBUGGER_ENABLED", "false")
+# The host sentry is exercised by its own suite.
+os.environ.setdefault("INDOONE_HOST_SENTRY_ENABLED", "false")

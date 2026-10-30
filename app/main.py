@@ -383,6 +383,35 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/health/kingdom")
+async def health_kingdom() -> dict[str, object]:
+    """The whole fleet in one JSON, for a monitor or a human at 3 a.m.
+
+    Deliberately a NEW path: ``/health`` is what the deploy script curls and what the
+    container health check uses, and changing what it returns is a change to the deployment
+    contract. This adds a view; it does not alter the one that already exists.
+    """
+    from app.agents import kingdom_auditor
+
+    snapshot = kingdom_auditor().collect_from_fleet()
+
+    return {
+        "status": snapshot.overall_status,
+        "timestamp": snapshot.iso_timestamp,
+        "summary": snapshot.summary_message,
+        "action_chips": snapshot.action_chips,
+        "subsystems": {
+            name: {
+                "status": report.status,
+                "latency_ms": report.latency_ms,
+                "details": report.details,
+                "error": report.error,
+            }
+            for name, report in snapshot.subsystems.items()
+        },
+    }
+
+
 @app.get("/ready")
 async def ready() -> JSONResponse:
     try:

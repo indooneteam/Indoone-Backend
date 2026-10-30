@@ -83,3 +83,5 @@ os.environ.setdefault("INDOONE_LRU_PRUNER_ENABLED", "false")
 os.environ.setdefault("INDOONE_COST_LEDGER_ENABLED", "false")
 # The circuit healer is exercised by its own suite.
 os.environ.setdefault("INDOONE_CIRCUIT_HEALER_ENABLED", "false")
+# The kingdom auditor is exercised by its own suite.
+os.environ.setdefault("INDOONE_KINGDOM_AUDITOR_ENABLED", "false")

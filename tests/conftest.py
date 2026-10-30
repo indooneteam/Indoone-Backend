@@ -79,3 +79,5 @@ os.environ.setdefault("INDOONE_QUOTA_GUARD_ENABLED", "false")
 os.environ.setdefault("INDOONE_POOL_WATCHDOG_ENABLED", "false")
 # The LRU pruner is exercised by its own suite.
 os.environ.setdefault("INDOONE_LRU_PRUNER_ENABLED", "false")
+# The cost ledger is exercised by its own suite.
+os.environ.setdefault("INDOONE_COST_LEDGER_ENABLED", "false")
